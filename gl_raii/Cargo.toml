@@ -1,0 +1,7 @@
+[package]
+name = "gl_raii"
+version = "0.1.0"
+authors = ["Osspial <osspial@gmail.com>"]
+
+[dependencies]
+gl = "0.6"
