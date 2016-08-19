@@ -14,7 +14,10 @@ pub trait Drawable {
     }
 
     fn mask(&self) -> Mask;
-    fn border(&self) -> Border;
+    fn border(&self) -> Border {
+        Default::default()
+    }
+
     fn foreground(&self) -> Self::Foreground;
     fn fill(&self) -> Self::Fill;
     fn backdrop(&self) -> Self::Backdrop;
@@ -41,7 +44,20 @@ impl Rect {
 
 pub struct Mask {}
 
-pub struct Border {}
+#[derive(Debug, Clone, Copy)]
+pub enum Border {
+    Solid {
+        width: f32,
+        color: Color
+    },
+    None
+}
+
+impl Default for Border {
+    fn default() -> Border {
+        Border::None
+    }
+}
 
 pub trait Surface {}
 
@@ -56,6 +72,26 @@ impl Point {
         Point {
             x: x,
             y: y
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Color {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+    pub a: u8
+}
+
+impl Color {
+    #[inline]
+    pub fn new(r: u8, g: u8, b: u8, a: u8) -> Color {
+        Color {
+            r: r,
+            g: g,
+            b: b,
+            a: a
         }
     }
 }
