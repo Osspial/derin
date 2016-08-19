@@ -7,10 +7,7 @@ pub trait Drawable {
     type Backdrop: Drawable;
 
     fn rect(&self) -> Rect {
-        Rect::new(
-            Point::new(-1.0,  1.0),
-            Point::new( 1.0, -1.0)
-        )
+        Default::default()
     }
 
     fn mask(&self) -> Mask;
@@ -25,12 +22,21 @@ pub trait Drawable {
     fn draw<S: Surface>(&self, &S);
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy)]
 pub struct Rect {
     /// Upper-left corner of rectangle
     pub ul: Point,
     // Lower-right corner of rectangle
     pub lr: Point
+}
+
+impl Default for Rect {
+    fn default() -> Rect {
+        Rect::new(
+            Point::new(-1.0,  1.0),
+            Point::new( 1.0, -1.0)
+        )
+    }
 }
 
 impl Rect {
