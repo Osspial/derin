@@ -47,6 +47,18 @@ pub trait Composite: Drawable<Self>
     fn backdrop(&self) -> Self::Backdrop;
 }
 
+impl<C: Composite> Drawable<C> for C {
+    default fn shader_data<'a>(&'a self) -> Shader<'a, C> {
+        Shader::Composite {
+            rect: self.rect(),
+            border: self.border(),
+            foreground: self.foreground(),
+            fill: self.fill(),
+            backdrop: self.backdrop()
+        }
+    }
+}
+
 impl Drawable for () {
     fn shader_data<'a>(&'a self) -> Shader<'a, ()> {
         Shader::None
