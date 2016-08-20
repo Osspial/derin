@@ -1,6 +1,31 @@
-use cgmath::Point2;
+use cgmath::{Point2, Vector2};
 
 pub trait Drawable {
+    fn shader_data<'a>(&'a self) -> Shader<'a>;
+}
+
+pub enum Shader<'a> {
+    Verts {
+        vertices: &'a [Vertex],
+        indices: &'a [u16]
+    },
+
+    Composite {
+        rect: Rect,
+        border: Border,
+        foreground: &'a Drawable,
+        fill: &'a Drawable,
+        backdrop: &'a Drawable
+    }
+}
+
+pub struct Vertex {
+    pub pos: Point2<f32>,
+    pub normal: Vector2<f32>,
+    pub color: Color
+}
+
+pub trait Composite: Drawable {
     type Foreground: Drawable;
     type Fill: Drawable;
     type Backdrop: Drawable;
@@ -17,8 +42,6 @@ pub trait Drawable {
     fn foreground(&self) -> Self::Foreground;
     fn fill(&self) -> Self::Fill;
     fn backdrop(&self) -> Self::Backdrop;
-
-    fn draw<S: Surface>(&self, &S);
 }
 
 
