@@ -1,10 +1,10 @@
 use cgmath::{Point2, Vector2};
 
-pub trait Drawable {
-    fn shader_data<'a>(&'a self) -> Shader<'a>;
+pub trait Drawable<C: Composite = ()> {
+    fn shader_data<'a>(&'a self) -> Shader<'a, C>;
 }
 
-pub enum Shader<'a> {
+pub enum Shader<'a, C: Composite> {
     Verts {
         vertices: &'a [Vertex],
         indices: &'a [u16]
@@ -13,10 +13,12 @@ pub enum Shader<'a> {
     Composite {
         rect: Rect,
         border: Border,
-        foreground: &'a Drawable,
-        fill: &'a Drawable,
-        backdrop: &'a Drawable
-    }
+        foreground: C::Foreground,
+        fill: C::Fill,
+        backdrop: C::Backdrop
+    },
+
+    None
 }
 
 pub struct Vertex {
@@ -25,10 +27,11 @@ pub struct Vertex {
     pub color: Color
 }
 
-pub trait Composite: Drawable {
-    type Foreground: Drawable;
-    type Fill: Drawable;
-    type Backdrop: Drawable;
+pub trait Composite: Drawable<Self> 
+        where Self: Sized {
+    type Foreground: Drawable<Self>;
+    type Fill: Drawable<Self>;
+    type Backdrop: Drawable<Self>;
 
     fn rect(&self) -> Rect {
         Default::default()
@@ -42,6 +45,22 @@ pub trait Composite: Drawable {
     fn foreground(&self) -> Self::Foreground;
     fn fill(&self) -> Self::Fill;
     fn backdrop(&self) -> Self::Backdrop;
+}
+
+impl Drawable for () {
+    fn shader_data<'a>(&'a self) -> Shader<'a, ()> {
+        Shader::None
+    }
+}
+
+impl Composite for () {
+    type Foreground = ();
+    type Fill = ();
+    type Backdrop = ();
+
+    fn foreground(&self) {}
+    fn fill(&self) {}
+    fn backdrop(&self) {}
 }
 
 
