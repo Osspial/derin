@@ -1,3 +1,5 @@
+use cgmath::Point2;
+
 pub trait Drawable {
     type Foreground: Drawable;
     type Fill: Drawable;
@@ -19,25 +21,26 @@ pub trait Drawable {
     fn draw<S: Surface>(&self, &S);
 }
 
+
 #[derive(Debug, Clone, Copy)]
 pub struct Rect {
     /// Upper-left corner of rectangle
-    pub ul: Point,
+    pub ul: Point2<f32>,
     // Lower-right corner of rectangle
-    pub lr: Point
+    pub lr: Point2<f32>
 }
 
 impl Default for Rect {
     fn default() -> Rect {
         Rect::new(
-            Point::new(-1.0,  1.0),
-            Point::new( 1.0, -1.0)
+            Point2::new(-1.0,  1.0),
+            Point2::new( 1.0, -1.0)
         )
     }
 }
 
 impl Rect {
-    pub fn new(ul: Point, lr: Point) -> Rect {
+    pub fn new(ul: Point2<f32>, lr: Point2<f32>) -> Rect {
         Rect {
             ul: ul,
             lr: lr
@@ -63,21 +66,6 @@ impl Default for Border {
 }
 
 pub trait Surface {}
-
-#[derive(Debug, Clone, Copy, Default)]
-pub struct Point {
-    pub x: f32,
-    pub y: f32
-}
-
-impl Point {
-    pub fn new(x: f32, y: f32) -> Point {
-        Point {
-            x: x,
-            y: y
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Color {

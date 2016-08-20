@@ -6,3 +6,4 @@ authors = ["Osspial <osspial@gmail.com>"]
 [dependencies]
 gl = "0.6"
 gl_raii = {path="./gl_raii"}
+cgmath = "0.11"
