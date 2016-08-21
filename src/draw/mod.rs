@@ -1,3 +1,5 @@
+pub mod primitive;
+
 use cgmath::{Vector2};
 
 pub trait Drawable<C: Composite = ()> {
