@@ -5,7 +5,8 @@ use std::collections::HashMap;
 use gl::types::*;
 use gl_raii::{GLVertexBuffer, GLVertex, BufferUsage,
               VertexAttribData, GLSLType, GLPrim,
-              GLVertexArray, GLIndexBuffer, GLBuffer};
+              GLVertexArray, GLIndexBuffer, GLBuffer,
+              GLProgram, GLShader, ShaderType};
 
 static mut ID_COUNTER: u64 = 0;
 
@@ -70,7 +71,30 @@ unsafe impl GLVertex for Vertex {
 }
 
 pub struct Facade {
-    id_update_map: HashMap<u64, u64>
+    id_update_map: HashMap<u64, u64>,
+    color_passthrough: GLProgram
+}
+
+impl Facade {
+    pub fn new() -> Facade {
+        use std::fs::File;
+        use std::io::Read;
+
+        let mut colored_vertex_string = String::new();
+        File::open("./src/shaders/colored_vertex.vert").unwrap().read_to_string(&mut colored_vertex_string).unwrap();
+        let colored_vertex_vert = GLShader::new(ShaderType::Vertex, &colored_vertex_string).unwrap();
+
+        let mut color_passthrough_string = String::new();
+        File::open("./src/shaders/color_passthrough.frag").unwrap().read_to_string(&mut color_passthrough_string).unwrap();
+        let color_passthrough_frag = GLShader::new(ShaderType::Fragment, &color_passthrough_string).unwrap();
+
+        let color_passthrough = GLProgram::new(&colored_vertex_vert, &color_passthrough_frag).unwrap();
+
+        Facade {
+            id_update_map: HashMap::with_capacity(32),
+            color_passthrough: color_passthrough
+        }
+    }
 }
 
 pub struct GLSurface<'a> {
@@ -81,7 +105,7 @@ impl<'a> Surface for GLSurface<'a> {
     fn draw<D: Drawable>(&mut self, drawable: &D) {
         use gl;
         use std::ptr;
-        
+
         use std::collections::hash_map::Entry;
 
         let buffers = drawable.buffer_data();
@@ -119,8 +143,10 @@ impl<'a> Surface for GLSurface<'a> {
             }
         }
 
-        buffers.verts_vao.with(|_| {unsafe{
-            gl::DrawElements(gl::TRIANGLES, draw_len as GLsizei, gl::UNSIGNED_SHORT, ptr::null());
-        }});
+        self.facade.color_passthrough.with(|_| {
+            buffers.verts_vao.with(|_| {unsafe{
+                gl::DrawElements(gl::TRIANGLES, draw_len as GLsizei, gl::UNSIGNED_SHORT, ptr::null());
+            }});
+        });
     }
 }
