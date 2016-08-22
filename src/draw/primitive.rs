@@ -1,12 +1,15 @@
-use super::{Drawable, Shader, Vertex, Color, Rect};
+use super::{Shadable, Shader, Vertex, Color, Rect};
 
 use cgmath::{Vector2};
 
-use std::cell::UnsafeCell;
+use std::cell::{Cell, UnsafeCell};
 
 pub struct ColorRect {
     pub color: Color,
     pub rect: Rect,
+    num_updates: Cell<u64>,
+    old_color: Color,
+    old_rect: Rect,
     verts: UnsafeCell<[Vertex; 4]>
 }
 
@@ -16,12 +19,15 @@ impl ColorRect {
         ColorRect {
             color: color,
             rect: rect,
+            num_updates: Cell::new(0),
+            old_color: color,
+            old_rect: rect,
             verts: UnsafeCell::new(unsafe{ mem::zeroed() })
         }
     }
 }
 
-impl Drawable for ColorRect {
+impl Shadable for ColorRect {
     fn shader_data<'a>(&'a self) -> Shader<'a, ()> {
         // Yes, this is writing to potentially pointed-to data. However, the data being written isn't at
         // all different from the data that would have been in verts anyway, so we can get away with that.
@@ -57,6 +63,15 @@ impl Drawable for ColorRect {
             verts: unsafe{ &*self.verts.get() },
             indices: INDICES
         }
+    }
+
+    fn num_updates(&self) -> u64 {
+        if self.old_color != self.color ||
+           self.old_rect != self.rect {
+            self.num_updates.set(self.num_updates.get() + 1);
+        }
+
+        self.num_updates.get()
     }
 }
 

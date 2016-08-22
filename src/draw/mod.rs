@@ -3,15 +3,19 @@ pub mod gl;
 
 use cgmath::{Vector2};
 
-pub trait Drawable<C: Composite = ()> {
+pub trait Shadable<C: Composite = ()> {
     fn shader_data<'a>(&'a self) -> Shader<'a, C>;
+    /// The number of times that this type's shader data has been updated. Note that this doesn't
+    /// have to be exact - all that matters is that, if there has been an update since the last time
+    /// this function was called, the number is greater than it was the previous call.
+    fn num_updates(&self) -> u64;
 }
 
-pub trait Composite: Drawable<Self> 
+pub trait Composite: Shadable<Self> 
         where Self: Sized {
-    type Foreground: Drawable<Self>;
-    type Fill: Drawable<Self>;
-    type Backdrop: Drawable<Self>;
+    type Foreground: Shadable<Self>;
+    type Fill: Shadable<Self>;
+    type Backdrop: Shadable<Self>;
 
     fn rect(&self) -> Rect {
         Default::default()
@@ -25,9 +29,11 @@ pub trait Composite: Drawable<Self>
     fn foreground(&self) -> Self::Foreground;
     fn fill(&self) -> Self::Fill;
     fn backdrop(&self) -> Self::Backdrop;
+
+    fn num_updates(&self) -> u64;
 }
 
-impl<C: Composite> Drawable<C> for C {
+impl<C: Composite> Shadable<C> for C {
     default fn shader_data<'a>(&'a self) -> Shader<'a, C> {
         Shader::Composite {
             rect: self.rect(),
@@ -37,9 +43,13 @@ impl<C: Composite> Drawable<C> for C {
             backdrop: self.backdrop()
         }
     }
+
+    default fn num_updates(&self) -> u64 {
+        <Self as Composite>::num_updates(self)
+    }
 }
 
-impl Drawable for () {
+impl Shadable for () {
     fn shader_data<'a>(&'a self) -> Shader<'a, ()> {
         Shader::None
     }
@@ -53,6 +63,10 @@ impl Composite for () {
     fn foreground(&self) {}
     fn fill(&self) {}
     fn backdrop(&self) {}
+
+    fn num_updates(&self) -> u64 {
+        0
+    }
 }
 
 pub trait Surface {}
@@ -76,7 +90,7 @@ impl Default for Border {
 
 
 #[repr(C, packed)]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Complex {
     pub rel: Point,
     pub abs: Point
@@ -106,7 +120,7 @@ impl Complex {
 }
 
 #[repr(C, packed)]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Point {
     pub x: f32,
     pub y: f32
@@ -122,7 +136,7 @@ impl Point {
 }
 
 #[repr(C, packed)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vertex {
     pub pos: Complex,
     pub normal: Vector2<f32>,
@@ -140,7 +154,7 @@ impl Vertex {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Rect {
     /// Upper-left corner of rectangle
     pub upleft: Complex,
@@ -200,7 +214,7 @@ pub enum Shader<'a, C: Composite> {
 }
 
 #[repr(C, packed)]
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
