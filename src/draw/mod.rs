@@ -75,7 +75,9 @@ impl Composite for () {
     fn backdrop(&self) {}
 }
 
-pub trait Surface {}
+pub trait Surface {
+    fn draw<D: Drawable>(&mut self, &D);
+}
 
 pub struct Mask {}
 
