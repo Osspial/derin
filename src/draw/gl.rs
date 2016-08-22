@@ -1,10 +1,23 @@
 use super::Vertex;
 
-use gl_raii::{GLVertexBuffer, GLVertex, 
-              VertexAttribData, GLSLType, GLPrim};
+use gl_raii::{GLVertexBuffer, GLVertex, BufferUsage,
+              VertexAttribData, GLSLType, GLPrim,
+              GLVertexArray};
 
 pub struct BufferData {
-    verts: GLVertexBuffer<Vertex>
+    verts: GLVertexBuffer<Vertex>,
+    verts_vao: GLVertexArray<Vertex>
+}
+
+impl BufferData {
+    pub fn new() -> BufferData {
+        let verts = GLVertexBuffer::new(0, BufferUsage::Static);
+        let verts_vao = GLVertexArray::new(&verts);
+        BufferData {
+            verts: verts,
+            verts_vao: verts_vao
+        }
+    }
 }
 
 unsafe impl GLVertex for Vertex {

@@ -1,7 +1,13 @@
 pub mod primitive;
 pub mod gl;
 
+use self::gl::BufferData;
+
 use cgmath::{Vector2};
+
+pub trait Drawable<C: Composite = ()>: Shadable<C> {
+    fn buffer_data(&self) -> &BufferData;
+}
 
 pub trait Shadable<C: Composite = ()> {
     fn shader_data<'a>(&'a self) -> Shader<'a, C>;
