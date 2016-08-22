@@ -149,27 +149,79 @@ impl BufferUsage {
     }
 }
 
-/// RAII wrapper around Vertex Buffers
-pub struct GLVertexBuffer<T> {
-    pub handle: GLuint,
-    capacity: Cell<usize>,
-    usage: BufferUsage,
-    _marker: PhantomData<T>
+pub trait GLBuffer<T> 
+        where Self: Sized {
+    fn new(capacity: usize, usage: BufferUsage) -> Self;
+    fn from_slice(slice: &[T], usage: BufferUsage) -> Self;
+    fn with<'a, F: FnOnce(BufModder<'a, T, Self>)>(&'a self, func: F)
+            where T: 'a;
+
+    fn buffer_type() -> GLenum;
 }
 
-impl<T> GLVertexBuffer<T> {
-    pub fn new(capacity: usize, usage: BufferUsage) -> GLVertexBuffer<T> {
+pub struct GLVertexBuffer<V: GLVertex> (Buffer<V, GLVertexBuffer<V>>);
+
+impl<V: GLVertex> GLBuffer<V> for GLVertexBuffer<V> {
+    fn new(capacity: usize, usage: BufferUsage) -> GLVertexBuffer<V> {
+        GLVertexBuffer( Buffer::new(capacity, usage) )
+    }
+
+    fn from_slice(slice: &[V], usage: BufferUsage) -> GLVertexBuffer<V> {
+        GLVertexBuffer( Buffer::from_slice(slice, usage) )
+    }
+
+    fn with<'a, F: FnOnce(BufModder<'a, V, GLVertexBuffer<V>>)>(&'a self, func: F) {
+        self.0.with(func)
+    }
+
+    #[inline]
+    fn buffer_type() -> GLenum {
+        gl::ARRAY_BUFFER
+    }
+}
+
+pub struct GLIndexBuffer (Buffer<GLshort, GLIndexBuffer>);
+
+impl GLBuffer<GLshort> for GLIndexBuffer {
+    fn new(capacity: usize, usage: BufferUsage) -> GLIndexBuffer {
+        GLIndexBuffer( Buffer::new(capacity, usage) )
+    }
+
+    fn from_slice(slice: &[GLshort], usage: BufferUsage) -> GLIndexBuffer {
+        GLIndexBuffer( Buffer::from_slice(slice, usage) )
+    }
+
+    fn with<'a, F: FnOnce(BufModder<'a, GLshort, GLIndexBuffer>)>(&'a self, func: F) {
+        self.0.with(func)
+    }
+
+    #[inline]
+    fn buffer_type() -> GLenum {
+        gl::ELEMENT_ARRAY_BUFFER
+    }
+}
+
+/// RAII wrapper around OpenGL buffers
+struct Buffer<T, B: GLBuffer<T>> {
+    handle: GLuint,
+    capacity: Cell<usize>,
+    usage: BufferUsage,
+    _marker: PhantomData<(T, B)>
+}
+
+impl<T, B: GLBuffer<T>> Buffer<T, B> {
+    fn new(capacity: usize, usage: BufferUsage) -> Buffer<T, B> {
         unsafe {
             use std::mem::size_of;
 
             let mut handle = 0;
             gl::GenBuffers(1, &mut handle);
 
-            gl::BindBuffer(gl::ARRAY_BUFFER, handle);
-            gl::BufferData(gl::ARRAY_BUFFER, (size_of::<T>() * capacity) as GLsizeiptr, ptr::null(), usage.to_gl_enum());
-            gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+            gl::BindBuffer(B::buffer_type(), handle);
+            gl::BufferData(B::buffer_type(), (size_of::<T>() * capacity) as GLsizeiptr, ptr::null(), usage.to_gl_enum());
+            gl::BindBuffer(B::buffer_type(), 0);
 
-            GLVertexBuffer {
+            Buffer {
                 handle: handle,
                 capacity: Cell::new(capacity),
                 usage: usage,
@@ -178,16 +230,16 @@ impl<T> GLVertexBuffer<T> {
         }
     }
 
-    pub fn from_slice(slice: &[T], usage: BufferUsage) -> GLVertexBuffer<T> {
+    fn from_slice(slice: &[T], usage: BufferUsage) -> Buffer<T, B> {
         unsafe {
             let mut handle = 0;
             gl::GenBuffers(1, &mut handle);
 
-            gl::BindBuffer(gl::ARRAY_BUFFER, handle);
-            gl::BufferData(gl::ARRAY_BUFFER, byte_slice_size(slice), slice.as_ptr() as *const _, usage.to_gl_enum());
-            gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+            gl::BindBuffer(B::buffer_type(), handle);
+            gl::BufferData(B::buffer_type(), byte_slice_size(slice), slice.as_ptr() as *const _, usage.to_gl_enum());
+            gl::BindBuffer(B::buffer_type(), 0);
 
-            GLVertexBuffer {
+            Buffer {
                 handle: handle,
                 capacity: Cell::new(slice.len()),
                 usage: usage,
@@ -196,31 +248,31 @@ impl<T> GLVertexBuffer<T> {
         }
     }
 
-    pub fn with<'a, F: FnOnce(BufModder<'a, T>)>(&'a self, func: F) {
+    fn with<'a, F: FnOnce(BufModder<'a, T, B>)>(&'a self, func: F) {
         unsafe {
-            gl::BindBuffer(gl::ARRAY_BUFFER, self.handle);
+            gl::BindBuffer(B::buffer_type(), self.handle);
             func(BufModder(self));
-            gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+            gl::BindBuffer(B::buffer_type(), 0);
         }
     }
 }
 
-pub struct BufModder<'a, T: 'a>(&'a GLVertexBuffer<T>);
+pub struct BufModder<'a, T: 'a, B: 'a + GLBuffer<T>>(&'a Buffer<T, B>);
 
-impl<'a, T: 'a> BufModder<'a, T> {
+impl<'a, T: 'a, B: 'a + GLBuffer<T>> BufModder<'a, T, B> {
     pub fn upload_data(&self, data: &[T]) {
         unsafe {
             if self.0.capacity.get() < data.len() {
                 gl::BufferData(
-                    gl::ARRAY_BUFFER, 
+                    B::buffer_type(), 
                     byte_slice_size(data), 
                     data.as_ptr() as *const _, 
-                    gl::DYNAMIC_DRAW
+                    self.0.usage.to_gl_enum()
                 );
                 self.0.capacity.set(data.len());
             } else {
                 gl::BufferSubData(
-                    gl::ARRAY_BUFFER,
+                    B::buffer_type(),
                     0,
                     byte_slice_size(data),
                     data.as_ptr() as *const _
@@ -238,7 +290,7 @@ pub struct GLVertexArray<V: GLVertex> {
 }
 
 impl<V: GLVertex> GLVertexArray<V> {
-    pub fn new(vbo: &GLVertexBuffer<V>) -> GLVertexArray<V> {
+    pub fn new(vertex_buffer: &GLVertexBuffer<V>, index_buffer: Option<&GLIndexBuffer>) -> GLVertexArray<V> {
         use std::mem::size_of;
 
         let mut handle = 0;
@@ -247,7 +299,11 @@ impl<V: GLVertex> GLVertexArray<V> {
             gl::GenVertexArrays(1, &mut handle);
             gl::BindVertexArray(handle);
 
-            gl::BindBuffer(gl::ARRAY_BUFFER, vbo.handle);
+            gl::BindBuffer(gl::ARRAY_BUFFER, vertex_buffer.0.handle);
+
+            if let Some(ib) = index_buffer {
+                gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ib.0.handle);
+            }
 
             let stride = size_of::<V>() as GLsizei;
             for attrib in V::vertex_attrib_data() {
