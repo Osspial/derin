@@ -6,41 +6,6 @@ pub trait Drawable<C: Composite = ()> {
     fn shader_data<'a>(&'a self) -> Shader<'a, C>;
 }
 
-pub enum Shader<'a, C: Composite> {
-    Verts {
-        verts: &'a [Vertex],
-        indices: &'a [u16]
-    },
-
-    Composite {
-        rect: Rect,
-        border: Border,
-        foreground: C::Foreground,
-        fill: C::Fill,
-        backdrop: C::Backdrop
-    },
-
-    None
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Vertex {
-    pub pos: Point,
-    pub normal: Vector2<f32>,
-    pub color: Color
-}
-
-impl Vertex {
-    #[inline]
-    pub fn new(pos: Point, normal: Vector2<f32>, color: Color) -> Vertex {
-        Vertex {
-            pos: pos,
-            normal: normal,
-            color: color
-        }
-    }
-}
-
 pub trait Composite: Drawable<Self> 
         where Self: Sized {
     type Foreground: Drawable<Self>;
@@ -89,6 +54,27 @@ impl Composite for () {
     fn backdrop(&self) {}
 }
 
+pub trait Surface {}
+
+pub struct Mask {}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Border {
+    Solid {
+        width: f32,
+        color: Color
+    },
+    None
+}
+
+impl Default for Border {
+    fn default() -> Border {
+        Border::None
+    }
+}
+
+
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Complex {
     pub rel: f32,
@@ -129,6 +115,24 @@ impl Point {
         Point {
             x: x,
             y: y
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Vertex {
+    pub pos: Point,
+    pub normal: Vector2<f32>,
+    pub color: Color
+}
+
+impl Vertex {
+    #[inline]
+    pub fn new(pos: Point, normal: Vector2<f32>, color: Color) -> Vertex {
+        Vertex {
+            pos: pos,
+            normal: normal,
+            color: color
         }
     }
 }
@@ -177,24 +181,22 @@ impl Default for Rect {
     }
 }
 
-pub struct Mask {}
-
-#[derive(Debug, Clone, Copy)]
-pub enum Border {
-    Solid {
-        width: f32,
-        color: Color
+pub enum Shader<'a, C: Composite> {
+    Verts {
+        verts: &'a [Vertex],
+        indices: &'a [u16]
     },
+
+    Composite {
+        rect: Rect,
+        border: Border,
+        foreground: C::Foreground,
+        fill: C::Fill,
+        backdrop: C::Backdrop
+    },
+
     None
 }
-
-impl Default for Border {
-    fn default() -> Border {
-        Border::None
-    }
-}
-
-pub trait Surface {}
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Color {
