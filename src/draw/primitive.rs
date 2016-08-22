@@ -8,8 +8,8 @@ pub struct ColorRect {
     pub color: Color,
     pub rect: Rect,
     num_updates: Cell<u64>,
-    old_color: Color,
-    old_rect: Rect,
+    old_color: Cell<Color>,
+    old_rect: Cell<Rect>,
     verts: UnsafeCell<[Vertex; 4]>
 }
 
@@ -20,8 +20,8 @@ impl ColorRect {
             color: color,
             rect: rect,
             num_updates: Cell::new(0),
-            old_color: color,
-            old_rect: rect,
+            old_color: Cell::new(color),
+            old_rect: Cell::new(rect),
             verts: UnsafeCell::new(unsafe{ mem::zeroed() })
         }
     }
@@ -66,9 +66,11 @@ impl Shadable for ColorRect {
     }
 
     fn num_updates(&self) -> u64 {
-        if self.old_color != self.color ||
-           self.old_rect != self.rect {
+        if self.old_color.get() != self.color ||
+           self.old_rect.get() != self.rect {
             self.num_updates.set(self.num_updates.get() + 1);
+            self.old_color.set(self.color);
+            self.old_rect.set(self.rect);
         }
 
         self.num_updates.get()
