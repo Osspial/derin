@@ -1,4 +1,5 @@
 pub mod primitive;
+pub mod gl;
 
 use cgmath::{Vector2};
 
@@ -74,7 +75,7 @@ impl Default for Border {
 }
 
 
-
+#[repr(C, packed)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Complex {
     pub rel: Point,
@@ -104,6 +105,7 @@ impl Complex {
     }
 }
 
+#[repr(C, packed)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Point {
     pub x: f32,
@@ -119,6 +121,7 @@ impl Point {
     }
 }
 
+#[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
 pub struct Vertex {
     pub pos: Complex,
@@ -196,6 +199,7 @@ pub enum Shader<'a, C: Composite> {
     None
 }
 
+#[repr(C, packed)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Color {
     pub r: u8,
