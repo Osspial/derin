@@ -180,18 +180,18 @@ impl<V: GLVertex> GLBuffer<V> for GLVertexBuffer<V> {
     }
 }
 
-pub struct GLIndexBuffer (Buffer<GLshort, GLIndexBuffer>);
+pub struct GLIndexBuffer (Buffer<GLushort, GLIndexBuffer>);
 
-impl GLBuffer<GLshort> for GLIndexBuffer {
+impl GLBuffer<GLushort> for GLIndexBuffer {
     fn new(capacity: usize, usage: BufferUsage) -> GLIndexBuffer {
         GLIndexBuffer( Buffer::new(capacity, usage) )
     }
 
-    fn from_slice(slice: &[GLshort], usage: BufferUsage) -> GLIndexBuffer {
+    fn from_slice(slice: &[GLushort], usage: BufferUsage) -> GLIndexBuffer {
         GLIndexBuffer( Buffer::from_slice(slice, usage) )
     }
 
-    fn with<'a, F: FnOnce(BufModder<'a, GLshort, GLIndexBuffer>)>(&'a self, func: F) {
+    fn with<'a, F: FnOnce(BufModder<'a, GLushort, GLIndexBuffer>)>(&'a self, func: F) {
         self.0.with(func)
     }
 
