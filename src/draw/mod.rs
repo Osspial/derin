@@ -29,8 +29,6 @@ pub trait Composite: Shadable<Self>
     fn foreground(&self) -> Self::Foreground;
     fn fill(&self) -> Self::Fill;
     fn backdrop(&self) -> Self::Backdrop;
-
-    fn num_updates(&self) -> u64;
 }
 
 impl<C: Composite> Shadable<C> for C {
@@ -45,13 +43,19 @@ impl<C: Composite> Shadable<C> for C {
     }
 
     default fn num_updates(&self) -> u64 {
-        <Self as Composite>::num_updates(self)
+        self.foreground().num_updates() +
+        self.fill().num_updates() +
+        self.backdrop().num_updates()
     }
 }
 
 impl Shadable for () {
     fn shader_data<'a>(&'a self) -> Shader<'a, ()> {
         Shader::None
+    }
+
+    fn num_updates(&self) -> u64 {
+        0
     }
 }
 
@@ -63,10 +67,6 @@ impl Composite for () {
     fn foreground(&self) {}
     fn fill(&self) {}
     fn backdrop(&self) {}
-
-    fn num_updates(&self) -> u64 {
-        0
-    }
 }
 
 pub trait Surface {}
