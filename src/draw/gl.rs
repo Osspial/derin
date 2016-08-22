@@ -2,19 +2,22 @@ use super::Vertex;
 
 use gl_raii::{GLVertexBuffer, GLVertex, BufferUsage,
               VertexAttribData, GLSLType, GLPrim,
-              GLVertexArray};
+              GLVertexArray, GLIndexBuffer, GLBuffer};
 
 pub struct BufferData {
     verts: GLVertexBuffer<Vertex>,
+    vert_indices: GLIndexBuffer,
     verts_vao: GLVertexArray<Vertex>
 }
 
 impl BufferData {
     pub fn new() -> BufferData {
         let verts = GLVertexBuffer::new(0, BufferUsage::Static);
-        let verts_vao = GLVertexArray::new(&verts);
+        let vert_indices = GLIndexBuffer::new(0, BufferUsage::Static);
+        let verts_vao = GLVertexArray::new(&verts, Some(&vert_indices));
         BufferData {
             verts: verts,
+            vert_indices: vert_indices,
             verts_vao: verts_vao
         }
     }
