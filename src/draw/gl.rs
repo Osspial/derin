@@ -84,6 +84,11 @@ impl Facade {
 
         gl::load_with(load_with);
 
+        unsafe {
+            gl::Enable(gl::BLEND);
+            gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+        }
+
         let mut colored_vertex_string = String::new();
         File::open("./src/shaders/colored_vertex.vert").unwrap().read_to_string(&mut colored_vertex_string).unwrap();
         let colored_vertex_vert = GLShader::new(ShaderType::Vertex, &colored_vertex_string).unwrap();
