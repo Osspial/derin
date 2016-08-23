@@ -31,7 +31,7 @@ impl Shadable for ColorRect {
     fn shader_data<'a>(&'a self) -> Shader<'a, ()> {
         // Yes, this is writing to potentially pointed-to data. However, the data being written isn't at
         // all different from the data that would have been in verts anyway, so we can get away with that.
-        let verts = &mut unsafe{ *self.verts.get() };
+        let verts = unsafe{ &mut *self.verts.get() };
         *verts = [
             Vertex::new(
                 self.rect.upleft,

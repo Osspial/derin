@@ -1,7 +1,9 @@
 use super::{Vertex, Shader, Drawable, Surface};
 
 use std::collections::HashMap;
+use std::os::raw::c_void;
 
+use gl;
 use gl::types::*;
 use gl_raii::{GLVertexBuffer, GLVertex, BufferUsage,
               VertexAttribData, GLSLType, GLPrim,
@@ -61,7 +63,7 @@ unsafe impl GLVertex for Vertex {
             // Color
             VertexAttribData {
                 index: 3,
-                glsl_type: GLSLType::Vec4(GLPrim::NByte),
+                glsl_type: GLSLType::Vec4(GLPrim::NUByte),
                 offset: 24
             }
         ];
@@ -76,9 +78,11 @@ pub struct Facade {
 }
 
 impl Facade {
-    pub fn new() -> Facade {
+    pub fn new<F: Fn(&str) -> *const c_void>(load_with: F) -> Facade {
         use std::fs::File;
         use std::io::Read;
+
+        gl::load_with(load_with);
 
         let mut colored_vertex_string = String::new();
         File::open("./src/shaders/colored_vertex.vert").unwrap().read_to_string(&mut colored_vertex_string).unwrap();
@@ -95,6 +99,17 @@ impl Facade {
             color_passthrough: color_passthrough
         }
     }
+
+    pub fn surface<'a>(&'a mut self) -> GLSurface {
+        unsafe {
+            gl::ClearColor(0.0, 0.0, 0.0, 1.0);
+            gl::Clear(gl::COLOR_BUFFER_BIT);
+        }
+
+        GLSurface {
+            facade: self
+        }
+    }
 }
 
 pub struct GLSurface<'a> {
@@ -103,7 +118,6 @@ pub struct GLSurface<'a> {
 
 impl<'a> Surface for GLSurface<'a> {
     fn draw<D: Drawable>(&mut self, drawable: &D) {
-        use gl;
         use std::ptr;
 
         use std::collections::hash_map::Entry;
@@ -123,7 +137,7 @@ impl<'a> Surface for GLSurface<'a> {
             }
         }
 
-        let mut draw_len = 0;
+        let draw_len = drawable.shader_data().count();
         if update_buffers {
             match drawable.shader_data() {
                 Shader::Verts {verts, indices} => {
@@ -134,8 +148,6 @@ impl<'a> Surface for GLSurface<'a> {
                     buffers.vert_indices.with(|modder| {
                         modder.upload_data(indices);
                     });
-
-                    draw_len = indices.len();
                 }
 
                 Shader::None => (),
