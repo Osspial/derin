@@ -7,3 +7,6 @@ authors = ["Osspial <osspial@gmail.com>"]
 gl = "0.6"
 gl_raii = {path="./gl_raii"}
 cgmath = "0.11"
+
+[dev-dependencies]
+glutin = "0.6"
