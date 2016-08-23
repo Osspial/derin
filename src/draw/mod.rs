@@ -91,24 +91,24 @@ pub struct Complex {
 }
 
 impl Complex {
-    pub fn new(rel: Point, abs: Point) -> Complex {
+    pub fn new(rel_x: f32, rel_y: f32, abs_x: f32, abs_y: f32) -> Complex {
         Complex {
-            rel: rel,
-            abs: abs
+            rel: Point::new(rel_x, rel_y),
+            abs: Point::new(abs_x, abs_y)
         }
     }
 
-    pub fn new_rel(rel: Point) -> Complex {
+    pub fn new_rel(x: f32, y: f32) -> Complex {
         Complex {
-            rel: rel,
+            rel: Point::new(x, y),
             abs: Point::new(0.0, 0.0)
         }
     }
 
-    pub fn new_abs(abs: Point) -> Complex {
+    pub fn new_abs(x: f32, y: f32) -> Complex {
         Complex {
             rel: Point::new(0.0, 0.0),
-            abs: abs
+            abs: Point::new(x, y)
         }
     }
 }
@@ -184,8 +184,8 @@ impl Rect {
 impl Default for Rect {
     fn default() -> Rect {
         Rect::new(
-            Complex::new_rel(Point::new(-1.0,  1.0)),
-            Complex::new_rel(Point::new( 1.0, -1.0))
+            Complex::new_rel(-1.0,  1.0),
+            Complex::new_rel( 1.0, -1.0)
         )
     }
 }

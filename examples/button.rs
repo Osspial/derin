@@ -40,8 +40,8 @@ fn main() {
         rect: ColorRect::new(
             Color::new(255, 255, 255, 255), 
             Rect::new(
-                Complex::new_rel(Point::new(-0.5,  0.5)),
-                Complex::new_rel(Point::new( 0.5, -0.5))
+                Complex::new_rel(-0.5,  0.5),
+                Complex::new_rel( 0.5, -0.5)
             )
         ),
         buffers: BufferData::new()
