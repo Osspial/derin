@@ -5,23 +5,25 @@ use self::gl::BufferData;
 
 use cgmath::{Vector2};
 
-pub trait Drawable<C: Composite = ()>: Shadable<C> {
+pub trait Drawable: Shadable {
     fn buffer_data(&self) -> &BufferData;
 }
 
-pub trait Shadable<C: Composite = ()> {
-    fn shader_data<'a>(&'a self) -> Shader<'a, C>;
+pub trait Shadable {
+    type Composite: Composite;
+
+    fn shader_data<'a>(&'a self) -> Shader<'a, Self::Composite>;
     /// The number of times that this type's shader data has been updated. Note that this doesn't
     /// have to be exact - all that matters is that, if there has been an update since the last time
     /// this function was called, the number is greater than it was the previous call.
     fn num_updates(&self) -> u64;
 }
 
-pub trait Composite: Shadable<Self> 
+pub trait Composite: Shadable 
         where Self: Sized {
-    type Foreground: Shadable<Self>;
-    type Fill: Shadable<Self>;
-    type Backdrop: Shadable<Self>;
+    type Foreground: Shadable;
+    type Fill: Shadable;
+    type Backdrop: Shadable;
 
     fn rect(&self) -> Rect {
         Default::default()
@@ -37,25 +39,9 @@ pub trait Composite: Shadable<Self>
     fn backdrop(&self) -> Self::Backdrop;
 }
 
-impl<C: Composite> Shadable<C> for C {
-    default fn shader_data<'a>(&'a self) -> Shader<'a, C> {
-        Shader::Composite {
-            rect: self.rect(),
-            border: self.border(),
-            foreground: self.foreground(),
-            fill: self.fill(),
-            backdrop: self.backdrop()
-        }
-    }
-
-    default fn num_updates(&self) -> u64 {
-        self.foreground().num_updates() +
-        self.fill().num_updates() +
-        self.backdrop().num_updates()
-    }
-}
-
 impl Shadable for () {
+    type Composite = ();
+
     fn shader_data<'a>(&'a self) -> Shader<'a, ()> {
         Shader::None
     }

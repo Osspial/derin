@@ -28,6 +28,7 @@ impl ColorRect {
 }
 
 impl Shadable for ColorRect {
+    type Composite = ();
     fn shader_data<'a>(&'a self) -> Shader<'a, ()> {
         // Yes, this is writing to potentially pointed-to data. However, the data being written isn't at
         // all different from the data that would have been in verts anyway, so we can get away with that.
@@ -74,6 +75,17 @@ impl Shadable for ColorRect {
         }
 
         self.num_updates.get()
+    }
+}
+
+impl<'b> Shadable for &'b ColorRect {
+    type Composite = ();
+    fn shader_data<'a>(&'a self) -> Shader<'a, ()> {
+        (*self).shader_data()
+    }
+
+    fn num_updates(&self) -> u64 {
+        (*self).num_updates()
     }
 }
 
