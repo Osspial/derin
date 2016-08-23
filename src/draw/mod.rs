@@ -1,6 +1,8 @@
 pub mod primitive;
 pub mod gl;
 
+use std::ops::{Add, Div};
+
 use self::gl::BufferData;
 
 use cgmath::{Vector2};
@@ -129,6 +131,28 @@ impl Point {
     }
 }
 
+impl Add for Point {
+    type Output = Point;
+
+    fn add(self, other: Point) -> Point {
+        Point {
+            x: self.x + other.x,
+            y: self.y + other.y
+        }
+    }
+}
+
+impl Div<f32> for Point {
+    type Output = Point;
+
+    fn div(self, divisor: f32) -> Point {
+        Point {
+            x: self.x / divisor,
+            y: self.y / divisor
+        }
+    }
+}
+
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Vertex {
@@ -179,6 +203,13 @@ impl Rect {
             abs: Point::new(self.upleft.abs.x, self.lowright.abs.y)
         }
     }
+
+    pub fn center(self) -> Complex {
+        Complex {
+            rel: (self.upleft.rel + self.lowright.rel) / 2.0,
+            abs: (self.upleft.abs + self.lowright.abs) / 2.0
+        }
+    }
 }
 
 impl Default for Rect {
@@ -213,8 +244,13 @@ impl<'a, C: Composite> Shader<'a, C> {
 
         match *self {
             Verts{indices, ..} => indices.len(),
-            None => 0,
-            _ => unimplemented!()
+
+            Composite{ref foreground, ref fill, ref backdrop, ..} =>
+                foreground.shader_data().count() +
+                fill.shader_data().count() +
+                backdrop.shader_data().count(),
+
+            None => 0
         }
     }
 }

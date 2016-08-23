@@ -1,4 +1,4 @@
-use super::{Vertex, Shader, Drawable, Surface};
+use super::{Vertex, Shader, Shadable, Drawable, Surface};
 
 use std::collections::HashMap;
 use std::os::raw::c_void;
@@ -8,7 +8,7 @@ use gl::types::*;
 use gl_raii::{GLVertexBuffer, GLVertex, BufferUsage,
               VertexAttribData, GLSLType, GLPrim,
               GLVertexArray, GLIndexBuffer, GLBuffer,
-              GLProgram, GLShader, ShaderType};
+              GLProgram, GLShader, ShaderType, BufModder};
 
 static mut ID_COUNTER: u64 = 0;
 
@@ -144,20 +144,19 @@ impl<'a> Surface for GLSurface<'a> {
 
         let draw_len = drawable.shader_data().count();
         if update_buffers {
-            match drawable.shader_data() {
-                Shader::Verts {verts, indices} => {
-                    buffers.verts.with(|modder| {
-                        modder.upload_data(verts);
-                    });
+            buffers.verts.with(|vert_modder|
+                buffers.vert_indices.with(|index_modder| {
+                    let mut bud = BufferUpdateData {
+                        vert_offset: 0,
+                        vert_modder: vert_modder,
+                        index_offset: 0,
+                        offsetted_indices: Vec::new(),
+                        index_modder: index_modder
+                    };
 
-                    buffers.vert_indices.with(|modder| {
-                        modder.upload_data(indices);
-                    });
-                }
-
-                Shader::None => (),
-                _ => unimplemented!()
-            }
+                    bud.update_buffers(drawable);
+                })
+            );
         }
 
         self.facade.color_passthrough.with(|_| {
@@ -165,5 +164,49 @@ impl<'a> Surface for GLSurface<'a> {
                 gl::DrawElements(gl::TRIANGLES, draw_len as GLsizei, gl::UNSIGNED_SHORT, ptr::null());
             }});
         });
+    }
+}
+
+struct BufferUpdateData<'a> {
+    vert_offset: usize,
+    vert_modder: BufModder<'a, Vertex, GLVertexBuffer<Vertex>>,
+    index_offset: usize,
+    offsetted_indices: Vec<u16>,
+    index_modder: BufModder<'a, u16, GLIndexBuffer>
+}
+
+impl<'a> BufferUpdateData<'a> {
+    fn update_buffers<S: Shadable>(&mut self, shadable: &S) {
+        match shadable.shader_data() {
+            Shader::Verts {verts, indices} => {
+                self.vert_modder.sub_data(self.vert_offset, verts);
+
+                if self.index_offset > 0 {
+                    // Clear the vector without de-allocating memory
+                    unsafe{ self.offsetted_indices.set_len(0) };
+
+                    // Because every vertex is being stored in one vertex buffer, we need to offset the indices so that
+                    // they all get drawn properly
+                    let vert_offset = self.vert_offset as u16;
+                    self.offsetted_indices.extend(indices.iter().map(|i| *i + vert_offset));
+
+                    self.index_modder.sub_data(self.index_offset, &self.offsetted_indices);
+                } else {
+                    self.index_modder.sub_data(self.index_offset, indices);
+                }
+
+                self.vert_offset += verts.len();
+                self.index_offset += indices.len();
+            }
+
+            Shader::Composite{foreground, fill, backdrop, ..} => {
+                // We order the vertices so that OpenGL draws them back-to-front
+                self.update_buffers(&backdrop);
+                self.update_buffers(&fill);
+                self.update_buffers(&foreground);
+            }
+
+            Shader::None => ()
+        }
     }
 }

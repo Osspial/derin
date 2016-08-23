@@ -4,7 +4,7 @@ use gl::types::*;
 
 use std::ptr;
 use std::marker::PhantomData;
-use std::cell::Cell;
+use std::cell::RefCell;
 
 pub type GLError = String;
 
@@ -13,7 +13,7 @@ fn byte_slice_size<T>(slice: &[T]) -> GLsizeiptr {
     (size_of::<T>() * slice.len()) as GLsizeiptr
 }
 
-pub unsafe trait GLVertex: Sized {
+pub unsafe trait GLVertex: Sized + Copy {
     unsafe fn vertex_attrib_data() -> &'static [VertexAttribData];
 }
 
@@ -149,7 +149,7 @@ impl BufferUsage {
     }
 }
 
-pub trait GLBuffer<T> 
+pub trait GLBuffer<T: Copy> 
         where Self: Sized {
     fn new(capacity: usize, usage: BufferUsage) -> Self;
     fn from_slice(slice: &[T], usage: BufferUsage) -> Self;
@@ -202,14 +202,14 @@ impl GLBuffer<GLushort> for GLIndexBuffer {
 }
 
 /// RAII wrapper around OpenGL buffers
-struct Buffer<T, B: GLBuffer<T>> {
+struct Buffer<T: Copy, B: GLBuffer<T>> {
     handle: GLuint,
-    capacity: Cell<usize>,
+    data: RefCell<Vec<T>>,
     usage: BufferUsage,
     _marker: PhantomData<(T, B)>
 }
 
-impl<T, B: GLBuffer<T>> Buffer<T, B> {
+impl<T: Copy, B: GLBuffer<T>> Buffer<T, B> {
     fn new(capacity: usize, usage: BufferUsage) -> Buffer<T, B> {
         unsafe {
             use std::mem::size_of;
@@ -223,7 +223,7 @@ impl<T, B: GLBuffer<T>> Buffer<T, B> {
 
             Buffer {
                 handle: handle,
-                capacity: Cell::new(capacity),
+                data: RefCell::new(Vec::with_capacity(capacity)),
                 usage: usage,
                 _marker: PhantomData
             }
@@ -239,9 +239,11 @@ impl<T, B: GLBuffer<T>> Buffer<T, B> {
             gl::BufferData(B::buffer_type(), byte_slice_size(slice), slice.as_ptr() as *const _, usage.to_gl_enum());
             gl::BindBuffer(B::buffer_type(), 0);
 
+            let data = slice.to_vec();
+
             Buffer {
                 handle: handle,
-                capacity: Cell::new(slice.len()),
+                data: RefCell::new(data),
                 usage: usage,
                 _marker: PhantomData
             }
@@ -257,26 +259,31 @@ impl<T, B: GLBuffer<T>> Buffer<T, B> {
     }
 }
 
-pub struct BufModder<'a, T: 'a, B: 'a + GLBuffer<T>>(&'a Buffer<T, B>);
+pub struct BufModder<'a, T: 'a + Copy, B: 'a + GLBuffer<T>>(&'a Buffer<T, B>);
 
-impl<'a, T: 'a, B: 'a + GLBuffer<T>> BufModder<'a, T, B> {
-    pub fn upload_data(&self, data: &[T]) {
+impl<'a, T: 'a + Copy, B: 'a + GLBuffer<T>> BufModder<'a, T, B> {
+    pub fn sub_data(&self, offset: usize, data: &[T]) {
         unsafe {
-            if self.0.capacity.get() < data.len() {
+            let mut cached_data = self.0.data.borrow_mut();
+
+            if cached_data.capacity() < data.len() + offset {
+                cached_data.truncate(offset);
+                cached_data.extend_from_slice(data);
+                
                 gl::BufferData(
-                    B::buffer_type(), 
-                    byte_slice_size(data), 
-                    data.as_ptr() as *const _, 
+                    B::buffer_type(),
+                    byte_slice_size(&cached_data),
+                    cached_data.as_ptr() as *const _,
                     self.0.usage.to_gl_enum()
                 );
-                self.0.capacity.set(data.len());
             } else {
+                cached_data[offset..data.len() + offset].copy_from_slice(data); 
                 gl::BufferSubData(
                     B::buffer_type(),
-                    0,
+                    offset as GLintptr,
                     byte_slice_size(data),
                     data.as_ptr() as *const _
-                );
+                )
             }
         }
     }
