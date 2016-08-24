@@ -128,8 +128,11 @@ fn main() {
 
     'main: loop {
         for event in window.poll_events() {
+            use glutin::Event::*;
+
             match event {
-                glutin::Event::Closed => break 'main,
+                Closed => break 'main,
+                Resized(x, y) => display.resize(x, y),
                 _ => ()
             }
         }

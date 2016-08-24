@@ -129,6 +129,10 @@ impl Facade {
         }
     }
 
+    pub fn resize(&self, x: u32, y: u32) {
+        unsafe{ gl::Viewport(0, 0, x as GLint, y as GLint) };
+    }
+
     pub fn surface<'a>(&'a mut self) -> GLSurface {
         unsafe {
             gl::ClearColor(0.0, 0.0, 0.0, 1.0);
