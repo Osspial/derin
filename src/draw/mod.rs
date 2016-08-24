@@ -1,7 +1,7 @@
 pub mod primitive;
 pub mod gl;
 
-use std::ops::{Add, Div};
+use std::ops::{Add, Mul, Div};
 
 use self::gl::BufferData;
 
@@ -113,6 +113,11 @@ impl Complex {
             abs: Point::new(x, y)
         }
     }
+
+    /// TODO: Properly implement
+    pub fn to_rel(self) -> Point {
+        self.rel
+    }
 }
 
 #[repr(C, packed)]
@@ -138,6 +143,17 @@ impl Add for Point {
         Point {
             x: self.x + other.x,
             y: self.y + other.y
+        }
+    }
+}
+
+impl Mul<f32> for Point {
+    type Output = Point;
+
+    fn mul(self, mult: f32) -> Point {
+        Point {
+            x: self.x * mult,
+            y: self.y * mult
         }
     }
 }

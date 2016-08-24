@@ -107,7 +107,7 @@ fn main() {
     let composite = CompositeRects {
         rect: Rect::new(
                 Complex::new_rel(-1.0, 1.0),
-                Complex::new_rel( 1.0, 0.0)
+                Complex::new_rel( 0.8, 0.0)
             ),
         front: ColorRect::new(
                 Color::new(255, 0, 0, 255),
