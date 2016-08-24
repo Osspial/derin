@@ -285,7 +285,7 @@ impl<'a> BufferUpdateData<'a> {
             Shader::Composite{foreground, fill, backdrop, rect, ..} => {
                 let center = rect.center().to_rel();
                 let height = rect.upleft.rel.y - rect.lowright.rel.y;
-                let width = rect.upleft.rel.x - rect.lowright.rel.x;
+                let width = rect.lowright.rel.x - rect.upleft.rel.x;
 
                 let new_matrix = self.matrix_stack.last().unwrap() * Matrix3::new(
                     width/2.0,        0.0, 0.0,
