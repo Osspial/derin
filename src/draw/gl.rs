@@ -10,7 +10,7 @@ use gl_raii::{GLVertexBuffer, GLVertex, BufferUsage,
               GLVertexArray, GLIndexBuffer, GLBuffer,
               GLProgram, GLShader, ShaderType, BufModder};
 
-use cgmath::Matrix3;
+use cgmath::{Matrix3, Vector2};
 use cgmath::prelude::*;
 
 static mut ID_COUNTER: u64 = 0;
@@ -77,7 +77,8 @@ unsafe impl GLVertex for Vertex {
 
 struct ColorVertexProgram {
     program: GLProgram,
-    transform_matrix_uniform: GLint
+    transform_matrix_uniform: GLint,
+    abs_rel_scale_uniform: GLint
 }
 
 impl ColorVertexProgram {
@@ -96,10 +97,12 @@ impl ColorVertexProgram {
         let program = GLProgram::new(&colored_vertex_vert, &color_passthrough_frag).unwrap();
 
         let transform_matrix_uniform = unsafe{ gl::GetUniformLocation(program.handle, "transform_matrix\0".as_ptr() as *const GLchar) };
+        let abs_rel_scale_uniform = unsafe{ gl::GetUniformLocation(program.handle, "abs_rel_scale\0".as_ptr() as *const GLchar) };
 
         ColorVertexProgram {
             program: program,
-            transform_matrix_uniform: transform_matrix_uniform
+            transform_matrix_uniform: transform_matrix_uniform,
+            abs_rel_scale_uniform: abs_rel_scale_uniform
         }
     }
 }
@@ -111,26 +114,35 @@ struct IDMapEntry {
 
 pub struct Facade {
     id_map: HashMap<u64, IDMapEntry>,
-    color_passthrough: ColorVertexProgram
+    color_passthrough: ColorVertexProgram,
+    pub dpi: f32,
+    viewport_size: (GLint, GLint)
 }
 
 impl Facade {
     pub fn new<F: Fn(&str) -> *const c_void>(load_with: F) -> Facade {
         gl::load_with(load_with);
 
+        let mut viewport_info = [0; 4];
+
         unsafe {
             gl::Enable(gl::BLEND);
             gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+            gl::GetIntegerv(gl::VIEWPORT, viewport_info.as_mut_ptr());
         }
 
         Facade {
             id_map: HashMap::with_capacity(32),
-            color_passthrough: ColorVertexProgram::new()
+            color_passthrough: ColorVertexProgram::new(),
+            dpi: 72.0,
+            viewport_size: (viewport_info[2], viewport_info[3])
         }
     }
 
-    pub fn resize(&self, x: u32, y: u32) {
-        unsafe{ gl::Viewport(0, 0, x as GLint, y as GLint) };
+    pub fn resize(&mut self, x: u32, y: u32) {
+        self.viewport_size = (x as GLint, y as GLint);
+
+        unsafe{ gl::Viewport(0, 0, self.viewport_size.0, self.viewport_size.1) };
     }
 
     pub fn surface<'a>(&'a mut self) -> GLSurface {
@@ -175,6 +187,9 @@ impl<'a> Surface for GLSurface<'a> {
             }
         }
         
+        let dpi = self.facade.dpi;
+        let viewport_size = self.facade.viewport_size;
+
         if update_buffers {
             buffers.verts.with(|vert_modder|
                 buffers.vert_indices.with(|index_modder| {
@@ -186,7 +201,10 @@ impl<'a> Surface for GLSurface<'a> {
                         index_modder: index_modder,
 
                         base_vertex_vec: vec![Default::default(); 1],
-                        matrix_stack: vec![One::one(); 1]
+                        matrix_stack: vec![One::one(); 1],
+
+                        dpi: dpi,
+                        viewport_size: viewport_size
                     };
 
                     bud.update_buffers(drawable);
@@ -202,6 +220,8 @@ impl<'a> Surface for GLSurface<'a> {
         }
 
         let transform_matrix_uniform = self.facade.color_passthrough.transform_matrix_uniform;
+        let abs_rel_scale_uniform = self.facade.color_passthrough.abs_rel_scale_uniform;
+
         self.facade.color_passthrough.program.with(|_| {
             buffers.verts_vao.with(|_| {
                 for bvd in id_map_entry.base_vertex_vec.iter() {unsafe{
@@ -211,6 +231,12 @@ impl<'a> Surface for GLSurface<'a> {
                         gl::FALSE,
                         bvd.matrix.as_ptr()
                     );
+
+                    gl::Uniform2f(
+                        abs_rel_scale_uniform,
+                        bvd.abs_rel_scale.x, bvd.abs_rel_scale.y
+                    );
+
 
                     gl::DrawElementsBaseVertex(
                         gl::TRIANGLES, 
@@ -230,7 +256,8 @@ struct BaseVertexData {
     offset: usize,
     count: usize,
     base_vertex: usize,
-    matrix: Matrix3<f32>
+    matrix: Matrix3<f32>,
+    abs_rel_scale: Vector2<f32>
 }
 
 impl Default for BaseVertexData {
@@ -239,7 +266,8 @@ impl Default for BaseVertexData {
             offset: 0,
             count: 0,
             base_vertex: 0,
-            matrix: One::one()
+            matrix: One::one(),
+            abs_rel_scale: Zero::zero()
         }
     }
 }
@@ -252,7 +280,10 @@ struct BufferUpdateData<'a> {
     index_modder: BufModder<'a, u16, GLIndexBuffer>,
 
     base_vertex_vec: Vec<BaseVertexData>,
-    matrix_stack: Vec<Matrix3<f32>>
+    matrix_stack: Vec<Matrix3<f32>>,
+
+    dpi: f32,
+    viewport_size: (GLint, GLint)
 }
 
 impl<'a> BufferUpdateData<'a> {
@@ -283,17 +314,25 @@ impl<'a> BufferUpdateData<'a> {
             }
 
             Shader::Composite{foreground, fill, backdrop, rect, ..} => {
-                let center = rect.center().to_rel();
-                let height = rect.upleft.rel.y - rect.lowright.rel.y;
-                let width = rect.lowright.rel.x - rect.upleft.rel.x;
+                let new_matrix = {
+                    let center = rect.center().to_rel();
+                    let width = rect.lowright.rel.x - rect.upleft.rel.x;
+                    let height = rect.upleft.rel.y - rect.lowright.rel.y;
 
-                let new_matrix = self.matrix_stack.last().unwrap() * Matrix3::new(
-                    width/2.0,        0.0, 0.0,
-                          0.0, height/2.0, 0.0,
-                     center.x,   center.y, 1.0
+                    self.matrix_stack.last().unwrap() * Matrix3::new(
+                        width/2.0,        0.0, 0.0,
+                              0.0, height/2.0, 0.0,
+                         center.x,   center.y, 1.0
+                    )
+                };
+
+                let abs_rel_scale = Vector2::new(
+                    1.0 / new_matrix.x.x * (self.dpi / self.viewport_size.0 as f32 / 10.0 / 2.0),
+                    1.0 / new_matrix.y.y * (self.dpi / self.viewport_size.1 as f32 / 10.0 / 2.0)
                 );
 
                 self.base_vertex_vec.last_mut().unwrap().matrix = new_matrix;
+                self.base_vertex_vec.last_mut().unwrap().abs_rel_scale = abs_rel_scale;
                 self.matrix_stack.push(new_matrix);
 
                 // We order the vertices so that OpenGL draws them back-to-front

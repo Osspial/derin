@@ -112,8 +112,8 @@ fn main() {
         front: ColorRect::new(
                 Color::new(255, 0, 0, 255),
                 Rect::new(
-                    Complex::new_rel(-0.8,  0.8),
-                    Complex::new_rel( 0.8, -0.8)
+                    Complex::new(-1.0,  1.0,  12.0, -12.0),
+                    Complex::new( 1.0, -1.0, -12.0,  12.0)
                 )
             ),
         fill: ColorRect::new(
