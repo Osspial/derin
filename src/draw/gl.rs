@@ -1,4 +1,4 @@
-use super::{Vertex, Shader, Shadable, Drawable, Surface};
+use super::{Point, Vertex, Shader, Shadable, Drawable, Surface};
 
 use std::collections::HashMap;
 use std::os::raw::c_void;
@@ -134,7 +134,7 @@ impl Facade {
         Facade {
             id_map: HashMap::with_capacity(32),
             color_passthrough: ColorVertexProgram::new(),
-            dpi: 72.0,
+            dpi: 96.0,
             viewport_size: (viewport_info[2], viewport_info[3])
         }
     }
@@ -314,21 +314,34 @@ impl<'a> BufferUpdateData<'a> {
             }
 
             Shader::Composite{foreground, fill, backdrop, rect, ..} => {
-                let new_matrix = {
-                    let center = rect.center().to_rat();
-                    let width = rect.lowright.rat.x - rect.upleft.rat.x;
-                    let height = rect.upleft.rat.y - rect.lowright.rat.y;
+                let last_matrix = self.matrix_stack.last().unwrap().clone();
 
-                    self.matrix_stack.last().unwrap() * Matrix3::new(
-                        width/2.0,        0.0, 0.0,
-                              0.0, height/2.0, 0.0,
-                         center.x,   center.y, 1.0
-                    )
-                };
+                let (rat_width, rat_height) =
+                    (
+                        last_matrix.x.x * (rect.lowright.rat.x - rect.upleft.rat.x),
+                        last_matrix.y.y * (rect.upleft.rat.y - rect.lowright.rat.y)
+                    );
 
                 let pts_rat_scale = Vector2::new(
-                    1.0 / new_matrix.x.x * (self.dpi / self.viewport_size.0 as f32 / 10.0 / 2.0),
-                    1.0 / new_matrix.y.y * (self.dpi / self.viewport_size.1 as f32 / 10.0 / 2.0)
+                    1.0 / rat_width * (self.dpi / self.viewport_size.0 as f32 / 10.0 / 2.0),
+                    1.0 / rat_height * (self.dpi / self.viewport_size.1 as f32 / 10.0 / 2.0)
+                );
+
+                let complex_center = rect.center();
+                let center = 
+                    complex_center.rat + 
+                    Point::new(
+                        complex_center.pts.x * pts_rat_scale.x,
+                        complex_center.pts.y * pts_rat_scale.y
+                    );
+
+                let width = rat_width + (rect.lowright.pts.x - rect.upleft.rat.y) * pts_rat_scale.x;
+                let height = rat_height + (rect.upleft.pts.y - rect.lowright.pts.y) * pts_rat_scale.y;
+
+                let new_matrix = last_matrix * Matrix3::new(
+                    width/2.0,        0.0, 0.0,
+                          0.0, height/2.0, 0.0,
+                     center.x,   center.y, 1.0
                 );
 
                 self.base_vertex_vec.last_mut().unwrap().matrix = new_matrix;

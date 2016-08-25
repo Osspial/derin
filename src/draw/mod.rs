@@ -115,11 +115,6 @@ impl Complex {
             pts: Point::new(x, y)
         }
     }
-
-    /// TODO: Properly implement
-    pub fn to_rat(self) -> Point {
-        self.rat
-    }
 }
 
 #[repr(C, packed)]
