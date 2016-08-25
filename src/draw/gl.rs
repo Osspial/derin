@@ -116,7 +116,8 @@ pub struct Facade {
     id_map: HashMap<u64, IDMapEntry>,
     color_passthrough: ColorVertexProgram,
     pub dpi: f32,
-    viewport_size: (GLint, GLint)
+    viewport_size: (GLint, GLint),
+    viewport_size_changed: bool
 }
 
 impl Facade {
@@ -135,12 +136,14 @@ impl Facade {
             id_map: HashMap::with_capacity(32),
             color_passthrough: ColorVertexProgram::new(),
             dpi: 96.0,
-            viewport_size: (viewport_info[2], viewport_info[3])
+            viewport_size: (viewport_info[2], viewport_info[3]),
+            viewport_size_changed: false
         }
     }
 
     pub fn resize(&mut self, x: u32, y: u32) {
         self.viewport_size = (x as GLint, y as GLint);
+        self.viewport_size_changed = true;
 
         unsafe{ gl::Viewport(0, 0, self.viewport_size.0, self.viewport_size.1) };
     }
@@ -190,7 +193,7 @@ impl<'a> Surface for GLSurface<'a> {
         let dpi = self.facade.dpi;
         let viewport_size = self.facade.viewport_size;
 
-        if update_buffers {
+        if update_buffers || self.facade.viewport_size_changed {
             buffers.verts.with(|vert_modder|
                 buffers.vert_indices.with(|index_modder| {
                     let mut bud = BufferUpdateData {
@@ -248,6 +251,12 @@ impl<'a> Surface for GLSurface<'a> {
                 }}
             });
         });
+    }
+}
+
+impl<'a> Drop for GLSurface<'a> {
+    fn drop(&mut self) {
+        self.facade.viewport_size_changed = false;
     }
 }
 
