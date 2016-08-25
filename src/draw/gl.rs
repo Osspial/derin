@@ -135,7 +135,7 @@ impl Facade {
         Facade {
             id_map: HashMap::with_capacity(32),
             color_passthrough: ColorVertexProgram::new(),
-            dpi: 96.0,
+            dpi: 72.0,
             viewport_size: (viewport_info[2], viewport_info[3]),
             viewport_size_changed: false
         }
@@ -332,8 +332,8 @@ impl<'a> BufferUpdateData<'a> {
                     );
 
                 let pts_rat_scale = Vector2::new(
-                    1.0 / rat_width * (self.dpi / self.viewport_size.0 as f32 / 10.0 / 2.0),
-                    1.0 / rat_height * (self.dpi / self.viewport_size.1 as f32 / 10.0 / 2.0)
+                    (4.0 / rat_width) * self.dpi / (self.viewport_size.0 as f32 * 72.0),
+                    (4.0 / rat_height) * self.dpi / (self.viewport_size.1 as f32 * 72.0)
                 );
 
                 let complex_center = rect.center();
