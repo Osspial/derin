@@ -262,7 +262,9 @@ impl<T: Copy, B: GLBuffer<T>> Buffer<T, B> {
 pub struct BufModder<'a, T: 'a + Copy, B: 'a + GLBuffer<T>>(&'a Buffer<T, B>);
 
 impl<'a, T: 'a + Copy, B: 'a + GLBuffer<T>> BufModder<'a, T, B> {
-    pub fn sub_data(&self, offset: usize, data: &[T]) {
+    pub fn sub_data(&self, offset: usize, data: &[T]) 
+            where T: std::fmt::Debug {
+        use std::mem;
         unsafe {
             let mut cached_data = self.0.data.borrow_mut();
 
@@ -280,7 +282,7 @@ impl<'a, T: 'a + Copy, B: 'a + GLBuffer<T>> BufModder<'a, T, B> {
                 cached_data[offset..data.len() + offset].copy_from_slice(data); 
                 gl::BufferSubData(
                     B::buffer_type(),
-                    offset as GLintptr,
+                    (mem::size_of::<T>() * offset) as GLintptr,
                     byte_slice_size(data),
                     data.as_ptr() as *const _
                 )
