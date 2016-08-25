@@ -88,35 +88,37 @@ impl Default for Border {
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Complex {
-    pub rel: Point,
-    pub abs: Point
+    /// The Ratio component
+    pub rat: Point,
+    /// The [Point (as in the typographic unit)](https://en.wikipedia.org/wiki/Point_(typography)) component
+    pub pts: Point
 }
 
 impl Complex {
-    pub fn new(rel_x: f32, rel_y: f32, abs_x: f32, abs_y: f32) -> Complex {
+    pub fn new(rat_x: f32, rat_y: f32, pts_x: f32, pts_y: f32) -> Complex {
         Complex {
-            rel: Point::new(rel_x, rel_y),
-            abs: Point::new(abs_x, abs_y)
+            rat: Point::new(rat_x, rat_y),
+            pts: Point::new(pts_x, pts_y)
         }
     }
 
-    pub fn new_rel(x: f32, y: f32) -> Complex {
+    pub fn new_rat(x: f32, y: f32) -> Complex {
         Complex {
-            rel: Point::new(x, y),
-            abs: Point::new(0.0, 0.0)
+            rat: Point::new(x, y),
+            pts: Point::new(0.0, 0.0)
         }
     }
 
-    pub fn new_abs(x: f32, y: f32) -> Complex {
+    pub fn new_pts(x: f32, y: f32) -> Complex {
         Complex {
-            rel: Point::new(0.0, 0.0),
-            abs: Point::new(x, y)
+            rat: Point::new(0.0, 0.0),
+            pts: Point::new(x, y)
         }
     }
 
     /// TODO: Properly implement
-    pub fn to_rel(self) -> Point {
-        self.rel
+    pub fn to_rat(self) -> Point {
+        self.rat
     }
 }
 
@@ -207,23 +209,23 @@ impl Rect {
     /// Calculate upper-right corner of rectangle
     pub fn upright(self) -> Complex {
         Complex {
-            rel: Point::new(self.lowright.rel.x, self.upleft.rel.y),
-            abs: Point::new(self.lowright.abs.x, self.upleft.abs.y)
+            rat: Point::new(self.lowright.rat.x, self.upleft.rat.y),
+            pts: Point::new(self.lowright.pts.x, self.upleft.pts.y)
         }
     }
 
     /// Calculate lower-left corner of rectangle
     pub fn lowleft(self) -> Complex {
         Complex {
-            rel: Point::new(self.upleft.rel.x, self.lowright.rel.y),
-            abs: Point::new(self.upleft.abs.x, self.lowright.abs.y)
+            rat: Point::new(self.upleft.rat.x, self.lowright.rat.y),
+            pts: Point::new(self.upleft.pts.x, self.lowright.pts.y)
         }
     }
 
     pub fn center(self) -> Complex {
         Complex {
-            rel: (self.upleft.rel + self.lowright.rel) / 2.0,
-            abs: (self.upleft.abs + self.lowright.abs) / 2.0
+            rat: (self.upleft.rat + self.lowright.rat) / 2.0,
+            pts: (self.upleft.pts + self.lowright.pts) / 2.0
         }
     }
 }
@@ -231,8 +233,8 @@ impl Rect {
 impl Default for Rect {
     fn default() -> Rect {
         Rect::new(
-            Complex::new_rel(-1.0,  1.0),
-            Complex::new_rel( 1.0, -1.0)
+            Complex::new_rat(-1.0,  1.0),
+            Complex::new_rat( 1.0, -1.0)
         )
     }
 }

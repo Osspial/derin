@@ -97,8 +97,8 @@ fn main() {
         rect: ColorRect::new(
             Color::new(255, 255, 255, 255), 
             Rect::new(
-                Complex::new_rel(-0.5,  0.5),
-                Complex::new_rel( 0.5, -0.5)
+                Complex::new_rat(-0.5,  0.5),
+                Complex::new_rat( 0.5, -0.5)
             )
         ),
         buffers: BufferData::new()
@@ -106,8 +106,8 @@ fn main() {
 
     let composite = CompositeRects {
         rect: Rect::new(
-                Complex::new_rel(-1.0, 1.0),
-                Complex::new_rel( 0.8, 0.0)
+                Complex::new_rat(-1.0, 1.0),
+                Complex::new_rat( 0.8, 0.0)
             ),
         front: ColorRect::new(
                 Color::new(255, 0, 0, 255),
@@ -119,8 +119,8 @@ fn main() {
         fill: ColorRect::new(
                 Color::new(255, 255, 0, 128),
                 Rect::new(
-                    Complex::new_rel(-1.0,  1.0),
-                    Complex::new_rel( 1.0, -1.0)
+                    Complex::new_rat(-1.0,  1.0),
+                    Complex::new_rat( 1.0, -1.0)
                 )
             ),
         buffers: BufferData::new()

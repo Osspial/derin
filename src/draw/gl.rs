@@ -42,14 +42,14 @@ impl BufferData {
 unsafe impl GLVertex for Vertex {
     unsafe fn vertex_attrib_data() -> &'static [VertexAttribData] {
         const VAD: &'static [VertexAttribData] = &[
-            // Relative point
+            // Ratio Vec2
             VertexAttribData {
                 index: 0,
                 glsl_type: GLSLType::Vec2(GLPrim::Float),
                 offset: 0
             },
 
-            // Absolute point
+            // Points Vec2
             VertexAttribData {
                 index: 1,
                 glsl_type: GLSLType::Vec2(GLPrim::Float),
@@ -78,7 +78,7 @@ unsafe impl GLVertex for Vertex {
 struct ColorVertexProgram {
     program: GLProgram,
     transform_matrix_uniform: GLint,
-    abs_rel_scale_uniform: GLint
+    pts_rat_scale_uniform: GLint
 }
 
 impl ColorVertexProgram {
@@ -97,12 +97,12 @@ impl ColorVertexProgram {
         let program = GLProgram::new(&colored_vertex_vert, &color_passthrough_frag).unwrap();
 
         let transform_matrix_uniform = unsafe{ gl::GetUniformLocation(program.handle, "transform_matrix\0".as_ptr() as *const GLchar) };
-        let abs_rel_scale_uniform = unsafe{ gl::GetUniformLocation(program.handle, "abs_rel_scale\0".as_ptr() as *const GLchar) };
+        let pts_rat_scale_uniform = unsafe{ gl::GetUniformLocation(program.handle, "pts_rat_scale\0".as_ptr() as *const GLchar) };
 
         ColorVertexProgram {
             program: program,
             transform_matrix_uniform: transform_matrix_uniform,
-            abs_rel_scale_uniform: abs_rel_scale_uniform
+            pts_rat_scale_uniform: pts_rat_scale_uniform
         }
     }
 }
@@ -220,7 +220,7 @@ impl<'a> Surface for GLSurface<'a> {
         }
 
         let transform_matrix_uniform = self.facade.color_passthrough.transform_matrix_uniform;
-        let abs_rel_scale_uniform = self.facade.color_passthrough.abs_rel_scale_uniform;
+        let pts_rat_scale_uniform = self.facade.color_passthrough.pts_rat_scale_uniform;
 
         self.facade.color_passthrough.program.with(|_| {
             buffers.verts_vao.with(|_| {
@@ -233,8 +233,8 @@ impl<'a> Surface for GLSurface<'a> {
                     );
 
                     gl::Uniform2f(
-                        abs_rel_scale_uniform,
-                        bvd.abs_rel_scale.x, bvd.abs_rel_scale.y
+                        pts_rat_scale_uniform,
+                        bvd.pts_rat_scale.x, bvd.pts_rat_scale.y
                     );
 
 
@@ -257,7 +257,7 @@ struct BaseVertexData {
     count: usize,
     base_vertex: usize,
     matrix: Matrix3<f32>,
-    abs_rel_scale: Vector2<f32>
+    pts_rat_scale: Vector2<f32>
 }
 
 impl Default for BaseVertexData {
@@ -267,7 +267,7 @@ impl Default for BaseVertexData {
             count: 0,
             base_vertex: 0,
             matrix: One::one(),
-            abs_rel_scale: Zero::zero()
+            pts_rat_scale: Zero::zero()
         }
     }
 }
@@ -315,9 +315,9 @@ impl<'a> BufferUpdateData<'a> {
 
             Shader::Composite{foreground, fill, backdrop, rect, ..} => {
                 let new_matrix = {
-                    let center = rect.center().to_rel();
-                    let width = rect.lowright.rel.x - rect.upleft.rel.x;
-                    let height = rect.upleft.rel.y - rect.lowright.rel.y;
+                    let center = rect.center().to_rat();
+                    let width = rect.lowright.rat.x - rect.upleft.rat.x;
+                    let height = rect.upleft.rat.y - rect.lowright.rat.y;
 
                     self.matrix_stack.last().unwrap() * Matrix3::new(
                         width/2.0,        0.0, 0.0,
@@ -326,13 +326,13 @@ impl<'a> BufferUpdateData<'a> {
                     )
                 };
 
-                let abs_rel_scale = Vector2::new(
+                let pts_rat_scale = Vector2::new(
                     1.0 / new_matrix.x.x * (self.dpi / self.viewport_size.0 as f32 / 10.0 / 2.0),
                     1.0 / new_matrix.y.y * (self.dpi / self.viewport_size.1 as f32 / 10.0 / 2.0)
                 );
 
                 self.base_vertex_vec.last_mut().unwrap().matrix = new_matrix;
-                self.base_vertex_vec.last_mut().unwrap().abs_rel_scale = abs_rel_scale;
+                self.base_vertex_vec.last_mut().unwrap().pts_rat_scale = pts_rat_scale;
                 self.matrix_stack.push(new_matrix);
 
                 // We order the vertices so that OpenGL draws them back-to-front
