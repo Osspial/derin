@@ -1,5 +1,6 @@
 pub mod primitive;
 pub mod gl;
+pub mod font;
 
 use std::ops::{Add, Mul, Div};
 
