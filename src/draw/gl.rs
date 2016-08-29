@@ -115,7 +115,7 @@ struct IDMapEntry {
 pub struct Facade {
     id_map: HashMap<u64, IDMapEntry>,
     color_passthrough: ColorVertexProgram,
-    pub dpi: f32,
+    pub dpi: u32,
     viewport_size: (GLint, GLint),
     viewport_size_changed: bool
 }
@@ -135,7 +135,7 @@ impl Facade {
         Facade {
             id_map: HashMap::with_capacity(32),
             color_passthrough: ColorVertexProgram::new(),
-            dpi: 72.0,
+            dpi: 72,
             viewport_size: (viewport_info[2], viewport_info[3]),
             viewport_size_changed: false
         }
@@ -291,7 +291,7 @@ struct BufferUpdateData<'a> {
     base_vertex_vec: Vec<BaseVertexData>,
     matrix_stack: Vec<Matrix3<f32>>,
 
-    dpi: f32,
+    dpi: u32,
     viewport_size: (GLint, GLint)
 }
 
@@ -332,8 +332,8 @@ impl<'a> BufferUpdateData<'a> {
                     );
 
                 let pts_rat_scale = Vector2::new(
-                    (4.0 / rat_width) * self.dpi / (self.viewport_size.0 as f32 * 72.0),
-                    (4.0 / rat_height) * self.dpi / (self.viewport_size.1 as f32 * 72.0)
+                    (4.0 / rat_width) * self.dpi as f32 / (self.viewport_size.0 as f32 * 72.0),
+                    (4.0 / rat_height) * self.dpi as f32 / (self.viewport_size.1 as f32 * 72.0)
                 );
 
                 let complex_center = rect.center();
