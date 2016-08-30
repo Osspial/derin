@@ -106,7 +106,7 @@ impl Font {
         }
     }
 
-    pub fn atlas_chars<'a, 's>(&'a self, string: &'s str, font_size: u32, dpi: u32) -> Result<AtlasCharIter<'a, 's>, FontError> {
+    pub fn char_draw_info<'a, 's>(&'a self, string: &'s str, font_size: u32, dpi: u32) -> Result<CharDrawInfoIter<'a, 's>, FontError> {
         if self.atlas.pixels.len() == 0 {
             Err(FontError::NoAtlasImage)
         } else if self.atlas.dpi != dpi {
@@ -117,7 +117,7 @@ impl Font {
         } else if let Err(_) = self.atlas.font_sizes.binary_search(&font_size) {
             Err(FontError::UnloadedFontSize(font_size))
         } else {
-            Ok(AtlasCharIter {
+            Ok(CharDrawInfoIter {
                 font: self,
                 chars: string.chars(),
                 last_char: '\0',
@@ -263,7 +263,7 @@ impl FontAtlas {
     }
 }
 
-pub struct AtlasCharIter<'a, 's> {
+pub struct CharDrawInfoIter<'a, 's> {
     font: &'a Font,
     chars: Chars<'s>,
     last_char: char,
@@ -274,10 +274,10 @@ pub struct AtlasCharIter<'a, 's> {
     dpi: u32
 }
 
-impl<'a, 's> Iterator for AtlasCharIter<'a, 's> {
-    type Item = AtlasChar;
+impl<'a, 's> Iterator for CharDrawInfoIter<'a, 's> {
+    type Item = CharDrawInfo;
 
-    fn next(&mut self) -> Option<AtlasChar> {
+    fn next(&mut self) -> Option<CharDrawInfo> {
         if let Some(c) = self.chars.next() {
             let last_char_index = self.font.faces.regular.get_char_index(self.last_char as usize);
             let char_index = self.font.faces.regular.get_char_index(c as usize);
@@ -297,7 +297,7 @@ impl<'a, 's> Iterator for AtlasCharIter<'a, 's> {
             self.offset.x += advance.x as f32;
             self.offset.y += advance.y as f32;
 
-            Some(AtlasChar{
+            Some(CharDrawInfo{
                 character: c,
                 offset: (self.offset / 64.0) * dpi_scale
             })
@@ -308,7 +308,7 @@ impl<'a, 's> Iterator for AtlasCharIter<'a, 's> {
 }
 
 #[derive(Debug)]
-pub struct AtlasChar {
+pub struct CharDrawInfo {
     pub character: char,
     // pub rect: ImageRect,
     /// The number of points on the xy plane offset from the first character in the string
