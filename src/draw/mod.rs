@@ -252,23 +252,6 @@ pub enum Shader<'a, C: Composite> {
     None
 }
 
-impl<'a, C: Composite> Shader<'a, C> {
-    pub fn count(&self) -> usize {
-        use self::Shader::*;
-
-        match *self {
-            Verts{indices, ..} => indices.len(),
-
-            Composite{ref foreground, ref fill, ref backdrop, ..} =>
-                foreground.shader_data().count() +
-                fill.shader_data().count() +
-                backdrop.shader_data().count(),
-
-            None => 0
-        }
-    }
-}
-
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Color {
