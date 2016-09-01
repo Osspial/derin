@@ -169,16 +169,16 @@ impl Div<f32> for Point {
 
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Vertex {
+pub struct ColorVert {
     pub pos: Complex,
     pub normal: Vector2<f32>,
     pub color: Color
 }
 
-impl Vertex {
+impl ColorVert {
     #[inline]
-    pub fn new(pos: Complex, normal: Vector2<f32>, color: Color) -> Vertex {
-        Vertex {
+    pub fn new(pos: Complex, normal: Vector2<f32>, color: Color) -> ColorVert {
+        ColorVert {
             pos: pos,
             normal: normal,
             color: color
@@ -237,7 +237,7 @@ impl Default for Rect {
 
 pub enum Shader<'a, C: Composite> {
     Verts {
-        verts: &'a [Vertex],
+        verts: &'a [ColorVert],
         indices: &'a [u16]
     },
 

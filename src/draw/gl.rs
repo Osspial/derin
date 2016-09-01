@@ -1,4 +1,4 @@
-use super::{Point, Vertex, Shader, Shadable, Drawable, Surface};
+use super::{Point, ColorVert, Shader, Shadable, Drawable, Surface};
 
 use std::collections::HashMap;
 use std::os::raw::c_void;
@@ -17,9 +17,9 @@ static mut ID_COUNTER: u64 = 0;
 
 pub struct BufferData {
     id: u64,
-    verts: GLVertexBuffer<Vertex>,
+    verts: GLVertexBuffer<ColorVert>,
     vert_indices: GLIndexBuffer,
-    verts_vao: GLVertexArray<Vertex>
+    verts_vao: GLVertexArray<ColorVert>
 }
 
 impl BufferData {
@@ -39,7 +39,7 @@ impl BufferData {
     }
 }
 
-unsafe impl GLVertex for Vertex {
+unsafe impl GLVertex for ColorVert {
     unsafe fn vertex_attrib_data() -> &'static [VertexAttribData] {
         const VAD: &'static [VertexAttribData] = &[
             // Ratio Vec2
@@ -283,7 +283,7 @@ impl Default for BaseVertexData {
 
 struct BufferUpdateData<'a> {
     vert_offset: usize,
-    vert_modder: BufModder<'a, Vertex, GLVertexBuffer<Vertex>>,
+    vert_modder: BufModder<'a, ColorVert, GLVertexBuffer<ColorVert>>,
     index_offset: usize,
     offsetted_indices: Vec<u16>,
     index_modder: BufModder<'a, u16, GLIndexBuffer>,

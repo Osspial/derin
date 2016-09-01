@@ -1,4 +1,4 @@
-use super::{Shadable, Shader, Vertex, Color, Rect};
+use super::{Shadable, Shader, ColorVert, Color, Rect};
 
 use cgmath::{Vector2};
 
@@ -10,7 +10,7 @@ pub struct ColorRect {
     num_updates: Cell<u64>,
     old_color: Cell<Color>,
     old_rect: Cell<Rect>,
-    verts: UnsafeCell<[Vertex; 4]>
+    verts: UnsafeCell<[ColorVert; 4]>
 }
 
 impl ColorRect {
@@ -34,22 +34,22 @@ impl Shadable for ColorRect {
         // all different from the data that would have been in verts anyway, so we can get away with that.
         let verts = unsafe{ &mut *self.verts.get() };
         *verts = [
-            Vertex::new(
+            ColorVert::new(
                 self.rect.upleft,
                 Vector2::new(-SQRT_2, SQRT_2),
                 self.color
             ),
-            Vertex::new(
+            ColorVert::new(
                 self.rect.upright(),
                 Vector2::new(SQRT_2, SQRT_2),
                 self.color
             ),
-            Vertex::new(
+            ColorVert::new(
                 self.rect.lowright,
                 Vector2::new(SQRT_2, -SQRT_2),
                 self.color
             ),
-            Vertex::new(
+            ColorVert::new(
                 self.rect.lowleft(),
                 Vector2::new(-SQRT_2, -SQRT_2),
                 self.color
