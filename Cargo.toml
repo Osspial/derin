@@ -11,3 +11,6 @@ freetype-rs = "0.11"
 
 [dev-dependencies]
 glutin = "0.6"
+
+[workspace]
+members = ["./gl_raii"]
