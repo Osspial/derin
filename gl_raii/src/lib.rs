@@ -379,6 +379,61 @@ impl<V: GLVertex> Drop for GLVertexArray<V> {
     }
 }
 
+pub enum TextureFormat {
+    R8
+}
+
+pub struct GLTexture {
+    handle: GLuint
+}
+
+impl GLTexture {
+    pub fn new(width: u32, height: u32, pixels: &[u8], format: TextureFormat) -> GLTexture {
+        unsafe {
+            debug_assert_eq!(gl::TEXTURE0 as i32, {
+                let mut active_texture = 0;
+                gl::GetIntegerv(gl::ACTIVE_TEXTURE, &mut active_texture);
+                active_texture
+            });
+
+            debug_assert_eq!(0, {
+                let mut texture_binding_2d = 0;
+                gl::GetIntegerv(gl::TEXTURE_BINDING_2D, &mut texture_binding_2d);
+                texture_binding_2d
+            });
+
+            let mut handle = 0;
+            gl::GenTextures(1, &mut handle);
+
+            let tex = GLTexture {
+                handle: handle
+            };
+
+            tex.swap_data(width, height, pixels, format);
+            tex
+        }
+    }
+
+    pub fn swap_data(&self, width: u32, height: u32, pixels: &[u8], format: TextureFormat) {
+        let (internal_format, format) = match format {
+            TextureFormat::R8 => (gl::R8 as i32, gl::RED)
+        };
+
+        unsafe {
+            gl::BindTexture(gl::TEXTURE_2D, self.handle);
+            gl::TexImage2D(gl::TEXTURE_2D, 0, internal_format, width as i32, height as i32,
+                0, format, gl::UNSIGNED_BYTE, pixels.as_ptr() as *const GLvoid);
+            gl::BindTexture(gl::TEXTURE_2D, 0);
+        }
+    }
+}
+
+impl Drop for GLTexture {
+    fn drop(&mut self) {
+        unsafe{ gl::DeleteTextures(1, &self.handle) };
+    }
+}
+
 
 #[derive(Debug, Clone, Copy)]
 pub enum ShaderType {
