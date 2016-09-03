@@ -19,13 +19,6 @@ pub enum FontError {
     }
 }
 
-pub enum FontStyle {
-    Regular,
-    Italic,
-    Bold,
-    BoldItalic
-}
-
 pub struct FontInfo {
     pub regular: PathBuf,
     pub italic: Option<PathBuf>,
