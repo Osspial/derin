@@ -325,6 +325,8 @@ impl<'a> BufferUpdateData<'a> {
                 self.index_offset += indices.len();
             }
 
+            Shader::Text{..} => {}
+
             Shader::Composite{foreground, fill, backdrop, rect, ..} => {
                 let last_matrix = self.matrix_stack.last().unwrap().clone();
 

@@ -5,6 +5,7 @@ pub mod font;
 use std::ops::{Add, Mul, Div};
 
 use self::gl::BufferData;
+use self::font::Font;
 
 use cgmath::{Vector2};
 
@@ -239,6 +240,13 @@ pub enum Shader<'a, C: Composite> {
     Verts {
         verts: &'a [ColorVert],
         indices: &'a [u16]
+    },
+
+    Text {
+        rect: Rect,
+        text: &'a str,
+        font: &'a Font,
+        font_size: u32
     },
 
     Composite {
