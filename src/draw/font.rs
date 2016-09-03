@@ -4,10 +4,12 @@ use freetype::face::{LoadFlag, KerningMode};
 use std::path::PathBuf;
 use std::collections::HashMap;
 use std::str::Chars;
-
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::ops::Mul;
 
 use super::Point;
+use super::gl::get_unique_id;
 
 #[derive(Debug)]
 pub enum FontError {
@@ -24,6 +26,30 @@ pub struct FontInfo {
     pub italic: Option<PathBuf>,
     pub bold: Option<PathBuf>,
     pub bold_italic: Option<PathBuf>
+}
+
+#[derive(Clone)]
+pub struct Font{
+    raw_font: Rc<RefCell<RawFont>>,
+    id: u64
+}
+
+impl Font {
+    pub fn new(info: &FontInfo) -> Font {
+        Font{
+            raw_font: Rc::new(RefCell::new(RawFont::new(info))),
+            id: get_unique_id()
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn raw_font(&self) -> &RefCell<RawFont> {
+        &self.raw_font
+    }
+
+    pub fn id(&self) -> u64 {
+        self.id
+    }
 }
 
 thread_local!{
@@ -69,20 +95,20 @@ struct FontFaces {
     bold_italic: Option<Face<'static>>
 }
 
-pub struct Font {
+pub struct RawFont {
     faces: FontFaces,
     atlas: FontAtlas,
 }
 
-impl Font {
-    pub fn new(info: &FontInfo) -> Font {
+impl RawFont {
+    pub fn new(info: &FontInfo) -> RawFont {
         FT_LIB.with(|lib| {
             let regular = lib.new_face(&info.regular, 0).unwrap();
             let italic = info.italic.as_ref().map(|p| lib.new_face(p, 0).unwrap());
             let bold = info.bold.as_ref().map(|p| lib.new_face(p, 0).unwrap());
             let bold_italic = info.bold_italic.as_ref().map(|p| lib.new_face(p, 0).unwrap());
 
-            Font {
+            RawFont {
                 faces: FontFaces {                
                     regular: regular,
                     italic: italic,
@@ -310,7 +336,7 @@ impl FontAtlas {
 }
 
 pub struct CharDrawInfoIter<'a, 's> {
-    font: &'a Font,
+    font: &'a RawFont,
     chars: Chars<'s>,
     last_char: char,
     /// The offset from the first character in the string, stored as 1/64ths of a pixel. This value is

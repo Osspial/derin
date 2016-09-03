@@ -15,6 +15,12 @@ use cgmath::prelude::*;
 
 static mut ID_COUNTER: u64 = 0;
 
+pub fn get_unique_id() -> u64 {
+    let id = unsafe{ ID_COUNTER };
+    unsafe{ ID_COUNTER += 1 };
+    id
+}
+
 pub struct BufferData {
     id: u64,
     verts: GLVertexBuffer<ColorVert>,
@@ -24,14 +30,11 @@ pub struct BufferData {
 
 impl BufferData {
     pub fn new() -> BufferData {
-        let id = unsafe{ ID_COUNTER };
-        unsafe{ ID_COUNTER += 1 };
-
         let verts = GLVertexBuffer::new(0, BufferUsage::Static);
         let vert_indices = GLIndexBuffer::new(0, BufferUsage::Static);
         let verts_vao = GLVertexArray::new(&verts, Some(&vert_indices));
         BufferData {
-            id: id,
+            id: get_unique_id(),
             verts: verts,
             vert_indices: vert_indices,
             verts_vao: verts_vao
