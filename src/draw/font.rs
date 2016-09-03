@@ -82,7 +82,7 @@ pub struct Font {
 }
 
 impl Font {
-    pub fn new(info: &FontInfo, dpi: u32) -> Font {
+    pub fn new(info: &FontInfo) -> Font {
         FT_LIB.with(|lib| {
             let regular = lib.new_face(&info.regular, 0).unwrap();
             let italic = info.italic.as_ref().map(|p| lib.new_face(p, 0).unwrap());
@@ -96,7 +96,7 @@ impl Font {
                     bold: bold,
                     bold_italic: bold_italic,
                 },
-                atlas: FontAtlas::new(dpi)
+                atlas: FontAtlas::new()
             }
         })
     }
@@ -177,14 +177,14 @@ pub struct FontAtlas {
 }
 
 impl FontAtlas {
-    fn new(dpi: u32) -> FontAtlas {
+    fn new() -> FontAtlas {
         FontAtlas {
             pixels: Vec::with_capacity(512 * 512),
             width: 0,
             height: 0,
             charmap: HashMap::new(),
             font_sizes: Vec::with_capacity(4),
-            dpi: dpi
+            dpi: 0
         }
     }
 
