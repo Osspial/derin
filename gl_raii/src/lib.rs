@@ -434,6 +434,43 @@ impl Drop for GLTexture {
     }
 }
 
+pub struct GLSampler {
+    handle: GLuint
+}
+
+impl GLSampler {
+    pub fn new() -> GLSampler {
+        unsafe {
+            let mut handle = 0;
+            gl::GenSamplers(1, &mut handle);
+            gl::SamplerParameteri(handle, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+            gl::SamplerParameteri(handle, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
+            gl::SamplerParameteri(handle, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as i32);
+            gl::SamplerParameteri(handle, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as i32);
+
+            GLSampler {
+                handle: handle
+            }
+        }
+    }
+
+    pub fn with_texture(&self, tex_unit: GLuint, texture: &GLTexture) {
+        assert!(tex_unit != 0);
+        unsafe {
+            gl::ActiveTexture(gl::TEXTURE0 + tex_unit);
+            gl::BindTexture(gl::TEXTURE_2D, texture.handle);
+            gl::ActiveTexture(gl::TEXTURE0);
+            gl::BindSampler(tex_unit, self.handle);
+        }
+    }
+}
+
+impl Drop for GLSampler {
+    fn drop(&mut self) {
+        unsafe{ gl::DeleteSamplers(1, &self.handle) };
+    }
+}
+
 
 #[derive(Debug, Clone, Copy)]
 pub enum ShaderType {
