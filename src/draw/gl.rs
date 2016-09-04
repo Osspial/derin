@@ -8,7 +8,7 @@ use gl::types::*;
 use gl_raii::{GLVertexBuffer, GLVertex, BufferUsage,
               VertexAttribData, GLSLType, GLPrim,
               GLVertexArray, GLIndexBuffer, GLBuffer,
-              GLProgram, GLShader, ShaderType, BufModder};
+              GLProgram, GLShader, ShaderType};
 
 use cgmath::{Matrix3, Vector2};
 use cgmath::prelude::*;
@@ -197,14 +197,14 @@ impl<'a> Surface for GLSurface<'a> {
         let viewport_size = self.facade.viewport_size;
 
         if update_buffers || self.facade.viewport_size_changed {
-            buffers.verts.with(|vert_modder|
-                buffers.vert_indices.with(|index_modder| {
+            buffers.verts.with(|mut vert_modder|
+                buffers.vert_indices.with(|mut index_modder| {
                     let mut bud = BufferUpdateData {
                         vert_offset: 0,
-                        vert_modder: vert_modder,
+                        vert_vec: vert_modder.buffer_vec(),
                         index_offset: 0,
                         offsetted_indices: Vec::new(),
-                        index_modder: index_modder,
+                        index_vec: index_modder.buffer_vec(),
 
                         base_vertex_vec: vec![Default::default(); 1],
                         matrix_stack: vec![One::one(); 1],
@@ -286,10 +286,10 @@ impl Default for BaseVertexData {
 
 struct BufferUpdateData<'a> {
     vert_offset: usize,
-    vert_modder: BufModder<'a, ColorVert, GLVertexBuffer<ColorVert>>,
+    vert_vec: &'a mut Vec<ColorVert>,
     index_offset: usize,
     offsetted_indices: Vec<u16>,
-    index_modder: BufModder<'a, u16, GLIndexBuffer>,
+    index_vec: &'a mut Vec<u16>,
 
     base_vertex_vec: Vec<BaseVertexData>,
     matrix_stack: Vec<Matrix3<f32>>,
@@ -302,10 +302,22 @@ impl<'a> BufferUpdateData<'a> {
     fn update_buffers<S: Shadable>(&mut self, shadable: &S) {
         match shadable.shader_data() {
             Shader::Verts {verts, indices} => {
-                self.vert_modder.sub_data(self.vert_offset, verts);
+                // Resize the vertex vector to be long enough to contain the new vertices we're adding
+                if self.vert_vec.len() < self.vert_offset + verts.len() {
+                    use std::mem;
+
+                    self.vert_vec.resize(self.vert_offset + verts.len(), unsafe{ mem::zeroed() });
+                }
+
+                self.vert_vec[self.vert_offset..self.vert_offset + verts.len()].copy_from_slice(verts);
 
                 let bvd = self.base_vertex_vec.last_mut().unwrap();
                 bvd.count += indices.len();
+
+                // Resize the index vector to be long enough to contain the new indices we're adding
+                if self.index_vec.len() < self.index_offset + indices.len() {
+                    self.index_vec.resize(self.index_offset + indices.len(), 0);
+                }
 
                 if self.index_offset > 0 {
                     // Clear the vector without de-allocating memory
@@ -316,9 +328,9 @@ impl<'a> BufferUpdateData<'a> {
                     let vert_offset = self.vert_offset as u16;
                     self.offsetted_indices.extend(indices.iter().map(|i| *i + vert_offset));
 
-                    self.index_modder.sub_data(self.index_offset, &self.offsetted_indices);
+                    self.index_vec[self.index_offset..self.index_offset + indices.len()].copy_from_slice(&self.offsetted_indices);
                 } else {
-                    self.index_modder.sub_data(self.index_offset, indices);
+                    self.index_vec[self.index_offset..self.index_offset + indices.len()].copy_from_slice(indices);
                 }
 
                 self.vert_offset += verts.len();

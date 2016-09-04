@@ -4,7 +4,7 @@ use gl::types::*;
 
 use std::ptr;
 use std::marker::PhantomData;
-use std::cell::RefCell;
+use std::cell::{RefCell, RefMut};
 
 pub type GLError = String;
 
@@ -251,42 +251,53 @@ impl<T: Copy, B: GLBuffer<T>> Buffer<T, B> {
     }
 
     fn with<'a, F: FnOnce(BufModder<'a, T, B>)>(&'a self, func: F) {
-        unsafe {
-            gl::BindBuffer(B::buffer_type(), self.handle);
-            func(BufModder(self));
-            gl::BindBuffer(B::buffer_type(), 0);
-        }
+        let buffer_vec = self.data.borrow_mut();
+        func(BufModder{
+            buffer: self,
+            old_vec_len: buffer_vec.len(),
+            buffer_vec: buffer_vec
+        });
     }
 }
 
-pub struct BufModder<'a, T: 'a + Copy, B: 'a + GLBuffer<T>>(&'a Buffer<T, B>);
+pub struct BufModder<'a, T, B> 
+        where T: 'a + Copy,
+              B: 'a + GLBuffer<T> {
+    buffer: &'a Buffer<T, B>, 
+    buffer_vec: RefMut<'a, Vec<T>>,
+    old_vec_len: usize
+}
 
-impl<'a, T: 'a + Copy, B: 'a + GLBuffer<T>> BufModder<'a, T, B> {
-    pub fn sub_data(&self, offset: usize, data: &[T]) 
-            where T: std::fmt::Debug {
-        use std::mem;
+impl<'a, T, B> BufModder<'a, T, B>
+        where T: 'a + Copy,
+              B: 'a + GLBuffer<T> {
+    pub fn buffer_vec(&mut self) -> &mut Vec<T> {
+        &mut self.buffer_vec
+    }
+}
+
+impl<'a, T, B> Drop for BufModder<'a, T, B>
+        where T: 'a + Copy,
+              B: 'a + GLBuffer<T> {
+    fn drop(&mut self) {
         unsafe {
-            let mut cached_data = self.0.data.borrow_mut();
-
-            if cached_data.capacity() < data.len() + offset {
-                cached_data.truncate(offset);
-                cached_data.extend_from_slice(data);
-                
+            gl::BindBuffer(B::buffer_type(), self.buffer.handle);
+            if self.old_vec_len < self.buffer_vec.len() {
                 gl::BufferData(
                     B::buffer_type(),
-                    byte_slice_size(&cached_data),
-                    cached_data.as_ptr() as *const _,
-                    self.0.usage.to_gl_enum()
+                    byte_slice_size(&self.buffer_vec),
+                    self.buffer_vec.as_ptr() as *const _,
+                    self.buffer.usage.to_gl_enum()
                 );
             } else {
-                cached_data[offset..data.len() + offset].copy_from_slice(data); 
                 gl::BufferSubData(
                     B::buffer_type(),
-                    (mem::size_of::<T>() * offset) as GLintptr,
-                    byte_slice_size(data),
-                    data.as_ptr() as *const _
+                    0,
+                    byte_slice_size(&self.buffer_vec),
+                    self.buffer_vec.as_ptr() as *const _
                 )
             }
+            gl::BindBuffer(B::buffer_type(), 0);
         }
     }
 }
