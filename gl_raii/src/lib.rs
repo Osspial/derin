@@ -28,7 +28,10 @@ pub enum GLSLType {
     Single(GLPrim),
     Vec2(GLPrim),
     Vec3(GLPrim),
-    Vec4(GLPrim)
+    Vec4(GLPrim),
+    Mat2(GLPrim),
+    Mat3(GLPrim),
+    Mat4(GLPrim)
 }
 
 impl GLSLType {
@@ -40,19 +43,41 @@ impl GLSLType {
             Single(p) |
             Vec2(p)   |
             Vec3(p)   |
-            Vec4(p)  => p
+            Vec4(p)   |
+            Mat2(p)   |
+            Mat3(p)   |
+            Mat4(p)  => p
         }
     }
 
     /// Gets the number of primitives stored in this type
-    fn size(self) -> GLint {
+    fn len(self) -> GLint {
         use self::GLSLType::*;
 
         match self {
             Single(_) => 1,
             Vec2(_)   => 2,
             Vec3(_)   => 3,
-            Vec4(_)   => 4
+            Vec4(_)   => 4,
+            Mat2(_)   => 4,
+            Mat3(_)   => 9,
+            Mat4(_)   => 16
+        }
+    }
+
+
+    /// Gets the byte size of the type represented by this enum
+    fn size(self) -> usize {
+        use self::GLSLType::*;
+
+        match self {
+            Single(p) => p.size(),
+            Vec2(p)   => p.size() * 2,
+            Vec3(p)   => p.size() * 3,
+            Vec4(p)   => p.size() * 4,
+            Mat2(p)   => p.size() * 4,
+            Mat3(p)   => p.size() * 9,
+            Mat4(p)   => p.size() * 16
         }
     }
 }
@@ -128,6 +153,27 @@ impl GLPrim {
             NUInt   => gl::UNSIGNED_INT,
             Float   => gl::FLOAT,
             Double  => gl::DOUBLE
+        }
+    }
+
+    fn size(self) -> usize {
+        use self::GLPrim::*;
+
+        match self {
+            Byte     |
+            NByte    |
+            UByte    |
+            NUByte  => 1,
+            Short    |
+            NShort   |
+            UShort   |
+            NUShort => 2,
+            Int      |
+            NInt     |
+            UInt     |
+            NUInt    |
+            Float   => 4,
+            Double  => 8
         }
     }
 }
@@ -302,6 +348,127 @@ impl<'a, T, B> Drop for BufModder<'a, T, B>
     }
 }
 
+pub unsafe trait GLUniformBlock: Clone {
+    unsafe fn data_types() -> &'static [UniformBlockEntry];
+}
+
+pub struct UniformBlockEntry {
+    pub entry_name: &'static str,
+    pub entry_type: GLSLType,
+    /// The element's byte offset into the struct. Please note that this is different from the offset
+    /// into the uniform buffer.
+    pub offset: usize
+}
+
+#[derive(Debug)]
+struct UBEntryLocationInfo {
+    entry_size: usize,
+    struct_offset: usize,
+    buffer_offset: GLsizeiptr
+}
+
+impl UBEntryLocationInfo {
+    #[inline]
+    fn new(entry_size: usize, struct_offset: usize, buffer_offset: GLsizeiptr) -> UBEntryLocationInfo {
+        UBEntryLocationInfo {
+            entry_size: entry_size,
+            struct_offset: struct_offset,
+            buffer_offset: buffer_offset
+        }
+    }
+}
+
+pub struct GLUniformBuffer<U: GLUniformBlock> {
+    block: U,
+    handle: GLuint,
+    uniform_block_index: GLuint,
+    /// The offsets into the uniform buffer for writing data to the buffer
+    offsets: Vec<UBEntryLocationInfo>
+}
+
+impl<U: GLUniformBlock> GLUniformBuffer<U> {
+    pub fn new(block: U, uniform_block_name: &str, program: &GLProgram) -> GLUniformBuffer<U> {
+        unsafe {
+            let mut offsets = Vec::with_capacity(U::data_types().len());
+
+            let uniform_block_name = uniform_block_name.to_owned() + "\0";
+            let uniform_block_index = gl::GetUniformBlockIndex(program.handle, uniform_block_name.as_ptr() as *const _);
+
+            let mut handle = 0;
+            gl::GenBuffers(1, &mut handle);
+            gl::BindBuffer(gl::UNIFORM_BUFFER, handle);
+
+            for ube in U::data_types() {
+                let entry_name = ube.entry_name.to_owned() + "\0";
+
+                let mut uniform_index = 0;
+                gl::GetUniformIndices(program.handle, 1, &(entry_name.as_ptr() as *const _), &mut uniform_index);
+                assert!(gl::INVALID_INDEX != uniform_index);
+
+                let mut uniform_offset = 0;
+                gl::GetActiveUniformsiv(program.handle, 1, &uniform_index, gl::UNIFORM_OFFSET, &mut uniform_offset);
+                assert!(-1 != uniform_offset);
+                offsets.push(UBEntryLocationInfo::new(ube.entry_type.size(), ube.offset, uniform_offset as GLsizeiptr));
+            }
+
+            let mut buffer_size = 0;
+            gl::GetActiveUniformBlockiv(program.handle, uniform_block_index, gl::UNIFORM_BLOCK_DATA_SIZE, &mut buffer_size);
+            gl::BufferData(gl::UNIFORM_BUFFER, buffer_size as GLsizeiptr, ptr::null(), gl::STREAM_DRAW);
+
+            let u_buffer = GLUniformBuffer {
+                block: block,
+                handle: handle,
+                uniform_block_index: uniform_block_index,
+                offsets: offsets
+            };
+            u_buffer.update_data();
+            u_buffer.bind_to_program(program);
+            gl::BindBuffer(gl::UNIFORM_BUFFER, 0);
+
+            u_buffer
+        }
+    }
+
+    /// Upload the cached data to the GPU. The caller of this function must ensure that the proper
+    /// buffer is bound.
+    unsafe fn update_data(&self) {
+        let block_ptr = &self.block as *const U as *const GLvoid;
+        
+        for off in self.offsets.iter() {
+            gl::BufferSubData(gl::UNIFORM_BUFFER, off.buffer_offset, off.entry_size as GLsizeiptr, block_ptr.offset(off.struct_offset as isize));
+        }
+    }
+
+    pub fn sub_data(&mut self, block: &U) {
+        unsafe {
+            gl::BindBuffer(gl::UNIFORM_BUFFER, self.handle);
+            
+            self.block = block.clone();
+            self.update_data();
+
+            gl::BindBuffer(gl::UNIFORM_BUFFER, 0);
+        }
+    }
+
+    pub fn bind_to_program(&self, program: &GLProgram) {
+        unsafe {
+            let mut buffer_size = 0;
+            gl::GetActiveUniformBlockiv(program.handle, self.uniform_block_index, gl::UNIFORM_BLOCK_DATA_SIZE, &mut buffer_size);
+
+            // This is re-using the uniform block index as the uniform binding index, mainly because I'm not
+            // aware of any major consequences to doing so and it's easier.
+            gl::UniformBlockBinding(program.handle, self.uniform_block_index, self.uniform_block_index);
+            gl::BindBufferRange(
+                gl::UNIFORM_BUFFER, 
+                self.uniform_block_index, 
+                self.handle, 
+                0,
+                buffer_size as GLsizeiptr
+            );
+        }
+    }
+}
+
 
 /// RAII wrapper aound Vertex Arrays
 pub struct GLVertexArray<V: GLVertex> {
@@ -337,7 +504,7 @@ impl<V: GLVertex> GLVertexArray<V> {
                     if prim == GLPrim::Double {
                         gl::VertexAttribLPointer(
                             attrib.index,
-                            glsl_type.size(),
+                            glsl_type.len(),
                             gl::DOUBLE,
                             stride,
                             offset
@@ -345,7 +512,7 @@ impl<V: GLVertex> GLVertexArray<V> {
                     } else {
                         gl::VertexAttribPointer(
                             attrib.index, 
-                            glsl_type.size(), 
+                            glsl_type.len(), 
                             prim.to_gl_enum(), 
                             prim.is_normalized(),
                             stride,
@@ -355,7 +522,7 @@ impl<V: GLVertex> GLVertexArray<V> {
                 } else {
                     gl::VertexAttribIPointer(
                         attrib.index,
-                        glsl_type.size(),
+                        glsl_type.len(),
                         prim.to_gl_enum(),
                         stride,
                         offset
