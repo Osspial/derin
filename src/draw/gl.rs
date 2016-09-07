@@ -110,6 +110,42 @@ impl ColorVertexProgram {
     }
 }
 
+struct CharVertexProgram {
+    program: GLProgram,
+    base_location_uniform: GLint,
+    pts_rat_scale_uniform: GLint
+}
+
+impl CharVertexProgram {
+    fn new() -> CharVertexProgram {
+        use std::fs::File;
+        use std::io::Read;
+
+        let mut char_vertex_vert_string = String::new();
+        File::open("./src/shaders/char_vertex.vert").unwrap().read_to_string(&mut char_vertex_vert_string).unwrap();
+        let char_vertex_vert = GLShader::new(ShaderType::Vertex, &char_vertex_vert_string).unwrap();
+
+        let mut char_vertex_geom_string = String::new();
+        File::open("./src/shaders/char_vertex.geom").unwrap().read_to_string(&mut char_vertex_geom_string).unwrap();
+        let char_vertex_geom = GLShader::new(ShaderType::Geometry, &char_vertex_geom_string).unwrap();
+
+        let mut char_vertex_frag_string = String::new();
+        File::open("./src/shaders/char_vertex.frag").unwrap().read_to_string(&mut char_vertex_frag_string).unwrap();
+        let char_vertex_frag = GLShader::new(ShaderType::Fragment, &char_vertex_frag_string).unwrap();
+
+        let program = GLProgram::new_geometry(&char_vertex_vert, &char_vertex_geom, &char_vertex_frag).unwrap();
+
+        let base_location_uniform = unsafe{ gl::GetUniformLocation(program.handle, "base_location\0".as_ptr() as *const GLchar) };
+        let pts_rat_scale_uniform = unsafe{ gl::GetUniformLocation(program.handle, "pts_rat_scale\0".as_ptr() as *const GLchar) };
+
+        CharVertexProgram {
+            program: program,
+            base_location_uniform: base_location_uniform,
+            pts_rat_scale_uniform: pts_rat_scale_uniform
+        }
+    }
+}
+
 struct IDMapEntry {
     num_updates: u64,
     base_vertex_vec: Vec<BaseVertexData>
@@ -118,6 +154,7 @@ struct IDMapEntry {
 pub struct Facade {
     id_map: HashMap<u64, IDMapEntry>,
     color_passthrough: ColorVertexProgram,
+    char_vertex: CharVertexProgram,
     pub dpi: u32,
     viewport_size: (GLint, GLint),
     viewport_size_changed: bool
@@ -138,6 +175,7 @@ impl Facade {
         Facade {
             id_map: HashMap::with_capacity(32),
             color_passthrough: ColorVertexProgram::new(),
+            char_vertex: CharVertexProgram::new(),
             dpi: 72,
             viewport_size: (viewport_info[2], viewport_info[3]),
             viewport_size_changed: false
