@@ -653,6 +653,7 @@ impl Drop for GLSampler {
 #[derive(Debug, Clone, Copy)]
 pub enum ShaderType {
     Vertex,
+    Geometry,
     Fragment
 }
 
@@ -660,6 +661,7 @@ impl ShaderType {
     pub fn to_gl_enum(self) -> GLenum {
         match self {
             ShaderType::Vertex => gl::VERTEX_SHADER,
+            ShaderType::Geometry => gl::GEOMETRY_SHADER,
             ShaderType::Fragment => gl::FRAGMENT_SHADER
         }
     }
@@ -723,6 +725,15 @@ impl GLProgram {
         use std::iter;
 
         GLProgram::from_program_iter(iter::once(vertex_shader).chain(iter::once(fragment_shader)))
+    }
+
+    pub fn new_geometry(vertex_shader: &GLShader, geometry_shader: &GLShader, fragment_shader: &GLShader) -> Result<GLProgram, GLError> {
+        use std::iter;
+
+        GLProgram::from_program_iter(
+            iter::once(vertex_shader).chain(
+            iter::once(geometry_shader).chain(
+            iter::once(fragment_shader))))
     }
 
     pub fn from_program_iter<'a, I>(iter: I) -> Result<GLProgram, GLError> 
