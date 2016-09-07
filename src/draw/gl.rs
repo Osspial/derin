@@ -1,14 +1,12 @@
 use super::{Point, ColorVert, Shader, Shadable, Drawable, Surface};
+use super::font::{Font, CharVert};
 
 use std::collections::HashMap;
 use std::os::raw::c_void;
 
 use gl;
 use gl::types::*;
-use gl_raii::{GLVertexBuffer, GLVertex, BufferUsage,
-              VertexAttribData, GLSLType, GLPrim,
-              GLVertexArray, GLIndexBuffer, GLBuffer,
-              GLProgram, GLShader, ShaderType};
+use gl_raii::*;
 
 use cgmath::{Matrix3, Vector2};
 use cgmath::prelude::*;
@@ -25,7 +23,9 @@ pub struct BufferData {
     id: u64,
     verts: GLVertexBuffer<ColorVert>,
     vert_indices: GLIndexBuffer,
-    verts_vao: GLVertexArray<ColorVert>
+    verts_vao: GLVertexArray<ColorVert>,
+    chars: GLVertexBuffer<CharVert>,
+    chars_vao: GLVertexArray<CharVert>
 }
 
 impl BufferData {
@@ -33,11 +33,17 @@ impl BufferData {
         let verts = GLVertexBuffer::new(0, BufferUsage::Static);
         let vert_indices = GLIndexBuffer::new(0, BufferUsage::Static);
         let verts_vao = GLVertexArray::new(&verts, Some(&vert_indices));
+
+        let chars = GLVertexBuffer::new(0, BufferUsage::Dynamic);
+        let chars_vao = GLVertexArray::new(&chars, None);
+
         BufferData {
             id: get_unique_id(),
             verts: verts,
             vert_indices: vert_indices,
-            verts_vao: verts_vao
+            verts_vao: verts_vao,
+            chars: chars,
+            chars_vao: chars_vao
         }
     }
 }
@@ -70,6 +76,42 @@ unsafe impl GLVertex for ColorVert {
             VertexAttribData {
                 index: 3,
                 glsl_type: GLSLType::Vec4(GLPrim::NUByte),
+                offset: 24
+            }
+        ];
+
+        VAD
+    }
+}
+
+unsafe impl GLVertex for CharVert {
+    unsafe fn vertex_attrib_data() -> &'static [VertexAttribData] {
+        const VAD: &'static [VertexAttribData] = &[
+            // Rect upper left
+            VertexAttribData {
+                index: 0,
+                glsl_type: GLSLType::Vec2(GLPrim::Float),
+                offset: 0
+            },
+
+            // Rect lower right
+            VertexAttribData {
+                index: 1,
+                glsl_type: GLSLType::Vec2(GLPrim::Float),
+                offset: 8
+            },
+
+            // Offset
+            VertexAttribData {
+                index: 2,
+                glsl_type: GLSLType::Vec2(GLPrim::Float),
+                offset: 16
+            },
+
+            // Size
+            VertexAttribData {
+                index: 3,
+                glsl_type: GLSLType::Vec2(GLPrim::Float),
                 offset: 24
             }
         ];
@@ -148,7 +190,8 @@ impl CharVertexProgram {
 
 struct IDMapEntry {
     num_updates: u64,
-    base_vertex_vec: Vec<BaseVertexData>
+    base_vertex_vec: Vec<BaseVertexData>,
+    char_vertex_vec: Vec<CharVertexData>
 }
 
 pub struct Facade {
@@ -225,7 +268,8 @@ impl<'a> Surface for GLSurface<'a> {
                 id_map_entry = entry.insert(
                     IDMapEntry {
                         num_updates: drawable.num_updates(),
-                        base_vertex_vec: Vec::new()
+                        base_vertex_vec: Vec::new(),
+                        char_vertex_vec: Vec::new()
                     }
                 );
             }
@@ -236,31 +280,41 @@ impl<'a> Surface for GLSurface<'a> {
 
         if update_buffers || self.facade.viewport_size_changed {
             buffers.verts.with(|mut vert_modder|
-                buffers.vert_indices.with(|mut index_modder| {
-                    let mut bud = BufferUpdateData {
-                        vert_offset: 0,
-                        vert_vec: vert_modder.buffer_vec(),
-                        index_offset: 0,
-                        offsetted_indices: Vec::new(),
-                        index_vec: index_modder.buffer_vec(),
+            buffers.vert_indices.with(|mut index_modder|
+            buffers.chars.with(|mut char_modder| {
+                vert_modder.buffer_vec().clear();
+                index_modder.buffer_vec().clear();
+                char_modder.buffer_vec().clear();
 
-                        base_vertex_vec: vec![Default::default(); 1],
-                        matrix_stack: vec![One::one(); 1],
+                let mut bud = BufferUpdateData {
+                    vert_offset: 0,
+                    vert_vec: vert_modder.buffer_vec(),
 
-                        dpi: dpi,
-                        viewport_size: viewport_size
-                    };
+                    index_offset: 0,
+                    offsetted_indices: Vec::new(),
+                    index_vec: index_modder.buffer_vec(),
 
-                    bud.update_buffers(drawable);
+                    char_offset: 0,
+                    char_vec: char_modder.buffer_vec(),
 
-                    // If `drawable` is a composite, then there will be one extra BaseVertexData pushed to the vector
-                    // that we need to get rid of. This does that.
-                    if let Shader::Composite{..} = drawable.shader_data() {
-                        bud.base_vertex_vec.pop();
-                    }
-                    id_map_entry.base_vertex_vec = bud.base_vertex_vec;
-                })
-            );
+                    base_vertex_vec: vec![Default::default(); 1],
+                    char_vertex_vec: Vec::new(),
+                    matrix_stack: vec![One::one(); 1],
+
+                    dpi: dpi,
+                    viewport_size: viewport_size
+                };
+
+                bud.update_buffers(drawable);
+
+                // If `drawable` is a composite, then there will be one extra BaseVertexData pushed to the vector
+                // that we need to get rid of. This does that.
+                if let Shader::Composite{..} = drawable.shader_data() {
+                    bud.base_vertex_vec.pop();
+                }
+                id_map_entry.base_vertex_vec = bud.base_vertex_vec;
+                id_map_entry.char_vertex_vec = bud.char_vertex_vec;
+            })));
         }
 
         let transform_matrix_uniform = self.facade.color_passthrough.transform_matrix_uniform;
@@ -292,6 +346,30 @@ impl<'a> Surface for GLSurface<'a> {
                 }}
             });
         });
+
+        let base_location_uniform = self.facade.char_vertex.base_location_uniform;
+        let pts_rat_scale_uniform = self.facade.char_vertex.pts_rat_scale_uniform;
+        self.facade.char_vertex.program.with(|_| 
+            buffers.chars_vao.with(|_| 
+                for cvd in id_map_entry.char_vertex_vec.iter() {unsafe{
+                    gl::Uniform2f(
+                        base_location_uniform,
+                        cvd.base_location.x, cvd.base_location.y
+                    );
+
+                    gl::Uniform2f(
+                        pts_rat_scale_uniform,
+                        cvd.pts_rat_scale.x, cvd.pts_rat_scale.y
+                    );
+
+                    gl::DrawArrays(
+                        gl::POINTS,
+                        cvd.offset as GLint,
+                        cvd.count as GLsizei
+                    );
+                }}
+            )
+        );
     }
 }
 
@@ -322,14 +400,28 @@ impl Default for BaseVertexData {
     }
 }
 
+struct CharVertexData {
+    offset: usize,
+    count: usize,
+    base_location: Point,
+    pts_rat_scale: Vector2<f32>,
+    reupload_font_image: bool,
+    font: Font
+}
+
 struct BufferUpdateData<'a> {
     vert_offset: usize,
     vert_vec: &'a mut Vec<ColorVert>,
+
     index_offset: usize,
     offsetted_indices: Vec<u16>,
     index_vec: &'a mut Vec<u16>,
 
+    char_offset: usize,
+    char_vec: &'a mut Vec<CharVert>,
+
     base_vertex_vec: Vec<BaseVertexData>,
+    char_vertex_vec: Vec<CharVertexData>,
     matrix_stack: Vec<Matrix3<f32>>,
 
     dpi: u32,
@@ -340,42 +432,49 @@ impl<'a> BufferUpdateData<'a> {
     fn update_buffers<S: Shadable>(&mut self, shadable: &S) {
         match shadable.shader_data() {
             Shader::Verts {verts, indices} => {
-                // Resize the vertex vector to be long enough to contain the new vertices we're adding
-                if self.vert_vec.len() < self.vert_offset + verts.len() {
-                    use std::mem;
-
-                    self.vert_vec.resize(self.vert_offset + verts.len(), unsafe{ mem::zeroed() });
-                }
-
-                self.vert_vec[self.vert_offset..self.vert_offset + verts.len()].copy_from_slice(verts);
+                self.vert_vec.extend_from_slice(verts);
 
                 let bvd = self.base_vertex_vec.last_mut().unwrap();
                 bvd.count += indices.len();
 
-                // Resize the index vector to be long enough to contain the new indices we're adding
-                if self.index_vec.len() < self.index_offset + indices.len() {
-                    self.index_vec.resize(self.index_offset + indices.len(), 0);
-                }
-
                 if self.index_offset > 0 {
-                    // Clear the vector without de-allocating memory
-                    unsafe{ self.offsetted_indices.set_len(0) };
+                    self.offsetted_indices.clear();
 
                     // Because every vertex is being stored in one vertex buffer, we need to offset the indices so that
                     // they all get drawn properly
                     let vert_offset = self.vert_offset as u16;
                     self.offsetted_indices.extend(indices.iter().map(|i| *i + vert_offset));
 
-                    self.index_vec[self.index_offset..self.index_offset + indices.len()].copy_from_slice(&self.offsetted_indices);
+                    self.index_vec.extend_from_slice(&self.offsetted_indices);
                 } else {
-                    self.index_vec[self.index_offset..self.index_offset + indices.len()].copy_from_slice(indices);
+                    self.index_vec.extend_from_slice(indices);
                 }
 
                 self.vert_offset += verts.len();
                 self.index_offset += indices.len();
             }
 
-            Shader::Text{..} => {}
+            Shader::Text{rect, text, font, font_size} => {
+                let mut raw_font = font.raw_font().borrow_mut();
+                let (char_vert_iter, reupload_font_image) = raw_font.char_vert_iter(text, font_size, self.dpi);
+
+                let mut count = 0;
+                for v in char_vert_iter {
+                    self.char_vec.push(v);
+                    count += 1;
+                }
+
+                let pts_rat_scale = self.base_vertex_vec.last().unwrap().pts_rat_scale;
+                self.char_vertex_vec.push(
+                    CharVertexData {
+                        offset: self.char_offset,
+                        count: count,
+                        base_location: rect.upleft.rat + rect.upleft.pts * pts_rat_scale,
+                        pts_rat_scale: pts_rat_scale,
+                        reupload_font_image: reupload_font_image,
+                        font: font.clone()
+                    });
+            }
 
             Shader::Composite{foreground, fill, backdrop, rect, ..} => {
                 let last_matrix = self.matrix_stack.last().unwrap().clone();

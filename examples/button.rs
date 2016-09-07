@@ -2,8 +2,9 @@ extern crate tint;
 extern crate glutin;
 
 use tint::draw::{Drawable, Shadable, Shader, Surface, Color, Complex, Rect, Composite};
-use tint::draw::primitive::ColorRect;
+use tint::draw::primitive::{ColorRect, TextBox};
 use tint::draw::gl::{Facade, BufferData};
+use tint::draw::font::{Font, FontInfo};
 
 struct DrawableRect {
     rect: ColorRect,
@@ -31,13 +32,13 @@ impl Drawable for DrawableRect {
 struct CompositeRects {
     rect: Rect,
     front: ColorRect,
-    fill: ColorRect,
+    fill: TextBox<&'static str>,
     buffers: BufferData
 }
 
 impl<'a> Composite for &'a CompositeRects {
     type Foreground = &'a ColorRect;
-    type Fill = &'a ColorRect;
+    type Fill = &'a TextBox<&'static str>;
     type Backdrop = ();
 
     fn rect(&self) -> Rect {
@@ -48,7 +49,7 @@ impl<'a> Composite for &'a CompositeRects {
         &self.front
     }
 
-    fn fill(&self) -> &'a ColorRect {
+    fn fill(&self) -> &'a TextBox<&'static str> {
         &self.fill
     }
 
@@ -92,6 +93,12 @@ fn main() {
     unsafe{ window.make_current().unwrap() };
 
     let mut display = Facade::new(|s| window.get_proc_address(s) as *const _);
+    let font = Font::new(&FontInfo {
+        regular: "/usr/share/fonts/OTF/NimbusMonoPS-Regular.otf".into(),
+        italic: None,
+        bold: None,
+        bold_italic: None
+    });
 
     let rect = DrawableRect {
         rect: ColorRect::new(
@@ -116,12 +123,14 @@ fn main() {
                     Complex::new( 1.0, -1.0, -12.0,  12.0)
                 )
             ),
-        fill: ColorRect::new(
-                Color::new(255, 255, 0, 128),
+        fill: TextBox::new(
                 Rect::new(
-                    Complex::new_rat(-1.0,  1.0),
-                    Complex::new_rat( 1.0, -1.0)
-                )
+                    Complex::new_rat(-0.5, 0.5),
+                    Complex::new_rat( 0.5, -0.5)
+                ),
+                "Greetings, you glorious bastards",
+                font,
+                16
             ),
         buffers: BufferData::new()
     };

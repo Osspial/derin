@@ -1,6 +1,8 @@
 use freetype::{Library, RenderMode, Face, BitmapGlyph};
 use freetype::face::{LoadFlag, KerningMode};
 
+use cgmath::Vector2;
+
 use std::path::PathBuf;
 use std::collections::HashMap;
 use std::str::Chars;
@@ -10,16 +12,6 @@ use std::ops::Mul;
 
 use super::Point;
 use super::gl::get_unique_id;
-
-#[derive(Debug)]
-pub enum FontError {
-    NoAtlasImage,
-    UnloadedFontSize(u32),
-    UnexpectedDpiChange{
-        old_dpi: u32,
-        new_dpi: u32
-    }
-}
 
 pub struct FontInfo {
     pub regular: PathBuf,
@@ -120,33 +112,33 @@ impl RawFont {
         })
     }
 
-    pub fn add_font_size(&mut self, font_size: u32) {
+    /// Returns (iterator, whether or not the atlas image has been recalculated)
+    pub fn char_vert_iter<'a, 's>(&'a mut self, string: &'s str, font_size: u32, dpi: u32) -> (CharVertIter<'a, 's>, bool) {
+        // Whether or not the font atlas image has been recalculated, and as such whether or not it should
+        // be re-uploaded to the GPU.
+        let mut new_atlas_image = false;
+
+        if self.atlas.dpi != dpi {
+            self.atlas.dpi = dpi;
+            new_atlas_image = true;
+        }
         if let Err(i) = self.atlas.font_sizes.binary_search(&font_size) {
             self.atlas.font_sizes.insert(i, font_size);
+            new_atlas_image = true;
+        }
+
+        if new_atlas_image {
             self.atlas.recalculate_image(&self.faces);
         }
-    }
 
-    pub fn char_draw_info<'a, 's>(&'a self, string: &'s str, font_size: u32, dpi: u32) -> Result<CharDrawInfoIter<'a, 's>, FontError> {
-        if self.atlas.pixels.len() == 0 {
-            Err(FontError::NoAtlasImage)
-        } else if self.atlas.dpi != dpi {
-            Err(FontError::UnexpectedDpiChange {
-                old_dpi: self.atlas.dpi,
-                new_dpi: dpi
-            })
-        } else if let Err(_) = self.atlas.font_sizes.binary_search(&font_size) {
-            Err(FontError::UnloadedFontSize(font_size))
-        } else {
-            Ok(CharDrawInfoIter {
-                font: self,
-                chars: string.chars(),
-                last_char: '\0',
-                offset: Point::new(0.0, 0.0),
-                has_kerning: self.faces.regular.has_kerning(),
-                dpi: dpi
-            })
-        }
+        (CharVertIter {
+            font: self,
+            chars: string.chars(),
+            last_char: '\0',
+            offset: Point::new(0.0, 0.0),
+            has_kerning: self.faces.regular.has_kerning(),
+            dpi: dpi
+        }, new_atlas_image)
     }
 
     pub fn atlas_image(&self) -> ImageRef {
@@ -183,7 +175,9 @@ enum StyledChar {
 #[derive(Debug)]
 struct AtlasCharInfo {
     center_offset: Point,
-    image_rect: ImageRect
+    image_rect: ImageRect,
+    /// The size of the glyph, in pixels
+    size: Vector2<f32>
 }
 
 pub struct FontAtlas {
@@ -294,7 +288,8 @@ impl FontAtlas {
 
                 let char_info = AtlasCharInfo {
                     center_offset: px_to_pts(self.dpi, Point::new(b_left as f32, b_top as f32)),
-                    image_rect: pixel_rect
+                    image_rect: pixel_rect,
+                    size: Vector2::new(b.width() as f32, b.rows() as f32)
                 };
 
                 self.charmap.insert(c, char_info);
@@ -335,7 +330,7 @@ impl FontAtlas {
     }
 }
 
-pub struct CharDrawInfoIter<'a, 's> {
+pub struct CharVertIter<'a, 's> {
     font: &'a RawFont,
     chars: Chars<'s>,
     last_char: char,
@@ -346,13 +341,11 @@ pub struct CharDrawInfoIter<'a, 's> {
     dpi: u32
 }
 
-impl<'a, 's> Iterator for CharDrawInfoIter<'a, 's> {
-    type Item = CharDrawInfo;
+impl<'a, 's> Iterator for CharVertIter<'a, 's> {
+    type Item = CharVert;
 
-    fn next(&mut self) -> Option<CharDrawInfo> {
+    fn next(&mut self) -> Option<CharVert> {
         if let Some(c) = self.chars.next() {
-            let atlas_char_info = self.font.atlas.charmap.get(&StyledChar::Regular(c)).unwrap();
-
             let last_char_index = self.font.faces.regular.get_char_index(self.last_char as usize);
             let char_index = self.font.faces.regular.get_char_index(c as usize);
             self.font.faces.regular.load_glyph(char_index, LoadFlag::empty()).expect("Could not load glyph");
@@ -370,23 +363,31 @@ impl<'a, 's> Iterator for CharDrawInfoIter<'a, 's> {
             self.offset.x += advance.x as f32;
             self.offset.y += advance.y as f32;
 
-            Some(CharDrawInfo{
-                character: c,
-                image_rect: atlas_char_info.image_rect,
-                offset: px_to_pts(self.dpi, self.offset / 64.0) + atlas_char_info.center_offset
-            })
+            // Some characters don't have a glyph associated with them (e.g. spaces), so, if we can't find
+            // a glyph, just skip it's retrieval and go the next glyph!
+            if let Some(atlas_char_info) = self.font.atlas.charmap.get(&StyledChar::Regular(c)) {
+                Some(CharVert{
+                    image_rect: atlas_char_info.image_rect,
+                    offset: px_to_pts(self.dpi, self.offset / 64.0) + atlas_char_info.center_offset,
+                    size: px_to_pts(self.dpi, atlas_char_info.size)
+                })
+            } else {
+                self.next()
+            }
         } else {
             None
         }
     }
 }
 
+#[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
-pub struct CharDrawInfo {
-    pub character: char,
+pub struct CharVert {
     pub image_rect: ImageRect,
     /// The number of points on the xy plane offset from the first character in the string
-    pub offset: Point
+    pub offset: Point,
+    /// The size, in points, of this individual character
+    pub size: Vector2<f32>
 }
 
 #[derive(Debug, Clone, Copy)]

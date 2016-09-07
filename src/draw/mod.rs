@@ -168,10 +168,22 @@ impl Div<f32> for Point {
     }
 }
 
+impl Mul<Vector2<f32>> for Point {
+    type Output = Point;
+
+    fn mul(self, mult: Vector2<f32>) -> Point {
+        Point {
+            x: self.x * mult.x,
+            y: self.y * mult.y
+        }
+    }
+}
+
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ColorVert {
     pub pos: Complex,
+    // TODO: Remove the Vector2, replace with non-cgmath type, and get rid of mem::zeroed inits for ColorVert
     pub normal: Vector2<f32>,
     pub color: Color
 }
