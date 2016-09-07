@@ -1,8 +1,10 @@
 use super::{Shadable, Shader, ColorVert, Color, Rect};
+use super::font::Font;
 
 use cgmath::{Vector2};
 
 use std::cell::{Cell, UnsafeCell};
+use std::hash::{Hash, Hasher, SipHasher};
 
 pub struct ColorRect {
     pub color: Color,
@@ -90,3 +92,70 @@ impl<'b> Shadable for &'b ColorRect {
 }
 
 const SQRT_2: f32 = 0.70710678118;
+
+pub struct TextBox<S: AsRef<str>> {
+    pub rect: Rect,
+    pub text: S,
+    pub font: Font,
+    pub font_size: u32,
+
+    num_updates: Cell<u64>,
+    old_rect: Cell<Rect>,
+    old_str_hash: Cell<u64>
+}
+
+impl<S: AsRef<str>> TextBox<S> {
+    pub fn new(rect: Rect, text: S, font: Font, font_size: u32) -> TextBox<S> {
+        let mut hasher = SipHasher::new();
+        text.as_ref().hash(&mut hasher);
+
+        TextBox {
+            rect: rect,
+            text: text,
+            font: font,
+            font_size: font_size,
+            
+            num_updates: Cell::new(0),
+            old_rect: Cell::new(rect),
+            old_str_hash: Cell::new(hasher.finish())
+        }
+    }
+}
+
+impl<S: AsRef<str>> Shadable for TextBox<S> {
+    type Composite = ();
+    fn shader_data<'a>(&'a self) -> Shader<'a, ()> {
+        Shader::Text {
+            rect: self.rect,
+            text: self.text.as_ref(),
+            font: &self.font,
+            font_size: self.font_size
+        }
+    }
+
+    fn num_updates(&self) -> u64 {
+        let mut hasher = SipHasher::new();
+        self.text.as_ref().hash(&mut hasher);
+        let str_hash = hasher.finish();
+
+        if str_hash != self.old_str_hash.get() ||
+           self.rect != self.old_rect.get() {
+            self.num_updates.set(self.num_updates.get() + 1);
+            self.old_rect.set(self.rect);
+            self.old_str_hash.set(str_hash);
+        }
+
+        self.num_updates.get()
+    }
+}
+
+impl<'b, S: AsRef<str>> Shadable for &'b TextBox<S> {
+    type Composite = ();
+    fn shader_data<'a>(&'a self) -> Shader<'a, ()> {
+        (*self).shader_data()
+    }
+
+    fn num_updates(&self) -> u64 {
+        (*self).num_updates()
+    }
+}
