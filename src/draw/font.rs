@@ -287,7 +287,12 @@ impl FontAtlas {
                 };
 
                 let char_info = AtlasCharInfo {
-                    center_offset: px_to_pts(self.dpi, Point::new(b_left as f32, b_top as f32)),
+                    center_offset: px_to_pts(
+                        self.dpi, 
+                        Point::new(
+                            b_left as f32 + b.width() as f32 / 2.0,
+                            b_top as f32 - b.rows() as f32 / 2.0
+                        )),
                     image_rect: pixel_rect,
                     size: Vector2::new(b.width() as f32, b.rows() as f32)
                 };
