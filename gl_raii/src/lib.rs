@@ -567,6 +567,12 @@ pub struct GLTexture {
 
 impl GLTexture {
     pub fn new(width: u32, height: u32, pixels: &[u8], format: TextureFormat) -> GLTexture {
+        let tex = GLTexture::empty();
+        tex.swap_data(width, height, pixels, format);
+        tex
+    }
+
+    pub fn empty() -> GLTexture {
         unsafe {
             debug_assert_eq!(gl::TEXTURE0 as i32, {
                 let mut active_texture = 0;
@@ -587,7 +593,6 @@ impl GLTexture {
                 handle: handle
             };
 
-            tex.swap_data(width, height, pixels, format);
             tex
         }
     }

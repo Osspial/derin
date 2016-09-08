@@ -155,7 +155,10 @@ impl ColorVertexProgram {
 struct CharVertexProgram {
     program: GLProgram,
     base_location_uniform: GLint,
-    pts_rat_scale_uniform: GLint
+    pts_rat_scale_uniform: GLint,
+
+    // font_image_uniform: GLint,
+    font_image_tex_unit: GLint
 }
 
 impl CharVertexProgram {
@@ -180,10 +183,20 @@ impl CharVertexProgram {
         let base_location_uniform = unsafe{ gl::GetUniformLocation(program.handle, "base_location\0".as_ptr() as *const GLchar) };
         let pts_rat_scale_uniform = unsafe{ gl::GetUniformLocation(program.handle, "pts_rat_scale\0".as_ptr() as *const GLchar) };
 
+        let font_image_uniform = unsafe{ gl::GetUniformLocation(program.handle, "tex\0".as_ptr() as *const GLchar) };
+        let font_image_tex_unit = 1;
+
+        // Set the font image uniform to use the proper texture unit
+        program.with(|_| unsafe {
+            gl::Uniform1i(font_image_uniform, font_image_tex_unit);
+        });
+
         CharVertexProgram {
             program: program,
             base_location_uniform: base_location_uniform,
-            pts_rat_scale_uniform: pts_rat_scale_uniform
+            pts_rat_scale_uniform: pts_rat_scale_uniform,
+            // font_image_uniform: font_image_uniform,
+            font_image_tex_unit: font_image_tex_unit
         }
     }
 }
@@ -195,10 +208,16 @@ struct IDMapEntry {
 }
 
 pub struct Facade {
+    pub dpi: u32,
     id_map: HashMap<u64, IDMapEntry>,
+    font_id_map: HashMap<u64, GLTexture>,
+
+    // The rendering programs
     color_passthrough: ColorVertexProgram,
     char_vertex: CharVertexProgram,
-    pub dpi: u32,
+
+    sampler: GLSampler,
+
     viewport_size: (GLint, GLint),
     viewport_size_changed: bool
 }
@@ -216,10 +235,15 @@ impl Facade {
         }
 
         Facade {
+            dpi: 72,
             id_map: HashMap::with_capacity(32),
+            font_id_map: HashMap::with_capacity(8),
+            
             color_passthrough: ColorVertexProgram::new(),
             char_vertex: CharVertexProgram::new(),
-            dpi: 72,
+
+            sampler: GLSampler::new(),
+
             viewport_size: (viewport_info[2], viewport_info[3]),
             viewport_size_changed: false
         }
@@ -256,66 +280,80 @@ impl<'a> Surface for GLSurface<'a> {
         // Whether or not to re-upload any data to the GPU buffers
         let update_buffers: bool;
 
-        let id_map_entry: &mut IDMapEntry;
-        match self.facade.id_map.entry(buffers.id) {
-            Entry::Occupied(mut entry) => {
-                update_buffers = !drawable.num_updates() == entry.get().num_updates;
-                entry.get_mut().num_updates = drawable.num_updates();
-                id_map_entry = entry.into_mut();
-            }
-            Entry::Vacant(entry)   => {
-                update_buffers = true;
-                id_map_entry = entry.insert(
-                    IDMapEntry {
-                        num_updates: drawable.num_updates(),
-                        base_vertex_vec: Vec::new(),
-                        char_vertex_vec: Vec::new()
-                    }
-                );
-            }
-        }
-        
-        let dpi = self.facade.dpi;
-        let viewport_size = self.facade.viewport_size;
-
-        if update_buffers || self.facade.viewport_size_changed {
-            buffers.verts.with(|mut vert_modder|
-            buffers.vert_indices.with(|mut index_modder|
-            buffers.chars.with(|mut char_modder| {
-                vert_modder.buffer_vec().clear();
-                index_modder.buffer_vec().clear();
-                char_modder.buffer_vec().clear();
-
-                let mut bud = BufferUpdateData {
-                    vert_offset: 0,
-                    vert_vec: vert_modder.buffer_vec(),
-
-                    index_offset: 0,
-                    offsetted_indices: Vec::new(),
-                    index_vec: index_modder.buffer_vec(),
-
-                    char_offset: 0,
-                    char_vec: char_modder.buffer_vec(),
-
-                    base_vertex_vec: vec![Default::default(); 1],
-                    char_vertex_vec: Vec::new(),
-                    matrix_stack: vec![One::one(); 1],
-
-                    dpi: dpi,
-                    viewport_size: viewport_size
-                };
-
-                bud.update_buffers(drawable);
-
-                // If `drawable` is a composite, then there will be one extra BaseVertexData pushed to the vector
-                // that we need to get rid of. This does that.
-                if let Shader::Composite{..} = drawable.shader_data() {
-                    bud.base_vertex_vec.pop();
+        {
+            let id_map_entry_mut: &mut IDMapEntry;
+            match self.facade.id_map.entry(buffers.id) {
+                Entry::Occupied(mut entry) => {
+                    update_buffers = !drawable.num_updates() == entry.get().num_updates;
+                    entry.get_mut().num_updates = drawable.num_updates();
+                    id_map_entry_mut = entry.into_mut();
                 }
-                id_map_entry.base_vertex_vec = bud.base_vertex_vec;
-                id_map_entry.char_vertex_vec = bud.char_vertex_vec;
-            })));
+                Entry::Vacant(entry)   => {
+                    update_buffers = true;
+                    id_map_entry_mut = entry.insert(
+                        IDMapEntry {
+                            num_updates: drawable.num_updates(),
+                            base_vertex_vec: Vec::new(),
+                            char_vertex_vec: Vec::new()
+                        }
+                    );
+                }
+            }
+            
+            let dpi = self.facade.dpi;
+            let viewport_size = self.facade.viewport_size;
+
+            if update_buffers || self.facade.viewport_size_changed {
+                // Annoyingly, we can't borrow `self.facade.font_id_map` directly inside of the closure because
+                // that throws an error. Doing it through this binding works. Probably a bug, and should be reported to
+                // the rust compiler.
+                let font_id_map = &mut self.facade.font_id_map;
+
+                buffers.verts.with(|mut vert_modder|
+                buffers.vert_indices.with(|mut index_modder|
+                buffers.chars.with(|mut char_modder| {
+                    vert_modder.buffer_vec().clear();
+                    index_modder.buffer_vec().clear();
+                    char_modder.buffer_vec().clear();
+
+                    let mut bud = BufferUpdateData {
+                        vert_offset: 0,
+                        vert_vec: vert_modder.buffer_vec(),
+
+                        index_offset: 0,
+                        offsetted_indices: Vec::new(),
+                        index_vec: index_modder.buffer_vec(),
+
+                        char_offset: 0,
+                        char_vec: char_modder.buffer_vec(),
+
+                        base_vertex_vec: vec![Default::default(); 1],
+                        char_vertex_vec: Vec::new(),
+                        matrix_stack: vec![One::one(); 1],
+
+                        font_id_map: font_id_map,
+
+                        dpi: dpi,
+                        viewport_size: viewport_size
+                    };
+
+                    bud.update_buffers(drawable);
+
+                    // If `drawable` is a composite, then there will be one extra BaseVertexData pushed to the vector
+                    // that we need to get rid of. This does that.
+                    if let Shader::Composite{..} = drawable.shader_data() {
+                        bud.base_vertex_vec.pop();
+                    }
+                    id_map_entry_mut.base_vertex_vec = bud.base_vertex_vec;
+                    id_map_entry_mut.char_vertex_vec = bud.char_vertex_vec;
+                })));
+            }
         }
+
+        // Unfortunately, we can't just re-use the mutable reference to the id_map_entry, as we also need
+        // to borrow the struct owning the entry as immutable. This workaround has a slight runtime cost,
+        // so it's in the program's best interest to have this hack removed.
+        let id_map_entry = self.facade.id_map.get(&buffers.id).unwrap();
 
         let transform_matrix_uniform = self.facade.color_passthrough.transform_matrix_uniform;
         let pts_rat_scale_uniform = self.facade.color_passthrough.pts_rat_scale_uniform;
@@ -352,6 +390,26 @@ impl<'a> Surface for GLSurface<'a> {
         self.facade.char_vertex.program.with(|_| 
             buffers.chars_vao.with(|_| 
                 for cvd in id_map_entry.char_vertex_vec.iter() {unsafe{
+                    let font_texture = self.facade.font_id_map.get(&cvd.font.id())
+                        .expect("Dangling Font ID; should never happen");
+
+                    if cvd.reupload_font_image {
+                        let raw_font = cvd.font.raw_font().borrow();
+                        let atlas_image = raw_font.atlas_image();
+
+                        font_texture.swap_data(
+                            atlas_image.width,
+                            atlas_image.height,
+                            atlas_image.pixels,
+                            TextureFormat::R8
+                        );
+                    }
+                    self.facade.sampler.with_texture(
+                        self.facade.char_vertex.font_image_tex_unit as GLuint,
+                        font_texture
+                    );
+
+
                     gl::Uniform2f(
                         base_location_uniform,
                         cvd.base_location.x, cvd.base_location.y
@@ -424,6 +482,10 @@ struct BufferUpdateData<'a> {
     char_vertex_vec: Vec<CharVertexData>,
     matrix_stack: Vec<Matrix3<f32>>,
 
+    /// A reference to the facade's font_id_map, which this struct's `update_buffers` function adds to
+    /// in the event that the desired font is not in the map.
+    font_id_map: &'a mut HashMap<u64, GLTexture>,
+
     dpi: u32,
     viewport_size: (GLint, GLint)
 }
@@ -456,7 +518,15 @@ impl<'a> BufferUpdateData<'a> {
 
             Shader::Text{rect, text, font, font_size} => {
                 let mut raw_font = font.raw_font().borrow_mut();
-                let (char_vert_iter, reupload_font_image) = raw_font.char_vert_iter(text, font_size, self.dpi);
+                let (char_vert_iter, mut reupload_font_image) = raw_font.char_vert_iter(text, font_size, self.dpi);
+
+                // If the facade doesn't have a texture created for this font, create one. If we do need to create
+                // one, then we'll need to reupload the texture so force that to true. The actual texture gets
+                // filled in right before the draw calls happen.
+                self.font_id_map.entry(font.id()).or_insert_with(|| {
+                    reupload_font_image = true;
+                    GLTexture::empty()
+                });
 
                 let mut count = 0;
                 for v in char_vert_iter {
