@@ -9,5 +9,6 @@ uniform sampler2D tex;
 out vec4 color;
 
 void main() {
-    color = texture(tex, tex_coord);
+    float alpha = texture(tex, tex_coord).r;
+    color = vec4(1.0, 1.0, 1.0, alpha);
 }
