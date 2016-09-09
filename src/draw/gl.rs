@@ -154,8 +154,9 @@ impl ColorVertexProgram {
 
 struct CharVertexProgram {
     program: GLProgram,
-    base_location_uniform: GLint,
+    transform_matrix_uniform: GLint,
     pts_rat_scale_uniform: GLint,
+    base_location_uniform: GLint,
 
     // font_image_uniform: GLint,
     font_image_tex_unit: GLint
@@ -180,8 +181,9 @@ impl CharVertexProgram {
 
         let program = GLProgram::new_geometry(&char_vertex_vert, &char_vertex_geom, &char_vertex_frag).unwrap();
 
-        let base_location_uniform = unsafe{ gl::GetUniformLocation(program.handle, "base_location\0".as_ptr() as *const GLchar) };
+        let transform_matrix_uniform = unsafe{ gl::GetUniformLocation(program.handle, "transform_matrix\0".as_ptr() as *const GLchar) };
         let pts_rat_scale_uniform = unsafe{ gl::GetUniformLocation(program.handle, "pts_rat_scale\0".as_ptr() as *const GLchar) };
+        let base_location_uniform = unsafe{ gl::GetUniformLocation(program.handle, "base_location\0".as_ptr() as *const GLchar) };
 
         let font_image_uniform = unsafe{ gl::GetUniformLocation(program.handle, "tex\0".as_ptr() as *const GLchar) };
         let font_image_tex_unit = 1;
@@ -193,8 +195,9 @@ impl CharVertexProgram {
 
         CharVertexProgram {
             program: program,
-            base_location_uniform: base_location_uniform,
+            transform_matrix_uniform: transform_matrix_uniform,
             pts_rat_scale_uniform: pts_rat_scale_uniform,
+            base_location_uniform: base_location_uniform,
             // font_image_uniform: font_image_uniform,
             font_image_tex_unit: font_image_tex_unit
         }
@@ -385,6 +388,7 @@ impl<'a> Surface for GLSurface<'a> {
             });
         });
 
+        let transform_matrix_uniform = self.facade.char_vertex.transform_matrix_uniform;
         let base_location_uniform = self.facade.char_vertex.base_location_uniform;
         let pts_rat_scale_uniform = self.facade.char_vertex.pts_rat_scale_uniform;
         self.facade.char_vertex.program.with(|_| 
@@ -409,15 +413,19 @@ impl<'a> Surface for GLSurface<'a> {
                         font_texture
                     );
 
-
-                    gl::Uniform2f(
-                        base_location_uniform,
-                        cvd.base_location.x, cvd.base_location.y
+                    gl::UniformMatrix3fv(
+                        transform_matrix_uniform,
+                        1,
+                        gl::FALSE,
+                        cvd.matrix.as_ptr()
                     );
-
                     gl::Uniform2f(
                         pts_rat_scale_uniform,
                         cvd.pts_rat_scale.x, cvd.pts_rat_scale.y
+                    );
+                    gl::Uniform2f(
+                        base_location_uniform,
+                        cvd.base_location.x, cvd.base_location.y
                     );
 
                     gl::DrawArrays(
@@ -461,8 +469,9 @@ impl Default for BaseVertexData {
 struct CharVertexData {
     offset: usize,
     count: usize,
-    base_location: Point,
+    matrix: Matrix3<f32>,
     pts_rat_scale: Vector2<f32>,
+    base_location: Point,
     reupload_font_image: bool,
     font: Font
 }
@@ -534,13 +543,16 @@ impl<'a> BufferUpdateData<'a> {
                     count += 1;
                 }
 
+                let matrix = self.base_vertex_vec.last().unwrap().matrix;
                 let pts_rat_scale = self.base_vertex_vec.last().unwrap().pts_rat_scale;
+
                 self.char_vertex_vec.push(
                     CharVertexData {
                         offset: self.char_offset,
                         count: count,
-                        base_location: rect.upleft.rat + rect.upleft.pts * pts_rat_scale,
+                        matrix: matrix,
                         pts_rat_scale: pts_rat_scale,
+                        base_location: rect.upleft.rat + rect.upleft.pts * pts_rat_scale,
                         reupload_font_image: reupload_font_image,
                         font: font.clone()
                     });
