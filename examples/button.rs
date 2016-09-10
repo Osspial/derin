@@ -94,7 +94,7 @@ fn main() {
 
     let mut display = Facade::new(|s| window.get_proc_address(s) as *const _);
     let font = Font::new(&FontInfo {
-        regular: "/usr/share/fonts/OTF/NimbusMonoPS-Regular.otf".into(),
+        regular: "/usr/share/fonts/OTF/NimbusSans-Regular.otf".into(),
         italic: None,
         bold: None,
         bold_italic: None

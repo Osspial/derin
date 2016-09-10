@@ -356,6 +356,7 @@ impl<'a, 's> Iterator for CharVertIter<'a, 's> {
             self.font.faces.regular.load_glyph(char_index, LoadFlag::empty()).expect("Could not load glyph");
 
             if self.has_kerning {
+                println!("kerned!");
                 let kerning = self.font.faces.regular
                     .get_kerning(last_char_index, char_index, KerningMode::KerningDefault)
                     .expect("Failed to get font kerning");
@@ -365,18 +366,24 @@ impl<'a, 's> Iterator for CharVertIter<'a, 's> {
             }
 
             let advance = self.font.faces.regular.glyph().advance();
-            self.offset.x += advance.x as f32;
-            self.offset.y += advance.y as f32;
 
             // Some characters don't have a glyph associated with them (e.g. spaces), so, if we can't find
             // a glyph, just skip it's retrieval and go the next glyph!
             if let Some(atlas_char_info) = self.font.atlas.charmap.get(&StyledChar::Regular(c)) {
-                Some(CharVert{
+                let vert = Some(CharVert{
                     image_rect: atlas_char_info.image_rect,
                     offset: px_to_pts(self.dpi, self.offset / 64.0) + atlas_char_info.center_offset,
                     size: px_to_pts(self.dpi, atlas_char_info.size)
-                })
+                });
+
+                self.offset.x += advance.x as f32;
+                self.offset.y += advance.y as f32;
+
+                vert
             } else {
+                self.offset.x += advance.x as f32;
+                self.offset.y += advance.y as f32;
+
                 self.next()
             }
         } else {
