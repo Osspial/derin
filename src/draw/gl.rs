@@ -515,6 +515,8 @@ impl<'a> BufferUpdateData<'a> {
 
             Shader::Text{rect, text, font, font_size} => {
                 let mut raw_font = font.raw_font().borrow_mut();
+                let font_height = raw_font.height(font_size, self.dpi) as f32 / (self.viewport_size.1 as f32 / 2.0);
+
                 let (char_vert_iter, mut reupload_font_image) = raw_font.char_vert_iter(text, font_size, self.dpi);
 
                 // If the facade doesn't have a texture created for this font, create one. If we do need to create
@@ -531,6 +533,7 @@ impl<'a> BufferUpdateData<'a> {
                     count += 1;
                 }
 
+                // Tranform the base location into window-space coordinates
                 let pts_rat_scale = self.base_vertex_vec.last().unwrap().pts_rat_scale;
                 let matrix = self.base_vertex_vec.last().unwrap().matrix;
                 let base_location_point = rect.upleft.rat + rect.upleft.pts * pts_rat_scale;
@@ -540,7 +543,10 @@ impl<'a> BufferUpdateData<'a> {
                     CharVertexData {
                         offset: self.char_offset,
                         count: count,
-                        base_location: Point::new(base_location_vec3.x, base_location_vec3.y),
+                        // Because the base location specifies the upper-left coordinate of the font renderer, we need to
+                        // shift it downwards by the height of the font so that the font appears inside of the text box
+                        // instead of above it.
+                        base_location: Point::new(base_location_vec3.x, base_location_vec3.y - font_height),
                         reupload_font_image: reupload_font_image,
                         font: font.clone()
                     });

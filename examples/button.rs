@@ -125,8 +125,8 @@ fn main() {
             ),
         fill: TextBox::new(
                 Rect::new(
-                    Complex::new_rat(-0.5, 0.5),
-                    Complex::new_rat( 0.5, -0.5)
+                    Complex::new(-1.0,  1.0,  12.0, -12.0),
+                    Complex::new( 1.0, -1.0, -12.0,  12.0)
                 ),
                 "Greetings, you glorious bastards",
                 font,

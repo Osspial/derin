@@ -146,6 +146,12 @@ impl RawFont {
             height: self.atlas.height
         }
     }
+
+    pub fn height(&self, font_size: u32, dpi: u32) -> u16 {
+        self.faces.regular.set_char_size(0, font_size as isize * 64, dpi, dpi).unwrap();
+        let pixel_size = font_size * dpi / 72;
+        pixel_size as u16 * self.faces.regular.height() as u16 / self.faces.regular.em_size() as u16
+    }
 }
 
 pub struct ImageRef<'a> {
