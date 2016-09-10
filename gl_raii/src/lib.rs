@@ -558,7 +558,8 @@ impl<V: GLVertex> Drop for GLVertexArray<V> {
 }
 
 pub enum TextureFormat {
-    R8
+    R8,
+    RGB8
 }
 
 pub struct GLTexture {
@@ -599,7 +600,8 @@ impl GLTexture {
 
     pub fn swap_data(&self, width: u32, height: u32, pixels: &[u8], format: TextureFormat) {
         let (internal_format, format) = match format {
-            TextureFormat::R8 => (gl::R8 as i32, gl::RED)
+            TextureFormat::R8 => (gl::R8 as i32, gl::RED),
+            TextureFormat::RGB8 => (gl::RGB8 as i32, gl::RGB)
         };
 
         unsafe {
