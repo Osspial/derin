@@ -8,7 +8,6 @@ use std::collections::HashMap;
 use std::str::Chars;
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::ops::Mul;
 
 use super::Point;
 use super::gl::get_unique_id;
@@ -136,8 +135,7 @@ impl RawFont {
             chars: string.chars(),
             last_char: '\0',
             offset: Point::new(0.0, 0.0),
-            has_kerning: self.faces.regular.has_kerning(),
-            dpi: dpi
+            has_kerning: self.faces.regular.has_kerning()
         }, new_atlas_image)
     }
 
@@ -174,7 +172,7 @@ enum StyledChar {
 
 #[derive(Debug)]
 struct AtlasCharInfo {
-    center_offset: Point,
+    topleft_offset: Point,
     image_rect: ImageRect,
     /// The size of the glyph, in pixels
     size: Vector2<f32>
@@ -287,12 +285,11 @@ impl FontAtlas {
                 };
 
                 let char_info = AtlasCharInfo {
-                    center_offset: px_to_pts(
-                        self.dpi, 
+                    topleft_offset: 
                         Point::new(
-                            b_left as f32 + b.width() as f32 / 2.0,
-                            b_top as f32 - b.rows() as f32 / 2.0
-                        )),
+                            b_left as f32,
+                            b_top as f32
+                        ),
                     image_rect: pixel_rect,
                     size: Vector2::new(b.width() as f32, b.rows() as f32)
                 };
@@ -342,8 +339,7 @@ pub struct CharVertIter<'a, 's> {
     /// The offset from the first character in the string, stored as 1/64ths of a pixel. This value is
     /// converted to points upon return from the `next` function down below.
     offset: Point,
-    has_kerning: bool,
-    dpi: u32
+    has_kerning: bool
 }
 
 impl<'a, 's> Iterator for CharVertIter<'a, 's> {
@@ -372,8 +368,8 @@ impl<'a, 's> Iterator for CharVertIter<'a, 's> {
             if let Some(atlas_char_info) = self.font.atlas.charmap.get(&StyledChar::Regular(c)) {
                 let vert = Some(CharVert{
                     image_rect: atlas_char_info.image_rect,
-                    offset: px_to_pts(self.dpi, self.offset / 64.0) + atlas_char_info.center_offset,
-                    size: px_to_pts(self.dpi, atlas_char_info.size)
+                    offset: self.offset / 64.0 + atlas_char_info.topleft_offset,
+                    size: atlas_char_info.size
                 });
 
                 self.offset.x += advance.x as f32;
@@ -396,9 +392,9 @@ impl<'a, 's> Iterator for CharVertIter<'a, 's> {
 #[derive(Debug, Clone, Copy)]
 pub struct CharVert {
     pub image_rect: ImageRect,
-    /// The number of points on the xy plane offset from the first character in the string
+    /// The number of pixels on the xy plane offset from the first character in the string
     pub offset: Point,
-    /// The size, in points, of this individual character
+    /// The size, in pixels, of this individual character
     pub size: Vector2<f32>
 }
 
@@ -406,9 +402,4 @@ pub struct CharVert {
 pub struct ImageRect {
     pub upleft: Point,
     pub lowright: Point
-}
-
-fn px_to_pts<P: Mul<f32>>(dpi: u32, pixels: P) -> <P as Mul<f32>>::Output {
-    let dpi_scale = 1.0 / (dpi as f32 / 72.0);
-    pixels * dpi_scale
 }

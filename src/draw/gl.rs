@@ -8,7 +8,7 @@ use gl;
 use gl::types::*;
 use gl_raii::*;
 
-use cgmath::{Matrix3, Vector2};
+use cgmath::{Matrix3, Vector2, Vector3};
 use cgmath::prelude::*;
 
 static mut ID_COUNTER: u64 = 0;
@@ -154,9 +154,8 @@ impl ColorVertexProgram {
 
 struct CharVertexProgram {
     program: GLProgram,
-    transform_matrix_uniform: GLint,
-    pts_rat_scale_uniform: GLint,
     base_location_uniform: GLint,
+    viewport_size_px_uniform: GLint,
 
     // font_image_uniform: GLint,
     font_image_tex_unit: GLint
@@ -181,9 +180,8 @@ impl CharVertexProgram {
 
         let program = GLProgram::new_geometry(&char_vertex_vert, &char_vertex_geom, &char_vertex_frag).unwrap();
 
-        let transform_matrix_uniform = unsafe{ gl::GetUniformLocation(program.handle, "transform_matrix\0".as_ptr() as *const GLchar) };
-        let pts_rat_scale_uniform = unsafe{ gl::GetUniformLocation(program.handle, "pts_rat_scale\0".as_ptr() as *const GLchar) };
         let base_location_uniform = unsafe{ gl::GetUniformLocation(program.handle, "base_location\0".as_ptr() as *const GLchar) };
+        let viewport_size_px_uniform = unsafe{ gl::GetUniformLocation(program.handle, "viewport_size_px\0".as_ptr() as *const GLchar) };
 
         let font_image_uniform = unsafe{ gl::GetUniformLocation(program.handle, "tex\0".as_ptr() as *const GLchar) };
         let font_image_tex_unit = 1;
@@ -195,9 +193,8 @@ impl CharVertexProgram {
 
         CharVertexProgram {
             program: program,
-            transform_matrix_uniform: transform_matrix_uniform,
-            pts_rat_scale_uniform: pts_rat_scale_uniform,
             base_location_uniform: base_location_uniform,
+            viewport_size_px_uniform: viewport_size_px_uniform,
             // font_image_uniform: font_image_uniform,
             font_image_tex_unit: font_image_tex_unit
         }
@@ -388,9 +385,8 @@ impl<'a> Surface for GLSurface<'a> {
             });
         });
 
-        let transform_matrix_uniform = self.facade.char_vertex.transform_matrix_uniform;
         let base_location_uniform = self.facade.char_vertex.base_location_uniform;
-        let pts_rat_scale_uniform = self.facade.char_vertex.pts_rat_scale_uniform;
+        let viewport_size_px_uniform = self.facade.char_vertex.viewport_size_px_uniform;
         self.facade.char_vertex.program.with(|_| 
             buffers.chars_vao.with(|_| 
                 for cvd in id_map_entry.char_vertex_vec.iter() {unsafe{
@@ -413,19 +409,13 @@ impl<'a> Surface for GLSurface<'a> {
                         font_texture
                     );
 
-                    gl::UniformMatrix3fv(
-                        transform_matrix_uniform,
-                        1,
-                        gl::FALSE,
-                        cvd.matrix.as_ptr()
-                    );
-                    gl::Uniform2f(
-                        pts_rat_scale_uniform,
-                        cvd.pts_rat_scale.x, cvd.pts_rat_scale.y
-                    );
                     gl::Uniform2f(
                         base_location_uniform,
                         cvd.base_location.x, cvd.base_location.y
+                    );
+                    gl::Uniform2f(
+                        viewport_size_px_uniform,
+                        self.facade.viewport_size.0 as f32, self.facade.viewport_size.1 as f32
                     );
 
                     gl::DrawArrays(
@@ -469,8 +459,6 @@ impl Default for BaseVertexData {
 struct CharVertexData {
     offset: usize,
     count: usize,
-    matrix: Matrix3<f32>,
-    pts_rat_scale: Vector2<f32>,
     base_location: Point,
     reupload_font_image: bool,
     font: Font
@@ -543,16 +531,16 @@ impl<'a> BufferUpdateData<'a> {
                     count += 1;
                 }
 
-                let matrix = self.base_vertex_vec.last().unwrap().matrix;
                 let pts_rat_scale = self.base_vertex_vec.last().unwrap().pts_rat_scale;
+                let matrix = self.base_vertex_vec.last().unwrap().matrix;
+                let base_location_point = rect.upleft.rat + rect.upleft.pts * pts_rat_scale;
+                let base_location_vec3 = matrix * Vector3::new(base_location_point.x, base_location_point.y, 1.0);
 
                 self.char_vertex_vec.push(
                     CharVertexData {
                         offset: self.char_offset,
                         count: count,
-                        matrix: matrix,
-                        pts_rat_scale: pts_rat_scale,
-                        base_location: rect.upleft.rat + rect.upleft.pts * pts_rat_scale,
+                        base_location: Point::new(base_location_vec3.x, base_location_vec3.y),
                         reupload_font_image: reupload_font_image,
                         font: font.clone()
                     });
