@@ -548,10 +548,21 @@ impl<'a> BufferUpdateData<'a> {
                         line_offset.y -= font_height_px;
                     }
 
-                    for mut v in w.char_vert_iter() {
-                        v.offset = v.offset + w.offset() + line_offset;
-                        self.char_vec.push(v);
-                        count += 1;
+                    for v_result in w.char_vert_iter() {
+                        match v_result {
+                            Ok(mut v) => {
+                                v.offset = v.offset + w.offset() + line_offset;
+                                self.char_vec.push(v);
+                                count += 1;
+                            }
+                            Err(ci) => match ci.character {
+                                '\n' => {
+                                    line_offset.x = -w.offset().x - ci.offset.x;
+                                    line_offset.y -= font_height_px;
+                                }
+                                _ => ()
+                            }
+                        }
                     }
                 }
 

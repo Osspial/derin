@@ -439,9 +439,9 @@ pub struct CharVertIter<'a, C>
 
 impl<'a, C> Iterator for CharVertIter<'a, C> 
         where C: Iterator<Item = char> {
-    type Item = CharVert;
+    type Item = Result<CharVert, CharInvisible>;
 
-    fn next(&mut self) -> Option<CharVert> {
+    fn next(&mut self) -> Option<Result<CharVert, CharInvisible>> {
         if let Some(c) = self.chars.next() {
             let last_char_index = self.font.faces.regular.get_char_index(self.last_char as usize);
             let char_index = self.font.faces.regular.get_char_index(c as usize);
@@ -459,23 +459,26 @@ impl<'a, C> Iterator for CharVertIter<'a, C>
             let advance = self.font.faces.regular.glyph().advance();
 
             // Some characters don't have a glyph associated with them (e.g. spaces), so, if we can't find
-            // a glyph, just skip it's retrieval and go the next glyph!
+            // a glyph, return an Error containing the character.
             if let Some(atlas_char_info) = self.font.atlas.charmap.get(&StyledChar::Regular(c)) {
-                let vert = Some(CharVert{
+                let vert = CharVert{
                     image_rect: atlas_char_info.image_rect,
                     offset: self.offset / 64.0 + atlas_char_info.topleft_offset,
                     size: atlas_char_info.size
-                });
+                };
 
                 self.offset.x += advance.x as f32;
                 self.offset.y += advance.y as f32;
 
-                vert
+                Some(Ok(vert))
             } else {
                 self.offset.x += advance.x as f32;
                 self.offset.y += advance.y as f32;
 
-                self.next()
+                Some(Err(CharInvisible{
+                    offset: self.offset / 64.0,
+                    character: c
+                }))
             }
         } else {
             None
@@ -497,6 +500,12 @@ pub struct CharVert {
 pub struct ImageRect {
     pub upleft: Point,
     pub lowright: Point
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CharInvisible {
+    pub offset: Point,
+    pub character: char
 }
 
 #[cfg(test)]
