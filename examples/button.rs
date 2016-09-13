@@ -129,6 +129,7 @@ fn main() {
                     Complex::new( 1.0, -1.0, -12.0,  12.0)
                 ),
                 "Greetings, you glorious bastards. Oh shit, word wrapping works correctly? Cool beans.\nDo new\n\nlines work?",
+                Color::new(0, 127, 0, 255),
                 font,
                 16
             ),

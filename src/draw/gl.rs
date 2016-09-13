@@ -1,4 +1,4 @@
-use super::{Point, ColorVert, Shader, Shadable, Drawable, Surface};
+use super::{Point, Color, ColorVert, Shader, Shadable, Drawable, Surface};
 use super::font::{Font, CharVert};
 
 use std::collections::HashMap;
@@ -156,6 +156,7 @@ struct CharVertexProgram {
     program: GLProgram,
     base_location_uniform: GLint,
     viewport_size_px_uniform: GLint,
+    color_uniform: GLint,
 
     // font_image_uniform: GLint,
     font_image_tex_unit: GLint
@@ -182,6 +183,7 @@ impl CharVertexProgram {
 
         let base_location_uniform = unsafe{ gl::GetUniformLocation(program.handle, "base_location\0".as_ptr() as *const GLchar) };
         let viewport_size_px_uniform = unsafe{ gl::GetUniformLocation(program.handle, "viewport_size_px\0".as_ptr() as *const GLchar) };
+        let color_uniform = unsafe{ gl::GetUniformLocation(program.handle, "color\0".as_ptr() as *const GLchar) };
 
         let font_image_uniform = unsafe{ gl::GetUniformLocation(program.handle, "tex\0".as_ptr() as *const GLchar) };
         let font_image_tex_unit = 1;
@@ -195,6 +197,8 @@ impl CharVertexProgram {
             program: program,
             base_location_uniform: base_location_uniform,
             viewport_size_px_uniform: viewport_size_px_uniform,
+            color_uniform: color_uniform,
+
             // font_image_uniform: font_image_uniform,
             font_image_tex_unit: font_image_tex_unit
         }
@@ -387,6 +391,7 @@ impl<'a> Surface for GLSurface<'a> {
 
         let base_location_uniform = self.facade.char_vertex.base_location_uniform;
         let viewport_size_px_uniform = self.facade.char_vertex.viewport_size_px_uniform;
+        let color_uniform = self.facade.char_vertex.color_uniform;
         self.facade.char_vertex.program.with(|_| 
             buffers.chars_vao.with(|_| 
                 for cvd in id_map_entry.char_vertex_vec.iter() {unsafe{
@@ -416,6 +421,13 @@ impl<'a> Surface for GLSurface<'a> {
                     gl::Uniform2f(
                         viewport_size_px_uniform,
                         self.facade.viewport_size.0 as f32, self.facade.viewport_size.1 as f32
+                    );
+                    gl::Uniform4f(
+                        color_uniform,
+                        cvd.color.r as f32 / 255.0, 
+                        cvd.color.g as f32 / 255.0, 
+                        cvd.color.b as f32 / 255.0, 
+                        cvd.color.a as f32 / 255.0
                     );
 
                     gl::DrawArrays(
@@ -460,6 +472,7 @@ struct CharVertexData {
     offset: usize,
     count: usize,
     base_location: Point,
+    color: Color,
     reupload_font_image: bool,
     font: Font
 }
@@ -513,7 +526,7 @@ impl<'a> BufferUpdateData<'a> {
                 self.index_offset += indices.len();
             }
 
-            Shader::Text{rect, text, font, font_size} => {
+            Shader::Text{rect, text, font, font_size, color} => {
                 let mut raw_font = font.raw_font().borrow_mut();
                 let font_height_px = raw_font.height(font_size, self.dpi) as f32;
                 let font_height_gl = font_height_px / (self.viewport_size.1 as f32 / 2.0);
@@ -574,6 +587,7 @@ impl<'a> BufferUpdateData<'a> {
                         // shift it downwards by the height of the font so that the font appears inside of the text box
                         // instead of above it.
                         base_location: Point::new(base_location_vec3.x, base_location_vec3.y - font_height_gl),
+                        color: color,
                         reupload_font_image: reupload_font_image,
                         font: font.clone()
                     });

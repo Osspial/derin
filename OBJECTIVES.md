@@ -4,7 +4,7 @@ been completed.
 
 ## Text Rendering
 - [x] Make textboxes wrap text
-- [ ] Add colored text rendering
+- [x] Add colored text rendering
 - [ ] Add ability to render styled text
 - [ ] Make text not always draw in front of vertices
 - [ ] Handle control characters

@@ -257,6 +257,7 @@ pub enum Shader<'a, C: Composite> {
     Text {
         rect: Rect,
         text: &'a str,
+        color: Color,
         font: &'a Font,
         font_size: u32
     },

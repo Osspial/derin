@@ -2,13 +2,14 @@
 
 in FragVert {
     vec2 tex_coord;
+    vec4 char_color;
 };
 
 uniform sampler2D tex;
 
-out vec4 color;
+out vec4 frag_color;
 
 void main() {
     float alpha = texture(tex, tex_coord).r;
-    color = vec4(1.0, 1.0, 1.0, alpha);
+    frag_color = char_color * vec4(1.0, 1.0, 1.0, alpha);
 }

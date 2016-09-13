@@ -7,16 +7,19 @@ in CharData {
     vec2 position;
     vec2 tex_upleft;
     vec2 tex_lowright;
-    vec2 size;    
+    vec2 size;
+    vec4 char_color;
 } char_data[];
 
 out FragVert {
     vec2 tex_coord;
+    vec4 char_color;
 };
 
 void main() {
     vec2 position = char_data[0].position;
     vec2 size = char_data[0].size;
+    char_color = char_data[0].char_color;
 
     // Upper-right vertex
     tex_coord = vec2(char_data[0].tex_lowright.x, char_data[0].tex_upleft.y);
