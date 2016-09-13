@@ -517,27 +517,30 @@ impl<'a> BufferUpdateData<'a> {
                 let mut raw_font = font.raw_font().borrow_mut();
                 let font_height = raw_font.height(font_size, self.dpi) as f32 / (self.viewport_size.1 as f32 / 2.0);
 
-                let (char_vert_iter, mut reupload_font_image) = raw_font.char_vert_iter(text, font_size, self.dpi);
+                // Tranform the base location into window-space coordinates
+                let pts_rat_scale = self.base_vertex_vec.last().unwrap().pts_rat_scale;
+                let matrix = self.base_vertex_vec.last().unwrap().matrix;
+                let base_location_point = rect.upleft.rat + rect.upleft.pts * pts_rat_scale;
+                let base_location_vec3 = matrix * Vector3::new(base_location_point.x, base_location_point.y, 1.0);
+
+                let (word_iter, mut reupload_font_image) = raw_font.word_iter(text, font_size, self.dpi);
 
                 // If the facade doesn't have a texture created for this font, create one. If we do need to create
                 // one, then we'll need to reupload the texture so force that to true. The actual texture gets
-                // filled in right before the draw calls happen.
+                // uploaded right before the draw calls happen.
                 self.font_id_map.entry(font.id()).or_insert_with(|| {
                     reupload_font_image = true;
                     GLTexture::empty()
                 });
 
                 let mut count = 0;
-                for v in char_vert_iter {
-                    self.char_vec.push(v);
-                    count += 1;
+                for w in word_iter {
+                    for mut v in w.char_vert_iter() {
+                        v.offset = v.offset + w.offset();
+                        self.char_vec.push(v);
+                        count += 1;
+                    }
                 }
-
-                // Tranform the base location into window-space coordinates
-                let pts_rat_scale = self.base_vertex_vec.last().unwrap().pts_rat_scale;
-                let matrix = self.base_vertex_vec.last().unwrap().matrix;
-                let base_location_point = rect.upleft.rat + rect.upleft.pts * pts_rat_scale;
-                let base_location_vec3 = matrix * Vector3::new(base_location_point.x, base_location_point.y, 1.0);
 
                 self.char_vertex_vec.push(
                     CharVertexData {

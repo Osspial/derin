@@ -112,7 +112,7 @@ impl RawFont {
     }
 
     /// Returns (iterator, whether or not the atlas image has been recalculated)
-    pub fn char_vert_iter<'a, 's>(&'a mut self, string: &'s str, font_size: u32, dpi: u32) -> (CharVertIter<'a, 's>, bool) {
+    pub fn word_iter<'a, 's>(&'a mut self, string: &'s str, font_size: u32, dpi: u32) -> (WordIter<'a, 's>, bool) {
         // Whether or not the font atlas image has been recalculated, and as such whether or not it should
         // be re-uploaded to the GPU.
         let mut new_atlas_image = false;
@@ -130,10 +130,9 @@ impl RawFont {
             self.atlas.recalculate_image(&self.faces);
         }
 
-        (CharVertIter {
+        (WordIter {
             font: self,
             chars: string.chars(),
-            last_char: '\0',
             offset: Point::new(0.0, 0.0),
             has_kerning: self.faces.regular.has_kerning()
         }, new_atlas_image)
@@ -338,9 +337,99 @@ impl FontAtlas {
     }
 }
 
-pub struct CharVertIter<'a, 's> {
+pub struct WordIter<'a, 's> {
     font: &'a RawFont,
     chars: Chars<'s>,
+    offset: Point,
+    has_kerning: bool
+}
+
+impl<'a, 's> Iterator for WordIter<'a, 's> {
+    type Item = Word<'a, 's>;
+
+    fn next(&mut self) -> Option<Word<'a, 's>> {
+        let word_offset = self.offset;
+        let mut word_str = self.chars.as_str();
+        let mut word_len_bytes = 0;
+        let word_len_px: f32;
+
+        {
+            let mut reached_whitespace = false;
+            let mut iter = CharVertIter {
+                font: self.font,
+                chars: self.chars.clone()
+                    .take_while(|c| { // Take characters until we reach the end of the word, including the trailing whitespace
+                        reached_whitespace |= c.is_whitespace();
+                        !reached_whitespace ^ c.is_whitespace()
+                    })
+                    .map(|c| {word_len_bytes += c.len_utf8(); c}),
+                last_char: '\0',
+                offset: Point::new(0.0, 0.0),
+                has_kerning: self.has_kerning
+            };
+
+            // Consume the character iterator without destroying it, so that we can get the physical length of
+            // the word.
+            for _ in &mut iter {}
+            self.offset = self.offset + iter.offset;
+            word_len_px = iter.offset.x / 64.0;
+        }
+
+        self.chars = word_str[word_len_bytes..].chars();
+        word_str = &word_str[..word_len_bytes];
+
+        if 0 != word_str.len() {
+            Some(Word {
+                font: self.font,
+                word: word_str,
+                word_len_px: word_len_px,
+                has_kerning: self.has_kerning,
+                offset: word_offset
+            })
+        } else {
+            None
+        }
+    }
+}
+
+pub struct Word<'a, 's> {
+    font: &'a RawFont,
+    word: &'s str,
+    word_len_px: f32,
+    has_kerning: bool,
+    offset: Point
+}
+
+impl<'a, 's> Word<'a, 's> {
+    pub fn char_vert_iter(&self) -> CharVertIter<'a, Chars<'s>> {
+        CharVertIter {
+            font: self.font,
+            chars: self.word.chars(),
+            last_char: '\0',
+            offset: Point::new(0.0, 0.0),
+            has_kerning: self.has_kerning
+        }
+    }
+
+    pub fn word(&self) -> &'s str {
+        self.word
+    }
+
+    pub fn word_len_px(&self) -> f32 {
+        self.word_len_px
+    }
+
+    pub fn offset(&self) -> Point {
+        // Because the offset is stored as 64ths of a pixel, we must convert it into pixels
+        self.offset / 64.0
+    }
+}
+
+
+pub struct CharVertIter<'a, C> 
+        where C: Iterator<Item = char> {
+    font: &'a RawFont,
+    chars: C,
     last_char: char,
     /// The offset from the first character in the string, stored as 1/64ths of a pixel. This value is
     /// converted to points upon return from the `next` function down below.
@@ -348,7 +437,8 @@ pub struct CharVertIter<'a, 's> {
     has_kerning: bool
 }
 
-impl<'a, 's> Iterator for CharVertIter<'a, 's> {
+impl<'a, C> Iterator for CharVertIter<'a, C> 
+        where C: Iterator<Item = char> {
     type Item = CharVert;
 
     fn next(&mut self) -> Option<CharVert> {
@@ -358,7 +448,6 @@ impl<'a, 's> Iterator for CharVertIter<'a, 's> {
             self.font.faces.regular.load_glyph(char_index, LoadFlag::empty()).expect("Could not load glyph");
 
             if self.has_kerning {
-                println!("kerned!");
                 let kerning = self.font.faces.regular
                     .get_kerning(last_char_index, char_index, KerningMode::KerningDefault)
                     .expect("Failed to get font kerning");
@@ -408,4 +497,29 @@ pub struct CharVert {
 pub struct ImageRect {
     pub upleft: Point,
     pub lowright: Point
+}
+
+#[cfg(test)]
+mod tests {
+    // I don't know why I love calling this the "superstar pattern", but I do. Maybe because it's just an awesome name.
+    use super::*;
+
+    #[test]
+    fn word_iter() {
+        let font = Font::new(&FontInfo {
+            regular: "./tests/DejaVuSans.ttf".into(),
+            italic: None,
+            bold: None,
+            bold_italic: None
+        });
+
+        let mut font = font.raw_font().borrow_mut();
+        let mut iter = font.word_iter("This is    a l❤vely test.\t", 12, 72).0.map(|w| w.word);
+        assert_eq!(Some("This "), iter.next());
+        assert_eq!(Some("is    "), iter.next());
+        assert_eq!(Some("a "), iter.next());
+        assert_eq!(Some("l❤vely "), iter.next());
+        assert_eq!(Some("test.\t"), iter.next());
+        assert_eq!(None, iter.next());
+    }
 }
