@@ -236,6 +236,7 @@ impl Facade {
             gl::Enable(gl::BLEND);
             gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
             gl::GetIntegerv(gl::VIEWPORT, viewport_info.as_mut_ptr());
+            gl::Enable(gl::FRAMEBUFFER_SRGB);
         }
 
         Facade {
