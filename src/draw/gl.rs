@@ -515,13 +515,18 @@ impl<'a> BufferUpdateData<'a> {
 
             Shader::Text{rect, text, font, font_size} => {
                 let mut raw_font = font.raw_font().borrow_mut();
-                let font_height = raw_font.height(font_size, self.dpi) as f32 / (self.viewport_size.1 as f32 / 2.0);
+                let font_height_px = raw_font.height(font_size, self.dpi) as f32;
+                let font_height_gl = font_height_px / (self.viewport_size.1 as f32 / 2.0);
 
                 // Tranform the base location into window-space coordinates
                 let pts_rat_scale = self.base_vertex_vec.last().unwrap().pts_rat_scale;
                 let matrix = self.base_vertex_vec.last().unwrap().matrix;
                 let base_location_point = rect.upleft.rat + rect.upleft.pts * pts_rat_scale;
                 let base_location_vec3 = matrix * Vector3::new(base_location_point.x, base_location_point.y, 1.0);
+
+                let rect_width_px =
+                    (rect.lowright.pts.x + rect.lowright.rat.x / pts_rat_scale.x) -
+                    (rect.upleft.pts.x + rect.upleft.rat.x / pts_rat_scale.x);
 
                 let (word_iter, mut reupload_font_image) = raw_font.word_iter(text, font_size, self.dpi);
 
@@ -534,9 +539,17 @@ impl<'a> BufferUpdateData<'a> {
                 });
 
                 let mut count = 0;
+                let mut line_offset = Point::new(0.0, 0.0);
                 for w in word_iter {
+                    // If the length of the word causes the line length to exceed the length of the text box,
+                    // wrap the word and move down one line.
+                    if w.offset().x + w.word_len_px() + line_offset.x > rect_width_px {
+                        line_offset.x = -w.offset().x;
+                        line_offset.y -= font_height_px;
+                    }
+
                     for mut v in w.char_vert_iter() {
-                        v.offset = v.offset + w.offset();
+                        v.offset = v.offset + w.offset() + line_offset;
                         self.char_vec.push(v);
                         count += 1;
                     }
@@ -549,7 +562,7 @@ impl<'a> BufferUpdateData<'a> {
                         // Because the base location specifies the upper-left coordinate of the font renderer, we need to
                         // shift it downwards by the height of the font so that the font appears inside of the text box
                         // instead of above it.
-                        base_location: Point::new(base_location_vec3.x, base_location_vec3.y - font_height),
+                        base_location: Point::new(base_location_vec3.x, base_location_vec3.y - font_height_gl),
                         reupload_font_image: reupload_font_image,
                         font: font.clone()
                     });

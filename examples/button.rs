@@ -128,7 +128,7 @@ fn main() {
                     Complex::new(-1.0,  1.0,  12.0, -12.0),
                     Complex::new( 1.0, -1.0, -12.0,  12.0)
                 ),
-                "Greetings, you glorious bastards",
+                "Greetings, you glorious bastards. Oh shit, word wrapping works correctly? Cool beans.",
                 font,
                 16
             ),

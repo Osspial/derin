@@ -3,7 +3,7 @@ This file contains a list of things that need to be completed. When you complete
 the `[ ]` with a `[x]`.
 
 ## Text Rendering
-* `[ ]` Make textboxes wrap text
+* `[x]` Make textboxes wrap text
 * `[ ]` Add colored text rendering
 * `[ ]` Add ability to render styled text
 * `[ ]` Make text not always draw in front of vertices
