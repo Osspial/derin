@@ -6,7 +6,7 @@ use cgmath::{Vector2};
 use std::cell::{Cell, UnsafeCell};
 use std::hash::{Hash, Hasher};
 
-use fnv::FnvHasher;
+use twox_hash::XxHash;
 
 pub struct ColorRect {
     pub color: Color,
@@ -110,8 +110,8 @@ pub struct TextBox<S: AsRef<str>> {
 
 impl<S: AsRef<str>> TextBox<S> {
     pub fn new(rect: Rect, text: S, color: Color, font: Font, font_size: u32) -> TextBox<S> {
-        let mut hasher = FnvHasher::default();
-        text.as_ref().hash(&mut hasher);
+        let mut string_hasher = XxHash::default();
+        text.as_ref().hash(&mut string_hasher);
 
         TextBox {
             rect: rect,
@@ -122,7 +122,7 @@ impl<S: AsRef<str>> TextBox<S> {
             
             num_updates: Cell::new(0),
             old_rect: Cell::new(rect),
-            old_str_hash: Cell::new(hasher.finish()),
+            old_str_hash: Cell::new(string_hasher.finish()),
             old_color: Cell::new(color)
         }
     }
@@ -141,9 +141,10 @@ impl<S: AsRef<str>> Shadable for TextBox<S> {
     }
 
     fn num_updates(&self) -> u64 {
-        let mut hasher = FnvHasher::default();
-        self.text.as_ref().hash(&mut hasher);
-        let str_hash = hasher.finish();
+        // We're using xxHash for the strings, as it is faster than FNV for larger bytecounts.
+        let mut string_hasher = XxHash::default();
+        self.text.as_ref().hash(&mut string_hasher);
+        let str_hash = string_hasher.finish();
 
         if str_hash != self.old_str_hash.get() ||
            self.rect != self.old_rect.get() || 
