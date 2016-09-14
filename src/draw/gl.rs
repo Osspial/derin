@@ -3,6 +3,9 @@ use super::font::{Font, CharVert};
 
 use std::collections::HashMap;
 use std::os::raw::c_void;
+use std::hash::BuildHasherDefault;
+
+use fnv::FnvHasher;
 
 use gl;
 use gl::types::*;
@@ -10,6 +13,8 @@ use gl_raii::*;
 
 use cgmath::{Matrix3, Vector2, Vector3};
 use cgmath::prelude::*;
+
+type HasherType = BuildHasherDefault<FnvHasher>;
 
 static mut ID_COUNTER: u64 = 0;
 
@@ -219,8 +224,8 @@ struct IDMapEntry {
 
 pub struct Facade {
     pub dpi: u32,
-    id_map: HashMap<u64, IDMapEntry>,
-    font_id_map: HashMap<u64, GLTexture>,
+    id_map: HashMap<u64, IDMapEntry, HasherType>,
+    font_id_map: HashMap<u64, GLTexture, HasherType>,
 
     // The rendering programs
     color_passthrough: ColorVertexProgram,
@@ -249,8 +254,8 @@ impl Facade {
 
         Facade {
             dpi: 72,
-            id_map: HashMap::with_capacity(32),
-            font_id_map: HashMap::with_capacity(8),
+            id_map: HashMap::default(),
+            font_id_map: HashMap::default(),
             
             color_passthrough: ColorVertexProgram::new(),
             char_vertex: CharVertexProgram::new(),
@@ -528,7 +533,7 @@ struct BufferUpdateData<'a> {
 
     /// A reference to the facade's font_id_map, which this struct's `update_buffers` function adds to
     /// in the event that the desired font is not in the map.
-    font_id_map: &'a mut HashMap<u64, GLTexture>,
+    font_id_map: &'a mut HashMap<u64, GLTexture, HasherType>,
 
     depth: u16,
 

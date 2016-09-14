@@ -1,10 +1,12 @@
-use super::{Shadable, Shader, ColorVert, Color, Rect};
+use super::{Shadable, Shader, ColorVert, Color, Rect, LinearComplex};
 use super::font::Font;
 
 use cgmath::{Vector2};
 
 use std::cell::{Cell, UnsafeCell};
-use std::hash::{Hash, Hasher, SipHasher};
+use std::hash::{Hash, Hasher};
+
+use fnv::FnvHasher;
 
 pub struct ColorRect {
     pub color: Color,
@@ -108,7 +110,7 @@ pub struct TextBox<S: AsRef<str>> {
 
 impl<S: AsRef<str>> TextBox<S> {
     pub fn new(rect: Rect, text: S, color: Color, font: Font, font_size: u32) -> TextBox<S> {
-        let mut hasher = SipHasher::new();
+        let mut hasher = FnvHasher::default();
         text.as_ref().hash(&mut hasher);
 
         TextBox {
@@ -139,7 +141,7 @@ impl<S: AsRef<str>> Shadable for TextBox<S> {
     }
 
     fn num_updates(&self) -> u64 {
-        let mut hasher = SipHasher::new();
+        let mut hasher = FnvHasher::default();
         self.text.as_ref().hash(&mut hasher);
         let str_hash = hasher.finish();
 
