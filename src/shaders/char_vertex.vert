@@ -3,6 +3,7 @@
 uniform vec2 base_location;
 uniform vec2 viewport_size_px;
 uniform vec4 color;
+uniform float depth;
 
 layout (location = 0) in vec2 tex_upleft;
 layout (location = 1) in vec2 tex_lowright;
@@ -15,6 +16,7 @@ out CharData {
     vec2 tex_lowright;
     vec2 size;
     vec4 char_color;
+    float depth;
 } char_data;
 
 void main() {
@@ -23,4 +25,5 @@ void main() {
     char_data.tex_lowright = tex_lowright;
     char_data.size = size / (viewport_size_px / 2.0);
     char_data.char_color = color;
+    char_data.depth = depth;
 }

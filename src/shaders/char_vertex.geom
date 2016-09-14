@@ -9,6 +9,7 @@ in CharData {
     vec2 tex_lowright;
     vec2 size;
     vec4 char_color;
+    float depth;
 } char_data[];
 
 out FragVert {
@@ -19,29 +20,31 @@ out FragVert {
 void main() {
     vec2 position = char_data[0].position;
     vec2 size = char_data[0].size;
+    float depth = char_data[0].depth;
+
     char_color = char_data[0].char_color;
 
     // Upper-right vertex
     tex_coord = vec2(char_data[0].tex_lowright.x, char_data[0].tex_upleft.y);
-    gl_Position = vec4(position.x + size.x, position.y, 0.0, 1.0);
+    gl_Position = vec4(position.x + size.x, position.y, depth, 1.0);
     gl_PrimitiveID = gl_PrimitiveIDIn;
     EmitVertex();
 
     // Upper-left vertex
     tex_coord = char_data[0].tex_upleft;
-    gl_Position = vec4(position, 0.0, 1.0);
+    gl_Position = vec4(position, depth, 1.0);
     gl_PrimitiveID = gl_PrimitiveIDIn;
     EmitVertex();
 
     // Lower-right vertex
     tex_coord = char_data[0].tex_lowright;
-    gl_Position = vec4(position.x + size.x, position.y - size.y, 0.0, 1.0);
+    gl_Position = vec4(position.x + size.x, position.y - size.y, depth, 1.0);
     gl_PrimitiveID = gl_PrimitiveIDIn;
     EmitVertex();
 
     // Lower-left vertex
     tex_coord = vec2(char_data[0].tex_upleft.x, char_data[0].tex_lowright.y);
-    gl_Position = vec4(position.x, position.y - size.y, 0.0, 1.0);
+    gl_Position = vec4(position.x, position.y - size.y, depth, 1.0);
     gl_PrimitiveID = gl_PrimitiveIDIn;
     EmitVertex();
 }

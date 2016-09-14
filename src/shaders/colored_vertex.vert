@@ -2,6 +2,7 @@
 
 uniform mat3 transform_matrix;
 uniform vec2 pts_rat_scale;
+uniform float depth;
 
 layout (location = 0) in vec2 rat;
 layout (location = 1) in vec2 pts;
@@ -12,6 +13,6 @@ out vec4 vert_color;
 
 void main() {
     vec3 pos = transform_matrix * vec3(rat + pts * pts_rat_scale, 1.0);
-    gl_Position = vec4(pos.xy, 0.0, 1.0);
+    gl_Position = vec4(pos.xy, depth, 1.0);
     vert_color = color;
 }

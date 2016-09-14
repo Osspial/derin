@@ -123,7 +123,8 @@ unsafe impl GLVertex for CharVert {
 struct ColorVertexProgram {
     program: GLProgram,
     transform_matrix_uniform: GLint,
-    pts_rat_scale_uniform: GLint
+    pts_rat_scale_uniform: GLint,
+    depth_uniform: GLint
 }
 
 impl ColorVertexProgram {
@@ -143,11 +144,13 @@ impl ColorVertexProgram {
 
         let transform_matrix_uniform = unsafe{ gl::GetUniformLocation(program.handle, "transform_matrix\0".as_ptr() as *const GLchar) };
         let pts_rat_scale_uniform = unsafe{ gl::GetUniformLocation(program.handle, "pts_rat_scale\0".as_ptr() as *const GLchar) };
+        let depth_uniform = unsafe{ gl::GetUniformLocation(program.handle, "depth\0".as_ptr() as *const GLchar) };
 
         ColorVertexProgram {
             program: program,
             transform_matrix_uniform: transform_matrix_uniform,
-            pts_rat_scale_uniform: pts_rat_scale_uniform
+            pts_rat_scale_uniform: pts_rat_scale_uniform,
+            depth_uniform: depth_uniform
         }
     }
 }
@@ -157,6 +160,7 @@ struct CharVertexProgram {
     base_location_uniform: GLint,
     viewport_size_px_uniform: GLint,
     color_uniform: GLint,
+    depth_uniform: GLint,
 
     // font_image_uniform: GLint,
     font_image_tex_unit: GLint
@@ -184,6 +188,7 @@ impl CharVertexProgram {
         let base_location_uniform = unsafe{ gl::GetUniformLocation(program.handle, "base_location\0".as_ptr() as *const GLchar) };
         let viewport_size_px_uniform = unsafe{ gl::GetUniformLocation(program.handle, "viewport_size_px\0".as_ptr() as *const GLchar) };
         let color_uniform = unsafe{ gl::GetUniformLocation(program.handle, "color\0".as_ptr() as *const GLchar) };
+        let depth_uniform = unsafe{ gl::GetUniformLocation(program.handle, "depth\0".as_ptr() as *const GLchar) };
 
         let font_image_uniform = unsafe{ gl::GetUniformLocation(program.handle, "tex\0".as_ptr() as *const GLchar) };
         let font_image_tex_unit = 1;
@@ -198,6 +203,7 @@ impl CharVertexProgram {
             base_location_uniform: base_location_uniform,
             viewport_size_px_uniform: viewport_size_px_uniform,
             color_uniform: color_uniform,
+            depth_uniform: depth_uniform,
 
             // font_image_uniform: font_image_uniform,
             font_image_tex_unit: font_image_tex_unit
@@ -237,6 +243,8 @@ impl Facade {
             gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
             gl::GetIntegerv(gl::VIEWPORT, viewport_info.as_mut_ptr());
             gl::Enable(gl::FRAMEBUFFER_SRGB);
+            gl::Enable(gl::DEPTH_TEST);
+            gl::DepthFunc(gl::GEQUAL);
         }
 
         Facade {
@@ -264,17 +272,24 @@ impl Facade {
     pub fn surface<'a>(&'a mut self) -> GLSurface {
         unsafe {
             gl::ClearColor(0.0, 0.0, 0.0, 1.0);
-            gl::Clear(gl::COLOR_BUFFER_BIT);
+            gl::ClearDepth(0.0);
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
 
         GLSurface {
-            facade: self
+            facade: self,
+            depth_accumulator: 0
         }
     }
 }
 
 pub struct GLSurface<'a> {
-    facade: &'a mut Facade
+    facade: &'a mut Facade,
+    /// An accumulator that increments every time a shader is drawn. Used to prevent shaders that are executed
+    /// after other shaders from drawing above a shader when the programmer told the first shader to draw before
+    /// the second. As an example, text is drawn after vertices, so if the programmer instructed the program to
+    /// draw the vertices after the text, the depth test is used to make it appear as though that is what's happening.
+    depth_accumulator: u16
 }
 
 impl<'a> Surface for GLSurface<'a> {
@@ -305,14 +320,16 @@ impl<'a> Surface for GLSurface<'a> {
                 }
             }
             
-            let dpi = self.facade.dpi;
-            let viewport_size = self.facade.viewport_size;
-
             if update_buffers || self.facade.viewport_size_changed {
-                // Annoyingly, we can't borrow `self.facade.font_id_map` directly inside of the closure because
-                // that throws an error. Doing it through this binding works. Probably a bug, and should be reported to
+                // Annoyingly, we can't borrow these variables directly inside of the closure because
+                // that throws an error. Binding them through these works. Probably a bug, and should be reported to
                 // the rust compiler.
                 let font_id_map = &mut self.facade.font_id_map;
+                let dpi = self.facade.dpi;
+                let viewport_size = self.facade.viewport_size;
+                // We take the depth_accumulator value from self, update it inside of the closure, and then pass it back
+                // to self after the closure finishes.
+                let mut depth_accumulator = self.depth_accumulator;
 
                 buffers.verts.with(|mut vert_modder|
                 buffers.vert_indices.with(|mut index_modder|
@@ -338,6 +355,8 @@ impl<'a> Surface for GLSurface<'a> {
 
                         font_id_map: font_id_map,
 
+                        depth: depth_accumulator,
+
                         dpi: dpi,
                         viewport_size: viewport_size
                     };
@@ -351,7 +370,10 @@ impl<'a> Surface for GLSurface<'a> {
                     }
                     id_map_entry_mut.base_vertex_vec = bud.base_vertex_vec;
                     id_map_entry_mut.char_vertex_vec = bud.char_vertex_vec;
+                    depth_accumulator = bud.depth;
                 })));
+
+                self.depth_accumulator = depth_accumulator;
             }
         }
 
@@ -362,7 +384,7 @@ impl<'a> Surface for GLSurface<'a> {
 
         let transform_matrix_uniform = self.facade.color_passthrough.transform_matrix_uniform;
         let pts_rat_scale_uniform = self.facade.color_passthrough.pts_rat_scale_uniform;
-
+        let depth_uniform = self.facade.color_passthrough.depth_uniform;
         self.facade.color_passthrough.program.with(|_| {
             buffers.verts_vao.with(|_| {
                 for bvd in id_map_entry.base_vertex_vec.iter() {unsafe{
@@ -372,10 +394,13 @@ impl<'a> Surface for GLSurface<'a> {
                         gl::FALSE,
                         bvd.matrix.as_ptr()
                     );
-
                     gl::Uniform2f(
                         pts_rat_scale_uniform,
                         bvd.pts_rat_scale.x, bvd.pts_rat_scale.y
+                    );
+                    gl::Uniform1f(
+                        depth_uniform,
+                        bvd.depth
                     );
 
 
@@ -393,6 +418,7 @@ impl<'a> Surface for GLSurface<'a> {
         let base_location_uniform = self.facade.char_vertex.base_location_uniform;
         let viewport_size_px_uniform = self.facade.char_vertex.viewport_size_px_uniform;
         let color_uniform = self.facade.char_vertex.color_uniform;
+        let depth_uniform = self.facade.char_vertex.depth_uniform;
         self.facade.char_vertex.program.with(|_| 
             buffers.chars_vao.with(|_| 
                 for cvd in id_map_entry.char_vertex_vec.iter() {unsafe{
@@ -430,6 +456,10 @@ impl<'a> Surface for GLSurface<'a> {
                         cvd.color.b as f32 / 255.0, 
                         cvd.color.a as f32 / 255.0
                     );
+                    gl::Uniform1f(
+                        depth_uniform,
+                        cvd.depth
+                    );
 
                     gl::DrawArrays(
                         gl::POINTS,
@@ -454,7 +484,8 @@ struct BaseVertexData {
     count: usize,
     base_vertex: usize,
     matrix: Matrix3<f32>,
-    pts_rat_scale: Vector2<f32>
+    pts_rat_scale: Vector2<f32>,
+    depth: f32
 }
 
 impl Default for BaseVertexData {
@@ -464,7 +495,8 @@ impl Default for BaseVertexData {
             count: 0,
             base_vertex: 0,
             matrix: One::one(),
-            pts_rat_scale: Zero::zero()
+            pts_rat_scale: Zero::zero(),
+            depth: 0.0
         }
     }
 }
@@ -475,7 +507,8 @@ struct CharVertexData {
     base_location: Point,
     color: Color,
     reupload_font_image: bool,
-    font: Font
+    font: Font,
+    depth: f32
 }
 
 struct BufferUpdateData<'a> {
@@ -496,6 +529,8 @@ struct BufferUpdateData<'a> {
     /// A reference to the facade's font_id_map, which this struct's `update_buffers` function adds to
     /// in the event that the desired font is not in the map.
     font_id_map: &'a mut HashMap<u64, GLTexture>,
+
+    depth: u16,
 
     dpi: u32,
     viewport_size: (GLint, GLint)
@@ -525,6 +560,8 @@ impl<'a> BufferUpdateData<'a> {
 
                 self.vert_offset += verts.len();
                 self.index_offset += indices.len();
+                self.depth += 1;
+                bvd.depth = self.depth as f32 / 65536.0;
             }
 
             Shader::Text{rect, text, font, font_size, color} => {
@@ -580,6 +617,7 @@ impl<'a> BufferUpdateData<'a> {
                     }
                 }
 
+                self.depth += 1;
                 self.char_vertex_vec.push(
                     CharVertexData {
                         offset: self.char_offset,
@@ -590,7 +628,8 @@ impl<'a> BufferUpdateData<'a> {
                         base_location: Point::new(base_location_vec3.x, base_location_vec3.y - font_height_gl),
                         color: color,
                         reupload_font_image: reupload_font_image,
-                        font: font.clone()
+                        font: font.clone(),
+                        depth: self.depth as f32 / 65536.0
                     });
             }
 

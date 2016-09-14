@@ -6,7 +6,7 @@ been completed.
 - [x] Make textboxes wrap text
 - [x] Add colored text rendering
 - [ ] Add ability to render styled text
-- [ ] Make text not always draw in front of vertices
+- [x] Make text not always draw in front of vertices
 - [ ] Handle control characters
   - [x] Newline
   - [ ] Tab
