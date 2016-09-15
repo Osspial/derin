@@ -108,9 +108,9 @@ fn main() {
                 Complex::new_rat( 0.5, -0.5)
             ),
             vec![
-                GradientNode::new(LinearComplex::new_rat( 0.5), Color::new(255, 0, 0, 255)),
-                GradientNode::new(LinearComplex::new_rat( 0.0), Color::new(0, 255, 0, 255)),
-                GradientNode::new(LinearComplex::new_rat(-0.5), Color::new(255, 255, 255, 255)),
+                GradientNode::new( 0.5, Color::new(255, 0, 0, 255)),
+                GradientNode::new( 0.0, Color::new(0, 255, 0, 255)),
+                GradientNode::new(-0.5, Color::new(255, 255, 255, 255)),
             ]
         ),
         buffers: BufferData::new()

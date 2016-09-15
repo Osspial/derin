@@ -98,12 +98,12 @@ const SQRT_2: f32 = 0.70710678118;
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct GradientNode {
-    pub pos: LinearComplex,
+    pub pos: f32,
     pub color: Color
 }
 
 impl GradientNode {
-    pub fn new(pos: LinearComplex, color: Color) -> GradientNode {
+    pub fn new(pos: f32, color: Color) -> GradientNode {
         GradientNode {
             pos: pos,
             color: color
@@ -117,7 +117,7 @@ impl Hash for GradientNode {
         use std::slice;
         use std::mem;
 
-        let pos_bytes = unsafe{ slice::from_raw_parts(&self.pos as *const _ as *const u8, mem::size_of::<LinearComplex>()) };
+        let pos_bytes = unsafe{ slice::from_raw_parts(&self.pos as *const _ as *const u8, mem::size_of::<f32>()) };
         state.write(pos_bytes);
         self.color.hash(state);
     }
@@ -164,10 +164,9 @@ impl<N> Shadable for LinearGradient<N>
         indices.clear();
 
         for n in self.nodes.as_ref().iter() {
-            let pos = LinearComplex {
-                rat: n.pos.rat * self.rect.height().rat / 2.0,
-                ..n.pos
-            };
+            let pos = LinearComplex::new_rat(
+                n.pos * self.rect.height().rat / 2.0,
+            );
 
             verts.push(ColorVert {
                 pos: Complex::from_linears(self.rect.upleft.x(), pos),
