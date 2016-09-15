@@ -309,7 +309,7 @@ impl<'a> Surface for GLSurface<'a> {
             let id_map_entry_mut: &mut IDMapEntry;
             match self.facade.id_map.entry(buffers.id) {
                 Entry::Occupied(mut entry) => {
-                    update_buffers = !drawable.num_updates() == entry.get().num_updates;
+                    update_buffers = !(drawable.num_updates() == entry.get().num_updates);
                     entry.get_mut().num_updates = drawable.num_updates();
                     id_map_entry_mut = entry.into_mut();
                 }
