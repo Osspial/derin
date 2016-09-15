@@ -2,7 +2,7 @@ pub mod primitive;
 pub mod gl;
 pub mod font;
 
-use std::ops::{Add, Mul, Div};
+use std::ops::{Add, Sub, Mul, Div};
 
 use self::gl::BufferData;
 use self::font::Font;
@@ -117,6 +117,79 @@ impl Complex {
             pts: Point::new(x, y)
         }
     }
+
+    pub fn from_linears(x: LinearComplex, y: LinearComplex) -> Complex {
+        Complex {
+            rat: Point::new(x.rat, y.rat),
+            pts: Point::new(x.pts, y.pts)
+        }
+    }
+
+    pub fn x(self) -> LinearComplex {
+        LinearComplex {
+            rat: self.rat.x,
+            pts: self.pts.x
+        }
+    }
+
+    pub fn y(self) -> LinearComplex {
+        LinearComplex {
+            rat: self.rat.y,
+            pts: self.pts.y
+        }
+    }
+}
+
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct LinearComplex {
+    pub rat: f32,
+    pub pts: f32
+}
+
+impl LinearComplex {
+    pub fn new(rat: f32, pts: f32) -> LinearComplex {
+        LinearComplex {
+            rat: rat,
+            pts: pts
+        }
+    }
+
+    pub fn new_rat(rat: f32) -> LinearComplex {
+        LinearComplex {
+            rat: rat,
+            pts: 0.0
+        }
+    }
+
+    pub fn new_pts(pts: f32) -> LinearComplex {
+        LinearComplex {
+            rat: 0.0,
+            pts: pts
+        }
+    }
+}
+
+impl Add for LinearComplex {
+    type Output = LinearComplex;
+
+    fn add(self, other: LinearComplex) -> LinearComplex {
+        LinearComplex {
+            rat: self.rat + other.rat,
+            pts: self.pts + other.pts
+        }
+    }
+}
+
+impl Sub for LinearComplex {
+    type Output = LinearComplex;
+
+    fn sub(self, other: LinearComplex) -> LinearComplex {
+        LinearComplex {
+            rat: self.rat - other.rat,
+            pts: self.pts - other.pts
+        }
+    }
 }
 
 #[repr(C, packed)]
@@ -142,6 +215,17 @@ impl Add for Point {
         Point {
             x: self.x + other.x,
             y: self.y + other.y
+        }
+    }
+}
+
+impl Sub for Point {
+    type Output = Point;
+
+    fn sub(self, other: Point) -> Point {
+        Point {
+            x: self.x - other.x,
+            y: self.y - other.y
         }
     }
 }
@@ -237,6 +321,14 @@ impl Rect {
             pts: (self.upleft.pts + self.lowright.pts) / 2.0
         }
     }
+
+    pub fn width(self) -> LinearComplex {
+        self.upleft.x() - self.lowright.x()
+    }
+
+    pub fn height(self) -> LinearComplex {
+        self.upleft.y() - self.lowright.y()
+    }
 }
 
 impl Default for Rect {
@@ -274,7 +366,7 @@ pub enum Shader<'a, C: Composite> {
 }
 
 #[repr(C, packed)]
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 pub struct Color {
     pub r: u8,
     pub g: u8,
