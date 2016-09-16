@@ -354,7 +354,7 @@ impl<'a> Surface for GLSurface<'a> {
                         char_offset: 0,
                         char_vec: char_modder.buffer_vec(),
 
-                        base_vertex_vec: vec![Default::default(); 1],
+                        base_vertex_vec: vec![BaseVertexData::new(dpi, viewport_size); 1],
                         char_vertex_vec: Vec::new(),
                         matrix_stack: vec![One::one(); 1],
 
@@ -491,6 +491,22 @@ struct BaseVertexData {
     matrix: Matrix3<f32>,
     pts_rat_scale: Vector2<f32>,
     depth: f32
+}
+
+impl BaseVertexData {
+    fn new(dpi: u32, viewport_size: (GLint, GLint)) -> BaseVertexData {
+        BaseVertexData {
+            offset: 0,
+            count: 0,
+            base_vertex: 0,
+            matrix: One::one(),
+            pts_rat_scale: Vector2::new(
+                2.0 * dpi as f32 / (viewport_size.0 as f32 * 72.0),
+                2.0 * dpi as f32 / (viewport_size.1 as f32 * 72.0)
+            ),
+            depth: 0.0
+        }
+    }
 }
 
 impl Default for BaseVertexData {
