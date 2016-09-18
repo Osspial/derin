@@ -1,4 +1,4 @@
-use super::{Point, Color, ColorVert, Shader, Shadable, Drawable, Surface};
+use super::{Point, Color, ColorVert, Shader, Shadable, Drawable, Surface, Composite, Rect};
 use super::font::{Font, CharVert};
 
 use std::collections::HashMap;
@@ -558,9 +558,60 @@ struct BufferUpdateData<'a> {
 }
 
 impl<'a> BufferUpdateData<'a> {
+    fn transform_data(&self, scale: Rect) -> (Matrix3<f32>, Vector2<f32>) {
+        let last_matrix = self.matrix_stack.last().unwrap().clone();
+
+        let (rat_width, rat_height) =
+            (
+                last_matrix.x.x * (scale.lowright.rat.x - scale.upleft.rat.x),
+                last_matrix.y.y * (scale.upleft.rat.y - scale.lowright.rat.y)
+            );
+
+        let pts_rat_scale = Vector2::new(
+            (4.0 / rat_width) * self.dpi as f32 / (self.viewport_size.0 as f32 * 72.0),
+            (4.0 / rat_height) * self.dpi as f32 / (self.viewport_size.1 as f32 * 72.0)
+        );
+
+        let complex_center = scale.center();
+        let center = 
+            complex_center.rat + 
+            Point::new(
+                complex_center.pts.x * pts_rat_scale.x,
+                complex_center.pts.y * pts_rat_scale.y
+            );
+
+        let width = rat_width + (scale.lowright.pts.x - scale.upleft.rat.y) * pts_rat_scale.x;
+        let height = rat_height + (scale.upleft.pts.y - scale.lowright.pts.y) * pts_rat_scale.y;
+
+        let new_matrix = last_matrix * Matrix3::new(
+            width/2.0,        0.0, 0.0,
+                  0.0, height/2.0, 0.0,
+             center.x,   center.y, 1.0
+        );
+
+        (new_matrix, pts_rat_scale)
+    }
+
     fn update_buffers<S: Shadable>(&mut self, shadable: &S) {
-        match shadable.shader_data() {
-            Shader::Verts {verts, indices} => {
+        self.update_buffers_raw(&shadable.shader_data());
+    }
+
+    fn update_buffers_raw<C: Composite>(&mut self, shader: &Shader<C>) {
+        match *shader {
+            Shader::Transform{scale, operand} => {
+                let (new_matrix, pts_rat_scale) = self.transform_data(scale);
+
+                self.base_vertex_vec.last_mut().unwrap().matrix = new_matrix;
+                self.base_vertex_vec.last_mut().unwrap().pts_rat_scale = pts_rat_scale;
+                self.matrix_stack.push(new_matrix);
+
+                self.update_buffers_raw(&operand.shader_data());
+
+                self.base_vertex_vec.push(BaseVertexData::new(self.dpi, self.viewport_size));
+                self.matrix_stack.pop();
+            }
+
+            Shader::Verts{verts, indices} => {
                 self.vert_vec.extend_from_slice(verts);
 
                 let bvd = self.base_vertex_vec.last_mut().unwrap();
@@ -654,47 +705,20 @@ impl<'a> BufferUpdateData<'a> {
                     });
             }
 
-            Shader::Composite{foreground, fill, backdrop, rect, ..} => {
-                let last_matrix = self.matrix_stack.last().unwrap().clone();
-
-                let (rat_width, rat_height) =
-                    (
-                        last_matrix.x.x * (rect.lowright.rat.x - rect.upleft.rat.x),
-                        last_matrix.y.y * (rect.upleft.rat.y - rect.lowright.rat.y)
-                    );
-
-                let pts_rat_scale = Vector2::new(
-                    (4.0 / rat_width) * self.dpi as f32 / (self.viewport_size.0 as f32 * 72.0),
-                    (4.0 / rat_height) * self.dpi as f32 / (self.viewport_size.1 as f32 * 72.0)
-                );
-
-                let complex_center = rect.center();
-                let center = 
-                    complex_center.rat + 
-                    Point::new(
-                        complex_center.pts.x * pts_rat_scale.x,
-                        complex_center.pts.y * pts_rat_scale.y
-                    );
-
-                let width = rat_width + (rect.lowright.pts.x - rect.upleft.rat.y) * pts_rat_scale.x;
-                let height = rat_height + (rect.upleft.pts.y - rect.lowright.pts.y) * pts_rat_scale.y;
-
-                let new_matrix = last_matrix * Matrix3::new(
-                    width/2.0,        0.0, 0.0,
-                          0.0, height/2.0, 0.0,
-                     center.x,   center.y, 1.0
-                );
+            Shader::Composite{ref foreground, ref fill, ref backdrop, rect, ..} => {
+                let (new_matrix, pts_rat_scale) = self.transform_data(rect);
 
                 self.base_vertex_vec.last_mut().unwrap().matrix = new_matrix;
                 self.base_vertex_vec.last_mut().unwrap().pts_rat_scale = pts_rat_scale;
                 self.matrix_stack.push(new_matrix);
 
                 // We order the vertices so that OpenGL draws them back-to-front
-                self.update_buffers(&backdrop);
-                self.update_buffers(&fill);
-                self.update_buffers(&foreground);
+                self.update_buffers(backdrop);
+                self.update_buffers(fill);
+                self.update_buffers(foreground);
 
                 self.base_vertex_vec.push(Default::default());
+                self.matrix_stack.pop();
             }
 
             Shader::None => ()

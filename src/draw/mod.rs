@@ -340,7 +340,12 @@ impl Default for Rect {
     }
 }
 
-pub enum Shader<'a, C: Composite> {
+pub enum Shader<'a, C: 'a + Composite> {
+    Transform {
+        scale: Rect,
+        operand: &'a Shadable<Composite = C>
+    },
+
     Verts {
         verts: &'a [ColorVert],
         indices: &'a [u16]
