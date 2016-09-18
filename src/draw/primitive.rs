@@ -1,4 +1,4 @@
-use super::{Shadable, Shader, ColorVert, Color, Rect, Complex, LinearComplex};
+use super::{Shadable, Shader, ColorVert, Color, Rect, Complex};
 use super::font::Font;
 
 use cgmath::{Vector2};
@@ -131,8 +131,7 @@ pub struct LinearGradient<N>
     num_updates: Cell<u64>,
     old_rect: Cell<Rect>,
     old_nodes_hash: Cell<u64>,
-    verts: UnsafeCell<Vec<ColorVert>>,
-    indices: UnsafeCell<Vec<u16>>
+    baked: UnsafeCell<BakedGradient>
 }
 
 impl<N> LinearGradient<N>
@@ -148,8 +147,10 @@ impl<N> LinearGradient<N>
             num_updates: Cell::new(0),
             old_rect: Cell::new(rect),
             old_nodes_hash: Cell::new(hasher.finish()),
-            verts: UnsafeCell::new(Vec::with_capacity(8)),
-            indices: UnsafeCell::new(Vec::with_capacity(16))
+            baked: UnsafeCell::new(BakedGradient {
+                verts: Vec::with_capacity(8),
+                indices: Vec::with_capacity(16)
+            })
         }
     }
 }
@@ -158,24 +159,20 @@ impl<N> Shadable for LinearGradient<N>
         where N: AsRef<[GradientNode]> {
     type Composite = ();
     fn shader_data<'a>(&'a self) -> Shader<'a, ()> {
-        let verts = unsafe{ &mut *self.verts.get() };
-        let indices = unsafe {&mut *self.indices.get() };
+        let verts = unsafe{ &mut (*self.baked.get()).verts };
+        let indices = unsafe {&mut (*self.baked.get()).indices };
         verts.clear();
         indices.clear();
 
         for n in self.nodes.as_ref().iter() {
-            let pos = LinearComplex::new_rat(
-                n.pos * self.rect.height().rat / 2.0,
-            );
-
             verts.push(ColorVert {
-                pos: Complex::from_linears(self.rect.upleft.x(), pos),
+                pos: Complex::new_rat(-1.0, n.pos),
                 // TODO: Add proper normal calculation
                 normal: Vector2::new(0.0, 0.0),
                 color: n.color
             });
             verts.push(ColorVert {
-                pos: Complex::from_linears(self.rect.lowright.x(), pos),
+                pos: Complex::new_rat(1.0, n.pos),
                 // Ditto.
                 normal: Vector2::new(0.0, 0.0),
                 color: n.color
@@ -187,24 +184,24 @@ impl<N> Shadable for LinearGradient<N>
 
         // Top left and right vertices
         verts.insert(0, ColorVert {
-            pos: self.rect.upleft,
+            pos: Complex::new_rat(-1.0, 1.0),
             normal: Vector2::new(0.0, 0.0),
             color: top_color
         });
         verts.insert(1, ColorVert {
-            pos: self.rect.upright(),
+            pos: Complex::new_rat(1.0, 1.0),
             normal: Vector2::new(0.0, 0.0),
             color: top_color
         });
 
         // Bottom left and right vertices
         verts.push(ColorVert {
-            pos: self.rect.lowleft(),
+            pos: Complex::new_rat(-1.0, -1.0),
             normal: Vector2::new(0.0, 0.0),
             color: bottom_color
         });
         verts.push(ColorVert {
-            pos: self.rect.lowright,
+            pos: Complex::new_rat(1.0, -1.0),
             normal: Vector2::new(0.0, 0.0),
             color: bottom_color
         });
@@ -218,9 +215,9 @@ impl<N> Shadable for LinearGradient<N>
             last_pair = Some(pair);
         }
 
-        Shader::Verts {
-            verts: unsafe{ &*self.verts.get() },
-            indices: unsafe{ &*self.indices.get() }
+        Shader::Transform {
+            scale: self.rect,
+            operand: unsafe{ &*self.baked.get() }
         }
     }
 
@@ -237,6 +234,26 @@ impl<N> Shadable for LinearGradient<N>
         }
 
         self.num_updates.get()
+    }
+}
+
+pub struct BakedGradient {
+    verts: Vec<ColorVert>,
+    indices: Vec<u16>
+}
+
+impl Shadable for BakedGradient {
+    type Composite = ();
+
+    fn shader_data<'a>(&'a self) -> Shader<'a, ()> {
+        Shader::Verts {
+            verts: &self.verts,
+            indices: &self.indices
+        }
+    }
+
+    fn num_updates(&self) -> u64 {
+        0
     }
 }
 

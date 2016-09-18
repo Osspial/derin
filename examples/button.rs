@@ -104,11 +104,11 @@ fn main() {
     let rect = DrawableRect {
         rect: LinearGradient::new(
             Rect::new(
-                Complex::new_rat(-0.5,  0.5),
+                Complex::new(-0.5,  0.5, 0.0, 144.0),
                 Complex::new_rat( 0.5, -0.5)
             ),
             vec![
-                GradientNode::new( 0.5, Color::new(255, 0, 0, 255)),
+                GradientNode::new( 1.0, Color::new(255, 0, 0, 255)),
                 GradientNode::new( 0.0, Color::new(0, 255, 0, 255)),
                 GradientNode::new(-0.5, Color::new(255, 255, 255, 255)),
             ]
