@@ -3,83 +3,20 @@ extern crate glutin;
 
 use tint::draw::*;
 use tint::draw::primitive::*;
-use tint::draw::gl::{Facade, BufferData};
+use tint::draw::gl::{Facade, ShaderDataCollector};
 use tint::draw::font::{Font, FontInfo};
-
-struct DrawableRect {
-    rect: LinearGradient<Vec<GradientNode>>,
-    buffers: BufferData
-}
-
-impl Shadable for DrawableRect {
-    type Composite = ();
-
-    fn shader_data<'a>(&'a self) -> Shader<'a, ()> {
-        self.rect.shader_data()
-    }
-
-    fn num_updates(&self) -> u64 {
-        self.rect.num_updates()
-    }
-}
-
-impl Drawable for DrawableRect {
-    fn buffer_data(&self) -> &BufferData {
-        &self.buffers
-    }
-}
 
 struct CompositeRects {
     rect: Rect,
-    front: ColorRect,
-    fill: TextBox<&'static str>,
-    buffers: BufferData
+    text: TextBox<&'static str>,
+    front: ColorRect
 }
 
-impl<'a> Composite for &'a CompositeRects {
-    type Foreground = &'a ColorRect;
-    type Fill = &'a TextBox<&'static str>;
-    type Backdrop = ();
-
-    fn rect(&self) -> Rect {
-        self.rect
-    }
-
-    fn foreground(&self) -> &'a ColorRect {
-        &self.front
-    }
-
-    fn fill(&self) -> &'a TextBox<&'static str> {
-        &self.fill
-    }
-
-    fn backdrop(&self) -> () {
-        ()
-    }
-}
-
-impl<'b> Shadable for &'b CompositeRects {
-    type Composite = &'b CompositeRects;
-
-    fn shader_data<'a>(&'a self) -> Shader<'a, &'b CompositeRects> {
-        Shader::Composite {
-            rect: self.rect(),
-            border: self.border(),
-            foreground: self.foreground(),
-            fill: self.fill(),
-            backdrop: self.backdrop()
-        }
-    }
-
-    fn num_updates(&self) -> u64 {
-        self.front.num_updates() +
-        self.fill.num_updates()
-    }
-}
-
-impl<'a> Drawable for &'a CompositeRects {
-    fn buffer_data(&self) -> &BufferData {
-        &self.buffers
+impl Shadable for CompositeRects {
+    fn shader_data(&self, data: &mut ShaderDataCollector) {
+        let mut data_trans = data.push_transform(self.rect);
+        self.front.shader_data(&mut data_trans);
+        self.text.shader_data(&mut data_trans);
     }
 }
 
@@ -101,8 +38,7 @@ fn main() {
         bold_italic: None
     });
 
-    let rect = DrawableRect {
-        rect: LinearGradient::new(
+    let rect = Widget::new(LinearGradient::new(
             Rect::new(
                 Complex::new(-0.5,  0.5, 0.0, 144.0),
                 Complex::new_rat( 0.5, -0.5)
@@ -112,11 +48,10 @@ fn main() {
                 GradientNode::new( 0.0, Color::new(0, 255, 0, 255)),
                 GradientNode::new(-0.5, Color::new(255, 255, 255, 255)),
             ]
-        ),
-        buffers: BufferData::new()
-    };
+        )
+    );
 
-    let composite = CompositeRects {
+    let composite = Widget::new(CompositeRects {
         rect: Rect::new(
                 Complex::new_rat(-1.0, 1.0),
                 Complex::new( 0.0, 0.0, 0.0, 0.0)
@@ -128,7 +63,7 @@ fn main() {
                     Complex::new( 0.0, -1.0, -12.0,  12.0)
                 )
             ),
-        fill: TextBox::new(
+        text: TextBox::new(
                 Rect::new(
                     Complex::new(-1.0,  1.0,  12.0, -12.0),
                     Complex::new( 1.0, -1.0, -12.0,  12.0)
@@ -137,9 +72,8 @@ fn main() {
                 Color::new(0, 127, 127, 255),
                 font,
                 16
-            ),
-        buffers: BufferData::new()
-    };
+            )
+    });
 
     'main: loop {
         for event in window.poll_events() {
@@ -154,7 +88,7 @@ fn main() {
 
         let mut surface = display.surface();
         surface.draw(&rect);
-        surface.draw(&&composite);
+        surface.draw(&composite);
 
         window.swap_buffers().unwrap();
     }

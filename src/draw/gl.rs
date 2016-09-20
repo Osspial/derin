@@ -1,4 +1,4 @@
-use super::{Point, Color, ColorVert, Shader, Shadable, Drawable, Surface, Composite, Rect};
+use super::{Point, Color, ColorVert, Shadable, Surface, Rect, Widget};
 use super::font::{Font, CharVert};
 
 use std::collections::HashMap;
@@ -298,10 +298,10 @@ pub struct GLSurface<'a> {
 }
 
 impl<'a> Surface for GLSurface<'a> {
-    fn draw<D: Drawable>(&mut self, drawable: &D) {
+    fn draw<S: Shadable>(&mut self, drawable: &Widget<S>) {
         use std::collections::hash_map::Entry;
 
-        let buffers = drawable.buffer_data();
+        let buffers = &drawable.buffer_data;
         // Whether or not to re-upload any data to the GPU buffers
         let update_buffers: bool;
 
@@ -309,15 +309,15 @@ impl<'a> Surface for GLSurface<'a> {
             let id_map_entry_mut: &mut IDMapEntry;
             match self.facade.id_map.entry(buffers.id) {
                 Entry::Occupied(mut entry) => {
-                    update_buffers = !(drawable.num_updates() == entry.get().num_updates);
-                    entry.get_mut().num_updates = drawable.num_updates();
+                    update_buffers = !(drawable.num_updates == entry.get().num_updates);
+                    entry.get_mut().num_updates = drawable.num_updates;
                     id_map_entry_mut = entry.into_mut();
                 }
                 Entry::Vacant(entry)   => {
                     update_buffers = true;
                     id_map_entry_mut = entry.insert(
                         IDMapEntry {
-                            num_updates: drawable.num_updates(),
+                            num_updates: drawable.num_updates,
                             base_vertex_vec: Vec::new(),
                             char_vertex_vec: Vec::new()
                         }
@@ -332,9 +332,7 @@ impl<'a> Surface for GLSurface<'a> {
                 let font_id_map = &mut self.facade.font_id_map;
                 let dpi = self.facade.dpi;
                 let viewport_size = self.facade.viewport_size;
-                // We take the depth_accumulator value from self, update it inside of the closure, and then pass it back
-                // to self after the closure finishes.
-                let mut depth_accumulator = self.depth_accumulator;
+                let mut depth_accumulator = &mut self.depth_accumulator;
 
                 buffers.verts.with(|mut vert_modder|
                 buffers.vert_indices.with(|mut index_modder|
@@ -342,43 +340,36 @@ impl<'a> Surface for GLSurface<'a> {
                     vert_modder.buffer_vec().clear();
                     index_modder.buffer_vec().clear();
                     char_modder.buffer_vec().clear();
+                    id_map_entry_mut.base_vertex_vec.clear();
+                    id_map_entry_mut.char_vertex_vec.clear();
 
-                    let mut bud = BufferUpdateData {
-                        vert_offset: 0,
+                    let mut vert_offset = 0;
+                    let mut index_offset = 0;
+
+                    drawable.shader_data(&mut ShaderDataCollector {
+                        matrix: One::one(),
+                        pts_rat_scale: Vector2::new(
+                            2.0 * dpi as f32 / (viewport_size.0 as f32 * 72.0),
+                            2.0 * dpi as f32 / (viewport_size.1 as f32 * 72.0)
+                        ),
+
                         vert_vec: vert_modder.buffer_vec(),
-
-                        index_offset: 0,
-                        offsetted_indices: Vec::new(),
                         index_vec: index_modder.buffer_vec(),
-
-                        char_offset: 0,
                         char_vec: char_modder.buffer_vec(),
+                        vert_offset: &mut vert_offset,
+                        index_offset: &mut index_offset,
 
-                        base_vertex_vec: vec![BaseVertexData::new(dpi, viewport_size); 1],
-                        char_vertex_vec: Vec::new(),
-                        matrix_stack: vec![One::one(); 1],
+                        base_vertex_vec: &mut id_map_entry_mut.base_vertex_vec,
+                        char_vertex_vec: &mut id_map_entry_mut.char_vertex_vec,
 
-                        font_id_map: font_id_map,
+                        font_id_map:font_id_map,
 
-                        depth: depth_accumulator,
+                        depth: &mut depth_accumulator,
 
                         dpi: dpi,
                         viewport_size: viewport_size
-                    };
-
-                    bud.update_buffers(drawable);
-
-                    // If `drawable` is a composite, then there will be one extra BaseVertexData pushed to the vector
-                    // that we need to get rid of. This does that.
-                    if let Shader::Composite{..} = drawable.shader_data() {
-                        bud.base_vertex_vec.pop();
-                    }
-                    id_map_entry_mut.base_vertex_vec = bud.base_vertex_vec;
-                    id_map_entry_mut.char_vertex_vec = bud.char_vertex_vec;
-                    depth_accumulator = bud.depth;
+                    });
                 })));
-
-                self.depth_accumulator = depth_accumulator;
             }
         }
 
@@ -487,39 +478,11 @@ impl<'a> Drop for GLSurface<'a> {
 struct BaseVertexData {
     offset: usize,
     count: usize,
+    // TODO: REMOVE BASE VERTEX
     base_vertex: usize,
     matrix: Matrix3<f32>,
     pts_rat_scale: Vector2<f32>,
     depth: f32
-}
-
-impl BaseVertexData {
-    fn new(dpi: u32, viewport_size: (GLint, GLint)) -> BaseVertexData {
-        BaseVertexData {
-            offset: 0,
-            count: 0,
-            base_vertex: 0,
-            matrix: One::one(),
-            pts_rat_scale: Vector2::new(
-                2.0 * dpi as f32 / (viewport_size.0 as f32 * 72.0),
-                2.0 * dpi as f32 / (viewport_size.1 as f32 * 72.0)
-            ),
-            depth: 0.0
-        }
-    }
-}
-
-impl Default for BaseVertexData {
-    fn default() -> BaseVertexData {
-        BaseVertexData {
-            offset: 0,
-            count: 0,
-            base_vertex: 0,
-            matrix: One::one(),
-            pts_rat_scale: Zero::zero(),
-            depth: 0.0
-        }
-    }
 }
 
 struct CharVertexData {
@@ -532,39 +495,140 @@ struct CharVertexData {
     depth: f32
 }
 
-struct BufferUpdateData<'a> {
-    vert_offset: usize,
+pub struct ShaderDataCollector<'a> {
+    matrix: Matrix3<f32>,
+    pts_rat_scale: Vector2<f32>,
+
     vert_vec: &'a mut Vec<ColorVert>,
-
-    index_offset: usize,
-    offsetted_indices: Vec<u16>,
     index_vec: &'a mut Vec<u16>,
-
-    char_offset: usize,
     char_vec: &'a mut Vec<CharVert>,
+    vert_offset: &'a mut usize,
+    index_offset: &'a mut usize,
 
-    base_vertex_vec: Vec<BaseVertexData>,
-    char_vertex_vec: Vec<CharVertexData>,
-    matrix_stack: Vec<Matrix3<f32>>,
+    base_vertex_vec: &'a mut Vec<BaseVertexData>,
+    char_vertex_vec: &'a mut Vec<CharVertexData>,
 
     /// A reference to the facade's font_id_map, which this struct's `update_buffers` function adds to
     /// in the event that the desired font is not in the map.
     font_id_map: &'a mut HashMap<u64, GLTexture, HasherType>,
 
-    depth: u16,
+    depth: &'a mut u16,
 
     dpi: u32,
     viewport_size: (GLint, GLint)
 }
 
-impl<'a> BufferUpdateData<'a> {
-    fn transform_data(&self, scale: Rect) -> (Matrix3<f32>, Vector2<f32>) {
-        let last_matrix = self.matrix_stack.last().unwrap().clone();
+impl<'a> ShaderDataCollector<'a> {
+    fn push_to_render_data_vec(&mut self) {
+        if *self.vert_offset < self.vert_vec.len() {
+            *self.depth += 1;
 
+            self.base_vertex_vec.push(BaseVertexData {
+                offset: *self.index_offset,
+                count: self.index_vec.len() - *self.index_offset,
+                base_vertex: 0,
+                matrix: self.matrix,
+                pts_rat_scale: self.pts_rat_scale,
+                depth: *self.depth as f32 / 65536.0
+            });
+
+            *self.vert_offset = self.vert_vec.len();
+            *self.index_offset = self.index_vec.len();
+        }
+    }
+
+    pub fn push_vert(&mut self, vert: ColorVert) {
+        self.vert_vec.push(vert);
+    }
+
+    pub fn verts_extend_from_slice(&mut self, verts: &[ColorVert]) {
+        self.vert_vec.extend_from_slice(verts);
+    }
+
+    pub fn push_index(&mut self, index: u16) {
+        self.index_vec.push(index);
+    }
+
+    pub fn indices_extend_from_slice(&mut self, indices: &[u16]) {
+        self.index_vec.extend_from_slice(indices);
+    }
+
+    pub fn push_text(&mut self, rect: Rect, text: &str, color: Color, font: &Font, font_size: u32) {
+        let mut raw_font = font.raw_font().borrow_mut();
+        let font_height_px = raw_font.height(font_size, self.dpi) as f32;
+        let font_height_gl = font_height_px / (self.viewport_size.1 as f32 / 2.0);
+
+        let char_offset = self.char_vec.len();
+
+        // Tranform the base location into window-space coordinates
+        let base_location_point = rect.upleft.rat + rect.upleft.pts * self.pts_rat_scale;
+        let base_location_vec3 = self.matrix * Vector3::new(base_location_point.x, base_location_point.y, 1.0);
+
+        let rect_width_px =
+            (rect.lowright.pts.x + rect.lowright.rat.x / self.pts_rat_scale.x) -
+            (rect.upleft.pts.x + rect.upleft.rat.x / self.pts_rat_scale.x);
+
+        let (word_iter, mut reupload_font_image) = raw_font.word_iter(text, font_size, self.dpi);
+
+        // If the facade doesn't have a texture created for this font, create one. If we do need to create
+        // one, then we'll need to reupload the texture so force that to true. The actual texture gets
+        // uploaded right before the draw calls happen.
+        self.font_id_map.entry(font.id()).or_insert_with(|| {
+            reupload_font_image = true;
+            GLTexture::empty()
+        });
+
+        let mut count = 0;
+        let mut line_offset = Point::new(0.0, 0.0);
+        for w in word_iter {
+            // If the length of the word causes the line length to exceed the length of the text box,
+            // wrap the word and move down one line.
+            if w.offset().x + w.word_len_px() + line_offset.x > rect_width_px {
+                line_offset.x = -w.offset().x;
+                line_offset.y -= font_height_px;
+            }
+
+            for v_result in w.char_vert_iter() {
+                match v_result {
+                    Ok(mut v) => {
+                        v.offset = v.offset + w.offset() + line_offset;
+                        self.char_vec.push(v);
+                        count += 1;
+                    }
+                    Err(ci) => match ci.character {
+                        '\n' => {
+                            line_offset.x = -w.offset().x - ci.offset.x;
+                            line_offset.y -= font_height_px;
+                        }
+                        _ => ()
+                    }
+                }
+            }
+        }
+
+        *self.depth += 1;
+        self.char_vertex_vec.push(CharVertexData {
+            offset: char_offset,
+            count: count,
+            // Because the base location specifies the upper-left coordinate of the font renderer, we need to
+            // shift it downwards by the height of the font so that the font appears inside of the text box
+            // instead of above it.
+            base_location: Point::new(base_location_vec3.x, base_location_vec3.y - font_height_gl),
+            color: color,
+            reupload_font_image: reupload_font_image,
+            font: font.clone(),
+            depth: *self.depth as f32 / 65536.0
+        });
+    }
+
+    pub fn push_transform<'b>(&'b mut self, scale: Rect) -> ShaderDataCollector<'b> {
+        self.push_to_render_data_vec();
+
+        // Create the new matrix and new pts_rat_scale
         let (rat_width, rat_height) =
             (
-                last_matrix.x.x * (scale.lowright.rat.x - scale.upleft.rat.x),
-                last_matrix.y.y * (scale.upleft.rat.y - scale.lowright.rat.y)
+                self.matrix.x.x * (scale.lowright.rat.x - scale.upleft.rat.x),
+                self.matrix.y.y * (scale.upleft.rat.y - scale.lowright.rat.y)
             );
 
         let pts_rat_scale = Vector2::new(
@@ -583,145 +647,36 @@ impl<'a> BufferUpdateData<'a> {
         let width = rat_width + (scale.lowright.pts.x - scale.upleft.rat.y) * pts_rat_scale.x;
         let height = rat_height + (scale.upleft.pts.y - scale.lowright.pts.y) * pts_rat_scale.y;
 
-        let new_matrix = last_matrix * Matrix3::new(
+        let new_matrix = self.matrix * Matrix3::new(
             width/2.0,        0.0, 0.0,
                   0.0, height/2.0, 0.0,
              center.x,   center.y, 1.0
         );
 
-        (new_matrix, pts_rat_scale)
-    }
+        ShaderDataCollector {
+            matrix: new_matrix,
+            pts_rat_scale: pts_rat_scale,
 
-    fn update_buffers<S: Shadable>(&mut self, shadable: &S) {
-        self.update_buffers_raw(&shadable.shader_data());
-    }
+            vert_vec: self.vert_vec,
+            index_vec: self.index_vec,
+            char_vec: self.char_vec,
+            vert_offset: self.vert_offset,
+            index_offset: self.index_offset,
 
-    fn update_buffers_raw<C: Composite>(&mut self, shader: &Shader<C>) {
-        match *shader {
-            Shader::Transform{scale, operand} => {
-                let (new_matrix, pts_rat_scale) = self.transform_data(scale);
+            base_vertex_vec: self.base_vertex_vec,
+            char_vertex_vec: self.char_vertex_vec,
 
-                self.base_vertex_vec.last_mut().unwrap().matrix = new_matrix;
-                self.base_vertex_vec.last_mut().unwrap().pts_rat_scale = pts_rat_scale;
-                self.matrix_stack.push(new_matrix);
+            font_id_map: self.font_id_map,
 
-                self.update_buffers_raw(&operand.shader_data());
-
-                self.base_vertex_vec.push(BaseVertexData::new(self.dpi, self.viewport_size));
-                self.matrix_stack.pop();
-            }
-
-            Shader::Verts{verts, indices} => {
-                self.vert_vec.extend_from_slice(verts);
-
-                let bvd = self.base_vertex_vec.last_mut().unwrap();
-                bvd.count += indices.len();
-
-                if self.index_offset > 0 {
-                    self.offsetted_indices.clear();
-
-                    // Because every vertex is being stored in one vertex buffer, we need to offset the indices so that
-                    // they all get drawn properly
-                    let vert_offset = self.vert_offset as u16;
-                    self.offsetted_indices.extend(indices.iter().map(|i| *i + vert_offset));
-
-                    self.index_vec.extend_from_slice(&self.offsetted_indices);
-                } else {
-                    self.index_vec.extend_from_slice(indices);
-                }
-
-                self.vert_offset += verts.len();
-                self.index_offset += indices.len();
-                self.depth += 1;
-                bvd.depth = self.depth as f32 / 65536.0;
-            }
-
-            Shader::Text{rect, text, font, font_size, color} => {
-                let mut raw_font = font.raw_font().borrow_mut();
-                let font_height_px = raw_font.height(font_size, self.dpi) as f32;
-                let font_height_gl = font_height_px / (self.viewport_size.1 as f32 / 2.0);
-
-                // Tranform the base location into window-space coordinates
-                let pts_rat_scale = self.base_vertex_vec.last().unwrap().pts_rat_scale;
-                let matrix = self.base_vertex_vec.last().unwrap().matrix;
-                let base_location_point = rect.upleft.rat + rect.upleft.pts * pts_rat_scale;
-                let base_location_vec3 = matrix * Vector3::new(base_location_point.x, base_location_point.y, 1.0);
-
-                let rect_width_px =
-                    (rect.lowright.pts.x + rect.lowright.rat.x / pts_rat_scale.x) -
-                    (rect.upleft.pts.x + rect.upleft.rat.x / pts_rat_scale.x);
-
-                let (word_iter, mut reupload_font_image) = raw_font.word_iter(text, font_size, self.dpi);
-
-                // If the facade doesn't have a texture created for this font, create one. If we do need to create
-                // one, then we'll need to reupload the texture so force that to true. The actual texture gets
-                // uploaded right before the draw calls happen.
-                self.font_id_map.entry(font.id()).or_insert_with(|| {
-                    reupload_font_image = true;
-                    GLTexture::empty()
-                });
-
-                let mut count = 0;
-                let mut line_offset = Point::new(0.0, 0.0);
-                for w in word_iter {
-                    // If the length of the word causes the line length to exceed the length of the text box,
-                    // wrap the word and move down one line.
-                    if w.offset().x + w.word_len_px() + line_offset.x > rect_width_px {
-                        line_offset.x = -w.offset().x;
-                        line_offset.y -= font_height_px;
-                    }
-
-                    for v_result in w.char_vert_iter() {
-                        match v_result {
-                            Ok(mut v) => {
-                                v.offset = v.offset + w.offset() + line_offset;
-                                self.char_vec.push(v);
-                                count += 1;
-                            }
-                            Err(ci) => match ci.character {
-                                '\n' => {
-                                    line_offset.x = -w.offset().x - ci.offset.x;
-                                    line_offset.y -= font_height_px;
-                                }
-                                _ => ()
-                            }
-                        }
-                    }
-                }
-
-                self.depth += 1;
-                self.char_vertex_vec.push(
-                    CharVertexData {
-                        offset: self.char_offset,
-                        count: count,
-                        // Because the base location specifies the upper-left coordinate of the font renderer, we need to
-                        // shift it downwards by the height of the font so that the font appears inside of the text box
-                        // instead of above it.
-                        base_location: Point::new(base_location_vec3.x, base_location_vec3.y - font_height_gl),
-                        color: color,
-                        reupload_font_image: reupload_font_image,
-                        font: font.clone(),
-                        depth: self.depth as f32 / 65536.0
-                    });
-            }
-
-            Shader::Composite{ref foreground, ref fill, ref backdrop, rect, ..} => {
-                let (new_matrix, pts_rat_scale) = self.transform_data(rect);
-
-                self.base_vertex_vec.last_mut().unwrap().matrix = new_matrix;
-                self.base_vertex_vec.last_mut().unwrap().pts_rat_scale = pts_rat_scale;
-                self.matrix_stack.push(new_matrix);
-
-                // We order the vertices so that OpenGL draws them back-to-front
-                self.update_buffers(backdrop);
-                self.update_buffers(fill);
-                self.update_buffers(foreground);
-
-                self.base_vertex_vec.push(Default::default());
-                self.matrix_stack.pop();
-            }
-
-            Shader::None => ()
+            depth: self.depth,
+            dpi: self.dpi,
+            viewport_size: self.viewport_size
         }
+    }
+}
+
+impl<'a> Drop for ShaderDataCollector<'a> {
+    fn drop(&mut self) {
+        self.push_to_render_data_vec();
     }
 }

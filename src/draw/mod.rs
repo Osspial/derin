@@ -2,71 +2,67 @@ pub mod primitive;
 pub mod gl;
 pub mod font;
 
-use std::ops::{Add, Sub, Mul, Div};
+use std::ops::{Add, Sub, Mul, Div, Deref, DerefMut};
 
-use self::gl::BufferData;
-use self::font::Font;
+use self::gl::{BufferData, ShaderDataCollector};
 
 use cgmath::{Vector2};
 
-pub trait Drawable: Shadable {
-    fn buffer_data(&self) -> &BufferData;
+pub struct Widget<S: Shadable> {
+    shadable: S,
+
+    buffer_data: BufferData,
+    num_updates: u64
+}
+
+impl<S: Shadable> Widget<S> {
+    pub fn new(shadable: S) -> Widget<S> {
+        Widget {
+            shadable: shadable,
+
+            buffer_data: BufferData::new(),
+            num_updates: 0
+        }
+    }
+
+    pub fn unwrap(self) -> S {
+        self.shadable
+    }
+}
+
+impl<S: Shadable> Deref for Widget<S> {
+    type Target = S;
+
+    fn deref(&self) -> &S {
+        &self.shadable
+    }
+}
+
+impl<S: Shadable> DerefMut for Widget<S> {
+    fn deref_mut(&mut self) -> &mut S {
+        self.num_updates += 1;
+        &mut self.shadable
+    }
+}
+
+impl<S: Shadable> AsRef<S> for Widget<S> {
+    fn as_ref(&self) -> &S {
+        self
+    }
+}
+
+impl<S: Shadable> AsMut<S> for Widget<S> {
+    fn as_mut(&mut self) -> &mut S {
+        self
+    }
 }
 
 pub trait Shadable {
-    type Composite: Composite;
-
-    fn shader_data<'a>(&'a self) -> Shader<'a, Self::Composite>;
-    /// The number of times that this type's shader data has been updated. Note that this doesn't
-    /// have to be exact - all that matters is that, if there has been an update since the last time
-    /// this function was called, the number is greater than it was the previous call.
-    fn num_updates(&self) -> u64;
-}
-
-pub trait Composite: Shadable 
-        where Self: Sized {
-    type Foreground: Shadable;
-    type Fill: Shadable;
-    type Backdrop: Shadable;
-
-    fn rect(&self) -> Rect {
-        Default::default()
-    }
-
-    // fn mask(&self) -> Mask;
-    fn border(&self) -> Border {
-        Default::default()
-    }
-
-    fn foreground(&self) -> Self::Foreground;
-    fn fill(&self) -> Self::Fill;
-    fn backdrop(&self) -> Self::Backdrop;
-}
-
-impl Shadable for () {
-    type Composite = ();
-
-    fn shader_data<'a>(&'a self) -> Shader<'a, ()> {
-        Shader::None
-    }
-
-    fn num_updates(&self) -> u64 {
-        0
-    }
-}
-
-impl Composite for () {
-    type Foreground = ();
-    type Fill = ();
-    type Backdrop = ();
-
-    fn foreground(&self) {}
-    fn fill(&self) {}
-    fn backdrop(&self) {}
+    fn shader_data(&self, &mut ShaderDataCollector);
 }
 
 pub trait Surface {
-    fn draw<D: Drawable>(&mut self, &D);
+    fn draw<S: Shadable>(&mut self, &Widget<S>);
 }
 
 pub struct Mask {}
@@ -338,36 +334,6 @@ impl Default for Rect {
             Complex::new_rat( 1.0, -1.0)
         )
     }
-}
-
-pub enum Shader<'a, C: 'a + Composite> {
-    Transform {
-        scale: Rect,
-        operand: &'a Shadable<Composite = C>
-    },
-
-    Verts {
-        verts: &'a [ColorVert],
-        indices: &'a [u16]
-    },
-
-    Text {
-        rect: Rect,
-        text: &'a str,
-        color: Color,
-        font: &'a Font,
-        font_size: u32
-    },
-
-    Composite {
-        rect: Rect,
-        border: Border,
-        foreground: C::Foreground,
-        fill: C::Fill,
-        backdrop: C::Backdrop
-    },
-
-    None
 }
 
 #[repr(C, packed)]
