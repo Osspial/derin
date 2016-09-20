@@ -106,18 +106,18 @@ impl<N> Shadable for LinearGradient<N>
 
         let mut data_trans = data.push_transform(self.rect);
 
-        // Top left and right vertices
+        // Bottom left and right vertices
         data_trans.push_vert(ColorVert {
-            pos: Complex::new_rat(-1.0, 1.0),
+            pos: Complex::new_rat(-1.0, -1.0),
             normal: Vector2::new(0.0, 0.0),
-            color: top_color
+            color: bottom_color
         });
         data_trans.push_vert(ColorVert {
-            pos: Complex::new_rat(1.0, 1.0),
+            pos: Complex::new_rat(1.0, -1.0),
             normal: Vector2::new(0.0, 0.0),
-            color: top_color
+            color: bottom_color
         });
-
+        
         for n in self.nodes.as_ref().iter() {
             data_trans.push_vert(ColorVert {
                 pos: Complex::new_rat(-1.0, n.pos),
@@ -133,16 +133,16 @@ impl<N> Shadable for LinearGradient<N>
             });
         }
 
-        // Bottom left and right vertices
+        // Top left and right vertices
         data_trans.push_vert(ColorVert {
-            pos: Complex::new_rat(-1.0, -1.0),
+            pos: Complex::new_rat(-1.0, 1.0),
             normal: Vector2::new(0.0, 0.0),
-            color: bottom_color
+            color: top_color
         });
         data_trans.push_vert(ColorVert {
-            pos: Complex::new_rat(1.0, -1.0),
+            pos: Complex::new_rat(1.0, 1.0),
             normal: Vector2::new(0.0, 0.0),
-            color: bottom_color
+            color: top_color
         });
 
         let mut last_pair: Option<(u16, u16)> = None;
