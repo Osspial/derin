@@ -46,8 +46,8 @@ impl Shadable for ColorRect {
         ]);
 
         data.indices_extend_from_slice(&[
-            0, 1, 2,
-            2, 3, 0
+            [0, 1, 2],
+            [2, 3, 0]
         ]);
     }
 }
@@ -148,7 +148,10 @@ impl<N> Shadable for LinearGradient<N>
         let mut last_pair: Option<(u16, u16)> = None;
         for pair in (0..self.nodes.as_ref().len() + 2).map(|i| (i as u16 * 2, i as u16 * 2 + 1)) {
             if let Some(last_pair) = last_pair {
-                data_trans.indices_extend_from_slice(&[pair.0, pair.1, last_pair.0, last_pair.0, last_pair.1, pair.1]);
+                data_trans.indices_extend_from_slice(&[
+                    [pair.0, pair.1, last_pair.0], 
+                    [last_pair.0, last_pair.1, pair.1]
+                ]);
             }
 
             last_pair = Some(pair);

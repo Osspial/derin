@@ -545,12 +545,15 @@ impl<'a> ShaderDataCollector<'a> {
         self.vert_vec.extend_from_slice(verts);
     }
 
-    pub fn push_index(&mut self, index: u16) {
-        self.index_vec.push(index);
+    pub fn push_indices(&mut self, indices: [u16; 3]) {
+        self.index_vec.extend_from_slice(&indices);
     }
 
-    pub fn indices_extend_from_slice(&mut self, indices: &[u16]) {
-        self.index_vec.extend_from_slice(indices);
+    pub fn indices_extend_from_slice(&mut self, indices: &[[u16; 3]]) {
+        use std::slice;
+
+        let collapsed_slice = unsafe{ slice::from_raw_parts(indices.as_ptr() as *const u16, indices.len() * 3) };
+        self.index_vec.extend_from_slice(collapsed_slice);
     }
 
     pub fn push_text(&mut self, rect: Rect, text: &str, color: Color, font: &Font, font_size: u32) {
