@@ -218,8 +218,7 @@ impl CharVertexProgram {
 
 struct IDMapEntry {
     num_updates: u64,
-    base_vertex_vec: Vec<BaseVertexData>,
-    char_vertex_vec: Vec<CharVertexData>
+    render_data_vec: Vec<RenderData>
 }
 
 pub struct Facade {
@@ -318,8 +317,7 @@ impl<'a> Surface for GLSurface<'a> {
                     id_map_entry_mut = entry.insert(
                         IDMapEntry {
                             num_updates: drawable.num_updates,
-                            base_vertex_vec: Vec::new(),
-                            char_vertex_vec: Vec::new()
+                            render_data_vec: Vec::new()
                         }
                     );
                 }
@@ -340,8 +338,7 @@ impl<'a> Surface for GLSurface<'a> {
                     vert_modder.buffer_vec().clear();
                     index_modder.buffer_vec().clear();
                     char_modder.buffer_vec().clear();
-                    id_map_entry_mut.base_vertex_vec.clear();
-                    id_map_entry_mut.char_vertex_vec.clear();
+                    id_map_entry_mut.render_data_vec.clear();
 
                     let mut vert_offset = 0;
                     let mut index_offset = 0;
@@ -359,8 +356,7 @@ impl<'a> Surface for GLSurface<'a> {
                         vert_offset: &mut vert_offset,
                         index_offset: &mut index_offset,
 
-                        base_vertex_vec: &mut id_map_entry_mut.base_vertex_vec,
-                        char_vertex_vec: &mut id_map_entry_mut.char_vertex_vec,
+                        render_data_vec: &mut id_map_entry_mut.render_data_vec,
 
                         font_id_map:font_id_map,
 
@@ -378,93 +374,86 @@ impl<'a> Surface for GLSurface<'a> {
         // so it's in the program's best interest to have this hack removed.
         let id_map_entry = self.facade.id_map.get(&buffers.id).unwrap();
 
-        let transform_matrix_uniform = self.facade.color_passthrough.transform_matrix_uniform;
-        let pts_rat_scale_uniform = self.facade.color_passthrough.pts_rat_scale_uniform;
-        let depth_uniform = self.facade.color_passthrough.depth_uniform;
-        self.facade.color_passthrough.program.with(|_| {
-            buffers.verts_vao.with(|_| {
-                for bvd in id_map_entry.base_vertex_vec.iter() {unsafe{
-                    gl::UniformMatrix3fv(
-                        transform_matrix_uniform,
-                        1,
-                        gl::FALSE,
-                        bvd.matrix.as_ptr()
-                    );
-                    gl::Uniform2f(
-                        pts_rat_scale_uniform,
-                        bvd.pts_rat_scale.x, bvd.pts_rat_scale.y
-                    );
-                    gl::Uniform1f(
-                        depth_uniform,
-                        bvd.depth
-                    );
+        for render_data in id_map_entry.render_data_vec.iter() {unsafe{
+            match *render_data {
+                RenderData::ColorVerts{offset, count, matrix, pts_rat_scale, depth} =>
+                    self.facade.color_passthrough.program.with(|_|
+                        buffers.verts_vao.with(|_| {                
+                            gl::UniformMatrix3fv(
+                                self.facade.color_passthrough.transform_matrix_uniform,
+                                1,
+                                gl::FALSE,
+                                matrix.as_ptr()
+                            );
+                            gl::Uniform2f(
+                                self.facade.color_passthrough.pts_rat_scale_uniform,
+                                pts_rat_scale.x, pts_rat_scale.y
+                            );
+                            gl::Uniform1f(
+                                self.facade.color_passthrough.depth_uniform,
+                                depth
+                            );
 
+                            gl::DrawElementsBaseVertex(
+                                gl::TRIANGLES, 
+                                count as GLsizei, 
+                                gl::UNSIGNED_SHORT, 
+                                offset as *const _,
+                                0
+                            );
+                        })
+                    ),
+                RenderData::CharVerts{offset, count, base_location, color, reupload_font_image, ref font, depth} =>
+                    self.facade.char_vertex.program.with(|_| 
+                        buffers.chars_vao.with(|_| {
+                            let font_texture = self.facade.font_id_map.get(&font.id())
+                                .expect("Dangling Font ID; should never happen");
 
-                    gl::DrawElementsBaseVertex(
-                        gl::TRIANGLES, 
-                        bvd.count as GLsizei, 
-                        gl::UNSIGNED_SHORT, 
-                        bvd.offset as *const _,
-                        bvd.base_vertex as GLint
-                    );
-                }}
-            });
-        });
+                            if reupload_font_image {
+                                let raw_font = font.raw_font().borrow();
+                                let atlas_image = raw_font.atlas_image();
 
-        let base_location_uniform = self.facade.char_vertex.base_location_uniform;
-        let viewport_size_px_uniform = self.facade.char_vertex.viewport_size_px_uniform;
-        let color_uniform = self.facade.char_vertex.color_uniform;
-        let depth_uniform = self.facade.char_vertex.depth_uniform;
-        self.facade.char_vertex.program.with(|_| 
-            buffers.chars_vao.with(|_| 
-                for cvd in id_map_entry.char_vertex_vec.iter() {unsafe{
-                    let font_texture = self.facade.font_id_map.get(&cvd.font.id())
-                        .expect("Dangling Font ID; should never happen");
+                                font_texture.swap_data(
+                                    atlas_image.width,
+                                    atlas_image.height,
+                                    atlas_image.pixels,
+                                    TextureFormat::R8
+                                );
+                            }
+                            self.facade.sampler.with_texture(
+                                self.facade.char_vertex.font_image_tex_unit as GLuint,
+                                font_texture
+                            );
 
-                    if cvd.reupload_font_image {
-                        let raw_font = cvd.font.raw_font().borrow();
-                        let atlas_image = raw_font.atlas_image();
+                            gl::Uniform2f(
+                                self.facade.char_vertex.base_location_uniform,
+                                base_location.x, base_location.y
+                            );
+                            gl::Uniform2f(
+                                self.facade.char_vertex.viewport_size_px_uniform,
+                                self.facade.viewport_size.0 as f32, self.facade.viewport_size.1 as f32
+                            );
+                            gl::Uniform4f(
+                                self.facade.char_vertex.color_uniform,
+                                color.r as f32 / 255.0, 
+                                color.g as f32 / 255.0, 
+                                color.b as f32 / 255.0, 
+                                color.a as f32 / 255.0
+                            );
+                            gl::Uniform1f(
+                                self.facade.char_vertex.depth_uniform,
+                                depth
+                            );
 
-                        font_texture.swap_data(
-                            atlas_image.width,
-                            atlas_image.height,
-                            atlas_image.pixels,
-                            TextureFormat::R8
-                        );
-                    }
-                    self.facade.sampler.with_texture(
-                        self.facade.char_vertex.font_image_tex_unit as GLuint,
-                        font_texture
-                    );
-
-                    gl::Uniform2f(
-                        base_location_uniform,
-                        cvd.base_location.x, cvd.base_location.y
-                    );
-                    gl::Uniform2f(
-                        viewport_size_px_uniform,
-                        self.facade.viewport_size.0 as f32, self.facade.viewport_size.1 as f32
-                    );
-                    gl::Uniform4f(
-                        color_uniform,
-                        cvd.color.r as f32 / 255.0, 
-                        cvd.color.g as f32 / 255.0, 
-                        cvd.color.b as f32 / 255.0, 
-                        cvd.color.a as f32 / 255.0
-                    );
-                    gl::Uniform1f(
-                        depth_uniform,
-                        cvd.depth
-                    );
-
-                    gl::DrawArrays(
-                        gl::POINTS,
-                        cvd.offset as GLint,
-                        cvd.count as GLsizei
-                    );
-                }}
-            )
-        );
+                            gl::DrawArrays(
+                                gl::POINTS,
+                                offset as GLint,
+                                count as GLsizei
+                            );
+                        })
+                    )
+            }
+        }}
     }
 }
 
@@ -474,25 +463,23 @@ impl<'a> Drop for GLSurface<'a> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-struct BaseVertexData {
-    offset: usize,
-    count: usize,
-    // TODO: REMOVE BASE VERTEX
-    base_vertex: usize,
-    matrix: Matrix3<f32>,
-    pts_rat_scale: Vector2<f32>,
-    depth: f32
-}
-
-struct CharVertexData {
-    offset: usize,
-    count: usize,
-    base_location: Point,
-    color: Color,
-    reupload_font_image: bool,
-    font: Font,
-    depth: f32
+enum RenderData {
+    ColorVerts {
+        offset: usize,
+        count: usize,
+        matrix: Matrix3<f32>,
+        pts_rat_scale: Vector2<f32>,
+        depth: f32
+    },
+    CharVerts {
+        offset: usize,
+        count: usize,
+        base_location: Point,
+        color: Color,
+        reupload_font_image: bool,
+        font: Font,
+        depth: f32
+    }
 }
 
 pub struct ShaderDataCollector<'a> {
@@ -505,8 +492,7 @@ pub struct ShaderDataCollector<'a> {
     vert_offset: &'a mut usize,
     index_offset: &'a mut usize,
 
-    base_vertex_vec: &'a mut Vec<BaseVertexData>,
-    char_vertex_vec: &'a mut Vec<CharVertexData>,
+    render_data_vec: &'a mut Vec<RenderData>,
 
     /// A reference to the facade's font_id_map, which this struct's `update_buffers` function adds to
     /// in the event that the desired font is not in the map.
@@ -523,10 +509,9 @@ impl<'a> ShaderDataCollector<'a> {
         if *self.vert_offset < self.vert_vec.len() {
             *self.depth += 1;
 
-            self.base_vertex_vec.push(BaseVertexData {
+            self.render_data_vec.push(RenderData::ColorVerts{
                 offset: *self.index_offset,
                 count: self.index_vec.len() - *self.index_offset,
-                base_vertex: 0,
                 matrix: self.matrix,
                 pts_rat_scale: self.pts_rat_scale,
                 depth: *self.depth as f32 / 65536.0
@@ -610,7 +595,7 @@ impl<'a> ShaderDataCollector<'a> {
         }
 
         *self.depth += 1;
-        self.char_vertex_vec.push(CharVertexData {
+        self.render_data_vec.push(RenderData::CharVerts {
             offset: char_offset,
             count: count,
             // Because the base location specifies the upper-left coordinate of the font renderer, we need to
@@ -666,8 +651,7 @@ impl<'a> ShaderDataCollector<'a> {
             vert_offset: self.vert_offset,
             index_offset: self.index_offset,
 
-            base_vertex_vec: self.base_vertex_vec,
-            char_vertex_vec: self.char_vertex_vec,
+            render_data_vec: self.render_data_vec,
 
             font_id_map: self.font_id_map,
 
@@ -676,6 +660,12 @@ impl<'a> ShaderDataCollector<'a> {
             viewport_size: self.viewport_size
         }
     }
+
+    // pub fn with_clip<'b, VI, II>(&'b mut self, verts: VI, indices: II) -> ShaderDataCollector<'b> 
+    //         where VI: IntoIterator<Complex>, 
+    //               II: IntoIterator<[u16; 3]> {
+
+    // }
 }
 
 impl<'a> Drop for ShaderDataCollector<'a> {
