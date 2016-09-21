@@ -263,6 +263,8 @@ impl<T: Copy, B: GLBuffer<T>> Buffer<T, B> {
             let mut handle = 0;
             gl::GenBuffers(1, &mut handle);
 
+            reset_vao_bind();
+
             gl::BindBuffer(B::buffer_type(), handle);
             gl::BufferData(B::buffer_type(), (size_of::<T>() * capacity) as GLsizeiptr, ptr::null(), usage.to_gl_enum());
             gl::BindBuffer(B::buffer_type(), 0);
@@ -280,6 +282,8 @@ impl<T: Copy, B: GLBuffer<T>> Buffer<T, B> {
         unsafe {
             let mut handle = 0;
             gl::GenBuffers(1, &mut handle);
+
+            reset_vao_bind();
 
             gl::BindBuffer(B::buffer_type(), handle);
             gl::BufferData(B::buffer_type(), byte_slice_size(slice), slice.as_ptr() as *const _, usage.to_gl_enum());
@@ -331,6 +335,8 @@ impl<'a, T, B> Drop for BufModder<'a, T, B>
         BOUND_BUFFER.with(|bb| unsafe {
             let last_bound = bb.get();
             bb.set(self.buffer.handle);
+
+            reset_vao_bind();
 
             gl::BindBuffer(B::buffer_type(), self.buffer.handle);
             if self.old_vec_len < self.buffer_vec.len() {
@@ -401,6 +407,8 @@ impl<U: GLUniformBlock> GLUniformBuffer<U> {
             let uniform_block_name = uniform_block_name.to_owned() + "\0";
             let uniform_block_index = gl::GetUniformBlockIndex(program.handle, uniform_block_name.as_ptr() as *const _);
 
+            reset_vao_bind();
+
             let mut handle = 0;
             gl::GenBuffers(1, &mut handle);
             gl::BindBuffer(gl::UNIFORM_BUFFER, handle);
@@ -448,6 +456,8 @@ impl<U: GLUniformBlock> GLUniformBuffer<U> {
 
     pub fn sub_data(&mut self, block: &U) {
         unsafe {
+            reset_vao_bind();
+
             gl::BindBuffer(gl::UNIFORM_BUFFER, self.handle);
             
             self.block = block.clone();
@@ -461,6 +471,8 @@ impl<U: GLUniformBlock> GLUniformBuffer<U> {
         unsafe {
             let mut buffer_size = 0;
             gl::GetActiveUniformBlockiv(program.handle, self.uniform_block_index, gl::UNIFORM_BLOCK_DATA_SIZE, &mut buffer_size);
+
+            reset_vao_bind();
 
             // This is re-using the uniform block index as the uniform binding index, mainly because I'm not
             // aware of any major consequences to doing so and it's easier.
@@ -488,82 +500,115 @@ impl<V: GLVertex> GLVertexArray<V> {
         use std::mem::size_of;
 
         let mut handle = 0;
+        let vao: GLVertexArray<V>;
         
         unsafe{ 
             gl::GenVertexArrays(1, &mut handle);
-            gl::BindVertexArray(handle);
+            vao = GLVertexArray {
+                handle: handle,
+                _marker: PhantomData
+            };
 
-            gl::BindBuffer(gl::ARRAY_BUFFER, vertex_buffer.0.handle);
+            vao.with(|_| {
+                gl::BindBuffer(gl::ARRAY_BUFFER, vertex_buffer.0.handle);
 
-            if let Some(ib) = index_buffer {
-                gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ib.0.handle);
-            }
+                if let Some(ib) = index_buffer {
+                    gl::BindBuffer(gl::ELEMENT_ARRAY_BUFFER, ib.0.handle);
+                }
 
-            let stride = size_of::<V>() as GLsizei;
-            for attrib in V::vertex_attrib_data() {
-                let glsl_type = attrib.glsl_type;
-                let prim = attrib.glsl_type.prim();
-                let offset = attrib.offset as *const GLvoid;
+                let stride = size_of::<V>() as GLsizei;
+                for attrib in V::vertex_attrib_data() {
+                    let glsl_type = attrib.glsl_type;
+                    let prim = attrib.glsl_type.prim();
+                    let offset = attrib.offset as *const GLvoid;
 
-                gl::EnableVertexAttribArray(attrib.index);
+                    gl::EnableVertexAttribArray(attrib.index);
 
-                if prim.is_glsl_float() {
-                    if prim == GLPrim::Double {
-                        gl::VertexAttribLPointer(
+                    if prim.is_glsl_float() {
+                        if prim == GLPrim::Double {
+                            gl::VertexAttribLPointer(
+                                attrib.index,
+                                glsl_type.len(),
+                                gl::DOUBLE,
+                                stride,
+                                offset
+                            );
+                        } else {
+                            gl::VertexAttribPointer(
+                                attrib.index, 
+                                glsl_type.len(), 
+                                prim.to_gl_enum(), 
+                                prim.is_normalized(),
+                                stride,
+                                offset
+                            );
+                        }
+                    } else {
+                        gl::VertexAttribIPointer(
                             attrib.index,
                             glsl_type.len(),
-                            gl::DOUBLE,
-                            stride,
-                            offset
-                        );
-                    } else {
-                        gl::VertexAttribPointer(
-                            attrib.index, 
-                            glsl_type.len(), 
-                            prim.to_gl_enum(), 
-                            prim.is_normalized(),
+                            prim.to_gl_enum(),
                             stride,
                             offset
                         );
                     }
-                } else {
-                    gl::VertexAttribIPointer(
-                        attrib.index,
-                        glsl_type.len(),
-                        prim.to_gl_enum(),
-                        stride,
-                        offset
-                    );
                 }
-            }
 
-            gl::BindBuffer(gl::ARRAY_BUFFER, 0);
-            gl::BindVertexArray(0);
+                gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+            });
         }
 
         assert!(handle != 0);
 
-        GLVertexArray {
-            handle: handle,
-            _marker: PhantomData
-        }
+        vao
     }
 
     pub fn with<F: FnOnce(GLuint)>(&self, func: F) {
-        thread_local!(static BOUND_VAO: Cell<GLuint> = Cell::new(0));
-
         BOUND_VAO.with(|bv| unsafe{
-            let last_bound = bv.get();
-            bv.set(self.handle);
+            let last_bound = bv.0.get();
+            let is_nested_bind = bv.1.get();
 
-            gl::BindVertexArray(self.handle);
-            func(self.handle);
-            gl::BindVertexArray(last_bound);
+            // The logic in here is effectively the same as the logic in GLProgram::with(), so look at that
+            // for documentation on what this if/else block is for.
+            if last_bound == self.handle && !is_nested_bind {
+                bv.1.set(true);
+                func(self.handle);
+                bv.1.set(false);
 
-            bv.set(last_bound);
+            } else if is_nested_bind {
+                bv.0.set(self.handle);
+
+                gl::BindVertexArray(self.handle);
+                func(self.handle);
+                gl::BindVertexArray(last_bound);
+
+                bv.0.set(last_bound);
+
+            } else {
+                bv.0.set(self.handle);
+                bv.1.set(true);
+
+                gl::BindVertexArray(self.handle);
+                func(self.handle);
+
+                bv.1.set(false);
+            }
         })
     }
 }
+
+/// Whenever we bind a buffer, we change VAO state. This function must be called before any
+/// non-vao-changing buffer binds so that it doesn't cause adverse effects on a VAO.
+fn reset_vao_bind() {
+    BOUND_VAO.with(|bv| {
+        if 0 != bv.0.get() {
+            bv.0.set(0);
+            unsafe{ gl::BindVertexArray(0) };
+        }
+    })
+}
+
+thread_local!(static BOUND_VAO: (Cell<GLuint>, Cell<bool>) = (Cell::new(0), Cell::new(false)));
 
 impl<V: GLVertex> Drop for GLVertexArray<V> {
     fn drop(&mut self) {
@@ -800,17 +845,42 @@ impl GLProgram {
     }
 
     pub fn with<F: FnOnce(GLuint)>(&self, func: F) {
-        thread_local!(static BOUND_PROGRAM: Cell<GLuint> = Cell::new(0));
+        thread_local!(static BOUND_PROGRAM: (Cell<GLuint>, Cell<bool>) = (Cell::new(0), Cell::new(false)));
 
         BOUND_PROGRAM.with(|bp| unsafe {
-            let last_bound = bp.get();
-            bp.set(self.handle);
+            let last_bound = bp.0.get();
+            let is_nested_bind = bp.1.get();
             
-            gl::UseProgram(self.handle);
-            func(self.handle);
-            gl::UseProgram(last_bound);
-            
-            bp.set(last_bound);
+            // This logic is set up so that we can minimize the number of program binds we have to do, as
+            // binding stuff in OpenGL is fairly expensive. The first case is for when `self` is the bound
+            // program, in which case we just need to run the given function. The second case is for when
+            // a `with` function is being called *inside* of another `with` function, in which case we must
+            // bind the current program, run `func`, and then re-bind the original program. This is the most
+            // expensive case. The third case is for when `self` isn't bound and we aren't inside another
+            // `with` function, in which case we can just bind `self` and leave it bound.
+            if last_bound == self.handle && !is_nested_bind {
+                bp.1.set(true);
+                func(self.handle);
+                bp.1.set(false);
+
+            } else if is_nested_bind {
+                bp.0.set(self.handle);
+
+                gl::UseProgram(self.handle);
+                func(self.handle);
+                gl::UseProgram(last_bound);
+
+                bp.0.set(last_bound);
+
+            } else {
+                bp.0.set(self.handle);
+                bp.1.set(true);
+
+                gl::UseProgram(self.handle);
+                func(self.handle);
+
+                bp.1.set(false);
+            }
         })
     }
 }
