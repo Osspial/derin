@@ -4,7 +4,7 @@ use gl::types::*;
 
 use std::ptr;
 use std::marker::PhantomData;
-use std::cell::{RefCell, RefMut};
+use std::cell::{Cell, RefCell, RefMut};
 
 pub type GLError = String;
 
@@ -326,7 +326,12 @@ impl<'a, T, B> Drop for BufModder<'a, T, B>
         where T: 'a + Copy,
               B: 'a + GLBuffer<T> {
     fn drop(&mut self) {
-        unsafe {
+        thread_local!(static BOUND_BUFFER: Cell<GLuint> = Cell::new(0));
+
+        BOUND_BUFFER.with(|bb| unsafe {
+            let last_bound = bb.get();
+            bb.set(self.buffer.handle);
+
             gl::BindBuffer(B::buffer_type(), self.buffer.handle);
             if self.old_vec_len < self.buffer_vec.len() {
                 gl::BufferData(
@@ -343,8 +348,10 @@ impl<'a, T, B> Drop for BufModder<'a, T, B>
                     self.buffer_vec.as_ptr() as *const _
                 )
             }
-            gl::BindBuffer(B::buffer_type(), 0);
-        }
+            gl::BindBuffer(B::buffer_type(), last_bound);
+
+            bb.set(last_bound);
+        });
     }
 }
 
@@ -543,11 +550,18 @@ impl<V: GLVertex> GLVertexArray<V> {
     }
 
     pub fn with<F: FnOnce(GLuint)>(&self, func: F) {
-        unsafe {        
+        thread_local!(static BOUND_VAO: Cell<GLuint> = Cell::new(0));
+
+        BOUND_VAO.with(|bv| unsafe{
+            let last_bound = bv.get();
+            bv.set(self.handle);
+
             gl::BindVertexArray(self.handle);
             func(self.handle);
-            gl::BindVertexArray(0);
-        }
+            gl::BindVertexArray(last_bound);
+
+            bv.set(last_bound);
+        })
     }
 }
 
@@ -786,11 +800,18 @@ impl GLProgram {
     }
 
     pub fn with<F: FnOnce(GLuint)>(&self, func: F) {
-        unsafe {
+        thread_local!(static BOUND_PROGRAM: Cell<GLuint> = Cell::new(0));
+
+        BOUND_PROGRAM.with(|bp| unsafe {
+            let last_bound = bp.get();
+            bp.set(self.handle);
+            
             gl::UseProgram(self.handle);
             func(self.handle);
-            gl::UseProgram(0);
-        }
+            gl::UseProgram(last_bound);
+            
+            bp.set(last_bound);
+        })
     }
 }
 
