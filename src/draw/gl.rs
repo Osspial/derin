@@ -621,7 +621,7 @@ impl<'a> ShaderDataCollector<'a> {
         });
     }
 
-    pub fn push_transform<'b>(&'b mut self, scale: Rect) -> ShaderDataCollector<'b> {
+    pub fn with_transform<'b>(&'b mut self, scale: Rect) -> ShaderDataCollector<'b> {
         self.push_to_render_data_vec();
 
         // Create the new matrix and new pts_rat_scale

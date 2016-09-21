@@ -104,7 +104,7 @@ impl<N> Shadable for LinearGradient<N>
         let top_color = self.nodes.as_ref()[0].color;
         let bottom_color = self.nodes.as_ref().last().unwrap().color;
 
-        let mut data_trans = data.push_transform(self.rect);
+        let mut data_trans = data.with_transform(self.rect);
 
         // Bottom left and right vertices
         data_trans.push_vert(ColorVert {

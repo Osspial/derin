@@ -14,7 +14,7 @@ struct CompositeRects {
 
 impl Shadable for CompositeRects {
     fn shader_data(&self, data: &mut ShaderDataCollector) {
-        let mut data_trans = data.push_transform(self.rect);
+        let mut data_trans = data.with_transform(self.rect);
         self.front.shader_data(&mut data_trans);
         self.text.shader_data(&mut data_trans);
     }
