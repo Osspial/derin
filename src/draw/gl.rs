@@ -370,7 +370,7 @@ impl<'a> Surface for GLSurface<'a> {
                 let font_id_map = &mut self.facade.font_id_map;
                 let dpi = self.facade.dpi;
                 let viewport_size = self.facade.viewport_size;
-                let mut depth_accumulator = &mut self.depth_accumulator;
+                let depth_accumulator = &mut self.depth_accumulator;
 
                 buffers.verts.with(|mut vert_modder|
                 buffers.vert_indices.with(|mut index_modder|
@@ -400,7 +400,7 @@ impl<'a> Surface for GLSurface<'a> {
 
                         font_id_map:font_id_map,
 
-                        depth: &mut depth_accumulator,
+                        depth: depth_accumulator,
 
                         dpi: dpi,
                         viewport_size: viewport_size
