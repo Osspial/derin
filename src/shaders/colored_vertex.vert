@@ -2,12 +2,12 @@
 
 uniform mat3 transform_matrix;
 uniform vec2 pts_rat_scale;
-uniform float depth;
 
 layout (location = 0) in vec2 rat;
 layout (location = 1) in vec2 pts;
 layout (location = 2) in vec2 normal;
 layout (location = 3) in vec4 color;
+layout (location = 4) in float depth;
 
 out vec4 vert_color;
 

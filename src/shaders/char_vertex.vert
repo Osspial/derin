@@ -3,12 +3,12 @@
 uniform vec2 base_location;
 uniform vec2 viewport_size_px;
 uniform vec4 color;
-uniform float depth;
 
 layout (location = 0) in vec2 tex_upleft;
 layout (location = 1) in vec2 tex_lowright;
 layout (location = 2) in vec2 offset;
 layout (location = 3) in vec2 size;
+layout (location = 4) in float depth;
 
 out CharData {
     vec2 position;

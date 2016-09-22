@@ -26,11 +26,11 @@ pub fn get_unique_id() -> u64 {
 
 pub struct BufferData {
     id: u64,
-    verts: GLVertexBuffer<ColorVert>,
+    verts: GLVertexBuffer<ColorVertDepth>,
     vert_indices: GLIndexBuffer,
-    verts_vao: GLVertexArray<ColorVert>,
-    chars: GLVertexBuffer<CharVert>,
-    chars_vao: GLVertexArray<CharVert>
+    verts_vao: GLVertexArray<ColorVertDepth>,
+    chars: GLVertexBuffer<CharVertDepth>,
+    chars_vao: GLVertexArray<CharVertDepth>
 }
 
 impl BufferData {
@@ -53,7 +53,23 @@ impl BufferData {
     }
 }
 
-unsafe impl GLVertex for ColorVert {
+#[repr(packed)]
+#[derive(Debug, Clone, Copy)]
+struct ColorVertDepth {
+    color_vert: ColorVert,
+    depth: f32
+}
+
+impl ColorVert {
+    fn with_depth(self, depth: u16) -> ColorVertDepth {
+        ColorVertDepth {
+            color_vert: self,
+            depth: depth as f32 / 65536.0
+        }
+    }
+}
+
+unsafe impl GLVertex for ColorVertDepth {
     unsafe fn vertex_attrib_data() -> &'static [VertexAttribData] {
         const VAD: &'static [VertexAttribData] = &[
             // Ratio Vec2
@@ -82,6 +98,13 @@ unsafe impl GLVertex for ColorVert {
                 index: 3,
                 glsl_type: GLSLType::Vec4(GLPrim::NUByte),
                 offset: 24
+            },
+
+            // Depth
+            VertexAttribData {
+                index: 4,
+                glsl_type: GLSLType::Single(GLPrim::Float),
+                offset: 28
             }
         ];
 
@@ -89,7 +112,23 @@ unsafe impl GLVertex for ColorVert {
     }
 }
 
-unsafe impl GLVertex for CharVert {
+#[repr(packed)]
+#[derive(Debug, Clone, Copy)]
+struct CharVertDepth {
+    char_vert: CharVert,
+    depth: f32
+}
+
+impl CharVert {
+    fn with_depth(self, depth: u16) -> CharVertDepth {
+        CharVertDepth {
+            char_vert: self,
+            depth: depth as f32 / 65536.0
+        }
+    }
+}
+
+unsafe impl GLVertex for CharVertDepth {
     unsafe fn vertex_attrib_data() -> &'static [VertexAttribData] {
         const VAD: &'static [VertexAttribData] = &[
             // Rect upper left
@@ -118,6 +157,13 @@ unsafe impl GLVertex for CharVert {
                 index: 3,
                 glsl_type: GLSLType::Vec2(GLPrim::Float),
                 offset: 24
+            },
+
+            // Depth
+            VertexAttribData {
+                index: 4,
+                glsl_type: GLSLType::Single(GLPrim::Float),
+                offset: 32
             }
         ];
 
@@ -128,8 +174,7 @@ unsafe impl GLVertex for CharVert {
 struct ColorVertexProgram {
     program: GLProgram,
     transform_matrix_uniform: GLint,
-    pts_rat_scale_uniform: GLint,
-    depth_uniform: GLint
+    pts_rat_scale_uniform: GLint
 }
 
 impl ColorVertexProgram {
@@ -149,13 +194,11 @@ impl ColorVertexProgram {
 
         let transform_matrix_uniform = unsafe{ gl::GetUniformLocation(program.handle, "transform_matrix\0".as_ptr() as *const GLchar) };
         let pts_rat_scale_uniform = unsafe{ gl::GetUniformLocation(program.handle, "pts_rat_scale\0".as_ptr() as *const GLchar) };
-        let depth_uniform = unsafe{ gl::GetUniformLocation(program.handle, "depth\0".as_ptr() as *const GLchar) };
 
         ColorVertexProgram {
             program: program,
             transform_matrix_uniform: transform_matrix_uniform,
-            pts_rat_scale_uniform: pts_rat_scale_uniform,
-            depth_uniform: depth_uniform
+            pts_rat_scale_uniform: pts_rat_scale_uniform
         }
     }
 }
@@ -165,7 +208,6 @@ struct CharVertexProgram {
     base_location_uniform: GLint,
     viewport_size_px_uniform: GLint,
     color_uniform: GLint,
-    depth_uniform: GLint,
 
     // font_image_uniform: GLint,
     font_image_tex_unit: GLint
@@ -193,7 +235,6 @@ impl CharVertexProgram {
         let base_location_uniform = unsafe{ gl::GetUniformLocation(program.handle, "base_location\0".as_ptr() as *const GLchar) };
         let viewport_size_px_uniform = unsafe{ gl::GetUniformLocation(program.handle, "viewport_size_px\0".as_ptr() as *const GLchar) };
         let color_uniform = unsafe{ gl::GetUniformLocation(program.handle, "color\0".as_ptr() as *const GLchar) };
-        let depth_uniform = unsafe{ gl::GetUniformLocation(program.handle, "depth\0".as_ptr() as *const GLchar) };
 
         let font_image_uniform = unsafe{ gl::GetUniformLocation(program.handle, "tex\0".as_ptr() as *const GLchar) };
         let font_image_tex_unit = 1;
@@ -208,7 +249,6 @@ impl CharVertexProgram {
             base_location_uniform: base_location_uniform,
             viewport_size_px_uniform: viewport_size_px_uniform,
             color_uniform: color_uniform,
-            depth_uniform: depth_uniform,
 
             // font_image_uniform: font_image_uniform,
             font_image_tex_unit: font_image_tex_unit
@@ -376,9 +416,9 @@ impl<'a> Surface for GLSurface<'a> {
 
         for render_data in id_map_entry.render_data_vec.iter() {unsafe{
             match *render_data {
-                RenderData::ColorVerts{offset, count, matrix, pts_rat_scale, depth} =>
+                RenderData::ColorVerts{offset, count, matrix, pts_rat_scale} =>
                     self.facade.color_passthrough.program.with(|_|
-                        buffers.verts_vao.with(|_| {                
+                        buffers.verts_vao.with(|_| {
                             gl::UniformMatrix3fv(
                                 self.facade.color_passthrough.transform_matrix_uniform,
                                 1,
@@ -388,10 +428,6 @@ impl<'a> Surface for GLSurface<'a> {
                             gl::Uniform2f(
                                 self.facade.color_passthrough.pts_rat_scale_uniform,
                                 pts_rat_scale.x, pts_rat_scale.y
-                            );
-                            gl::Uniform1f(
-                                self.facade.color_passthrough.depth_uniform,
-                                depth
                             );
 
                             gl::DrawElementsBaseVertex(
@@ -403,7 +439,7 @@ impl<'a> Surface for GLSurface<'a> {
                             );
                         })
                     ),
-                RenderData::CharVerts{offset, count, base_location, color, reupload_font_image, ref font, depth} =>
+                RenderData::CharVerts{offset, count, base_location, color, reupload_font_image, ref font} =>
                     self.facade.char_vertex.program.with(|_| 
                         buffers.chars_vao.with(|_| {
                             let font_texture = self.facade.font_id_map.get(&font.id())
@@ -440,10 +476,6 @@ impl<'a> Surface for GLSurface<'a> {
                                 color.b as f32 / 255.0, 
                                 color.a as f32 / 255.0
                             );
-                            gl::Uniform1f(
-                                self.facade.char_vertex.depth_uniform,
-                                depth
-                            );
 
                             gl::DrawArrays(
                                 gl::POINTS,
@@ -468,8 +500,7 @@ enum RenderData {
         offset: usize,
         count: usize,
         matrix: Matrix3<f32>,
-        pts_rat_scale: Vector2<f32>,
-        depth: f32
+        pts_rat_scale: Vector2<f32>
     },
     CharVerts {
         offset: usize,
@@ -477,8 +508,7 @@ enum RenderData {
         base_location: Point,
         color: Color,
         reupload_font_image: bool,
-        font: Font,
-        depth: f32
+        font: Font
     }
 }
 
@@ -486,9 +516,9 @@ pub struct ShaderDataCollector<'a> {
     matrix: Matrix3<f32>,
     pts_rat_scale: Vector2<f32>,
 
-    vert_vec: &'a mut Vec<ColorVert>,
+    vert_vec: &'a mut Vec<ColorVertDepth>,
     index_vec: &'a mut Vec<u16>,
-    char_vec: &'a mut Vec<CharVert>,
+    char_vec: &'a mut Vec<CharVertDepth>,
     vert_offset: &'a mut usize,
     index_offset: &'a mut usize,
 
@@ -507,27 +537,26 @@ pub struct ShaderDataCollector<'a> {
 impl<'a> ShaderDataCollector<'a> {
     fn push_to_render_data_vec(&mut self) {
         if *self.vert_offset < self.vert_vec.len() {
-            *self.depth += 1;
-
             self.render_data_vec.push(RenderData::ColorVerts{
                 offset: *self.index_offset,
                 count: self.index_vec.len() - *self.index_offset,
                 matrix: self.matrix,
-                pts_rat_scale: self.pts_rat_scale,
-                depth: *self.depth as f32 / 65536.0
+                pts_rat_scale: self.pts_rat_scale
             });
 
+            *self.depth += 1;
             *self.vert_offset = self.vert_vec.len();
             *self.index_offset = self.index_vec.len();
         }
     }
 
     pub fn push_vert(&mut self, vert: ColorVert) {
-        self.vert_vec.push(vert);
+        self.vert_vec.push(vert.with_depth(*self.depth));
     }
 
     pub fn verts_extend_from_slice(&mut self, verts: &[ColorVert]) {
-        self.vert_vec.extend_from_slice(verts);
+        let depth = *self.depth;
+        self.vert_vec.extend(verts.iter().map(|v| v.with_depth(depth)));
     }
 
     pub fn push_indices(&mut self, indices: [u16; 3]) {
@@ -542,6 +571,8 @@ impl<'a> ShaderDataCollector<'a> {
     }
 
     pub fn push_text(&mut self, rect: Rect, text: &str, color: Color, font: &Font, font_size: u32) {
+        self.push_to_render_data_vec();
+
         let mut raw_font = font.raw_font().borrow_mut();
         let font_height_px = raw_font.height(font_size, self.dpi) as f32;
         let font_height_gl = font_height_px / (self.viewport_size.1 as f32 / 2.0);
@@ -580,7 +611,7 @@ impl<'a> ShaderDataCollector<'a> {
                 match v_result {
                     Ok(mut v) => {
                         v.offset = v.offset + w.offset() + line_offset;
-                        self.char_vec.push(v);
+                        self.char_vec.push(v.with_depth(*self.depth));
                         count += 1;
                     }
                     Err(ci) => match ci.character {
@@ -594,7 +625,6 @@ impl<'a> ShaderDataCollector<'a> {
             }
         }
 
-        *self.depth += 1;
         self.render_data_vec.push(RenderData::CharVerts {
             offset: char_offset,
             count: count,
@@ -604,9 +634,9 @@ impl<'a> ShaderDataCollector<'a> {
             base_location: Point::new(base_location_vec3.x, base_location_vec3.y - font_height_gl),
             color: color,
             reupload_font_image: reupload_font_image,
-            font: font.clone(),
-            depth: *self.depth as f32 / 65536.0
+            font: font.clone()
         });
+        *self.depth += 1;
     }
 
     pub fn with_transform<'b>(&'b mut self, scale: Rect) -> ShaderDataCollector<'b> {
@@ -662,9 +692,8 @@ impl<'a> ShaderDataCollector<'a> {
     }
 
     // pub fn with_clip<'b, VI, II>(&'b mut self, verts: VI, indices: II) -> ShaderDataCollector<'b> 
-    //         where VI: IntoIterator<Complex>, 
-    //               II: IntoIterator<[u16; 3]> {
-
+    //         where VI: IntoIterator<Item = Complex>, 
+    //               II: IntoIterator<Item = [u16; 3]> {
     // }
 }
 
