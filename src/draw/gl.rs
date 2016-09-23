@@ -1,4 +1,4 @@
-use super::{Point, Color, ColorVert, Shadable, Surface, Rect, Widget};
+use super::{Complex, Point, Color, ColorVert, Shadable, Surface, Rect, Widget};
 use super::font::{Font, CharVert};
 
 use std::collections::HashMap;
@@ -26,9 +26,9 @@ pub fn get_unique_id() -> u64 {
 
 pub struct BufferData {
     id: u64,
-    verts: GLVertexBuffer<ColorVertDepth>,
+    verts: GLVertexBuffer<ColorVertGpu>,
     vert_indices: GLIndexBuffer,
-    verts_vao: GLVertexArray<ColorVertDepth>,
+    verts_vao: GLVertexArray<ColorVertGpu>,
     chars: GLVertexBuffer<CharVertDepth>,
     chars_vao: GLVertexArray<CharVertDepth>
 }
@@ -53,58 +53,51 @@ impl BufferData {
     }
 }
 
+impl Complex {
+    fn mul_matrix(self, pts_rat_scale: Vector2<f32>, matrix: Matrix3<f32>) -> Vector3<f32> {
+        let pure_rat = Vector2::new(self.rat.x, self.rat.y) +
+                       Vector2::new(pts_rat_scale.x * self.pts.x, pts_rat_scale.y * self.pts.y);
+
+        matrix * pure_rat.extend(1.0)
+    }
+}
+
+/// The GPU representation of a ColorVert. The reason this exists is that it has the matrix
+/// already performed, allowing us to batch the draw calls of multiple objects.
 #[repr(packed)]
 #[derive(Debug, Clone, Copy)]
-struct ColorVertDepth {
-    color_vert: ColorVert,
-    depth: f32
+struct ColorVertGpu {
+    pos: Vector3<f32>,
+    color: Color
 }
 
 impl ColorVert {
-    fn with_depth(self, depth: u16) -> ColorVertDepth {
-        ColorVertDepth {
-            color_vert: self,
-            depth: depth as f32 / 65536.0
+    fn to_gpu(self, depth: u16, pts_rat_scale: Vector2<f32>, matrix: Matrix3<f32>) -> ColorVertGpu {
+        ColorVertGpu {
+            pos: Vector3 {
+                z: depth as f32 / 65535.0,
+                ..self.pos.mul_matrix(pts_rat_scale, matrix)
+            },
+            color: self.color
         }
     }
 }
 
-unsafe impl GLVertex for ColorVertDepth {
+unsafe impl GLVertex for ColorVertGpu {
     unsafe fn vertex_attrib_data() -> &'static [VertexAttribData] {
         const VAD: &'static [VertexAttribData] = &[
-            // Ratio Vec2
+            // Position
             VertexAttribData {
                 index: 0,
-                glsl_type: GLSLType::Vec2(GLPrim::Float),
+                glsl_type: GLSLType::Vec3(GLPrim::Float),
                 offset: 0
-            },
-
-            // Points Vec2
-            VertexAttribData {
-                index: 1,
-                glsl_type: GLSLType::Vec2(GLPrim::Float),
-                offset: 8
-            },
-
-            // Normal
-            VertexAttribData {
-                index: 2,
-                glsl_type: GLSLType::Vec2(GLPrim::Float),
-                offset: 16
             },
 
             // Color
             VertexAttribData {
-                index: 3,
+                index: 1,
                 glsl_type: GLSLType::Vec4(GLPrim::NUByte),
-                offset: 24
-            },
-
-            // Depth
-            VertexAttribData {
-                index: 4,
-                glsl_type: GLSLType::Single(GLPrim::Float),
-                offset: 28
+                offset: 12
             }
         ];
 
@@ -123,7 +116,7 @@ impl CharVert {
     fn with_depth(self, depth: u16) -> CharVertDepth {
         CharVertDepth {
             char_vert: self,
-            depth: depth as f32 / 65536.0
+            depth: depth as f32 / 65535.0
         }
     }
 }
@@ -172,9 +165,7 @@ unsafe impl GLVertex for CharVertDepth {
 }
 
 struct ColorVertexProgram {
-    program: GLProgram,
-    transform_matrix_uniform: GLint,
-    pts_rat_scale_uniform: GLint
+    program: GLProgram
 }
 
 impl ColorVertexProgram {
@@ -192,13 +183,8 @@ impl ColorVertexProgram {
 
         let program = GLProgram::new(&colored_vertex_vert, &color_passthrough_frag).unwrap();
 
-        let transform_matrix_uniform = unsafe{ gl::GetUniformLocation(program.handle, "transform_matrix\0".as_ptr() as *const GLchar) };
-        let pts_rat_scale_uniform = unsafe{ gl::GetUniformLocation(program.handle, "pts_rat_scale\0".as_ptr() as *const GLchar) };
-
         ColorVertexProgram {
-            program: program,
-            transform_matrix_uniform: transform_matrix_uniform,
-            pts_rat_scale_uniform: pts_rat_scale_uniform
+            program: program
         }
     }
 }
@@ -321,19 +307,13 @@ impl Facade {
         }
 
         GLSurface {
-            facade: self,
-            depth_accumulator: 0
+            facade: self
         }
     }
 }
 
 pub struct GLSurface<'a> {
-    facade: &'a mut Facade,
-    /// An accumulator that increments every time a shader is drawn. Used to prevent shaders that are executed
-    /// after other shaders from drawing above a shader when the programmer told the first shader to draw before
-    /// the second. As an example, text is drawn after vertices, so if the programmer instructed the program to
-    /// draw the vertices after the text, the depth test is used to make it appear as though that is what's happening.
-    depth_accumulator: u16
+    facade: &'a mut Facade
 }
 
 impl<'a> Surface for GLSurface<'a> {
@@ -370,7 +350,6 @@ impl<'a> Surface for GLSurface<'a> {
                 let font_id_map = &mut self.facade.font_id_map;
                 let dpi = self.facade.dpi;
                 let viewport_size = self.facade.viewport_size;
-                let depth_accumulator = &mut self.depth_accumulator;
 
                 buffers.verts.with(|mut vert_modder|
                 buffers.vert_indices.with(|mut index_modder|
@@ -382,6 +361,10 @@ impl<'a> Surface for GLSurface<'a> {
 
                     let mut vert_offset = 0;
                     let mut index_offset = 0;
+
+                    // TODO: Replace with re-usable heap storage
+                    let mut mask_verts = Vec::new();
+                    let mut mask_indices = Vec::new();
 
                     drawable.shader_data(&mut ShaderDataCollector {
                         matrix: One::one(),
@@ -396,11 +379,14 @@ impl<'a> Surface for GLSurface<'a> {
                         vert_offset: &mut vert_offset,
                         index_offset: &mut index_offset,
 
+                        mask_verts: &mut mask_verts,
+                        mask_indices: &mut mask_indices,
+
                         render_data_vec: &mut id_map_entry_mut.render_data_vec,
 
                         font_id_map:font_id_map,
 
-                        depth: depth_accumulator,
+                        depth: 0,
 
                         dpi: dpi,
                         viewport_size: viewport_size
@@ -416,20 +402,9 @@ impl<'a> Surface for GLSurface<'a> {
 
         for render_data in id_map_entry.render_data_vec.iter() {unsafe{
             match *render_data {
-                RenderData::ColorVerts{offset, count, matrix, pts_rat_scale} =>
+                RenderData::ColorVerts{offset, count} =>
                     self.facade.color_passthrough.program.with(|_|
                         buffers.verts_vao.with(|_| {
-                            gl::UniformMatrix3fv(
-                                self.facade.color_passthrough.transform_matrix_uniform,
-                                1,
-                                gl::FALSE,
-                                matrix.as_ptr()
-                            );
-                            gl::Uniform2f(
-                                self.facade.color_passthrough.pts_rat_scale_uniform,
-                                pts_rat_scale.x, pts_rat_scale.y
-                            );
-
                             gl::DrawElementsBaseVertex(
                                 gl::TRIANGLES, 
                                 count as GLsizei, 
@@ -498,9 +473,7 @@ impl<'a> Drop for GLSurface<'a> {
 enum RenderData {
     ColorVerts {
         offset: usize,
-        count: usize,
-        matrix: Matrix3<f32>,
-        pts_rat_scale: Vector2<f32>
+        count: usize
     },
     CharVerts {
         offset: usize,
@@ -516,11 +489,14 @@ pub struct ShaderDataCollector<'a> {
     matrix: Matrix3<f32>,
     pts_rat_scale: Vector2<f32>,
 
-    vert_vec: &'a mut Vec<ColorVertDepth>,
+    vert_vec: &'a mut Vec<ColorVertGpu>,
     index_vec: &'a mut Vec<u16>,
     char_vec: &'a mut Vec<CharVertDepth>,
     vert_offset: &'a mut usize,
     index_offset: &'a mut usize,
+
+    mask_verts: &'a mut Vec<ColorVertGpu>,
+    mask_indices: &'a mut Vec<u16>,
 
     render_data_vec: &'a mut Vec<RenderData>,
 
@@ -528,7 +504,7 @@ pub struct ShaderDataCollector<'a> {
     /// in the event that the desired font is not in the map.
     font_id_map: &'a mut HashMap<u64, GLTexture, HasherType>,
 
-    depth: &'a mut u16,
+    depth: u16,
 
     dpi: u32,
     viewport_size: (GLint, GLint)
@@ -539,24 +515,23 @@ impl<'a> ShaderDataCollector<'a> {
         if *self.vert_offset < self.vert_vec.len() {
             self.render_data_vec.push(RenderData::ColorVerts{
                 offset: *self.index_offset,
-                count: self.index_vec.len() - *self.index_offset,
-                matrix: self.matrix,
-                pts_rat_scale: self.pts_rat_scale
+                count: self.index_vec.len() - *self.index_offset
             });
 
-            *self.depth += 1;
             *self.vert_offset = self.vert_vec.len();
             *self.index_offset = self.index_vec.len();
         }
     }
 
     pub fn push_vert(&mut self, vert: ColorVert) {
-        self.vert_vec.push(vert.with_depth(*self.depth));
+        self.vert_vec.push(vert.to_gpu(self.depth, self.pts_rat_scale, self.matrix));
     }
 
     pub fn verts_extend_from_slice(&mut self, verts: &[ColorVert]) {
-        let depth = *self.depth;
-        self.vert_vec.extend(verts.iter().map(|v| v.with_depth(depth)));
+        let depth = self.depth;
+        let pts_rat_scale = self.pts_rat_scale;
+        let matrix = self.matrix;
+        self.vert_vec.extend(verts.iter().map(|v| v.to_gpu(depth, pts_rat_scale, matrix)));
     }
 
     pub fn push_indices(&mut self, indices: [u16; 3]) {
@@ -611,7 +586,7 @@ impl<'a> ShaderDataCollector<'a> {
                 match v_result {
                     Ok(mut v) => {
                         v.offset = v.offset + w.offset() + line_offset;
-                        self.char_vec.push(v.with_depth(*self.depth));
+                        self.char_vec.push(v.with_depth(self.depth));
                         count += 1;
                     }
                     Err(ci) => match ci.character {
@@ -636,7 +611,6 @@ impl<'a> ShaderDataCollector<'a> {
             reupload_font_image: reupload_font_image,
             font: font.clone()
         });
-        *self.depth += 1;
     }
 
     pub fn with_transform<'b>(&'b mut self, scale: Rect) -> ShaderDataCollector<'b> {
@@ -680,6 +654,9 @@ impl<'a> ShaderDataCollector<'a> {
             char_vec: self.char_vec,
             vert_offset: self.vert_offset,
             index_offset: self.index_offset,
+
+            mask_verts: self.mask_verts,
+            mask_indices: self.mask_indices,
 
             render_data_vec: self.render_data_vec,
 
