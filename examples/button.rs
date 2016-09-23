@@ -32,7 +32,7 @@ fn main() {
 
     let mut display = Facade::new(|s| window.get_proc_address(s) as *const _);
     let font = Font::new(&FontInfo {
-        regular: "/usr/share/fonts/OTF/NimbusSans-Regular.otf".into(),
+        regular: "./tests/DejaVuSans.ttf".into(),
         italic: None,
         bold: None,
         bold_italic: None
@@ -40,7 +40,7 @@ fn main() {
 
     let rect = Widget::new(LinearGradient::new(
             Rect::new(
-                Complex::new(-0.5,  0.5, 0.0, 144.0),
+                Complex::new(-0.5,  0.5, 0.0, 64.0),
                 Complex::new_rat( 0.5, -0.5)
             ),
             vec![
@@ -60,7 +60,7 @@ fn main() {
                 Color::new(255, 0, 0, 255),
                 Rect::new(
                     Complex::new(-1.0,  1.0,  12.0, -12.0),
-                    Complex::new( 0.0, -1.0, -12.0,  12.0)
+                    Complex::new( 1.0, -1.0, -12.0,  12.0)
                 )
             ),
         text: TextBox::new(
@@ -68,8 +68,8 @@ fn main() {
                     Complex::new(-1.0,  1.0,  12.0, -12.0),
                     Complex::new( 1.0, -1.0, -12.0,  12.0)
                 ),
-                "Greetings, you glorious bastards. Oh shit, word wrapping works correctly? Cool beans.\nDo new\n\nlines work?",
-                Color::new(0, 127, 127, 255),
+                "Greetings, you glorious bastards. Word wrapping works fine, and so d\no ne\nwlines",
+                Color::new(0, 127, 255, 255),
                 font,
                 16
             )
