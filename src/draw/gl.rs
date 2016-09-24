@@ -623,27 +623,33 @@ impl<'a> ShaderDataCollector<'a> {
                 self.matrix.y.y * (scale.upleft.rat.y - scale.lowright.rat.y)
             );
 
-        let pts_rat_scale = Vector2::new(
-            (4.0 / rat_width) * self.dpi as f32 / (self.viewport_size.0 as f32 * 72.0),
-            (4.0 / rat_height) * self.dpi as f32 / (self.viewport_size.1 as f32 * 72.0)
-        );
-
         let complex_center = scale.center();
         let center = 
             complex_center.rat + 
             Point::new(
-                complex_center.pts.x * pts_rat_scale.x,
-                complex_center.pts.y * pts_rat_scale.y
+                complex_center.pts.x * self.pts_rat_scale.x,
+                complex_center.pts.y * self.pts_rat_scale.y
             );
 
-        let width = rat_width + (scale.lowright.pts.x - scale.upleft.rat.y) * pts_rat_scale.x;
-        let height = rat_height + (scale.upleft.pts.y - scale.lowright.pts.y) * pts_rat_scale.y;
+        let width = rat_width + (scale.lowright.pts.x - scale.upleft.pts.x) * self.pts_rat_scale.x;
+        let height = rat_height + (scale.upleft.pts.y - scale.lowright.pts.y) * self.pts_rat_scale.y;
 
         let new_matrix = self.matrix * Matrix3::new(
             width/2.0,        0.0, 0.0,
                   0.0, height/2.0, 0.0,
              center.x,   center.y, 1.0
         );
+
+        // If the rat width or height is zero, then the pts_rat_scale will end up being infinity due to a
+        // divide by zero error. This fixes that, allowing pts to be used even with rats of zero.
+        let pts_rat_scale_x_div = if rat_width == 0.0 {2.0} else {rat_width};
+        let pts_rat_scale_y_div = if rat_height == 0.0 {2.0} else {rat_height};
+
+        let pts_rat_scale = Vector2::new(
+            (4.0 / pts_rat_scale_x_div) * self.dpi as f32 / (self.viewport_size.0 as f32 * 72.0),
+            (4.0 / pts_rat_scale_y_div) * self.dpi as f32 / (self.viewport_size.1 as f32 * 72.0)
+        );
+        
 
         ShaderDataCollector {
             matrix: new_matrix,
