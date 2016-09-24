@@ -558,9 +558,9 @@ impl<'a> ShaderDataCollector<'a> {
         let base_location_point = rect.upleft.rat + rect.upleft.pts * self.pts_rat_scale;
         let base_location_vec3 = self.matrix * Vector3::new(base_location_point.x, base_location_point.y, 1.0);
 
-        let rect_width_px =
-            (rect.lowright.pts.x + rect.lowright.rat.x / self.pts_rat_scale.x) -
-            (rect.upleft.pts.x + rect.upleft.rat.x / self.pts_rat_scale.x);
+        let rect_width_px = 
+            (self.dpi as f32 / 72.0) * (rect.lowright.pts.x - rect.upleft.pts.x) +
+            self.viewport_size.0 as f32 * self.matrix.x.x * (rect.lowright.rat.x - rect.upleft.rat.x) / 2.0;
 
         let (word_iter, mut reupload_font_image) = raw_font.word_iter(text, font_size, self.dpi);
 
