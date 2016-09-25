@@ -4,6 +4,7 @@ use super::font::{Font, CharVert};
 use std::collections::HashMap;
 use std::os::raw::c_void;
 use std::hash::BuildHasherDefault;
+use std::mem;
 
 use fnv::FnvHasher;
 
@@ -72,10 +73,10 @@ struct ColorVertGpu {
 }
 
 impl ColorVert {
-    fn to_gpu(self, depth: u16, pts_rat_scale: Vector2<f32>, matrix: Matrix3<f32>) -> ColorVertGpu {
+    fn to_gpu(self, depth: i16, pts_rat_scale: Vector2<f32>, matrix: Matrix3<f32>) -> ColorVertGpu {
         ColorVertGpu {
             pos: Vector3 {
-                z: depth as f32 / 65535.0,
+                z: depth as f32 / i16::max_value() as f32,
                 ..self.pos.mul_matrix(pts_rat_scale, matrix)
             },
             color: self.color
@@ -113,10 +114,10 @@ struct CharVertDepth {
 }
 
 impl CharVert {
-    fn with_depth(self, depth: u16) -> CharVertDepth {
+    fn with_depth(self, depth: i16) -> CharVertDepth {
         CharVertDepth {
             char_vert: self,
-            depth: depth as f32 / 65535.0
+            depth: depth as f32 / i16::max_value() as f32
         }
     }
 }
@@ -244,7 +245,12 @@ impl CharVertexProgram {
 
 struct IDMapEntry {
     num_updates: u64,
-    render_data_vec: Vec<RenderData>
+    render_data_vec: Vec<RenderData>,
+
+    mask_verts: Vec<ColorVertGpu>,
+    mask_indices: Vec<u16>,
+    mask_offset: GLint,
+    mask_base_vertex: GLint
 }
 
 pub struct Facade {
@@ -274,7 +280,8 @@ impl Facade {
             gl::GetIntegerv(gl::VIEWPORT, viewport_info.as_mut_ptr());
             gl::Enable(gl::FRAMEBUFFER_SRGB);
             gl::Enable(gl::DEPTH_TEST);
-            gl::DepthFunc(gl::GEQUAL);
+            gl::DepthFunc(gl::LEQUAL);
+            gl::DepthRange(0.0, 1.0);
         }
 
         Facade {
@@ -337,7 +344,12 @@ impl<'a> Surface for GLSurface<'a> {
                     id_map_entry_mut = entry.insert(
                         IDMapEntry {
                             num_updates: drawable.num_updates,
-                            render_data_vec: Vec::new()
+                            render_data_vec: Vec::new(),
+
+                            mask_verts: Vec::new(),
+                            mask_indices: Vec::new(),
+                            mask_offset: 0,
+                            mask_base_vertex: 0
                         }
                     );
                 }
@@ -358,13 +370,11 @@ impl<'a> Surface for GLSurface<'a> {
                     index_modder.buffer_vec().clear();
                     char_modder.buffer_vec().clear();
                     id_map_entry_mut.render_data_vec.clear();
+                    id_map_entry_mut.mask_verts.clear();
+                    id_map_entry_mut.mask_indices.clear();
 
                     let mut vert_offset = 0;
                     let mut index_offset = 0;
-
-                    // TODO: Replace with re-usable heap storage
-                    let mut mask_verts = Vec::new();
-                    let mut mask_indices = Vec::new();
 
                     drawable.shader_data(&mut ShaderDataCollector {
                         matrix: One::one(),
@@ -379,18 +389,25 @@ impl<'a> Surface for GLSurface<'a> {
                         vert_offset: &mut vert_offset,
                         index_offset: &mut index_offset,
 
-                        mask_verts: &mut mask_verts,
-                        mask_indices: &mut mask_indices,
+                        mask_verts: &mut id_map_entry_mut.mask_verts,
+                        mask_indices: &mut id_map_entry_mut.mask_indices,
 
                         render_data_vec: &mut id_map_entry_mut.render_data_vec,
 
                         font_id_map:font_id_map,
 
-                        depth: 0,
+                        // We use -32767 instead of -32768 (i16's actual minimum value) because -32767 is
+                        // the same distance from zero as i16's max value, 32767. This makes the math easier.
+                        depth: -32767,
 
                         dpi: dpi,
                         viewport_size: viewport_size
                     });
+
+                    id_map_entry_mut.mask_offset = index_modder.buffer_vec().len() as GLint;
+                    id_map_entry_mut.mask_base_vertex = vert_modder.buffer_vec().len() as GLint;
+                    vert_modder.buffer_vec().extend_from_slice(&id_map_entry_mut.mask_verts);
+                    index_modder.buffer_vec().extend_from_slice(&id_map_entry_mut.mask_indices);
                 })));
             }
         }
@@ -399,6 +416,21 @@ impl<'a> Surface for GLSurface<'a> {
         // to borrow the struct owning the entry as immutable. This workaround has a slight runtime cost,
         // so it's in the program's best interest to have this hack removed.
         let id_map_entry = self.facade.id_map.get(&buffers.id).unwrap();
+
+        if 0 < id_map_entry.mask_indices.len() {unsafe {
+            gl::DepthFunc(gl::ALWAYS);
+            self.facade.color_passthrough.program.with(|_|
+                buffers.verts_vao.with(|_| {
+                    gl::DrawElementsBaseVertex(
+                        gl::TRIANGLES,
+                        id_map_entry.mask_indices.len() as GLsizei,
+                        gl::UNSIGNED_SHORT,
+                        (id_map_entry.mask_offset * mem::size_of::<u16>() as GLint) as *const _,
+                        id_map_entry.mask_base_vertex
+                    );
+                }));
+            gl::DepthFunc(gl::LEQUAL);
+        }}
 
         for render_data in id_map_entry.render_data_vec.iter() {unsafe{
             match *render_data {
@@ -409,7 +441,7 @@ impl<'a> Surface for GLSurface<'a> {
                                 gl::TRIANGLES, 
                                 count as GLsizei, 
                                 gl::UNSIGNED_SHORT, 
-                                offset as *const _,
+                                (offset * mem::size_of::<u16>()) as *const _,
                                 0
                             );
                         })
@@ -504,7 +536,10 @@ pub struct ShaderDataCollector<'a> {
     /// in the event that the desired font is not in the map.
     font_id_map: &'a mut HashMap<u64, GLTexture, HasherType>,
 
-    depth: u16,
+    // Why is depth an i16 and not a u16? Well, OpenGL has a depth range of -1 to 1, instead of 0 to 1.
+    // This way -32767 maps nicely to -1.0, instead of us having to subtract stuff from a u16 after
+    // converting it to a float.
+    depth: i16,
 
     dpi: u32,
     viewport_size: (GLint, GLint)
@@ -674,10 +709,47 @@ impl<'a> ShaderDataCollector<'a> {
         }
     }
 
-    // pub fn with_clip<'b, VI, II>(&'b mut self, verts: VI, indices: II) -> ShaderDataCollector<'b> 
-    //         where VI: IntoIterator<Item = Complex>, 
-    //               II: IntoIterator<Item = [u16; 3]> {
-    // }
+    pub fn with_mask<'b, 'c, VI, II>(&'b mut self, verts: VI, indices: II) -> ShaderDataCollector<'b> 
+            where VI: IntoIterator<Item = &'c Complex>, 
+                  II: IntoIterator<Item = &'c [u16; 3]> {
+        let new_depth = self.depth + 1;
+        let pts_rat_scale = self.pts_rat_scale;
+        let matrix = self.matrix;
+
+        self.mask_verts.extend(verts.into_iter().map(|v| ColorVertGpu {
+            pos: Vector3{
+                z: new_depth as f32 / i16::max_value() as f32,
+                ..v.mul_matrix(pts_rat_scale, matrix)
+            },
+            color: Color::new(0, 0, 0, 0)
+        }));
+
+        for ins in indices.into_iter() {
+            self.mask_indices.extend(ins.iter().map(|i| *i));
+        }
+
+        ShaderDataCollector {
+            matrix: self.matrix,
+            pts_rat_scale: self.pts_rat_scale,
+
+            vert_vec: self.vert_vec,
+            index_vec: self.index_vec,
+            char_vec: self.char_vec,
+            vert_offset: self.vert_offset,
+            index_offset: self.index_offset,
+
+            mask_verts: self.mask_verts,
+            mask_indices: self.mask_indices,
+
+            render_data_vec: self.render_data_vec,
+
+            font_id_map: self.font_id_map,
+
+            depth: new_depth,
+            dpi: self.dpi,
+            viewport_size: self.viewport_size
+        }
+    }
 }
 
 impl<'a> Drop for ShaderDataCollector<'a> {
