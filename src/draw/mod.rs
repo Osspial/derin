@@ -65,8 +65,6 @@ pub trait Surface {
     fn draw<S: Shadable>(&mut self, &Widget<S>);
 }
 
-pub struct Mask {}
-
 #[derive(Debug, Clone, Copy)]
 pub enum Border {
     Solid {
