@@ -14,16 +14,16 @@ struct CompositeRects {
 
 impl Shadable for CompositeRects {
     fn shader_data(&self, data: &mut ShaderDataCollector) {
-        let mut data_trans = data.with_transform(self.rect);
-        let mut data_clip = data_trans.with_mask(&[
+        let mut data = data.with_transform(self.rect);
+        let mut data = data.with_mask(&[
                 Complex::new_rat(-1.0, 0.0),
                 Complex::new_rat(1.0, -1.0),
                 Complex::new_rat(-1.0, 1.0),
                 Complex::new_rat(0.7, 0.7)
             ],
             &[[0, 1, 2], [2, 3, 1]]);
-        self.front.shader_data(&mut data_clip);
-        self.text.shader_data(&mut data_clip);
+        self.front.shader_data(&mut data);
+        self.text.shader_data(&mut data);
     }
 }
 
@@ -33,6 +33,7 @@ fn main() {
         .with_dimensions(500, 500)
         .with_pixel_format(24, 8)
         .with_depth_buffer(24)
+        .with_multisampling(4)
         .build().unwrap();
 
     unsafe{ window.make_current().unwrap() };
@@ -45,7 +46,7 @@ fn main() {
         bold_italic: None
     });
 
-    let rect = Widget::new(LinearGradient::new(
+    let mut rect = Widget::new(LinearGradient::new(
             Rect::new(
                 Complex::new(-0.5,  0.5, 0.0, 64.0),
                 Complex::new_rat( 0.5, -0.5)
@@ -54,7 +55,8 @@ fn main() {
                 GradientNode::new(-0.5, Color::new(255, 255, 255, 255)),
                 GradientNode::new( 0.0, Color::new(0, 255, 0, 255)),
                 GradientNode::new( 1.0, Color::new(255, 0, 0, 255)),
-            ]
+            ],
+            0.0
         )
     );
 
@@ -98,5 +100,6 @@ fn main() {
         surface.draw(&composite);
 
         window.swap_buffers().unwrap();
+        rect.angle += 1.0;
     }
 }

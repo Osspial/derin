@@ -2,7 +2,7 @@ use super::{Shadable, ColorVert, Color, Rect, Complex};
 use super::font::Font;
 use super::gl::ShaderDataCollector;
 
-use cgmath::{Vector2};
+use cgmath::{Vector2, Matrix3, Rad};
 
 use std::hash::{Hash, Hasher};
 
@@ -85,15 +85,17 @@ impl Hash for GradientNode {
 pub struct LinearGradient<N> 
         where N: AsRef<[GradientNode]> {
     pub rect: Rect,
-    pub nodes: N
+    pub nodes: N,
+    pub angle: f32
 }
 
 impl<N> LinearGradient<N>
         where N: AsRef<[GradientNode]> {
-    pub fn new(rect: Rect, nodes: N) -> LinearGradient<N> {
+    pub fn new(rect: Rect, nodes: N, angle: f32) -> LinearGradient<N> {
         LinearGradient {
             rect: rect,
-            nodes: nodes
+            nodes: nodes,
+            angle: angle
         }
     }
 }
@@ -101,10 +103,32 @@ impl<N> LinearGradient<N>
 impl<N> Shadable for LinearGradient<N>
         where N: AsRef<[GradientNode]> {
     fn shader_data(&self, data: &mut ShaderDataCollector) {
+        use std::f32::consts::PI;
+
         let top_color = self.nodes.as_ref()[0].color;
         let bottom_color = self.nodes.as_ref().last().unwrap().color;
 
+
+        let angle_rad = self.angle * 2.0 * PI / 360.0;
+
+        let angle_modulo = angle_rad % (PI / 2.0);
+        let (sin, cos) = (angle_modulo.sin(), angle_modulo.cos());
+        let scale = (sin + cos)/sin.hypot(cos);
+
+        let scale_matrix = Matrix3::new(
+            scale, 0.0, 0.0,
+            0.0, scale, 0.0,
+            0.0, 0.0, 1.0
+        );
+
         let mut data_trans = data.with_transform(self.rect);
+        let mut data_trans = data_trans.with_mask(&[
+                Complex::new_rat(-1.0,  1.0),
+                Complex::new_rat( 1.0,  1.0),
+                Complex::new_rat(-1.0, -1.0),
+                Complex::new_rat( 1.0, -1.0)
+            ], &[[0, 1, 2], [2, 3, 1]]);
+        let mut data_trans = data_trans.with_matrix(Matrix3::from_angle_z(Rad(angle_rad)) * scale_matrix);
 
         // Bottom left and right vertices
         data_trans.push_vert(ColorVert {

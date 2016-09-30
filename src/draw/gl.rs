@@ -709,6 +709,32 @@ impl<'a> ShaderDataCollector<'a> {
         }
     }
 
+    pub fn with_matrix<'b>(&'b mut self, matrix: Matrix3<f32>) -> ShaderDataCollector<'b> {
+        self.push_to_render_data_vec();
+
+        ShaderDataCollector {
+            matrix: self.matrix * matrix,
+            pts_rat_scale: self.pts_rat_scale,
+
+            vert_vec: self.vert_vec,
+            index_vec: self.index_vec,
+            char_vec: self.char_vec,
+            vert_offset: self.vert_offset,
+            index_offset: self.index_offset,
+
+            mask_verts: self.mask_verts,
+            mask_indices: self.mask_indices,
+
+            render_data_vec: self.render_data_vec,
+
+            font_id_map: self.font_id_map,
+
+            depth: self.depth,
+            dpi: self.dpi,
+            viewport_size: self.viewport_size
+        }
+    }
+
     pub fn with_mask<'b, 'c, VI, II>(&'b mut self, verts: VI, indices: II) -> ShaderDataCollector<'b> 
             where VI: IntoIterator<Item = &'c Complex>, 
                   II: IntoIterator<Item = &'c [u16; 3]> {

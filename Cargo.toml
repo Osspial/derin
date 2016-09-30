@@ -6,7 +6,7 @@ authors = ["Osspial <osspial@gmail.com>"]
 [dependencies]
 gl = "0.6"
 gl_raii = {path="./gl_raii"}
-cgmath = "0.11"
+cgmath = "0.12"
 freetype-rs = "0.11"
 fnv = "1.0"
 
