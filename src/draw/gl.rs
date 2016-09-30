@@ -314,13 +314,15 @@ impl Facade {
         }
 
         GLSurface {
-            facade: self
+            facade: self,
+            min_mask_depth: -i16::max_value() + 1
         }
     }
 }
 
 pub struct GLSurface<'a> {
-    facade: &'a mut Facade
+    facade: &'a mut Facade,
+    min_mask_depth: i16
 }
 
 impl<'a> Surface for GLSurface<'a> {
@@ -360,6 +362,7 @@ impl<'a> Surface for GLSurface<'a> {
                 // that throws an error. Binding them through these works. Probably a bug, and should be reported to
                 // the rust compiler.
                 let font_id_map = &mut self.facade.font_id_map;
+                let min_mask_depth = &mut self.min_mask_depth;
                 let dpi = self.facade.dpi;
                 let viewport_size = self.facade.viewport_size;
 
@@ -399,6 +402,7 @@ impl<'a> Surface for GLSurface<'a> {
                         // We use -32767 instead of -32768 (i16's actual minimum value) because -32767 is
                         // the same distance from zero as i16's max value, 32767. This makes the math easier.
                         depth: -32767,
+                        min_mask_depth: min_mask_depth,
 
                         dpi: dpi,
                         viewport_size: viewport_size
@@ -540,6 +544,9 @@ pub struct ShaderDataCollector<'a> {
     // This way -32767 maps nicely to -1.0, instead of us having to subtract stuff from a u16 after
     // converting it to a float.
     depth: i16,
+    // If we do end up using a mask, this is the minimum depth value the mask can be to avoid using an
+    // already-occupied depth layer.
+    min_mask_depth: &'a mut i16,
 
     dpi: u32,
     viewport_size: (GLint, GLint)
@@ -704,6 +711,8 @@ impl<'a> ShaderDataCollector<'a> {
             font_id_map: self.font_id_map,
 
             depth: self.depth,
+            min_mask_depth: self.min_mask_depth,
+
             dpi: self.dpi,
             viewport_size: self.viewport_size
         }
@@ -730,6 +739,8 @@ impl<'a> ShaderDataCollector<'a> {
             font_id_map: self.font_id_map,
 
             depth: self.depth,
+            min_mask_depth: self.min_mask_depth,
+
             dpi: self.dpi,
             viewport_size: self.viewport_size
         }
@@ -738,7 +749,14 @@ impl<'a> ShaderDataCollector<'a> {
     pub fn with_mask<'b, 'c, VI, II>(&'b mut self, verts: VI, indices: II) -> ShaderDataCollector<'b> 
             where VI: IntoIterator<Item = &'c Complex>, 
                   II: IntoIterator<Item = &'c [u16; 3]> {
-        let new_depth = self.depth + 1;
+        use std::cmp;
+
+        let min_mask_depth = *self.min_mask_depth;
+        let new_depth = if self.depth == -32767 {
+            min_mask_depth
+        } else {self.depth + 1};
+        *self.min_mask_depth = cmp::max(min_mask_depth, new_depth + 1);
+
         let pts_rat_scale = self.pts_rat_scale;
         let matrix = self.matrix;
 
@@ -772,6 +790,8 @@ impl<'a> ShaderDataCollector<'a> {
             font_id_map: self.font_id_map,
 
             depth: new_depth,
+            min_mask_depth: self.min_mask_depth,
+
             dpi: self.dpi,
             viewport_size: self.viewport_size
         }
