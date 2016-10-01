@@ -2,7 +2,7 @@ use super::{Shadable, ColorVert, Color, Rect, Complex};
 use super::font::Font;
 use super::gl::ShaderDataCollector;
 
-use cgmath::{Vector2, Matrix3, Rad};
+use cgmath::{Matrix3, Rad};
 
 use std::hash::{Hash, Hasher};
 
@@ -25,22 +25,18 @@ impl Shadable for ColorRect {
         data.verts_extend_from_slice(&[
             ColorVert::new(
                 self.rect.upleft,
-                Vector2::new(-SQRT_2, SQRT_2),
                 self.color
             ),
             ColorVert::new(
                 self.rect.upright(),
-                Vector2::new(SQRT_2, SQRT_2),
                 self.color
             ),
             ColorVert::new(
                 self.rect.lowright,
-                Vector2::new(SQRT_2, -SQRT_2),
                 self.color
             ),
             ColorVert::new(
                 self.rect.lowleft(),
-                Vector2::new(-SQRT_2, -SQRT_2),
                 self.color
             )
         ]);
@@ -51,8 +47,6 @@ impl Shadable for ColorRect {
         ]);
     }
 }
-
-const SQRT_2: f32 = 0.70710678118;
 
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -133,26 +127,20 @@ impl<N> Shadable for LinearGradient<N>
         // Bottom left and right vertices
         data_trans.push_vert(ColorVert {
             pos: Complex::new_rat(-1.0, -1.0),
-            normal: Vector2::new(0.0, 0.0),
             color: bottom_color
         });
         data_trans.push_vert(ColorVert {
             pos: Complex::new_rat(1.0, -1.0),
-            normal: Vector2::new(0.0, 0.0),
             color: bottom_color
         });
         
         for n in self.nodes.as_ref().iter() {
             data_trans.push_vert(ColorVert {
                 pos: Complex::new_rat(-1.0, n.pos),
-                // TODO: Add proper normal calculation
-                normal: Vector2::new(0.0, 0.0),
                 color: n.color
             });
             data_trans.push_vert(ColorVert {
                 pos: Complex::new_rat(1.0, n.pos),
-                // Ditto.
-                normal: Vector2::new(0.0, 0.0),
                 color: n.color
             });
         }
@@ -160,12 +148,10 @@ impl<N> Shadable for LinearGradient<N>
         // Top left and right vertices
         data_trans.push_vert(ColorVert {
             pos: Complex::new_rat(-1.0, 1.0),
-            normal: Vector2::new(0.0, 0.0),
             color: top_color
         });
         data_trans.push_vert(ColorVert {
             pos: Complex::new_rat(1.0, 1.0),
-            normal: Vector2::new(0.0, 0.0),
             color: top_color
         });
 

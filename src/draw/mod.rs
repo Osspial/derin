@@ -261,17 +261,14 @@ impl Mul<Vector2<f32>> for Point {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ColorVert {
     pub pos: Complex,
-    // TODO: Remove the Vector2, replace with non-cgmath type, and get rid of mem::zeroed inits for ColorVert
-    pub normal: Vector2<f32>,
     pub color: Color
 }
 
 impl ColorVert {
     #[inline]
-    pub fn new(pos: Complex, normal: Vector2<f32>, color: Color) -> ColorVert {
+    pub fn new(pos: Complex, color: Color) -> ColorVert {
         ColorVert {
             pos: pos,
-            normal: normal,
             color: color
         }
     }
