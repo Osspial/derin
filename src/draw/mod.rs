@@ -277,48 +277,48 @@ impl ColorVert {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Rect {
     /// Upper-left corner of rectangle
-    pub upleft: Complex,
+    pub lowleft: Complex,
     // Lower-right corner of rectangle
-    pub lowright: Complex
+    pub upright: Complex
 }
 
 impl Rect {
-    pub fn new(upleft: Complex, lowright: Complex) -> Rect {
+    pub fn new(lowleft: Complex, upright: Complex) -> Rect {
         Rect {
-            upleft: upleft,
-            lowright: lowright
+            lowleft: lowleft,
+            upright: upright
         }
     }
 
     /// Calculate upper-right corner of rectangle
-    pub fn upright(self) -> Complex {
+    pub fn lowright(self) -> Complex {
         Complex {
-            rat: Point::new(self.lowright.rat.x, self.upleft.rat.y),
-            pts: Point::new(self.lowright.pts.x, self.upleft.pts.y)
+            rat: Point::new(self.upright.rat.x, self.lowleft.rat.y),
+            pts: Point::new(self.upright.pts.x, self.lowleft.pts.y)
         }
     }
 
     /// Calculate lower-left corner of rectangle
-    pub fn lowleft(self) -> Complex {
+    pub fn upleft(self) -> Complex {
         Complex {
-            rat: Point::new(self.upleft.rat.x, self.lowright.rat.y),
-            pts: Point::new(self.upleft.pts.x, self.lowright.pts.y)
+            rat: Point::new(self.lowleft.rat.x, self.upright.rat.y),
+            pts: Point::new(self.lowleft.pts.x, self.upright.pts.y)
         }
     }
 
     pub fn center(self) -> Complex {
         Complex {
-            rat: (self.upleft.rat + self.lowright.rat) / 2.0,
-            pts: (self.upleft.pts + self.lowright.pts) / 2.0
+            rat: (self.lowleft.rat + self.upright.rat) / 2.0,
+            pts: (self.lowleft.pts + self.upright.pts) / 2.0
         }
     }
 
     pub fn width(self) -> LinearComplex {
-        self.upleft.x() - self.lowright.x()
+        self.upright.x() - self.lowleft.x()
     }
 
     pub fn height(self) -> LinearComplex {
-        self.upleft.y() - self.lowright.y()
+        self.upright.y() - self.lowleft.y()
     }
 }
 

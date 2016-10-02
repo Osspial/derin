@@ -24,19 +24,19 @@ impl Shadable for ColorRect {
     fn shader_data(&self, mut data: ShaderDataCollector) {
         data.verts_extend_from_slice(&[
             ColorVert::new(
-                self.rect.upleft,
+                self.rect.upleft(),
                 self.color
             ),
             ColorVert::new(
-                self.rect.upright(),
+                self.rect.upright,
                 self.color
             ),
             ColorVert::new(
-                self.rect.lowright,
+                self.rect.lowright(),
                 self.color
             ),
             ColorVert::new(
-                self.rect.lowleft(),
+                self.rect.lowleft,
                 self.color
             )
         ]);

@@ -51,8 +51,8 @@ fn main() {
 
     let mut rect = Widget::new(LinearGradient::new(
             Rect::new(
-                Complex::new(-0.5,  0.5, 0.0, 64.0),
-                Complex::new_rat( 0.5, -0.5)
+                Complex::new_rat(-0.5, -0.5),
+                Complex::new_rat( 0.5,  0.5)
             ),
             vec![
                 GradientNode::new(-0.5, Color::new(255, 255, 255, 255)),
@@ -65,27 +65,27 @@ fn main() {
 
     let composite = Widget::new(CompositeRects {
         rect: Rect::new(
-                Complex::new_rat(-1.0, 1.0),
-                Complex::new( 0.0, 0.0, 0.0, 0.0)
+                Complex::new_rat(-1.0, 0.0),
+                Complex::new_rat( 0.0, 1.0)
             ),
         outer_color: ColorRect::new(
                 Color::new(255, 0, 0, 255),
                 Rect::new(
-                    Complex::new_rat(-1.0,  1.0),
-                    Complex::new_rat( 1.0, -1.0)
+                    Complex::new_rat(-1.0, -1.0),
+                    Complex::new_rat( 1.0,  1.0)
                 )
             ),
         inner_color: ColorRect::new(
                 Color::new(255, 255, 0, 255),
                 Rect::new(
-                    Complex::new(-1.0,  1.0,  12.0, -12.0),
-                    Complex::new( 1.0, -1.0, -12.0,  12.0)
+                    Complex::new(-1.0, -1.0,  12.0,  12.0),
+                    Complex::new( 1.0,  1.0, -12.0, -12.0)
                 )
             ),
         text: TextBox::new(
                 Rect::new(
-                    Complex::new(-1.0,  1.0,  12.0, -12.0),
-                    Complex::new( 1.0, -1.0, -12.0,  12.0)
+                    Complex::new(-1.0, -1.0,  12.0,  12.0),
+                    Complex::new( 1.0,  1.0, -12.0, -12.0)
                 ),
                 "Greetings, you glorious bastards. Word wrapping works fine, and so d\no ne\nwlines",
                 Color::new(0, 127, 255, 255),

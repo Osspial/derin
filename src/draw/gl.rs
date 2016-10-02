@@ -632,12 +632,12 @@ impl<'a> ShaderDataCollector<'a> {
         let char_offset = self.char_vec.len();
 
         // Tranform the base location into window-space coordinates
-        let base_location_point = rect.upleft.rat + rect.upleft.pts * self.pts_rat_scale;
+        let base_location_point = rect.upleft().rat + rect.upleft().pts * self.pts_rat_scale;
         let base_location_vec3 = self.matrix * Vector3::new(base_location_point.x, base_location_point.y, 1.0);
 
         let rect_width_px = 
-            (self.dpi as f32 / 72.0) * (rect.lowright.pts.x - rect.upleft.pts.x) +
-            self.viewport_size.0 as f32 * self.matrix.x.x * (rect.lowright.rat.x - rect.upleft.rat.x) / 2.0;
+            (self.dpi as f32 / 72.0) * (rect.upright.pts.x - rect.lowleft.pts.x) +
+            self.viewport_size.0 as f32 * self.matrix.x.x * (rect.upright.rat.x - rect.lowleft.rat.x) / 2.0;
 
         let (word_iter, mut reupload_font_image) = raw_font.word_iter(text, font_size, self.dpi);
 
@@ -694,8 +694,8 @@ impl<'a> ShaderDataCollector<'a> {
         // Create the new matrix and new pts_rat_scale
         let (rat_width, rat_height) =
             (
-                self.matrix.x.x * (scale.lowright.rat.x - scale.upleft.rat.x),
-                self.matrix.y.y * (scale.upleft.rat.y - scale.lowright.rat.y)
+                self.matrix.x.x * scale.width().rat,
+                self.matrix.y.y * scale.height().rat
             );
 
         let complex_center = scale.center();
@@ -706,8 +706,8 @@ impl<'a> ShaderDataCollector<'a> {
                 complex_center.pts.y * self.pts_rat_scale.y
             );
 
-        let width = rat_width + (scale.lowright.pts.x - scale.upleft.pts.x) * self.pts_rat_scale.x;
-        let height = rat_height + (scale.upleft.pts.y - scale.lowright.pts.y) * self.pts_rat_scale.y;
+        let width = rat_width + scale.width().pts * self.pts_rat_scale.x;
+        let height = rat_height + scale.height().pts * self.pts_rat_scale.y;
 
         let new_matrix = self.matrix * Matrix3::new(
             width/2.0,        0.0, 0.0,
