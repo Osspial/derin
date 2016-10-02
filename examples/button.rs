@@ -8,22 +8,25 @@ use tint::draw::font::{Font, FontInfo};
 
 struct CompositeRects {
     rect: Rect,
-    text: TextBox<&'static str>,
-    front: ColorRect
+    outer_color: ColorRect,
+    inner_color: ColorRect,
+    text: TextBox<&'static str>
 }
 
 impl Shadable for CompositeRects {
-    fn shader_data(&self, data: &mut ShaderDataCollector) {
-        let mut data = data.with_transform(self.rect);
-        let mut data = data.with_mask(&[
+    fn shader_data(&self, mut data: ShaderDataCollector) {
+        data.with_transform(self.rect);
+        data.with_mask(&[
                 Complex::new_rat(-1.0, 0.0),
                 Complex::new_rat(1.0, -1.0),
                 Complex::new_rat(-1.0, 1.0),
                 Complex::new_rat(0.7, 0.7)
             ],
             &[[0, 1, 2], [2, 3, 1]]);
-        self.front.shader_data(&mut data);
-        self.text.shader_data(&mut data);
+
+        self.outer_color.shader_data(data.take());
+        self.inner_color.shader_data(data.take());
+        self.text.shader_data(data.take());
     }
 }
 
@@ -65,8 +68,15 @@ fn main() {
                 Complex::new_rat(-1.0, 1.0),
                 Complex::new( 0.0, 0.0, 0.0, 0.0)
             ),
-        front: ColorRect::new(
+        outer_color: ColorRect::new(
                 Color::new(255, 0, 0, 255),
+                Rect::new(
+                    Complex::new_rat(-1.0,  1.0),
+                    Complex::new_rat( 1.0, -1.0)
+                )
+            ),
+        inner_color: ColorRect::new(
+                Color::new(255, 255, 0, 255),
                 Rect::new(
                     Complex::new(-1.0,  1.0,  12.0, -12.0),
                     Complex::new( 1.0, -1.0, -12.0,  12.0)

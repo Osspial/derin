@@ -58,7 +58,7 @@ impl<S: Shadable> AsMut<S> for Widget<S> {
 }
 
 pub trait Shadable {
-    fn shader_data(&self, &mut ShaderDataCollector);
+    fn shader_data(&self, ShaderDataCollector);
 }
 
 pub trait Surface {

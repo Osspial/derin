@@ -21,7 +21,7 @@ impl ColorRect {
 }
 
 impl Shadable for ColorRect {
-    fn shader_data(&self, data: &mut ShaderDataCollector) {
+    fn shader_data(&self, mut data: ShaderDataCollector) {
         data.verts_extend_from_slice(&[
             ColorVert::new(
                 self.rect.upleft,
@@ -96,7 +96,7 @@ impl<N> LinearGradient<N>
 
 impl<N> Shadable for LinearGradient<N>
         where N: AsRef<[GradientNode]> {
-    fn shader_data(&self, data: &mut ShaderDataCollector) {
+    fn shader_data(&self, mut data: ShaderDataCollector) {
         use std::f32::consts::PI;
 
         let top_color = self.nodes.as_ref()[0].color;
@@ -115,42 +115,42 @@ impl<N> Shadable for LinearGradient<N>
             0.0, 0.0, 1.0
         );
 
-        let mut data_trans = data.with_transform(self.rect);
-        let mut data_trans = data_trans.with_mask(&[
+        data.with_transform(self.rect);
+        data.with_mask(&[
                 Complex::new_rat(-1.0,  1.0),
                 Complex::new_rat( 1.0,  1.0),
                 Complex::new_rat(-1.0, -1.0),
                 Complex::new_rat( 1.0, -1.0)
             ], &[[0, 1, 2], [2, 3, 1]]);
-        let mut data_trans = data_trans.with_matrix(Matrix3::from_angle_z(Rad(angle_rad)) * scale_matrix);
+        data.with_matrix(Matrix3::from_angle_z(Rad(angle_rad)) * scale_matrix);
 
         // Bottom left and right vertices
-        data_trans.push_vert(ColorVert {
+        data.push_vert(ColorVert {
             pos: Complex::new_rat(-1.0, -1.0),
             color: bottom_color
         });
-        data_trans.push_vert(ColorVert {
+        data.push_vert(ColorVert {
             pos: Complex::new_rat(1.0, -1.0),
             color: bottom_color
         });
         
         for n in self.nodes.as_ref().iter() {
-            data_trans.push_vert(ColorVert {
+            data.push_vert(ColorVert {
                 pos: Complex::new_rat(-1.0, n.pos),
                 color: n.color
             });
-            data_trans.push_vert(ColorVert {
+            data.push_vert(ColorVert {
                 pos: Complex::new_rat(1.0, n.pos),
                 color: n.color
             });
         }
 
         // Top left and right vertices
-        data_trans.push_vert(ColorVert {
+        data.push_vert(ColorVert {
             pos: Complex::new_rat(-1.0, 1.0),
             color: top_color
         });
-        data_trans.push_vert(ColorVert {
+        data.push_vert(ColorVert {
             pos: Complex::new_rat(1.0, 1.0),
             color: top_color
         });
@@ -158,7 +158,7 @@ impl<N> Shadable for LinearGradient<N>
         let mut last_pair: Option<(u16, u16)> = None;
         for pair in (0..self.nodes.as_ref().len() + 2).map(|i| (i as u16 * 2, i as u16 * 2 + 1)) {
             if let Some(last_pair) = last_pair {
-                data_trans.indices_extend_from_slice(&[
+                data.indices_extend_from_slice(&[
                     [pair.0, pair.1, last_pair.0], 
                     [last_pair.0, last_pair.1, pair.1]
                 ]);
@@ -190,7 +190,7 @@ impl<S: AsRef<str>> TextBox<S> {
 }
 
 impl<S: AsRef<str>> Shadable for TextBox<S> {
-    fn shader_data(&self, data: &mut ShaderDataCollector) {
+    fn shader_data(&self, mut data: ShaderDataCollector) {
         data.push_text(self.rect, self.text.as_ref(), self.color, &self.font, self.font_size);
     }
 }

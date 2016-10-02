@@ -376,37 +376,41 @@ impl<'a> Surface for GLSurface<'a> {
                     id_map_entry_mut.mask_verts.clear();
                     id_map_entry_mut.mask_indices.clear();
 
-                    let mut vert_offset = 0;
                     let mut index_offset = 0;
+                    let mut index_bias = 0;
 
-                    drawable.shader_data(&mut ShaderDataCollector {
-                        matrix: One::one(),
-                        pts_rat_scale: Vector2::new(
-                            2.0 * dpi as f32 / (viewport_size.0 as f32 * 72.0),
-                            2.0 * dpi as f32 / (viewport_size.1 as f32 * 72.0)
-                        ),
+                    {
+                        let mut sdc = ShaderDataCollector {
+                            matrix: One::one(),
+                            pts_rat_scale: Vector2::new(
+                                2.0 * dpi as f32 / (viewport_size.0 as f32 * 72.0),
+                                2.0 * dpi as f32 / (viewport_size.1 as f32 * 72.0)
+                            ),
 
-                        vert_vec: vert_modder.buffer_vec(),
-                        index_vec: index_modder.buffer_vec(),
-                        char_vec: char_modder.buffer_vec(),
-                        vert_offset: &mut vert_offset,
-                        index_offset: &mut index_offset,
+                            vert_vec: vert_modder.buffer_vec(),
+                            index_vec: index_modder.buffer_vec(),
+                            char_vec: char_modder.buffer_vec(),
+                            index_offset: &mut index_offset,
+                            index_bias: &mut index_bias,
 
-                        mask_verts: &mut id_map_entry_mut.mask_verts,
-                        mask_indices: &mut id_map_entry_mut.mask_indices,
+                            mask_verts: &mut id_map_entry_mut.mask_verts,
+                            mask_indices: &mut id_map_entry_mut.mask_indices,
 
-                        render_data_vec: &mut id_map_entry_mut.render_data_vec,
+                            render_data_vec: &mut id_map_entry_mut.render_data_vec,
 
-                        font_id_map:font_id_map,
+                            font_id_map:font_id_map,
 
-                        // We use -32767 instead of -32768 (i16's actual minimum value) because -32767 is
-                        // the same distance from zero as i16's max value, 32767. This makes the math easier.
-                        depth: -32767,
-                        min_mask_depth: min_mask_depth,
+                            // We use -32767 instead of -32768 (i16's actual minimum value) because -32767 is
+                            // the same distance from zero as i16's max value, 32767. This makes the math easier.
+                            depth: -32767,
+                            min_mask_depth: min_mask_depth,
 
-                        dpi: dpi,
-                        viewport_size: viewport_size
-                    });
+                            dpi: dpi,
+                            viewport_size: viewport_size
+                        };
+                        drawable.shader_data(sdc.take());
+                        sdc.push_to_render_data_vec();
+                    }
 
                     id_map_entry_mut.mask_offset = index_modder.buffer_vec().len() as GLint;
                     id_map_entry_mut.mask_base_vertex = vert_modder.buffer_vec().len() as GLint;
@@ -528,8 +532,8 @@ pub struct ShaderDataCollector<'a> {
     vert_vec: &'a mut Vec<ColorVertGpu>,
     index_vec: &'a mut Vec<u16>,
     char_vec: &'a mut Vec<CharVertDepth>,
-    vert_offset: &'a mut usize,
     index_offset: &'a mut usize,
+    index_bias: &'a mut u16,
 
     mask_verts: &'a mut Vec<ColorVertGpu>,
     mask_indices: &'a mut Vec<u16>,
@@ -554,14 +558,42 @@ pub struct ShaderDataCollector<'a> {
 
 impl<'a> ShaderDataCollector<'a> {
     fn push_to_render_data_vec(&mut self) {
-        if *self.vert_offset < self.vert_vec.len() {
+        if *self.index_offset < self.index_vec.len() {
             self.render_data_vec.push(RenderData::ColorVerts{
                 offset: *self.index_offset,
-                count: self.index_vec.len() - *self.index_offset
+                count: self.index_vec.len() - *self.index_offset as usize
             });
 
-            *self.vert_offset = self.vert_vec.len();
             *self.index_offset = self.index_vec.len();
+            *self.index_bias = self.vert_vec.len() as u16;
+        }
+    }
+
+    pub fn take<'b>(&'b mut self) -> ShaderDataCollector<'b> {
+        *self.index_bias = self.vert_vec.len() as u16;
+
+        ShaderDataCollector {
+            matrix: self.matrix,
+            pts_rat_scale: self.pts_rat_scale,
+
+            vert_vec: self.vert_vec,
+            index_vec: self.index_vec,
+            char_vec: self.char_vec,
+            index_offset: self.index_offset,
+            index_bias: self.index_bias,
+
+            mask_verts: self.mask_verts,
+            mask_indices: self.mask_indices,
+
+            render_data_vec: self.render_data_vec,
+
+            font_id_map: self.font_id_map,
+
+            depth: self.depth,
+            min_mask_depth: self.min_mask_depth,
+
+            dpi: self.dpi,
+            viewport_size: self.viewport_size
         }
     }
 
@@ -577,14 +609,17 @@ impl<'a> ShaderDataCollector<'a> {
     }
 
     pub fn push_indices(&mut self, indices: [u16; 3]) {
-        self.index_vec.extend_from_slice(&indices);
+        let index_bias = *self.index_bias;
+        self.index_vec.extend(indices.iter().map(|i| *i + index_bias));
     }
 
     pub fn indices_extend_from_slice(&mut self, indices: &[[u16; 3]]) {
         use std::slice;
 
+        let index_bias = *self.index_bias;
+
         let collapsed_slice = unsafe{ slice::from_raw_parts(indices.as_ptr() as *const u16, indices.len() * 3) };
-        self.index_vec.extend_from_slice(collapsed_slice);
+        self.index_vec.extend(collapsed_slice.iter().map(|i| *i + index_bias));
     }
 
     pub fn push_text(&mut self, rect: Rect, text: &str, color: Color, font: &Font, font_size: u32) {
@@ -655,9 +690,7 @@ impl<'a> ShaderDataCollector<'a> {
         });
     }
 
-    pub fn with_transform<'b>(&'b mut self, scale: Rect) -> ShaderDataCollector<'b> {
-        self.push_to_render_data_vec();
-
+    pub fn with_transform(&mut self, scale: Rect) {
         // Create the new matrix and new pts_rat_scale
         let (rat_width, rat_height) =
             (
@@ -692,63 +725,17 @@ impl<'a> ShaderDataCollector<'a> {
             (4.0 / pts_rat_scale_y_div) * self.dpi as f32 / (self.viewport_size.1 as f32 * 72.0)
         );
         
-
-        ShaderDataCollector {
-            matrix: new_matrix,
-            pts_rat_scale: pts_rat_scale,
-
-            vert_vec: self.vert_vec,
-            index_vec: self.index_vec,
-            char_vec: self.char_vec,
-            vert_offset: self.vert_offset,
-            index_offset: self.index_offset,
-
-            mask_verts: self.mask_verts,
-            mask_indices: self.mask_indices,
-
-            render_data_vec: self.render_data_vec,
-
-            font_id_map: self.font_id_map,
-
-            depth: self.depth,
-            min_mask_depth: self.min_mask_depth,
-
-            dpi: self.dpi,
-            viewport_size: self.viewport_size
-        }
+        self.matrix = new_matrix;
+        self.pts_rat_scale = pts_rat_scale;
     }
 
-    pub fn with_matrix<'b>(&'b mut self, matrix: Matrix3<f32>) -> ShaderDataCollector<'b> {
-        self.push_to_render_data_vec();
-
-        ShaderDataCollector {
-            matrix: self.matrix * matrix,
-            pts_rat_scale: self.pts_rat_scale,
-
-            vert_vec: self.vert_vec,
-            index_vec: self.index_vec,
-            char_vec: self.char_vec,
-            vert_offset: self.vert_offset,
-            index_offset: self.index_offset,
-
-            mask_verts: self.mask_verts,
-            mask_indices: self.mask_indices,
-
-            render_data_vec: self.render_data_vec,
-
-            font_id_map: self.font_id_map,
-
-            depth: self.depth,
-            min_mask_depth: self.min_mask_depth,
-
-            dpi: self.dpi,
-            viewport_size: self.viewport_size
-        }
+    pub fn with_matrix(&mut self, matrix: Matrix3<f32>) {
+        self.matrix = self.matrix * matrix;
     }
 
-    pub fn with_mask<'b, 'c, VI, II>(&'b mut self, verts: VI, indices: II) -> ShaderDataCollector<'b> 
-            where VI: IntoIterator<Item = &'c Complex>, 
-                  II: IntoIterator<Item = &'c [u16; 3]> {
+    pub fn with_mask<'b, VI, II>(&mut self, verts: VI, indices: II)
+            where VI: IntoIterator<Item = &'b Complex>, 
+                  II: IntoIterator<Item = &'b [u16; 3]> {
         use std::cmp;
 
         let min_mask_depth = *self.min_mask_depth;
@@ -772,34 +759,6 @@ impl<'a> ShaderDataCollector<'a> {
             self.mask_indices.extend(ins.iter().map(|i| *i));
         }
 
-        ShaderDataCollector {
-            matrix: self.matrix,
-            pts_rat_scale: self.pts_rat_scale,
-
-            vert_vec: self.vert_vec,
-            index_vec: self.index_vec,
-            char_vec: self.char_vec,
-            vert_offset: self.vert_offset,
-            index_offset: self.index_offset,
-
-            mask_verts: self.mask_verts,
-            mask_indices: self.mask_indices,
-
-            render_data_vec: self.render_data_vec,
-
-            font_id_map: self.font_id_map,
-
-            depth: new_depth,
-            min_mask_depth: self.min_mask_depth,
-
-            dpi: self.dpi,
-            viewport_size: self.viewport_size
-        }
-    }
-}
-
-impl<'a> Drop for ShaderDataCollector<'a> {
-    fn drop(&mut self) {
-        self.push_to_render_data_vec();
+        self.depth = new_depth;
     }
 }
