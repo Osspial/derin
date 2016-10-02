@@ -690,7 +690,7 @@ impl<'a> ShaderDataCollector<'a> {
         });
     }
 
-    pub fn with_transform(&mut self, scale: Rect) {
+    pub fn with_rect(&mut self, scale: Rect) {
         // Create the new matrix and new pts_rat_scale
         let (rat_width, rat_height) =
             (

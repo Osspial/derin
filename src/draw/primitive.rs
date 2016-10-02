@@ -114,7 +114,7 @@ impl<N> Shadable for LinearGradient<N>
             0.0, 0.0, 1.0
         );
 
-        data.with_transform(self.rect);
+        data.with_rect(self.rect);
         data.with_mask(&[
                 Complex::new_rat(-1.0,  1.0),
                 Complex::new_rat( 1.0,  1.0),
