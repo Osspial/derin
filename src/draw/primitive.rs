@@ -99,9 +99,8 @@ impl<N> Shadable for LinearGradient<N>
     fn shader_data(&self, mut data: ShaderDataCollector) {
         use std::f32::consts::PI;
 
-        let top_color = self.nodes.as_ref()[0].color;
-        let bottom_color = self.nodes.as_ref().last().unwrap().color;
-
+        let top_color = self.nodes.as_ref().last().unwrap().color;
+        let bottom_color = self.nodes.as_ref()[0].color;
 
         let angle_rad = self.angle * 2.0 * PI / 360.0;
 
