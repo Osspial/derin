@@ -63,6 +63,19 @@ fn main() {
         )
     );
 
+    let rad_grad = Widget::new(RadialGradient {
+        rect: Rect::new(
+                Complex::new_rat(-1.0, -1.0),
+                Complex::new_rat( 0.0,  0.0)
+            ),
+        nodes: vec![
+            GradientNode::new(0.0, Color::new(255, 255, 255, 255)),
+            GradientNode::new(0.2, Color::new(255, 0, 0, 255)),
+            GradientNode::new(1.0, Color::new(0, 255, 0, 255))
+        ],
+        origin: Complex::new_rat(0.5, 0.0)
+    });
+
     let composite = Widget::new(CompositeRects {
         rect: Rect::new(
                 Complex::new_rat(-1.0, 0.0),
@@ -108,6 +121,7 @@ fn main() {
         let mut surface = display.surface();
         surface.draw(&rect);
         surface.draw(&composite);
+        surface.draw(&rad_grad);
 
         window.swap_buffers().unwrap();
         rect.angle += 1.0;

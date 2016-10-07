@@ -4,8 +4,6 @@ use super::gl::ShaderDataCollector;
 
 use cgmath::{Matrix3, Rad};
 
-use std::hash::{Hash, Hasher};
-
 pub struct ColorRect {
     pub color: Color,
     pub rect: Rect
@@ -61,18 +59,6 @@ impl GradientNode {
             pos: pos,
             color: color
         }
-    }
-}
-
-impl Hash for GradientNode {
-    fn hash<H>(&self, state: &mut H) 
-            where H: Hasher {
-        use std::slice;
-        use std::mem;
-
-        let pos_bytes = unsafe{ slice::from_raw_parts(&self.pos as *const _ as *const u8, mem::size_of::<f32>()) };
-        state.write(pos_bytes);
-        self.color.hash(state);
     }
 }
 
@@ -164,6 +150,79 @@ impl<N> Shadable for LinearGradient<N>
             }
 
             last_pair = Some(pair);
+        }
+    }
+}
+
+pub struct RadialGradient<N>
+        where N: AsRef<[GradientNode]> {
+    pub rect: Rect,
+    pub nodes: N,
+    pub origin: Complex
+}
+
+impl<N> Shadable for RadialGradient<N>
+        where N: AsRef<[GradientNode]> {
+    fn shader_data(&self, mut data: ShaderDataCollector) {
+        use std::f32::consts::PI;
+
+        let nodes = self.nodes.as_ref();
+
+        data.with_rect(self.rect);
+        data.with_mask(&[
+                Complex::new_rat(-1.0,  1.0),
+                Complex::new_rat( 1.0,  1.0),
+                Complex::new_rat(-1.0, -1.0),
+                Complex::new_rat( 1.0, -1.0)
+            ], &[[0, 1, 2], [2, 3, 1]]);
+        // Draw the background rectangle
+        ColorRect::new(nodes.last().unwrap().color, Default::default()).shader_data(data.take());
+
+        let circle_resolution = 32;
+        let offset_modulo = circle_resolution * 2;
+
+        let offset_increment = nodes.len() as u16 - 1;
+
+        const ELLIPSE_OFFSET: u16 = 1;
+
+        // Push the center vertex
+        data.push_vert(ColorVert::new(
+            self.origin,
+            nodes[0].color
+        ));
+        
+        for (i, angle) in (0..circle_resolution).map(|i| (i as f32 / circle_resolution as f32) * 2.0 * PI).enumerate() {
+            let i = i as u16;
+
+            let (cos, sin) = (angle.cos(), angle.sin());
+
+            // The first node ellipse doesn't need multiple triangles per division, so we just push one
+            // triangle for each division.
+            data.push_vert(ColorVert::new(
+                Complex::new_rat(cos, sin) * nodes[1].pos + self.origin,
+                nodes[1].color
+            ));
+
+            data.push_indices([0, offset_increment * i + ELLIPSE_OFFSET, offset_increment * (i + 1) % offset_modulo + ELLIPSE_OFFSET]);
+
+            // All other nodes need two triangles, so those are done here. Technically, they could be done with one
+            // triangle but that would increase complexity (by requiring that those nodes be drawn first) and would
+            // have increased overdraw, compared to the current implementation with zero overdraw in the ellipse.
+            for (j, n) in nodes[2..].iter().enumerate() {
+                let j = j as u16;
+
+                data.push_vert(ColorVert::new(
+                        Complex::new_rat(cos, sin) * n.pos + self.origin,
+                        n.color
+                    ));
+
+                let node_offset = offset_increment * i + j + ELLIPSE_OFFSET;
+                let next_node_offset = (node_offset + offset_increment) % offset_modulo;
+                data.indices_extend_from_slice(&[
+                    [node_offset, node_offset + 1, next_node_offset],
+                    [next_node_offset, next_node_offset + 1, node_offset + 1]
+                ]);
+            }
         }
     }
 }

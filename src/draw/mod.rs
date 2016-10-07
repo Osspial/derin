@@ -134,6 +134,28 @@ impl Complex {
     }
 }
 
+impl Add for Complex {
+    type Output = Complex;
+
+    fn add(self, other: Complex) -> Complex {
+        Complex {
+            rat: self.rat + other.rat,
+            pts: self.pts + other.pts
+        }
+    }
+}
+
+impl Mul<f32> for Complex {
+    type Output = Complex;
+
+    fn mul(self, mult: f32) -> Complex {
+        Complex {
+            rat: self.rat * mult,
+            pts: self.pts * mult
+        }
+    }
+}
+
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct LinearComplex {
