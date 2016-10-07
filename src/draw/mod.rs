@@ -1,4 +1,4 @@
-pub mod primitive;
+pub mod primitives;
 pub mod gl;
 pub mod font;
 
