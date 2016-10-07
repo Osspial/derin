@@ -46,6 +46,39 @@ impl Shadable for ColorRect {
     }
 }
 
+pub struct ColorEllipse {
+    pub color: Color,
+    pub rect: Rect,
+    pub subdivs: Option<u16>
+}
+
+impl Shadable for ColorEllipse {
+    fn shader_data(&self, mut data: ShaderDataCollector) {
+        use std::f32::consts::PI;
+
+        data.with_rect(self.rect);
+
+        // Push the initial point, which we will build a triangle fan off of
+        data.push_vert(ColorVert::new(
+            Complex::new_rat(1.0, 0.0),
+            self.color
+        ));
+
+        let subdivs = self.subdivs.unwrap_or(32);
+
+        for (i, angle) in (1..subdivs).map(|a| a as f32 / subdivs as f32 * 2.0 * PI).enumerate() {
+            let i = i as u16;
+
+            data.push_vert(ColorVert::new(
+                Complex::new_rat(angle.cos(), angle.sin()),
+                self.color
+            ));
+
+            data.push_indices([0, i + 1, (i + 2) % subdivs]);
+        }
+    }
+}
+
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct GradientNode {

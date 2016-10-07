@@ -2,7 +2,7 @@ extern crate tint;
 extern crate glutin;
 
 use tint::draw::*;
-use tint::draw::primitive::*;
+use tint::draw::primitives::*;
 use tint::draw::gl::{Facade, ShaderDataCollector};
 use tint::draw::font::{Font, FontInfo};
 
@@ -79,6 +79,15 @@ fn main() {
         )
     });
 
+    let ellipse = Widget::new(ColorEllipse {
+        rect: Rect::new(
+                Complex::new_rat(-0.5, -1.0),
+                Complex::new_rat( 0.5,  0.0)
+            ),
+        color: Color::new(0, 0, 255, 128),
+        subdivs: None
+    });
+
     let composite = Widget::new(CompositeRects {
         rect: Rect::new(
                 Complex::new_rat(-1.0, 0.0),
@@ -124,6 +133,7 @@ fn main() {
         let mut surface = display.surface();
         surface.draw(&rect);
         surface.draw(&composite);
+        surface.draw(&ellipse);
         surface.draw(&rad_grad);
 
         window.swap_buffers().unwrap();
