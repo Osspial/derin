@@ -762,3 +762,9 @@ impl<'a> ShaderDataCollector<'a> {
         self.depth = new_depth;
     }
 }
+
+impl<'a> Drop for ShaderDataCollector<'a> {
+    fn drop(&mut self) {
+        *self.index_bias = self.vert_vec.len() as u16;
+    }
+}
