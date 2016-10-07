@@ -145,6 +145,28 @@ impl Add for Complex {
     }
 }
 
+impl Sub for Complex {
+    type Output = Complex;
+
+    fn sub(self, other: Complex) -> Complex {
+        Complex {
+            rat: self.rat - other.rat,
+            pts: self.pts - other.pts
+        }
+    }
+}
+
+impl Mul for Complex {
+    type Output = Complex;
+
+    fn mul(self, other: Complex) -> Complex {
+        Complex {
+            rat: self.rat * other.rat,
+            pts: self.pts * other.pts
+        }
+    }
+}
+
 impl Mul<f32> for Complex {
     type Output = Complex;
 
@@ -152,6 +174,17 @@ impl Mul<f32> for Complex {
         Complex {
             rat: self.rat * mult,
             pts: self.pts * mult
+        }
+    }
+}
+
+impl Div<f32> for Complex {
+    type Output = Complex;
+
+    fn div(self, divisor: f32) -> Complex {
+        Complex {
+            rat: self.rat / divisor,
+            pts: self.pts / divisor
         }
     }
 }
@@ -242,6 +275,17 @@ impl Sub for Point {
         Point {
             x: self.x - other.x,
             y: self.y - other.y
+        }
+    }
+}
+
+impl Mul for Point {
+    type Output = Point;
+
+    fn mul(self, other: Point) -> Point {
+        Point {
+            x: self.x * other.x,
+            y: self.y * other.y
         }
     }
 }
@@ -341,6 +385,10 @@ impl Rect {
 
     pub fn height(self) -> LinearComplex {
         self.upright.y() - self.lowleft.y()
+    }
+
+    pub fn dims(self) -> Complex {
+        self.upright - self.lowleft
     }
 }
 
