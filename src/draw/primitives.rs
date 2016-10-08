@@ -4,6 +4,7 @@ use super::gl::ShaderDataCollector;
 
 use cgmath::{Matrix3, Rad};
 
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct ColorRect {
     pub rect: Rect,
     pub color: Color
@@ -46,10 +47,21 @@ impl Shadable for ColorRect {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct ColorEllipse {
     pub rect: Rect,
     pub color: Color,
     pub subdivs: Option<u16>
+}
+
+impl ColorEllipse {
+    pub fn new(rect: Rect, color: Color, subdivs: Option<u16>) -> ColorEllipse {
+        ColorEllipse {
+            rect: rect,
+            color: color,
+            subdivs: subdivs
+        }
+    }
 }
 
 impl Shadable for ColorEllipse {
@@ -79,7 +91,6 @@ impl Shadable for ColorEllipse {
     }
 }
 
-#[repr(C, packed)]
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct GradientNode {
     pub pos: f32,
@@ -95,6 +106,7 @@ impl GradientNode {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct LinearGradient<N> 
         where N: AsRef<[GradientNode]> {
     pub rect: Rect,
@@ -187,11 +199,23 @@ impl<N> Shadable for LinearGradient<N>
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct RadialGradient<N>
         where N: AsRef<[GradientNode]> {
     pub rect: Rect,
     pub nodes: N,
     pub subdivs: Option<u16>
+}
+
+impl<N> RadialGradient<N>
+        where N: AsRef<[GradientNode]> {
+    pub fn new(rect: Rect, nodes: N, subdivs: Option<u16>) -> RadialGradient<N> {
+        RadialGradient {
+            rect: rect,
+            nodes: nodes,
+            subdivs: subdivs
+        }
+    }
 }
 
 impl<N> Shadable for RadialGradient<N>
@@ -258,6 +282,7 @@ impl<N> Shadable for RadialGradient<N>
     }
 }
 
+#[derive(Clone)]
 pub struct TextBox<S: AsRef<str>> {
     pub rect: Rect,
     pub color: Color,
