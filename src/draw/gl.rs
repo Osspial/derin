@@ -622,7 +622,7 @@ impl<'a> ShaderDataCollector<'a> {
         self.index_vec.extend(collapsed_slice.iter().map(|i| *i + index_bias));
     }
 
-    pub fn push_text(&mut self, rect: Rect, text: &str, color: Color, font: &Font, font_size: u32) {
+    pub fn push_text(&mut self, rect: Rect, color: Color, text: &str, font: &Font, font_size: u32) {
         self.push_to_render_data_vec();
 
         let mut raw_font = font.raw_font().borrow_mut();

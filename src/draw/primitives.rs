@@ -5,15 +5,15 @@ use super::gl::ShaderDataCollector;
 use cgmath::{Matrix3, Rad};
 
 pub struct ColorRect {
-    pub color: Color,
-    pub rect: Rect
+    pub rect: Rect,
+    pub color: Color
 }
 
 impl ColorRect {
-    pub fn new(color: Color, rect: Rect) -> ColorRect {
+    pub fn new(rect: Rect, color: Color) -> ColorRect {
         ColorRect {
-            color: color,
             rect: rect,
+            color: color,
         }
     }
 }
@@ -47,8 +47,8 @@ impl Shadable for ColorRect {
 }
 
 pub struct ColorEllipse {
-    pub color: Color,
     pub rect: Rect,
+    pub color: Color,
     pub subdivs: Option<u16>
 }
 
@@ -260,18 +260,18 @@ impl<N> Shadable for RadialGradient<N>
 
 pub struct TextBox<S: AsRef<str>> {
     pub rect: Rect,
-    pub text: S,
     pub color: Color,
+    pub text: S,
     pub font: Font,
     pub font_size: u32,
 }
 
 impl<S: AsRef<str>> TextBox<S> {
-    pub fn new(rect: Rect, text: S, color: Color, font: Font, font_size: u32) -> TextBox<S> {
+    pub fn new(rect: Rect, color: Color, text: S, font: Font, font_size: u32) -> TextBox<S> {
         TextBox {
             rect: rect,
-            text: text,
             color: color,
+            text: text,
             font: font,
             font_size: font_size,
         }
@@ -280,6 +280,6 @@ impl<S: AsRef<str>> TextBox<S> {
 
 impl<S: AsRef<str>> Shadable for TextBox<S> {
     fn shader_data(&self, mut data: ShaderDataCollector) {
-        data.push_text(self.rect, self.text.as_ref(), self.color, &self.font, self.font_size);
+        data.push_text(self.rect, self.color, self.text.as_ref(), &self.font, self.font_size);
     }
 }
