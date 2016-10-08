@@ -73,10 +73,7 @@ fn main() {
             GradientNode::new(0.2, Color::new(255, 0, 0, 255)),
             GradientNode::new(1.0, Color::new(0, 255, 0, 255))
         ],
-        ellipse_rect: Rect::new(
-            Complex::new_rat(0.0, -1.0),
-            Complex::new_rat(2.0,  1.0)
-        )
+        subdivs: None
     });
 
     let ellipse = Widget::new(ColorEllipse {

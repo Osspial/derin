@@ -191,7 +191,7 @@ pub struct RadialGradient<N>
         where N: AsRef<[GradientNode]> {
     pub rect: Rect,
     pub nodes: N,
-    pub ellipse_rect: Rect
+    pub subdivs: Option<u16>
 }
 
 impl<N> Shadable for RadialGradient<N>
@@ -208,8 +208,6 @@ impl<N> Shadable for RadialGradient<N>
                 Complex::new_rat(-1.0, -1.0),
                 Complex::new_rat( 1.0, -1.0)
             ], &[[0, 1, 2], [2, 3, 1]]);
-        // Draw the background rectangle
-        ColorRect::new(nodes.last().unwrap().color, Default::default()).shader_data(data.take());
 
         let circle_resolution = 32;
         let offset_modulo = circle_resolution * 2;
@@ -218,23 +216,21 @@ impl<N> Shadable for RadialGradient<N>
 
         const ELLIPSE_OFFSET: u16 = 1;
 
-        let origin = self.ellipse_rect.center();
-
         // Push the center vertex
         data.push_vert(ColorVert::new(
-            origin,
+            Complex::new_rat(0.0, 0.0),
             nodes[0].color
         ));
         
         for (i, angle) in (0..circle_resolution).map(|i| (i as f32 / circle_resolution as f32) * 2.0 * PI).enumerate() {
             let i = i as u16;
 
-            let ray_complex = Complex::new_rat(angle.cos(), angle.sin()) * self.ellipse_rect.dims() / 2.0;
+            let ray_complex = Complex::new_rat(angle.cos(), angle.sin());
 
             // The first node ellipse doesn't need multiple triangles per division, so we just push one
             // triangle for each division.
             data.push_vert(ColorVert::new(
-                ray_complex * nodes[1].pos + origin,
+                ray_complex * nodes[1].pos,
                 nodes[1].color
             ));
 
@@ -247,7 +243,7 @@ impl<N> Shadable for RadialGradient<N>
                 let j = j as u16;
 
                 data.push_vert(ColorVert::new(
-                        ray_complex * n.pos + origin,
+                        ray_complex * n.pos,
                         n.color
                     ));
 
