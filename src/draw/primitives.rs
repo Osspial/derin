@@ -226,12 +226,6 @@ impl<N> Shadable for RadialGradient<N>
         let nodes = self.nodes.as_ref();
 
         data.with_rect(self.rect);
-        data.with_mask(&[
-                Complex::new_rat(-1.0,  1.0),
-                Complex::new_rat( 1.0,  1.0),
-                Complex::new_rat(-1.0, -1.0),
-                Complex::new_rat( 1.0, -1.0)
-            ], &[[0, 1, 2], [2, 3, 1]]);
 
         let circle_resolution = 32;
         let offset_modulo = circle_resolution * 2;
