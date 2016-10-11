@@ -59,31 +59,31 @@ fn main() {
                 GradientNode::new( 0.0, Color::new(0, 255, 0, 255)),
                 GradientNode::new( 1.0, Color::new(255, 0, 0, 255)),
             ],
-            0.0
+            45.0
         )
     );
 
-    let rad_grad = Widget::new(RadialGradient {
-        rect: Rect::new(
-                Complex::new_rat(-1.0, -1.0),
-                Complex::new_rat( 0.0,  0.0)
-            ),
-        nodes: vec![
+    let rad_grad = Widget::new(RadialGradient::new(
+        Rect::new(
+            Complex::new_rat(-1.0, -1.0),
+            Complex::new_rat( 0.0,  0.0)
+        ),
+        vec![
             GradientNode::new(0.0, Color::new(255, 255, 255, 255)),
             GradientNode::new(0.2, Color::new(255, 0, 0, 255)),
             GradientNode::new(1.0, Color::new(0, 255, 0, 255))
         ],
-        subdivs: None
-    });
+        None
+    ));
 
-    let ellipse = Widget::new(ColorEllipse {
-        rect: Rect::new(
-                Complex::new_rat(-0.5, -1.0),
-                Complex::new_rat( 0.5,  0.0)
-            ),
-        color: Color::new(0, 0, 255, 128),
-        subdivs: None
-    });
+    let ellipse = Widget::new(ColorEllipse::new(
+        Rect::new(
+            Complex::new_rat(-0.5, -1.0),
+            Complex::new_rat( 0.5,  0.0)
+        ),
+        Color::new(0, 0, 255, 128),
+        None
+    ));
 
     let composite = Widget::new(CompositeRects {
         rect: Rect::new(
@@ -123,17 +123,17 @@ fn main() {
             match event {
                 Closed => break 'main,
                 Resized(x, y) => display.resize(x, y),
+                MouseMoved(_, _) => rect.angle += 1.0,
                 _ => ()
             }
         }
 
         let mut surface = display.surface();
+        surface.draw(&rad_grad);
         surface.draw(&rect);
         surface.draw(&composite);
         surface.draw(&ellipse);
-        surface.draw(&rad_grad);
 
         window.swap_buffers().unwrap();
-        rect.angle += 1.0;
     }
 }
