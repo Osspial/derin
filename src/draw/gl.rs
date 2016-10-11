@@ -250,7 +250,8 @@ struct IDMapEntry {
     mask_verts: Vec<ColorVertGpu>,
     mask_indices: Vec<u16>,
     mask_offset: GLint,
-    mask_base_vertex: GLint
+    mask_base_vertex: GLint,
+    depth_offset: f64
 }
 
 pub struct Facade {
@@ -315,14 +316,14 @@ impl Facade {
 
         GLSurface {
             facade: self,
-            min_mask_depth: -i16::max_value() + 1
+            depth_offset: 0.0
         }
     }
 }
 
 pub struct GLSurface<'a> {
     facade: &'a mut Facade,
-    min_mask_depth: i16
+    depth_offset: f64
 }
 
 impl<'a> Surface for GLSurface<'a> {
@@ -351,7 +352,8 @@ impl<'a> Surface for GLSurface<'a> {
                             mask_verts: Vec::new(),
                             mask_indices: Vec::new(),
                             mask_offset: 0,
-                            mask_base_vertex: 0
+                            mask_base_vertex: 0,
+                            depth_offset: 0.0
                         }
                     );
                 }
@@ -362,7 +364,6 @@ impl<'a> Surface for GLSurface<'a> {
                 // that throws an error. Binding them through these works. Probably a bug, and should be reported to
                 // the rust compiler.
                 let font_id_map = &mut self.facade.font_id_map;
-                let min_mask_depth = &mut self.min_mask_depth;
                 let dpi = self.facade.dpi;
                 let viewport_size = self.facade.viewport_size;
 
@@ -378,6 +379,7 @@ impl<'a> Surface for GLSurface<'a> {
 
                     let mut index_offset = 0;
                     let mut index_bias = 0;
+                    let mut max_depth = -32767;
 
                     {
                         let mut sdc = ShaderDataCollector {
@@ -403,7 +405,7 @@ impl<'a> Surface for GLSurface<'a> {
                             // We use -32767 instead of -32768 (i16's actual minimum value) because -32767 is
                             // the same distance from zero as i16's max value, 32767. This makes the math easier.
                             depth: -32767,
-                            min_mask_depth: min_mask_depth,
+                            max_depth: &mut max_depth,
 
                             dpi: dpi,
                             viewport_size: viewport_size
@@ -411,6 +413,8 @@ impl<'a> Surface for GLSurface<'a> {
                         drawable.shader_data(sdc.take());
                         sdc.push_to_render_data_vec();
                     }
+
+                    id_map_entry_mut.depth_offset = (max_depth as i32 + 32767) as f64 / 65535.0;
 
                     id_map_entry_mut.mask_offset = index_modder.buffer_vec().len() as GLint;
                     id_map_entry_mut.mask_base_vertex = vert_modder.buffer_vec().len() as GLint;
@@ -427,6 +431,7 @@ impl<'a> Surface for GLSurface<'a> {
 
         if 0 < id_map_entry.mask_indices.len() {unsafe {
             gl::DepthFunc(gl::ALWAYS);
+            gl::DepthRange(self.depth_offset, 1.0 + self.depth_offset);
             self.facade.color_passthrough.program.with(|_|
                 buffers.verts_vao.with(|_| {
                     gl::DrawElementsBaseVertex(
@@ -438,7 +443,11 @@ impl<'a> Surface for GLSurface<'a> {
                     );
                 }));
             gl::DepthFunc(gl::LEQUAL);
+        }} else {unsafe{
+            gl::DepthRange(0.0, 1.0);
         }}
+
+        self.depth_offset += id_map_entry.depth_offset;
 
         for render_data in id_map_entry.render_data_vec.iter() {unsafe{
             match *render_data {
@@ -548,9 +557,7 @@ pub struct ShaderDataCollector<'a> {
     // This way -32767 maps nicely to -1.0, instead of us having to subtract stuff from a u16 after
     // converting it to a float.
     depth: i16,
-    // If we do end up using a mask, this is the minimum depth value the mask can be to avoid using an
-    // already-occupied depth layer.
-    min_mask_depth: &'a mut i16,
+    max_depth: &'a mut i16,
 
     dpi: u32,
     viewport_size: (GLint, GLint)
@@ -590,7 +597,7 @@ impl<'a> ShaderDataCollector<'a> {
             font_id_map: self.font_id_map,
 
             depth: self.depth,
-            min_mask_depth: self.min_mask_depth,
+            max_depth: self.max_depth,
 
             dpi: self.dpi,
             viewport_size: self.viewport_size
@@ -738,18 +745,16 @@ impl<'a> ShaderDataCollector<'a> {
                   II: IntoIterator<Item = &'b [u16; 3]> {
         use std::cmp;
 
-        let min_mask_depth = *self.min_mask_depth;
-        let new_depth = if self.depth == -32767 {
-            min_mask_depth
-        } else {self.depth + 1};
-        *self.min_mask_depth = cmp::max(min_mask_depth, new_depth + 1);
+        self.depth += 1;
+        *self.max_depth = cmp::max(*self.max_depth, self.depth);
 
         let pts_rat_scale = self.pts_rat_scale;
         let matrix = self.matrix;
 
+        let depth = self.depth;
         self.mask_verts.extend(verts.into_iter().map(|v| ColorVertGpu {
             pos: Vector3{
-                z: new_depth as f32 / i16::max_value() as f32,
+                z: depth as f32 / i16::max_value() as f32,
                 ..v.mul_matrix(pts_rat_scale, matrix)
             },
             color: Color::new(0, 0, 0, 0)
@@ -758,8 +763,6 @@ impl<'a> ShaderDataCollector<'a> {
         for ins in indices.into_iter() {
             self.mask_indices.extend(ins.iter().map(|i| *i));
         }
-
-        self.depth = new_depth;
     }
 }
 
