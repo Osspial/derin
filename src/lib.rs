@@ -5,3 +5,4 @@ extern crate freetype;
 extern crate fnv;
 
 pub mod draw;
+pub mod ui;
