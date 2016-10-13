@@ -215,7 +215,7 @@ impl FontAtlas {
         self.charmap.clear();
 
         // Load the glyph bitmaps into the bitmap vector
-        for size in self.font_sizes.iter().map(|s| *s) {
+        for size in self.font_sizes.iter().cloned() {
             faces.regular.set_char_size(0, size as isize * 64, self.dpi, self.dpi).unwrap();
 
             bitmaps.extend(ASCII_CHAR_ARRAY.iter().map(|c| Regular(*c)).zip(BitmapIter::new(&faces.regular, ASCII_CHAR_ARRAY.iter())));
@@ -325,7 +325,7 @@ impl FontAtlas {
 
         // Because the final dimensions of the image are now known, we can safely convert the glyph rects from
         // pixel coordinates to normalized texture coordinates.
-        for (_, aci) in self.charmap.iter_mut() {
+        for (_, aci) in &mut self.charmap {
             aci.image_rect.upleft.x /= width as f32;
             aci.image_rect.upleft.y /= height as f32;
             aci.image_rect.lowright.x /= width as f32;
@@ -378,7 +378,7 @@ impl<'a, 's> Iterator for WordIter<'a, 's> {
         self.chars = word_str[word_len_bytes..].chars();
         word_str = &word_str[..word_len_bytes];
 
-        if 0 != word_str.len() {
+        if !word_str.is_empty() {
             Some(Word {
                 font: self.font,
                 word: word_str,

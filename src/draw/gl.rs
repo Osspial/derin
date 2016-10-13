@@ -63,7 +63,7 @@ impl Complex {
     }
 }
 
-/// The GPU representation of a ColorVert. The reason this exists is that it has the matrix
+/// The GPU representation of a `ColorVert`. The reason this exists is that it has the matrix
 /// already performed, allowing us to batch the draw calls of multiple objects.
 #[repr(packed)]
 #[derive(Debug, Clone, Copy)]
@@ -307,7 +307,7 @@ impl Facade {
         unsafe{ gl::Viewport(0, 0, self.viewport_size.0, self.viewport_size.1) };
     }
 
-    pub fn surface<'a>(&'a mut self) -> GLSurface {
+    pub fn surface(&mut self) -> GLSurface {
         unsafe {
             gl::ClearColor(0.0, 0.0, 0.0, 1.0);
             gl::ClearDepth(0.0);
@@ -449,7 +449,7 @@ impl<'a> Surface for GLSurface<'a> {
 
         self.depth_offset += id_map_entry.depth_offset;
 
-        for render_data in id_map_entry.render_data_vec.iter() {unsafe{
+        for render_data in &id_map_entry.render_data_vec {unsafe{
             match *render_data {
                 RenderData::ColorVerts{offset, count} =>
                     self.facade.color_passthrough.program.with(|_|
@@ -576,7 +576,7 @@ impl<'a> ShaderDataCollector<'a> {
         }
     }
 
-    pub fn take<'b>(&'b mut self) -> ShaderDataCollector<'b> {
+    pub fn take(&mut self) -> ShaderDataCollector {
         *self.index_bias = self.vert_vec.len() as u16;
 
         ShaderDataCollector {
@@ -760,8 +760,8 @@ impl<'a> ShaderDataCollector<'a> {
             color: Color::new(0, 0, 0, 0)
         }));
 
-        for ins in indices.into_iter() {
-            self.mask_indices.extend(ins.iter().map(|i| *i));
+        for ins in indices {
+            self.mask_indices.extend(ins.iter().cloned());
         }
     }
 }
