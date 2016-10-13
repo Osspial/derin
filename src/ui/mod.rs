@@ -10,11 +10,28 @@ pub enum MouseButton {
     Other(u8)
 }
 
-pub type Selector<'a> = &'a str;
 
-pub trait Control {
+#[derive(Debug, Clone, Copy)]
+pub struct NodeMeta<'a> {
+    pub typ: &'a str,
+    pub id: Option<&'a str>,
+    pub class: Option<&'a str>
+}
+
+pub struct Selector {}
+
+pub trait Node {
+    fn metadata(&self) -> NodeMeta;
+}
+
+pub trait Control: Node {
     type Action;
 
     fn on_mouse_event(&mut self, MouseEvent) -> Self::Action;
-    fn selector(&self) -> Selector;
+}
+
+pub trait Container: Node {
+    type Action;
+
+    fn get_control(&self, Selector) -> Option<&Control<Action = Self::Action>>;
 }
