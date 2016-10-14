@@ -12,7 +12,8 @@ pub struct Widget<S: Shadable> {
     shadable: S,
 
     buffer_data: BufferData,
-    num_updates: u64
+    num_updates: u64,
+    id: u64
 }
 
 impl<S: Shadable> Widget<S> {
@@ -21,7 +22,8 @@ impl<S: Shadable> Widget<S> {
             shadable: shadable,
 
             buffer_data: BufferData::new(),
-            num_updates: 0
+            num_updates: 0,
+            id: ::get_unique_id()
         }
     }
 

@@ -18,7 +18,6 @@ use cgmath::prelude::*;
 type HasherType = BuildHasherDefault<FnvHasher>;
 
 pub struct BufferData {
-    id: u64,
     verts: GLVertexBuffer<ColorVertGpu>,
     vert_indices: GLIndexBuffer,
     verts_vao: GLVertexArray<ColorVertGpu>,
@@ -36,7 +35,6 @@ impl BufferData {
         let chars_vao = GLVertexArray::new(&chars, None);
 
         BufferData {
-            id: ::get_unique_id(),
             verts: verts,
             vert_indices: vert_indices,
             verts_vao: verts_vao,
@@ -328,7 +326,7 @@ impl<'a> Surface for GLSurface<'a> {
 
         {
             let id_map_entry_mut: &mut IDMapEntry;
-            match self.facade.id_map.entry(buffers.id) {
+            match self.facade.id_map.entry(drawable.id) {
                 Entry::Occupied(mut entry) => {
                     update_buffers = !(drawable.num_updates == entry.get().num_updates);
                     entry.get_mut().num_updates = drawable.num_updates;
@@ -419,7 +417,7 @@ impl<'a> Surface for GLSurface<'a> {
         // Unfortunately, we can't just re-use the mutable reference to the id_map_entry, as we also need
         // to borrow the struct owning the entry as immutable. This workaround has a slight runtime cost,
         // so it's in the program's best interest to have this hack removed.
-        let id_map_entry = self.facade.id_map.get(&buffers.id).unwrap();
+        let id_map_entry = self.facade.id_map.get(&drawable.id).unwrap();
 
         if 0 < id_map_entry.mask_indices.len() {unsafe {
             gl::DepthFunc(gl::ALWAYS);
