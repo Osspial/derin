@@ -10,7 +10,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use super::Point;
-use super::gl::get_unique_id;
 
 pub struct FontInfo {
     pub regular: PathBuf,
@@ -29,7 +28,7 @@ impl Font {
     pub fn new(info: &FontInfo) -> Font {
         Font{
             raw_font: Rc::new(RefCell::new(RawFont::new(info))),
-            id: get_unique_id()
+            id: ::get_unique_id()
         }
     }
 

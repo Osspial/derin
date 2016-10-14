@@ -17,14 +17,6 @@ use cgmath::prelude::*;
 
 type HasherType = BuildHasherDefault<FnvHasher>;
 
-static mut ID_COUNTER: u64 = 0;
-
-pub fn get_unique_id() -> u64 {
-    let id = unsafe{ ID_COUNTER };
-    unsafe{ ID_COUNTER += 1 };
-    id
-}
-
 pub struct BufferData {
     id: u64,
     verts: GLVertexBuffer<ColorVertGpu>,
@@ -44,7 +36,7 @@ impl BufferData {
         let chars_vao = GLVertexArray::new(&chars, None);
 
         BufferData {
-            id: get_unique_id(),
+            id: ::get_unique_id(),
             verts: verts,
             vert_indices: vert_indices,
             verts_vao: verts_vao,
