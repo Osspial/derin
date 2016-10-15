@@ -4,7 +4,7 @@ use gl::types::*;
 
 use std::ptr;
 use std::marker::PhantomData;
-use std::cell::{Cell, RefCell, RefMut};
+use std::cell::{Cell};
 
 pub type GLError = String;
 
@@ -199,8 +199,7 @@ pub trait GLBuffer<T: Copy>
         where Self: Sized {
     fn new(capacity: usize, usage: BufferUsage) -> Self;
     fn from_slice(slice: &[T], usage: BufferUsage) -> Self;
-    fn with<'a, F: FnOnce(BufModder<'a, T, Self>)>(&'a self, func: F)
-            where T: 'a;
+    fn modify(&mut self) -> BufModder<T>;
 
     fn buffer_type() -> GLenum;
 }
@@ -216,8 +215,8 @@ impl<V: GLVertex> GLBuffer<V> for GLVertexBuffer<V> {
         GLVertexBuffer( Buffer::from_slice(slice, usage) )
     }
 
-    fn with<'a, F: FnOnce(BufModder<'a, V, GLVertexBuffer<V>>)>(&'a self, func: F) {
-        self.0.with(func)
+    fn modify(&mut self) -> BufModder<V> {
+        self.0.modify()
     }
 
     #[inline]
@@ -237,8 +236,8 @@ impl GLBuffer<GLushort> for GLIndexBuffer {
         GLIndexBuffer( Buffer::from_slice(slice, usage) )
     }
 
-    fn with<'a, F: FnOnce(BufModder<'a, GLushort, GLIndexBuffer>)>(&'a self, func: F) {
-        self.0.with(func)
+    fn modify(&mut self) -> BufModder<GLushort> {
+        self.0.modify()
     }
 
     #[inline]
@@ -250,7 +249,7 @@ impl GLBuffer<GLushort> for GLIndexBuffer {
 /// RAII wrapper around OpenGL buffers
 struct Buffer<T: Copy, B: GLBuffer<T>> {
     handle: GLuint,
-    data: RefCell<Vec<T>>,
+    data: Vec<T>,
     usage: BufferUsage,
     _marker: PhantomData<(T, B)>
 }
@@ -271,7 +270,7 @@ impl<T: Copy, B: GLBuffer<T>> Buffer<T, B> {
 
             Buffer {
                 handle: handle,
-                data: RefCell::new(Vec::with_capacity(capacity)),
+                data: Vec::with_capacity(capacity),
                 usage: usage,
                 _marker: PhantomData
             }
@@ -293,68 +292,70 @@ impl<T: Copy, B: GLBuffer<T>> Buffer<T, B> {
 
             Buffer {
                 handle: handle,
-                data: RefCell::new(data),
+                data: data,
                 usage: usage,
                 _marker: PhantomData
             }
         }
     }
 
-    fn with<'a, F: FnOnce(BufModder<'a, T, B>)>(&'a self, func: F) {
-        let buffer_vec = self.data.borrow_mut();
-        func(BufModder{
-            buffer: self,
-            old_vec_len: buffer_vec.len(),
-            buffer_vec: buffer_vec
-        });
+    fn modify(&mut self) -> BufModder<T> {
+        BufModder {
+            buffer_type: B::buffer_type(),
+            buffer_handle: self.handle,
+            buffer_usage: self.usage,
+
+            old_vec_len: self.data.len(),
+            buffer_vec: &mut self.data
+        }
     }
 }
 
-pub struct BufModder<'a, T, B> 
-        where T: 'a + Copy,
-              B: 'a + GLBuffer<T> {
-    buffer: &'a Buffer<T, B>, 
-    buffer_vec: RefMut<'a, Vec<T>>,
+pub struct BufModder<'a, T> 
+        where T: 'a + Copy {
+    buffer_type: GLenum,
+    buffer_handle: GLuint,
+    buffer_usage: BufferUsage,
+
+    buffer_vec: &'a mut Vec<T>,
     old_vec_len: usize
 }
 
-impl<'a, T, B> BufModder<'a, T, B>
-        where T: 'a + Copy,
-              B: 'a + GLBuffer<T> {
+impl<'a, T> BufModder<'a, T>
+        where T: 'a + Copy {
     pub fn buffer_vec(&mut self) -> &mut Vec<T> {
         &mut self.buffer_vec
     }
 }
 
-impl<'a, T, B> Drop for BufModder<'a, T, B>
-        where T: 'a + Copy,
-              B: 'a + GLBuffer<T> {
+impl<'a, T> Drop for BufModder<'a, T>
+        where T: 'a + Copy {
     fn drop(&mut self) {
         thread_local!(static BOUND_BUFFER: Cell<GLuint> = Cell::new(0));
 
         BOUND_BUFFER.with(|bb| unsafe {
             let last_bound = bb.get();
-            bb.set(self.buffer.handle);
+            bb.set(self.buffer_handle);
 
             reset_vao_bind();
 
-            gl::BindBuffer(B::buffer_type(), self.buffer.handle);
+            gl::BindBuffer(self.buffer_type, self.buffer_handle);
             if self.old_vec_len < self.buffer_vec.len() {
                 gl::BufferData(
-                    B::buffer_type(),
+                    self.buffer_type,
                     byte_slice_size(&self.buffer_vec),
                     self.buffer_vec.as_ptr() as *const _,
-                    self.buffer.usage.to_gl_enum()
+                    self.buffer_usage.to_gl_enum()
                 );
             } else {
                 gl::BufferSubData(
-                    B::buffer_type(),
+                    self.buffer_type,
                     0,
                     byte_slice_size(&self.buffer_vec),
                     self.buffer_vec.as_ptr() as *const _
                 )
             }
-            gl::BindBuffer(B::buffer_type(), last_bound);
+            gl::BindBuffer(self.buffer_type, last_bound);
 
             bb.set(last_bound);
         });

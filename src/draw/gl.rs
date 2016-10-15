@@ -235,6 +235,8 @@ impl CharVertexProgram {
 
 struct IDMapEntry {
     num_updates: u64,
+
+    buffer_data: BufferData,
     render_data_vec: Vec<RenderData>,
 
     mask_verts: Vec<ColorVertGpu>,
@@ -320,7 +322,6 @@ impl<'a> Surface for GLSurface<'a> {
     fn draw<S: Shadable>(&mut self, drawable: &Widget<S>) {
         use std::collections::hash_map::Entry;
 
-        let buffers = &drawable.buffer_data;
         // Whether or not to re-upload any data to the GPU buffers
         let update_buffers: bool;
 
@@ -337,6 +338,8 @@ impl<'a> Surface for GLSurface<'a> {
                     id_map_entry_mut = entry.insert(
                         IDMapEntry {
                             num_updates: drawable.num_updates,
+
+                            buffer_data: BufferData::new(),
                             render_data_vec: Vec::new(),
 
                             mask_verts: Vec::new(),
@@ -350,67 +353,60 @@ impl<'a> Surface for GLSurface<'a> {
             }
             
             if update_buffers || self.facade.viewport_size_changed {
-                // Annoyingly, we can't borrow these variables directly inside of the closure because
-                // that throws an error. Binding them through these works. Probably a bug, and should be reported to
-                // the rust compiler.
-                let font_id_map = &mut self.facade.font_id_map;
-                let dpi = self.facade.dpi;
-                let viewport_size = self.facade.viewport_size;
+                let mut vert_modder = id_map_entry_mut.buffer_data.verts.modify();
+                let mut index_modder = id_map_entry_mut.buffer_data.vert_indices.modify();
+                let mut char_modder = id_map_entry_mut.buffer_data.chars.modify();
 
-                buffers.verts.with(|mut vert_modder|
-                buffers.vert_indices.with(|mut index_modder|
-                buffers.chars.with(|mut char_modder| {
-                    vert_modder.buffer_vec().clear();
-                    index_modder.buffer_vec().clear();
-                    char_modder.buffer_vec().clear();
-                    id_map_entry_mut.render_data_vec.clear();
-                    id_map_entry_mut.mask_verts.clear();
-                    id_map_entry_mut.mask_indices.clear();
+                vert_modder.buffer_vec().clear();
+                index_modder.buffer_vec().clear();
+                char_modder.buffer_vec().clear();
+                id_map_entry_mut.render_data_vec.clear();
+                id_map_entry_mut.mask_verts.clear();
+                id_map_entry_mut.mask_indices.clear();
 
-                    let mut index_offset = 0;
-                    let mut index_bias = 0;
-                    let mut max_depth = -32767;
+                let mut index_offset = 0;
+                let mut index_bias = 0;
+                let mut max_depth = -32767;
 
-                    {
-                        let mut sdc = ShaderDataCollector {
-                            matrix: One::one(),
-                            pts_rat_scale: Vector2::new(
-                                2.0 * dpi as f32 / (viewport_size.0 as f32 * 72.0),
-                                2.0 * dpi as f32 / (viewport_size.1 as f32 * 72.0)
-                            ),
+                {
+                    let mut sdc = ShaderDataCollector {
+                        matrix: One::one(),
+                        pts_rat_scale: Vector2::new(
+                            2.0 * self.facade.dpi as f32 / (self.facade.viewport_size.0 as f32 * 72.0),
+                            2.0 * self.facade.dpi as f32 / (self.facade.viewport_size.1 as f32 * 72.0)
+                        ),
 
-                            vert_vec: vert_modder.buffer_vec(),
-                            index_vec: index_modder.buffer_vec(),
-                            char_vec: char_modder.buffer_vec(),
-                            index_offset: &mut index_offset,
-                            index_bias: &mut index_bias,
+                        vert_vec: vert_modder.buffer_vec(),
+                        index_vec: index_modder.buffer_vec(),
+                        char_vec: char_modder.buffer_vec(),
+                        index_offset: &mut index_offset,
+                        index_bias: &mut index_bias,
 
-                            mask_verts: &mut id_map_entry_mut.mask_verts,
-                            mask_indices: &mut id_map_entry_mut.mask_indices,
+                        mask_verts: &mut id_map_entry_mut.mask_verts,
+                        mask_indices: &mut id_map_entry_mut.mask_indices,
 
-                            render_data_vec: &mut id_map_entry_mut.render_data_vec,
+                        render_data_vec: &mut id_map_entry_mut.render_data_vec,
 
-                            font_id_map:font_id_map,
+                        font_id_map: &mut self.facade.font_id_map,
 
-                            // We use -32767 instead of -32768 (i16's actual minimum value) because -32767 is
-                            // the same distance from zero as i16's max value, 32767. This makes the math easier.
-                            depth: -32767,
-                            max_depth: &mut max_depth,
+                        // We use -32767 instead of -32768 (i16's actual minimum value) because -32767 is
+                        // the same distance from zero as i16's max value, 32767. This makes the math easier.
+                        depth: -32767,
+                        max_depth: &mut max_depth,
 
-                            dpi: dpi,
-                            viewport_size: viewport_size
-                        };
-                        drawable.shader_data(sdc.take());
-                        sdc.push_to_render_data_vec();
-                    }
+                        dpi: self.facade.dpi,
+                        viewport_size: self.facade.viewport_size
+                    };
+                    drawable.shader_data(sdc.take());
+                    sdc.push_to_render_data_vec();
+                }
 
-                    id_map_entry_mut.depth_offset = (max_depth as i32 + 32767) as f64 / 65535.0;
+                id_map_entry_mut.depth_offset = (max_depth as i32 + 32767) as f64 / 65535.0;
 
-                    id_map_entry_mut.mask_offset = index_modder.buffer_vec().len() as GLint;
-                    id_map_entry_mut.mask_base_vertex = vert_modder.buffer_vec().len() as GLint;
-                    vert_modder.buffer_vec().extend_from_slice(&id_map_entry_mut.mask_verts);
-                    index_modder.buffer_vec().extend_from_slice(&id_map_entry_mut.mask_indices);
-                })));
+                id_map_entry_mut.mask_offset = index_modder.buffer_vec().len() as GLint;
+                id_map_entry_mut.mask_base_vertex = vert_modder.buffer_vec().len() as GLint;
+                vert_modder.buffer_vec().extend_from_slice(&id_map_entry_mut.mask_verts);
+                index_modder.buffer_vec().extend_from_slice(&id_map_entry_mut.mask_indices);
             }
         }
 
@@ -418,6 +414,7 @@ impl<'a> Surface for GLSurface<'a> {
         // to borrow the struct owning the entry as immutable. This workaround has a slight runtime cost,
         // so it's in the program's best interest to have this hack removed.
         let id_map_entry = self.facade.id_map.get(&drawable.id).unwrap();
+        let buffers = &id_map_entry.buffer_data;
 
         if 0 < id_map_entry.mask_indices.len() {unsafe {
             gl::DepthFunc(gl::ALWAYS);

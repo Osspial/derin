@@ -4,14 +4,13 @@ pub mod font;
 
 use std::ops::{Add, Sub, Mul, Div, Deref, DerefMut};
 
-use self::gl::{BufferData, ShaderDataCollector};
+use self::gl::{ShaderDataCollector};
 
 use cgmath::{Vector2};
 
 pub struct Widget<S: Shadable> {
     shadable: S,
 
-    buffer_data: BufferData,
     num_updates: u64,
     id: u64
 }
@@ -21,7 +20,6 @@ impl<S: Shadable> Widget<S> {
         Widget {
             shadable: shadable,
 
-            buffer_data: BufferData::new(),
             num_updates: 0,
             id: ::get_unique_id()
         }
