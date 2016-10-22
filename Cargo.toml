@@ -1,17 +1,18 @@
 [package]
+authors = ["Osspial <osspial@gmail.com>"]
 name = "tint"
 version = "0.1.0"
-authors = ["Osspial <osspial@gmail.com>"]
 
 [dependencies]
-gl = "0.6"
-gl_raii = {path="./gl_raii"}
+bitflags = "0.7.0"
 cgmath = "0.12"
-freetype-rs = "0.11"
 fnv = "1.0"
-
-[dev-dependencies]
+freetype-rs = "0.11"
+gl = "0.6"
 glutin = "0.6"
+
+[dependencies.gl_raii]
+path = "./gl_raii"
 
 [workspace]
 members = ["./gl_raii"]

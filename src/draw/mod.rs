@@ -25,6 +25,14 @@ impl<S: Shadable> Widget<S> {
         }
     }
 
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    pub fn num_updates(&self) -> u64 {
+        self.num_updates
+    }
+
     pub fn unwrap(self) -> S {
         self.shadable
     }
@@ -59,10 +67,6 @@ impl<S: Shadable> AsMut<S> for Widget<S> {
 
 pub trait Shadable {
     fn shader_data(&self, ShaderDataCollector);
-}
-
-pub trait Surface {
-    fn draw<S: Shadable>(&mut self, &Widget<S>);
 }
 
 #[derive(Debug, Clone, Copy)]

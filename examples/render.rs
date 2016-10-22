@@ -1,6 +1,7 @@
 extern crate tint;
 extern crate glutin;
 
+use tint::Display;
 use tint::draw::*;
 use tint::draw::primitives::*;
 use tint::draw::gl::{Facade, ShaderDataCollector};
@@ -39,9 +40,7 @@ fn main() {
         .with_multisampling(4)
         .build().unwrap();
 
-    unsafe{ window.make_current().unwrap() };
-
-    let mut display = Facade::new(|s| window.get_proc_address(s) as *const _);
+    let mut display = Display::new(Facade::new(window));
     let font = Font::new(&FontInfo {
         regular: "./tests/DejaVuSans.ttf".into(),
         italic: None,
@@ -117,23 +116,21 @@ fn main() {
     });
 
     'main: loop {
-        for event in window.poll_events() {
-            use glutin::Event::*;
+        // for event in window.poll_events() {
+        //     use glutin::Event::*;
 
-            match event {
-                Closed => break 'main,
-                Resized(x, y) => display.resize(x, y),
-                MouseMoved(_, _) => rect.angle += 1.0,
-                _ => ()
-            }
-        }
+        //     match event {
+        //         Closed => break 'main,
+        //         Resized(x, y) => display.resize(x, y),
+        //         MouseMoved(_, _) => rect.angle += 1.0,
+        //         _ => ()
+        //     }
+        // }
 
-        let mut surface = display.surface();
+        let mut surface = display.dispatcher();
         surface.draw(&rad_grad);
         surface.draw(&rect);
         surface.draw(&composite);
         surface.draw(&ellipse);
-
-        window.swap_buffers().unwrap();
     }
 }

@@ -716,6 +716,12 @@ impl Drop for GLSampler {
     }
 }
 
+impl Default for GLSampler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 
 #[derive(Debug, Clone, Copy)]
 pub enum ShaderType {
