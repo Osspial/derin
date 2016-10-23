@@ -1,5 +1,3 @@
-use std::ops::{Deref, DerefMut};
-
 pub enum MouseEvent {
     Click(MouseButton),
     Scroll(f32, f32)
@@ -12,71 +10,38 @@ pub enum MouseButton {
     Other(u8)
 }
 
+pub struct Text {}
+pub struct Image {}
 
-pub trait TreeCrawler {
-    fn with_node<N: Node>(&mut self, ident: Option<&str>, N);
-    fn with_control_node<C: Control>(&mut self, ident: Option<&str>, C);
-    fn with_node_group<N: Node>(&mut self, ident: Option<&str>, NodeGroup<N>);
+pub struct NodeDataCollector {}
+pub struct ChildDataCollector {}
+pub struct ContentCollector {}
+
+impl NodeDataCollector {
+    pub fn node_type(&mut self, _: &str) {unimplemented!()}
+    pub fn node_state(&mut self, _: &str) {unimplemented!()}
+    pub fn node_class(&mut self, _: &str) {unimplemented!()}
+
+    pub fn node_control<C: Control>(&mut self, _: &mut C) {unimplemented!()}
+
+    pub fn children(self) -> ChildDataCollector {unimplemented!()}
+    pub fn contents(self) -> ContentCollector {unimplemented!()}
 }
 
-pub struct NodeGroup<N: Node> {
-    group: N,
-    num_updates: u64
+impl ChildDataCollector {
+    pub fn take(&mut self, _: &str) -> NodeDataCollector {unimplemented!()}
 }
 
-impl<N: Node> NodeGroup<N> {
-    pub fn new(group: N) -> NodeGroup<N> {
-        NodeGroup {
-            group: group,
-            num_updates: 0
-        }
-    }
-
-    pub fn num_updates(&self) -> u64 {
-        self.num_updates
-    }
-
-    pub fn unwrap(self) -> N {
-        self.group
-    }
-}
-
-impl<N: Node> Deref for NodeGroup<N> {
-    type Target = N;
-
-    fn deref(&self) -> &N {
-        &self.group
-    }
-}
-
-impl<N: Node> DerefMut for NodeGroup<N> {
-    fn deref_mut(&mut self) -> &mut N {
-        self.num_updates += 1;
-        &mut self.group
-    }
-}
-
-impl<N: Node> AsRef<N> for NodeGroup<N> {
-    fn as_ref(&self) -> &N {
-        self
-    }
-}
-
-impl<N: Node> AsMut<N> for NodeGroup<N> {
-    fn as_mut(&mut self) -> &mut N {
-        self
-    }
+impl ContentCollector {
+    pub fn push_image(&mut self, _: Image) {unimplemented!()}
+    pub fn push_text(&mut self, _: Text) {unimplemented!()}
 }
 
 pub trait Node {
-    fn crawl_children<T: TreeCrawler>(&self, T);
-
-    fn ty(&self) -> &str;
-    fn state(&self) -> Option<&str> {None}
-    fn class(&self) -> Option<&str> {None}
+    fn node_data(&mut self, NodeDataCollector);
 }
 
-pub trait Control: Node {
+pub trait Control {
     type Action;
 
     fn on_mouse_event(&mut self, MouseEvent) -> Option<Self::Action> {None}
