@@ -1,3 +1,5 @@
+#![feature(specialization)]
+
 extern crate gl;
 extern crate gl_raii;
 extern crate cgmath;
@@ -7,6 +9,15 @@ extern crate glutin;
 #[macro_use]
 extern crate bitflags;
 
+#[cfg(target_os="windows")]
+extern crate user32;
+#[cfg(target_os="windows")]
+extern crate kernel32;
+#[cfg(target_os="windows")]
+extern crate dwmapi;
+#[cfg(target_os="windows")]
+extern crate winapi;
+
 use fnv::FnvHasher;
 
 use std::hash::BuildHasherDefault;
@@ -15,6 +26,7 @@ use std::collections::HashMap;
 use draw::{Shadable, Widget};
 
 pub mod draw;
+pub mod native;
 pub mod ui;
 
 
