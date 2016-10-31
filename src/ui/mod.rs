@@ -24,6 +24,7 @@ pub trait NodeProcessor<'a, N: Node + ?Sized> {
 
 pub trait Node {
     fn type_name() -> &'static str;
+    fn num_updates(&self) -> u64;
 }
 
 pub trait ParentNode: Node {
