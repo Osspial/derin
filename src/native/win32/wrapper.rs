@@ -118,6 +118,10 @@ impl WindowWrapper {
                 user32::SetWindowLongW(window_handle, -16, 0);
             }
 
+            if config.show_window {
+                user32::ShowWindow(window_handle, winapi::SW_SHOW);
+            }
+
             if config.transparent {
                 let blur_options = winapi::DWM_BLURBEHIND {
                     dwFlags: 0x01,

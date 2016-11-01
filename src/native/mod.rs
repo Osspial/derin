@@ -67,6 +67,8 @@ pub struct WindowConfig {
 
     /// The initial state of the window
     pub initial_state: InitialState,
+    /// Whether or not to show the window upon creation
+    pub show_window: bool,
 
     /// The path to the window's icon
     pub icon: Option<PathBuf>
@@ -171,6 +173,7 @@ impl Default for WindowConfig {
             transparent: false,
 
             initial_state: InitialState::Windowed,
+            show_window: true,
 
             icon: None
         }
