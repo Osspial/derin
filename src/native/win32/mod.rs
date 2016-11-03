@@ -10,30 +10,24 @@ use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::thread;
 
+use boolinator::Boolinator;
+
 use native::NativeResult;
 use native::WindowConfig;
 
-/// An internal duplicate of WindowType that holds the internal window
-#[derive(Clone)]
-pub enum WindowType<'p> {
-    Owned(&'p Window<'p>),
-    Child(&'p Window<'p>),
-    Top
+use ui::{Node, NodeProcessor, ParentNode};
+use ui::intrinsics::TextButton;
+
+pub struct Window<N: Node> {
+    root: N,
+    node_tree_root: NodeTreeBranch,
+
+    wrapper: WindowWrapper,
+    window_receiver: Receiver<NativeResult<WindowWrapper>>
 }
 
-pub struct Event {}
-
-pub struct Window<'p> {
-    pub wrapper: WindowWrapper,
-    window_receiver: Receiver<NativeResult<WindowWrapper>>,
-    win_type: WindowType<'p>,
-    /// Used when setting the pixel format on context creation
-    config: WindowConfig,
-}
-
-impl<'p> Window<'p> {
-    #[inline]
-    pub fn new(config: WindowConfig) -> NativeResult<Window<'p>> {
+impl<N: Node> Window<N> {
+    pub fn new(root: N, config: WindowConfig) -> NativeResult<Window<N>> {
         // Channel for the handle to the window
         let (tx, rx) = mpsc::channel();
         let config = Arc::new(config);
@@ -56,8 +50,8 @@ impl<'p> Window<'p> {
                 }
                 
 
+                // Win32 message loop
                 let mut msg = mem::uninitialized();
-
                 while user32::GetMessageW(&mut msg, ptr::null_mut(), 0, 0) > 0 {
                     user32::TranslateMessage(&msg);
                     user32::DispatchMessageW(&msg);
@@ -69,39 +63,77 @@ impl<'p> Window<'p> {
 
         Ok(
             Window {
+                root: root,
+                node_tree_root: NodeTreeBranch::default(),
+
                 wrapper: wrapper_window,
-                window_receiver: rx,
-                win_type: WindowType::Top,
-                config: Arc::try_unwrap(config).unwrap()
+                window_receiver: rx
             }
         )
     }
 
-    #[inline]
-    pub fn get_type(&self) -> WindowType {
-        self.win_type.clone()
-    }
-
-    /// Get a non-blocking iterator over the window's events
-    #[inline]
-    pub fn poll_events(&self) -> PollEventsIter {
-        PollEventsIter {
-        }
-    }
-
-    /// Get a blocking iterator over the window's events
-    #[inline]
-    pub fn wait_events(&self) -> WaitEventsIter {
-        WaitEventsIter {
-        }
-    }
-
-    #[inline]
-    pub fn get_config(&self) -> &WindowConfig {
-        &self.config
+    pub fn process(&mut self) {
+        NodeTraverser::new(&mut self.node_tree_root).add_child("root", &mut self.root);
     }
 }
 
-pub struct PollEventsIter {}
+/// A node in the tree that represents the nodes of the UI tree!
+#[derive(Default)]
+struct NodeTreeBranch {
+    state_id: u64,
+    name: &'static str,
+    children: Vec<NodeTreeBranch>
+}
 
-pub struct WaitEventsIter {}
+struct NodeTraverser<'a> {
+    node_branch: &'a mut NodeTreeBranch,
+    /// The index in the child vector to first look at when searching for a child. As new
+    /// children get added, this gets incremented.
+    child_index: usize
+}
+
+impl<'a> NodeTraverser<'a> {
+    fn new(node_branch: &'a mut NodeTreeBranch) -> NodeTraverser<'a> {
+        NodeTraverser {
+            node_branch: node_branch,
+            child_index: 0
+        }
+    }
+
+    fn process_node<N, F>(&'a mut self, name: &'static str, node: &mut N, mut f: F)
+            where N: Node,
+                  F: FnMut(&'a mut NodeTreeBranch, &mut N)
+    {
+        if let Some(i) = self.node_branch.children.get(self.child_index)
+                             .and_then(|branch| (branch.name == name).as_some(self.child_index))
+                             .or(self.node_branch.children
+                                    .iter().enumerate()
+                                    .filter_map(|(i, branch)| (branch.name == name).as_some(i))
+                                    .next()) {
+            let branch = &mut self.node_branch.children[i];
+
+            self.child_index += 1;
+            let new_state_id = node.state_id();
+            if branch.state_id != new_state_id {
+                branch.state_id = new_state_id;
+                f(branch, node);                
+            }
+        }
+    }
+}
+
+impl<'a, N: Node> NodeProcessor<'a, N> for NodeTraverser<'a> {
+    default fn add_child(&'a mut self, name: &'static str, node: &mut N) {
+        // We have no information about what's in the child node, so we can't really do anything.
+        // It still needs to get added to the tree though.
+        self.process_node(name, node, |_, _| ());
+    }
+}
+
+impl<'a, N> NodeProcessor<'a, N> for NodeTraverser<'a> 
+        where N: ParentNode<NodeTraverser<'a>> {
+    default fn add_child(&'a mut self, name: &'static str, node: &mut N) {
+        self.process_node(name, node,
+            |branch, node| node.children(NodeTraverser::new(branch)));
+    }
+}

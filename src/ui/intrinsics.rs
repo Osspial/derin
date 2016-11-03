@@ -1,15 +1,16 @@
 use super::Node;
+use rand::{Rng, thread_rng};
 
 pub struct TextButton<S: AsRef<str> = String> {
     text: S,
-    num_updates: u64
+    state_id: u64
 }
 
 impl<S: AsRef<str>> TextButton<S> {
     pub fn new(text: S) -> TextButton<S> {
         TextButton {
             text: text,
-            num_updates: 0
+            state_id: 0
         }
     }
 
@@ -27,7 +28,7 @@ impl<S: AsRef<str>> AsRef<str> for TextButton<S> {
 impl<S: AsRef<str>> AsMut<str> for TextButton<S>
         where S: AsMut<str> {
     fn as_mut(&mut self) -> &mut str {
-        self.num_updates += 1;
+        self.state_id = thread_rng().next_u64();
 
         self.text.as_mut()
     }
@@ -41,7 +42,7 @@ impl AsRef<String> for TextButton<String> {
 
 impl AsMut<String> for TextButton<String> {
     fn as_mut(&mut self) -> &mut String {
-        self.num_updates += 1;
+        self.state_id = thread_rng().next_u64();
 
         &mut self.text
     }
@@ -52,7 +53,7 @@ impl<S: AsRef<str>> Node for TextButton<S> {
         "TextButton"
     }
 
-    fn num_updates(&self) -> u64 {
-        self.num_updates
+    fn state_id(&self) -> u64 {
+        self.state_id
     }
 }

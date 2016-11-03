@@ -21,16 +21,21 @@ pub enum MouseButton {
 /// specialization isn't stable, limiting this library to nightly, but the increases in
 /// implementation ergonomics and flexability are well worth it.
 pub trait NodeProcessor<'a, N: Node + ?Sized> {
-    fn add_child(&mut self, name: &'static str, node: &mut N);
+    fn add_child(&'a mut self, name: &'static str, node: &mut N);
 }
 
 pub trait Node {
     fn type_name() -> &'static str;
-    fn num_updates(&self) -> u64;
+    /// An identifier for the current state. Calling this function provides only one guarantee: that
+    /// if `node_a != node_b`, `state_id(node_a) != state_id(node_b)`.
+    fn state_id(&self) -> u64;
 }
 
-pub trait ParentNode: Node {
-    fn children<'a, N>(&mut self, N) where N: NodeProcessor<'a, Self>;
+/// A node that can have other children as nodes. Unless you have a **VERY** good reason to, this
+/// should be `derive`d and not manually implemented, as the current system is set up to allow us
+/// to emulate higher-kinded types within the current limitations of the type system.
+pub trait ParentNode<NP>: Node {
+    fn children(&mut self, NP);
 }
 
 pub trait Control: Node {

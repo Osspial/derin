@@ -1,8 +1,10 @@
 #![feature(specialization)]
 
 extern crate fnv;
+extern crate rand;
 #[macro_use]
 extern crate bitflags;
+extern crate boolinator;
 
 #[cfg(feature="gl_ui")]
 extern crate gl;
