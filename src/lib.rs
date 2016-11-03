@@ -5,6 +5,8 @@ extern crate rand;
 #[macro_use]
 extern crate bitflags;
 extern crate boolinator;
+#[macro_use]
+extern crate lazy_static;
 
 #[cfg(feature="gl_ui")]
 extern crate gl;

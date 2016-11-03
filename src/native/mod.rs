@@ -220,11 +220,3 @@ impl Error for NativeError {
         }
     }
 }
-
-fn osstr<'a>(s: &'a str) -> Vec<u16> {
-    use std::ffi::OsStr;
-    use std::os::windows::ffi::OsStrExt;
-    use std::iter::once;
-
-    OsStr::new(s).encode_wide().chain(once(0)).collect::<Vec<_>>()
-}

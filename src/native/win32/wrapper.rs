@@ -10,11 +10,13 @@ use winapi::winuser::WNDCLASSEXW;
 use std::ptr;
 use std::mem;
 use std::ops::Drop;
+use std::ffi::OsStr;
+use std::iter::once;
 use std::os::windows::ffi::OsStrExt;
 use std::path::PathBuf;
-use native::osstr;
 
 use native::{WindowConfig, NativeResult, NativeError};
+
 
 #[derive(Clone)]
 pub struct WindowWrapper( pub HWND, pub HDC );
@@ -26,10 +28,6 @@ impl WindowWrapper {
     #[inline]
     pub fn new<'a>(config: &WindowConfig, owner: HwndType) -> NativeResult<WindowWrapper> {
         unsafe {
-            let class_name = register_window_class();
-
-            let window_name = osstr(&config.name);
-
             let (style, style_ex) = {
                 use native::InitialState::*;
 
@@ -92,9 +90,10 @@ impl WindowWrapper {
                 None => (winapi::CW_USEDEFAULT, winapi::CW_USEDEFAULT)
             };
 
+            let window_name = ucs2_str(&config.name);
             let window_handle = user32::CreateWindowExW(
                 style_ex,
-                class_name.as_ptr(),
+                ROOT_WINDOW_CLASS.as_ptr(),
                 window_name.as_ptr() as winapi::LPCWSTR,
                 style,
                 winapi::CW_USEDEFAULT,
@@ -167,7 +166,7 @@ impl WindowWrapper {
     #[inline]
     pub fn set_title(&self, title: &str) {
         unsafe {
-            let title = osstr(title);
+            let title = ucs2_str(title);
             user32::SetWindowTextW(self.0, title.as_ptr());
         }
     }
@@ -330,26 +329,32 @@ impl Drop for WindowWrapper {
     }
 }
 
-unsafe fn register_window_class() -> Vec<u16> {
-    let class_name = osstr("Window Class");
+fn ucs2_str<'a>(s: &'a str) -> Vec<u16> {
+    OsStr::new(s).encode_wide().chain(once(0)).collect::<Vec<_>>()
+}
 
-    let window_class = WNDCLASSEXW {
-        cbSize: mem::size_of::<WNDCLASSEXW>() as winapi::UINT,
-        style: winapi::CS_OWNDC | winapi::CS_VREDRAW | winapi::CS_HREDRAW | winapi::CS_DBLCLKS,
-        lpfnWndProc: Some(callback),
-        cbClsExtra: 0,
-        cbWndExtra: 0,
-        hInstance: kernel32::GetModuleHandleW(ptr::null()),
-        hIcon: ptr::null_mut(),
-        hCursor: ptr::null_mut(),
-        hbrBackground: ptr::null_mut(),
-        lpszMenuName: ptr::null(),
-        lpszClassName: class_name.as_ptr(),
-        hIconSm: ptr::null_mut()
+lazy_static!{
+    static ref ROOT_WINDOW_CLASS: Vec<u16> = unsafe{
+        let class_name = ucs2_str("Root Window Class");
+
+        let window_class = WNDCLASSEXW {
+            cbSize: mem::size_of::<WNDCLASSEXW>() as winapi::UINT,
+            style: winapi::CS_OWNDC | winapi::CS_VREDRAW | winapi::CS_HREDRAW | winapi::CS_DBLCLKS,
+            lpfnWndProc: Some(callback),
+            cbClsExtra: 0,
+            cbWndExtra: 0,
+            hInstance: kernel32::GetModuleHandleW(ptr::null()),
+            hIcon: ptr::null_mut(),
+            hCursor: ptr::null_mut(),
+            hbrBackground: ptr::null_mut(),
+            lpszMenuName: ptr::null(),
+            lpszClassName: class_name.as_ptr(),
+            hIconSm: ptr::null_mut()
+        };
+        user32::RegisterClassExW(&window_class);
+
+        class_name
     };
-    user32::RegisterClassExW(&window_class);
-
-    class_name
 }
 
 pub enum HwndType {
