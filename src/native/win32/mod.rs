@@ -1,5 +1,5 @@
 pub mod wrapper;
-use self::wrapper::{HwndType, WindowWrapper};
+use self::wrapper::{HwndType, WindowNode, WindowWrapper};
 
 use user32;
 
@@ -64,7 +64,13 @@ impl<N: Node> Window<N> {
         Ok(
             Window {
                 root: root,
-                node_tree_root: NodeTreeBranch::default(),
+                // A dummy node that is the parent of the root node.
+                node_tree_root: NodeTreeBranch {
+                    state_id: 0,
+                    name: "",
+                    window: WindowNode::None,
+                    children: Vec::with_capacity(1)
+                },
 
                 wrapper: wrapper_window,
                 window_receiver: rx
@@ -78,11 +84,15 @@ impl<N: Node> Window<N> {
 }
 
 /// A node in the tree that represents the nodes of the UI tree!
-#[derive(Default)]
 struct NodeTreeBranch {
     state_id: u64,
     name: &'static str,
+    window: WindowNode,
     children: Vec<NodeTreeBranch>
+}
+
+trait IntoNTB {
+    fn into_ntb(&self, name: &'static str) -> NodeTreeBranch;
 }
 
 struct NodeTraverser<'a> {
@@ -100,9 +110,9 @@ impl<'a> NodeTraverser<'a> {
         }
     }
 
-    fn process_node<N, F>(&'a mut self, name: &'static str, node: &mut N, mut f: F)
+    fn process_node<N, PF>(&'a mut self, name: &'static str, node: &mut N, mut proc_func: PF)
             where N: Node,
-                  F: FnMut(&'a mut NodeTreeBranch, &mut N)
+                  PF: FnMut(&'a mut NodeTreeBranch, &mut N)
     {
         if let Some(i) = self.node_branch.children.get(self.child_index)
                              .and_then(|branch| (branch.name == name).as_some(self.child_index))
@@ -116,7 +126,7 @@ impl<'a> NodeTraverser<'a> {
             let new_state_id = node.state_id();
             if branch.state_id != new_state_id {
                 branch.state_id = new_state_id;
-                f(branch, node);                
+                proc_func(branch, node);                
             }
         }
     }
@@ -129,6 +139,7 @@ impl<'a, N: Node> NodeProcessor<'a, N> for NodeTraverser<'a> {
         self.process_node(name, node, |_, _| ());
     }
 }
+
 
 impl<'a, N> NodeProcessor<'a, N> for NodeTraverser<'a> 
         where N: ParentNode<NodeTraverser<'a>> {

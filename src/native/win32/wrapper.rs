@@ -12,6 +12,7 @@ use std::mem;
 use std::ops::Drop;
 use std::ffi::OsStr;
 use std::iter::{FromIterator, once};
+use std::os::raw::c_int;
 use std::os::windows::ffi::OsStrExt;
 use std::path::PathBuf;
 
@@ -317,18 +318,19 @@ impl WindowWrapper {
     pub fn get_style_ex(&self) -> u32 {
         unsafe{ user32::GetWindowLongW(self.0, -20) as u32 }
     }
-
-    pub fn kill(&self) {
-        unsafe {
-            user32::PostMessageW(self.0, winapi::WM_DESTROY, 0, 0);
-        }
-    }
 }
 
 impl Drop for WindowWrapper {
     fn drop(&mut self) {
-        self.kill();
+        unsafe{ user32::PostMessageW(self.0, winapi::WM_DESTROY, 0, 0) };
     }
+}
+
+
+pub type DlgId = c_int;
+pub enum WindowNode {
+    Button(DlgId, WindowWrapper),
+    None
 }
 
 fn ucs2_str<'a, C: FromIterator<u16>>(s: &'a str) -> C {
