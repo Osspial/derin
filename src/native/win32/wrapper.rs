@@ -11,9 +11,11 @@ use std::ptr;
 use std::mem;
 use std::ops::Drop;
 use std::ffi::OsStr;
-use std::iter::once;
+use std::iter::{FromIterator, once};
 use std::os::windows::ffi::OsStrExt;
 use std::path::PathBuf;
+
+use smallvec::SmallVec;
 
 use native::{WindowConfig, NativeResult, NativeError};
 
@@ -90,7 +92,7 @@ impl WindowWrapper {
                 None => (winapi::CW_USEDEFAULT, winapi::CW_USEDEFAULT)
             };
 
-            let window_name = ucs2_str(&config.name);
+            let window_name: SmallVec<[u16; 128]> = ucs2_str(&config.name);
             let window_handle = user32::CreateWindowExW(
                 style_ex,
                 ROOT_WINDOW_CLASS.as_ptr(),
@@ -166,7 +168,7 @@ impl WindowWrapper {
     #[inline]
     pub fn set_title(&self, title: &str) {
         unsafe {
-            let title = ucs2_str(title);
+            let title: SmallVec<[u16; 128]> = ucs2_str(title);
             user32::SetWindowTextW(self.0, title.as_ptr());
         }
     }
@@ -329,13 +331,13 @@ impl Drop for WindowWrapper {
     }
 }
 
-fn ucs2_str<'a>(s: &'a str) -> Vec<u16> {
-    OsStr::new(s).encode_wide().chain(once(0)).collect::<Vec<_>>()
+fn ucs2_str<'a, C: FromIterator<u16>>(s: &'a str) -> C {
+    OsStr::new(s).encode_wide().chain(once(0)).collect()
 }
 
 lazy_static!{
     static ref ROOT_WINDOW_CLASS: Vec<u16> = unsafe{
-        let class_name = ucs2_str("Root Window Class");
+        let class_name: Vec<_> = ucs2_str("Root Window Class");
 
         let window_class = WNDCLASSEXW {
             cbSize: mem::size_of::<WNDCLASSEXW>() as winapi::UINT,

@@ -7,6 +7,7 @@ extern crate bitflags;
 extern crate boolinator;
 #[macro_use]
 extern crate lazy_static;
+extern crate smallvec;
 
 #[cfg(feature="gl_ui")]
 extern crate gl;
