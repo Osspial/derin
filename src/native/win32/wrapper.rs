@@ -14,13 +14,14 @@ use std::ffi::OsStr;
 use std::iter::{FromIterator, once};
 use std::os::raw::c_int;
 use std::os::windows::ffi::OsStrExt;
-use std::path::PathBuf;
 
 use smallvec::SmallVec;
 
 use native::{WindowConfig, NativeResult, NativeError};
 
 
+type SmallUcs2String = SmallVec<[u16; 128]>;
+type Ucs2String = Vec<u16>;
 #[derive(Clone)]
 pub struct WindowWrapper( pub HWND, pub HDC );
 
@@ -93,7 +94,7 @@ impl WindowWrapper {
                 None => (winapi::CW_USEDEFAULT, winapi::CW_USEDEFAULT)
             };
 
-            let window_name: SmallVec<[u16; 128]> = ucs2_str(&config.name);
+            let window_name: SmallUcs2String = ucs2_str(&config.name);
             let window_handle = user32::CreateWindowExW(
                 style_ex,
                 ROOT_WINDOW_CLASS.as_ptr(),
@@ -136,10 +137,10 @@ impl WindowWrapper {
             }
 
             if let Some(ref p) = config.icon {
-                let path = wide_path(p).as_ptr();
+                let path: SmallUcs2String = ucs2_str(p);
 
                 // Load the 32x32 icon
-                let icon = user32::LoadImageW(ptr::null_mut(), path, winapi::IMAGE_ICON, 32, 32, winapi::LR_LOADFROMFILE);
+                let icon = user32::LoadImageW(ptr::null_mut(), path.as_ptr(), winapi::IMAGE_ICON, 32, 32, winapi::LR_LOADFROMFILE);
                 if icon != ptr::null_mut() {
                     user32::SendMessageW(window_handle, winapi::WM_SETICON, winapi::ICON_BIG as u64, icon as winapi::LPARAM);
                 }
@@ -148,7 +149,7 @@ impl WindowWrapper {
                 }
 
                 // Load the 16x16 icon
-                let icon = user32::LoadImageW(ptr::null_mut(), path, winapi::IMAGE_ICON, 16, 16, winapi::LR_LOADFROMFILE);
+                let icon = user32::LoadImageW(ptr::null_mut(), path.as_ptr(), winapi::IMAGE_ICON, 16, 16, winapi::LR_LOADFROMFILE);
                 if icon != ptr::null_mut() {
                     user32::SendMessageW(window_handle, winapi::WM_SETICON, winapi::ICON_SMALL as u64, icon as winapi::LPARAM);
                 }
@@ -162,7 +163,7 @@ impl WindowWrapper {
                 return Err(NativeError::OsError(format!("Error: {}", ::std::io::Error::last_os_error())));
             }
 
-            Ok(WindowWrapper( window_handle, hdc ))
+            Ok(WindowWrapper(window_handle, hdc))
         }
     }
 
@@ -327,19 +328,13 @@ impl Drop for WindowWrapper {
 }
 
 
-pub type DlgId = c_int;
-pub enum WindowNode {
-    Button(DlgId, WindowWrapper),
-    None
-}
-
-fn ucs2_str<'a, C: FromIterator<u16>>(s: &'a str) -> C {
-    OsStr::new(s).encode_wide().chain(once(0)).collect()
+fn ucs2_str<S: ?Sized + AsRef<OsStr>, C: FromIterator<u16>>(s: &S) -> C {
+    s.as_ref().encode_wide().chain(once(0)).collect()
 }
 
 lazy_static!{
-    static ref ROOT_WINDOW_CLASS: Vec<u16> = unsafe{
-        let class_name: Vec<_> = ucs2_str("Root Window Class");
+    static ref ROOT_WINDOW_CLASS: Ucs2String = unsafe{
+        let class_name: Ucs2String = ucs2_str("Root Window Class");
 
         let window_class = WNDCLASSEXW {
             cbSize: mem::size_of::<WNDCLASSEXW>() as winapi::UINT,
@@ -390,9 +385,4 @@ unsafe extern "system" fn callback(hwnd: HWND, msg: UINT,
 
         _ => user32::DefWindowProcW(hwnd, msg, wparam, lparam)
     }
-    
-}
-
-fn wide_path(path: &PathBuf) -> Vec<u16> {
-    path.as_os_str().encode_wide().chain(Some(0).into_iter()).collect::<Vec<_>>()
 }
