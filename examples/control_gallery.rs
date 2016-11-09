@@ -4,7 +4,9 @@ use tint::ui::intrinsics::*;
 use tint::native::{Window, WindowConfig};
 
 fn main() {
-	let window = Window::new(TextButton::new("Hello World"), WindowConfig::new());
+	let mut window = Window::new(TextButton::new("Hello World"), WindowConfig::new()).unwrap();
 
-	loop {}
+	loop {
+		window.process().unwrap();
+	}
 }
