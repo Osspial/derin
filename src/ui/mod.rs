@@ -29,7 +29,7 @@ pub trait Node {
     fn type_name() -> &'static str;
     /// An identifier for the current state. Calling this function provides only one guarantee: that
     /// if `node_a != node_b`, `state_id(node_a) != state_id(node_b)`.
-    fn state_id(&self) -> u64;
+    fn state_id(&self) -> u16;
 }
 
 /// A node that can have other children as nodes. Unless you have a **VERY** good reason to, this

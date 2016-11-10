@@ -99,7 +99,7 @@ impl<N: Node> Window<N> {
 
 /// A node in the tree that represents the nodes of the UI tree!
 struct NodeTreeBranch {
-    state_id: u64,
+    state_id: u16,
     name: &'static str,
     window: Option<WindowNode>,
     children: Vec<NodeTreeBranch>
