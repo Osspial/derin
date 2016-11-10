@@ -2,6 +2,7 @@ use user32;
 use kernel32;
 use dwmapi;
 
+use winapi::winbase::*;
 use winapi::dwmapi::*;
 use winapi::winnt::*;
 use winapi::windef::*;
@@ -429,4 +430,38 @@ unsafe extern "system" fn callback(hwnd: HWND, msg: UINT,
 
         _ => user32::DefWindowProcW(hwnd, msg, wparam, lparam)
     }
+}
+
+/// Enables win32 visual styles in the hackiest of methods. Basically, this steals the application
+/// manifest from `shell32.dll`, which contains the visual styles code, and then enables that
+/// manifest here.
+pub unsafe fn enable_visual_styles() {
+    const ACTCTX_FLAG_ASSEMBLY_DIRECTORY_VALID: DWORD = 0x004;
+    const ACTCTX_FLAG_RESOURCE_NAME_VALID: DWORD = 0x008;
+    const ACTCTX_FLAG_SET_PROCESS_DEFAULT: DWORD = 0x010;
+
+    let mut dir = [0u16; MAX_PATH];
+    kernel32::GetSystemDirectoryW(dir.as_mut_ptr(), MAX_PATH as u32);
+    let dll_file_name: SmallUcs2String = ucs2_str("shell32.dll");
+
+    let styles_ctx = ACTCTXW {
+        cbSize: mem::size_of::<ACTCTXW>() as u32,
+        dwFlags:
+            ACTCTX_FLAG_ASSEMBLY_DIRECTORY_VALID |
+            ACTCTX_FLAG_RESOURCE_NAME_VALID |
+            ACTCTX_FLAG_SET_PROCESS_DEFAULT,
+        lpSource: dll_file_name.as_ptr(),
+        wProcessorArchitecture: 0,
+        wLangId: 0,
+        lpAssemblyDirectory: dir.as_ptr(),
+        lpResourceName: 124 as LPCWSTR,
+        lpApplicationName: ptr::null_mut(),
+        hModule: ptr::null_mut()
+    };
+
+    let mut activation_cookie = 0;
+    kernel32::ActivateActCtx(
+        kernel32::CreateActCtxW(&styles_ctx),
+        &mut activation_cookie
+    );
 }

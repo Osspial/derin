@@ -28,6 +28,7 @@ impl<N: Node> Window<N> {
     pub fn new(root: N, config: WindowConfig) -> NativeResult<Window<N>> {
         // Channel for the handle to the window
         let (window_sender, window_receiver) = mpsc::channel();
+        unsafe{ self::wrapper::enable_visual_styles() };
 
         // Spawn a child thread in which UI windows are created. Messages are sent to this thread via the
         // `win32` `SendMessageW` function, and window handles and actions are sent back to the main thread
