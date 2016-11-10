@@ -1,7 +1,7 @@
-extern crate tint;
+extern crate derin;
 
-use tint::ui::intrinsics::*;
-use tint::native::{Window, WindowConfig};
+use derin::ui::intrinsics::*;
+use derin::native::{Window, WindowConfig};
 
 fn main() {
 	let mut window = Window::new(TextButton::new("Hello World"), WindowConfig::new()).unwrap();

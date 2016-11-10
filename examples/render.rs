@@ -1,11 +1,11 @@
-extern crate tint;
+extern crate derin;
 extern crate glutin;
 
-use tint::Display;
-use tint::draw::*;
-use tint::draw::primitives::*;
-use tint::draw::gl::{Facade, ShaderDataCollector};
-use tint::draw::font::{Font, FontInfo};
+use derin::Display;
+use derin::draw::*;
+use derin::draw::primitives::*;
+use derin::draw::gl::{Facade, ShaderDataCollector};
+use derin::draw::font::{Font, FontInfo};
 
 struct CompositeRects {
     rect: Rect,

@@ -1,6 +1,6 @@
 [package]
 authors = ["Osspial <osspial@gmail.com>"]
-name = "tint"
+name = "derin"
 version = "0.1.0"
 
 [dependencies]

@@ -372,7 +372,7 @@ thread_local!{
 }
 
 
-// A bunch of different tint messages for creating controls and such. These are all handled by the
+// A bunch of different derin messages for creating controls and such. These are all handled by the
 // toplevel window, as the child controls each have their own callback specified by windows.
 
 /// Create a title-less push button.
