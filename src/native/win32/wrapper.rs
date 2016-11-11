@@ -476,8 +476,7 @@ unsafe extern "system" fn callback(hwnd: HWND, msg: UINT,
                                    wparam: WPARAM, lparam: LPARAM)
                                    -> LRESULT {
     match msg {
-        WM_DESTROY  => {
-            user32::DestroyWindow(hwnd);
+        WM_CLOSE => {
             0
         }
 
