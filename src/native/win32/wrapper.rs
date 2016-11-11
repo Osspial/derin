@@ -8,6 +8,7 @@ use winapi::winnt::*;
 use winapi::windef::*;
 use winapi::minwindef::*;
 use winapi::winuser::*;
+use winapi::commctrl::*;
 
 use super::WindowReceiver;
 
@@ -277,6 +278,22 @@ impl TextButton {
     pub fn set_rect(&mut self, rect: Rect) {
         self.wrapper.set_pos(rect.topleft);
         self.wrapper.set_inner_size(rect.width(), rect.height());
+    }
+
+    pub fn get_ideal_rect(&self) -> Rect {
+        unsafe {
+            let mut ideal_size = SIZE {
+                cx: 0,
+                cy: 0
+            };
+            user32::SendMessageW(
+                self.wrapper.0,
+                BCM_GETIDEALSIZE,
+                0,
+                &mut ideal_size as *mut SIZE as LPARAM
+            );
+            Rect::new(0, 0, ideal_size.cx, ideal_size.cy)
+        }
     }
 }
 

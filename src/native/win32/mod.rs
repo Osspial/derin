@@ -1,5 +1,5 @@
 pub mod wrapper;
-use self::wrapper::{Rect, WindowNode, Toplevel, CallbackData, CALLBACK_DATA};
+use self::wrapper::{WindowNode, Toplevel, CallbackData, CALLBACK_DATA};
 
 use user32;
 
@@ -216,7 +216,9 @@ impl<'a, S: AsRef<str>> NodeProcessor<'a, TextButton<S>> for NodeTraverser<'a> {
         self.process_node_child(name, node, |node, traverser| {
             if let Some(WindowNode::TextButton(ref mut b)) = traverser.node_branch.window {
                 b.set_text(node.as_ref());
-                b.set_rect(Rect::new(0, 0, 64, 64));
+                let ideal_rect = b.get_ideal_rect();
+                b.set_rect(ideal_rect);
+
                 Ok(())
             } else {panic!("Mismatched WindowNode in TextButton. Please report code that caused this in derin repostiroy.")}
         })
