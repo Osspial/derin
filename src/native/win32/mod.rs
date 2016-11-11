@@ -1,5 +1,5 @@
 pub mod wrapper;
-use self::wrapper::{WindowNode, Toplevel, CallbackData, CALLBACK_DATA};
+use self::wrapper::{Rect, WindowNode, Toplevel, CallbackData, CALLBACK_DATA};
 
 use user32;
 
@@ -213,16 +213,22 @@ impl<'a, N> NodeProcessor<'a, N> for NodeTraverser<'a>
 
 impl<'a, S: AsRef<str>> NodeProcessor<'a, TextButton<S>> for NodeTraverser<'a> {
     fn add_child(&'a mut self, name: &'static str, node: &mut TextButton<S>) -> NativeResult<()> {
-        self.process_node_child(name, node, |_, _| Ok(()))
+        self.process_node_child(name, node, |node, traverser| {
+            if let Some(WindowNode::TextButton(ref mut b)) = traverser.node_branch.window {
+                b.set_text(node.as_ref());
+                b.set_rect(Rect::new(0, 0, 64, 64));
+                Ok(())
+            } else {panic!("Mismatched WindowNode in TextButton. Please report code that caused this in derin repostiroy.")}
+        })
     }
 }
 
 impl<'a, S: AsRef<str>> IntoNTB for TextButton<S> {
-    fn into_ntb(&self, name: &'static str, parent: &WindowNode, receiver: &Receiver<NativeResult<WindowNode>>) -> NativeResult<NodeTreeBranch> {
+    fn into_ntb(&self, name: &'static str, parent: &WindowNode, receiver: &WindowReceiver) -> NativeResult<NodeTreeBranch> {
         Ok(NodeTreeBranch {
             state_id: self.state_id(),
             name: name,
-            window: Some(parent.new_text_button(self.as_ref(), receiver)?),
+            window: Some(parent.new_text_button(receiver)?),
             children: Vec::new()
         })
     }

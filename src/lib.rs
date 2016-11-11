@@ -1,4 +1,4 @@
-#![feature(specialization)]
+#![feature(specialization, conservative_impl_trait)]
 
 extern crate fnv;
 extern crate rand;

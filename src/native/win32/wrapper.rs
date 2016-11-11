@@ -16,10 +16,11 @@ use std::mem;
 use std::io;
 use std::ops::Drop;
 use std::ffi::OsStr;
-use std::iter::{FromIterator, once};
+use std::iter::{once};
 use std::cell::RefCell;
-use std::sync::mpsc::{Sender, Receiver};
-use std::os::raw::{c_uint};
+use std::sync::mpsc::{Sender};
+use std::ops::{Add, AddAssign};
+use std::os::raw::{c_int, c_uint};
 use std::os::windows::ffi::OsStrExt;
 
 use smallvec::SmallVec;
@@ -30,6 +31,66 @@ use native::{WindowConfig, NativeResult, NativeError};
 
 pub type SmallUcs2String = SmallVec<[u16; 128]>;
 pub type Ucs2String = Vec<u16>;
+
+#[derive(Debug, Clone, Copy)]
+pub struct Point {
+    pub x: c_int,
+    pub y: c_int
+}
+
+impl Point {
+    pub fn new(x: c_int, y: c_int) -> Point {
+        Point {
+            x: x,
+            y: y
+        }
+    }
+}
+
+impl Add for Point {
+    type Output = Point;
+    fn add(self, rhs: Point) -> Point {
+        Point {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y
+        }
+    }
+}
+
+impl AddAssign for Point {
+    fn add_assign(&mut self, rhs: Point) {
+        *self = *self + rhs;
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Rect {
+    pub topleft: Point,
+    pub lowright: Point
+}
+
+impl Rect {
+    pub fn new(tl_x: c_int, tl_y: c_int, lr_x: c_int, lr_y: c_int) -> Rect {
+        Rect {
+            topleft: Point::new(tl_x, tl_y),
+            lowright: Point::new(lr_x, lr_y)
+        }
+    }
+
+    pub fn width(self) -> c_int {
+        self.lowright.x - self.topleft.x
+    }
+
+    pub fn height(self) -> c_int {
+        self.lowright.y - self.topleft.y
+    }
+
+    pub fn offset(mut self, offset: Point) -> Rect {
+        self.topleft += offset;
+        self.lowright += offset;
+        self
+    }
+}
 
 pub enum WindowNode {
     Toplevel(Toplevel),
@@ -56,14 +117,10 @@ impl WindowNode {
     /// Create a new zero-sized text button with no contents.
     pub fn new_text_button(&self, receiver: &WindowReceiver) -> NativeResult<WindowNode> {
         unsafe {
-            let button_create_data = TextButtonCreateData {
-                text: text,
-                parent: self.hwnd()
-            };
             user32::SendMessageW(
                 self.root_hwnd(),
                 TM_NEWTEXTBUTTON,
-                &button_create_data as *const _ as WPARAM,
+                self.hwnd() as WPARAM,
                 0
             );
             receiver.recv()
@@ -136,7 +193,7 @@ impl Toplevel {
             None => (CW_USEDEFAULT, CW_USEDEFAULT)
         };
 
-        let window_name: SmallUcs2String = ucs2_str(&config.name);
+        let window_name: SmallUcs2String = ucs2_str(&config.name).collect();
         let window_handle = user32::CreateWindowExW(
             style_ex,
             TOPLEVEL_WINDOW_CLASS.as_ptr(),
@@ -177,7 +234,7 @@ impl Toplevel {
         }
 
         if let Some(ref p) = config.icon {
-            let path: SmallUcs2String = ucs2_str(p);
+            let path: SmallUcs2String = ucs2_str(p).collect();
 
             // Load the 32x32 icon
             let icon = user32::LoadImageW(ptr::null_mut(), path.as_ptr(), IMAGE_ICON, 32, 32, LR_LOADFROMFILE);
@@ -210,12 +267,26 @@ pub struct TextButton {
 unsafe impl Send for TextButton {}
 unsafe impl Sync for TextButton {}
 
+impl TextButton {
+    pub fn set_text(&mut self, text: &str) {
+        self.text.clear();
+        self.text.extend(ucs2_str(text));
+        unsafe{ self.wrapper.set_title(&self.text) }
+    }
+
+    pub fn set_rect(&mut self, rect: Rect) {
+        self.wrapper.set_pos(rect.topleft);
+        self.wrapper.set_inner_size(rect.width(), rect.height());
+    }
+}
+
 /// The raw wrapper struct around `HWND`. Upon being dropped, the window is destroyed.
 struct WindowWrapper( HWND );
 unsafe impl Send for WindowWrapper {}
 unsafe impl Sync for WindowWrapper {}
 
 impl WindowWrapper {
+    /// Take a null-terminated UCS2-formatted string slice and set the window title to it
     unsafe fn set_title(&self, title: &[u16]) {
         user32::SetWindowTextW(self.0, title.as_ptr());
     }
@@ -269,13 +340,13 @@ impl WindowWrapper {
         }
     }
 
-    fn set_pos(&self, x: i32, y: i32) -> Option<()> {
+    fn set_pos(&self, pos: Point) -> Option<()> {
         unsafe {
             let result = user32::SetWindowPos(
                 self.0,
                 ptr::null_mut(),
-                x,
-                y,
+                pos.x,
+                pos.y,
                 0,
                 0,
                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE
@@ -288,13 +359,13 @@ impl WindowWrapper {
         }
     }
 
-    fn set_inner_size(&self, x: u32, y: u32) -> Option<()> {
+    fn set_inner_size(&self, x: c_int, y: c_int) -> Option<()> {
         unsafe {
             let mut rect = RECT {
                 left: 0,
                 top: 0,
-                right: x as i32,
-                bottom: y as i32
+                right: x,
+                bottom: y
             };
 
             user32::AdjustWindowRectEx(
@@ -337,13 +408,13 @@ impl Drop for WindowWrapper {
 }
 
 
-fn ucs2_str<S: ?Sized + AsRef<OsStr>, C: FromIterator<u16>>(s: &S) -> C {
-    s.as_ref().encode_wide().chain(once(0)).collect()
+fn ucs2_str<'a, S: ?Sized + AsRef<OsStr>>(s: &'a S) -> impl 'a + Iterator<Item=u16> {
+    s.as_ref().encode_wide().chain(once(0))
 }
 
 lazy_static!{
     static ref TOPLEVEL_WINDOW_CLASS: Ucs2String = unsafe{
-        let class_name: Ucs2String = ucs2_str("Root Window Class");
+        let class_name: Ucs2String = ucs2_str("Root Window Class").collect();
 
         let window_class = WNDCLASSEXW {
             cbSize: mem::size_of::<WNDCLASSEXW>() as UINT,
@@ -363,7 +434,7 @@ lazy_static!{
 
         class_name
     };
-    static ref BUTTON_CLASS: Ucs2String = ucs2_str("BUTTON");
+    static ref BUTTON_CLASS: Ucs2String = ucs2_str("BUTTON").collect();
 }
 
 pub struct CallbackData {
@@ -381,12 +452,8 @@ thread_local!{
 /// Create a title-less push button.
 ///
 /// # Callback parameters
-/// * `wparam`: Pointer to `TextButtonCreateData` struct
+/// * `wparam`: Parent `HWND` handle
 const TM_NEWTEXTBUTTON: UINT = WM_USER + 0;
-struct TextButtonCreateData {
-    text: *const str,
-    parent: HWND,
-}
 
 unsafe extern "system" fn callback(hwnd: HWND, msg: UINT,
                                    wparam: WPARAM, lparam: LPARAM)
@@ -398,19 +465,16 @@ unsafe extern "system" fn callback(hwnd: HWND, msg: UINT,
         }
 
         TM_NEWTEXTBUTTON => {
-            println!("NEW TEXT BUTTON");
-            let creation_data = &*(wparam as *const TextButtonCreateData);
-            let text_ucs2: Ucs2String = ucs2_str(&*creation_data.text);
             let button_hwnd = user32::CreateWindowExW(
                 0,
                 BUTTON_CLASS.as_ptr(),
-                text_ucs2.as_ptr(),
+                ptr::null(),
                 WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_PUSHBUTTON,
                 0,
                 0,
-                64,
-                64,
-                creation_data.parent,
+                0,
+                0,
+                wparam as HWND,
                 ptr::null_mut(),
                 kernel32::GetModuleHandleW(ptr::null()),
                 ptr::null_mut()
@@ -423,7 +487,7 @@ unsafe extern "system" fn callback(hwnd: HWND, msg: UINT,
                     (button_hwnd != ptr::null_mut()).as_result(
                         WindowNode::TextButton(TextButton {
                             wrapper: WindowWrapper(button_hwnd),
-                            text: text_ucs2
+                            text: Ucs2String::new()
                         }),
                         NativeError::OsError(format!("{}", io::Error::last_os_error()))
                     )).ok();
@@ -445,7 +509,7 @@ pub unsafe fn enable_visual_styles() {
 
     let mut dir = [0u16; MAX_PATH];
     kernel32::GetSystemDirectoryW(dir.as_mut_ptr(), MAX_PATH as u32);
-    let dll_file_name: SmallUcs2String = ucs2_str("shell32.dll");
+    let dll_file_name: SmallUcs2String = ucs2_str("shell32.dll").collect();
 
     let styles_ctx = ACTCTXW {
         cbSize: mem::size_of::<ACTCTXW>() as u32,
