@@ -442,7 +442,7 @@ lazy_static!{
             hInstance: kernel32::GetModuleHandleW(ptr::null()),
             hIcon: ptr::null_mut(),
             hCursor: ptr::null_mut(),
-            hbrBackground: ptr::null_mut(),
+            hbrBackground: (COLOR_MENU + 1) as *mut _,
             lpszMenuName: ptr::null(),
             lpszClassName: class_name.as_ptr(),
             hIconSm: ptr::null_mut()
