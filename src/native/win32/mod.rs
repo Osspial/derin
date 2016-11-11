@@ -48,7 +48,7 @@ impl<N: Node> Window<N> {
 
                     Err(e) => {
                         window_sender.send(Err(e)).unwrap();
-                        panic!("Window creation error: see sent result for details");
+                        panic!("Window creation error; see sent result for details");
                     }
                 }
                 
@@ -220,7 +220,7 @@ impl<'a, S: AsRef<str>> NodeProcessor<'a, TextButton<S>> for NodeTraverser<'a> {
                 b.set_rect(ideal_rect);
 
                 Ok(())
-            } else {panic!("Mismatched WindowNode in TextButton. Please report code that caused this in derin repostiroy.")}
+            } else {panic!("Mismatched WindowNode in TextButton. Please report code that caused this in derin repository.")}
         })
     }
 }
