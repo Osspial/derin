@@ -17,11 +17,14 @@ use native::WindowConfig;
 use ui::{Node, NodeProcessor, ParentNode};
 use ui::intrinsics::TextButton;
 
+
+type WindowReceiver = Receiver<NativeResult<WindowNode>>;
+
 pub struct Window<N: Node> {
     root: N,
     node_tree_root: NodeTreeBranch,
 
-    window_receiver: Receiver<NativeResult<WindowNode>>
+    window_receiver: WindowReceiver
 }
 
 impl<N: Node> Window<N> {
@@ -107,11 +110,11 @@ struct NodeTreeBranch {
 
 /// Trait for converting `Node`s into `NodeTreeBranch`es.
 trait IntoNTB: Node {
-    fn into_ntb(&self, name: &'static str, parent: &WindowNode, receiver: &Receiver<NativeResult<WindowNode>>) -> NativeResult<NodeTreeBranch>;
+    fn into_ntb(&self, name: &'static str, parent: &WindowNode, receiver: &WindowReceiver) -> NativeResult<NodeTreeBranch>;
 }
 
 impl<N: Node> IntoNTB for N {
-    default fn into_ntb(&self, name: &'static str, _: &WindowNode, _: &Receiver<NativeResult<WindowNode>>) -> NativeResult<NodeTreeBranch> {
+    default fn into_ntb(&self, name: &'static str, _: &WindowNode, _: &WindowReceiver) -> NativeResult<NodeTreeBranch> {
         Ok(NodeTreeBranch {
             state_id: self.state_id(),
             name: name,
@@ -127,7 +130,7 @@ struct NodeTraverser<'a> {
     /// The `WindowNode` belonging to the parent `NodeTreeBranch` of this `NodeTraverser`. In the event
     /// that this `NodeTraverser` represents the root node, this is `None`.
     parent_window: Option<&'a WindowNode>,
-    receiver: &'a Receiver<NativeResult<WindowNode>>,
+    receiver: &'a WindowReceiver,
     /// The index in the child vector to first look at when searching for a child. As new
     /// children get added, this gets incremented.
     child_index: usize

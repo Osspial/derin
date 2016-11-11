@@ -9,6 +9,8 @@ use winapi::windef::*;
 use winapi::minwindef::*;
 use winapi::winuser::*;
 
+use super::WindowReceiver;
+
 use std::ptr;
 use std::mem;
 use std::io;
@@ -51,7 +53,8 @@ impl WindowNode {
         }
     }
 
-    pub fn new_text_button(&self, text: &str, receiver: &Receiver<NativeResult<WindowNode>>) -> NativeResult<WindowNode> {
+    /// Create a new zero-sized text button with no contents.
+    pub fn new_text_button(&self, receiver: &WindowReceiver) -> NativeResult<WindowNode> {
         unsafe {
             let button_create_data = TextButtonCreateData {
                 text: text,
