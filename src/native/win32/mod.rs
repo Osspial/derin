@@ -1,5 +1,7 @@
-pub mod wrapper;
+mod wrapper;
+mod geometry;
 use self::wrapper::{WindowNode, Toplevel, CallbackData, CALLBACK_DATA};
+use self::geometry::{Rect, OffsetRect, OriginRect};
 
 use user32;
 

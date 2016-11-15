@@ -11,6 +11,7 @@ use winapi::winuser::*;
 use winapi::commctrl::*;
 
 use super::WindowReceiver;
+use super::geometry::{Rect, OffsetRect, OriginRect, Point};
 
 use std::ptr;
 use std::mem;
@@ -20,7 +21,6 @@ use std::ffi::OsStr;
 use std::iter::{once};
 use std::cell::RefCell;
 use std::sync::mpsc::{Sender};
-use std::ops::{Add, AddAssign};
 use std::os::raw::{c_int, c_uint};
 use std::os::windows::ffi::OsStrExt;
 
@@ -32,66 +32,6 @@ use native::{WindowConfig, NativeResult, NativeError};
 
 pub type SmallUcs2String = SmallVec<[u16; 128]>;
 pub type Ucs2String = Vec<u16>;
-
-#[derive(Debug, Clone, Copy)]
-pub struct Point {
-    pub x: c_int,
-    pub y: c_int
-}
-
-impl Point {
-    pub fn new(x: c_int, y: c_int) -> Point {
-        Point {
-            x: x,
-            y: y
-        }
-    }
-}
-
-impl Add for Point {
-    type Output = Point;
-    fn add(self, rhs: Point) -> Point {
-        Point {
-            x: self.x + rhs.x,
-            y: self.y + rhs.y
-        }
-    }
-}
-
-impl AddAssign for Point {
-    fn add_assign(&mut self, rhs: Point) {
-        *self = *self + rhs;
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Rect {
-    pub topleft: Point,
-    pub lowright: Point
-}
-
-impl Rect {
-    pub fn new(tl_x: c_int, tl_y: c_int, lr_x: c_int, lr_y: c_int) -> Rect {
-        Rect {
-            topleft: Point::new(tl_x, tl_y),
-            lowright: Point::new(lr_x, lr_y)
-        }
-    }
-
-    pub fn width(self) -> c_int {
-        self.lowright.x - self.topleft.x
-    }
-
-    pub fn height(self) -> c_int {
-        self.lowright.y - self.topleft.y
-    }
-
-    pub fn offset(mut self, offset: Point) -> Rect {
-        self.topleft += offset;
-        self.lowright += offset;
-        self
-    }
-}
 
 pub enum WindowNode {
     Toplevel(Toplevel),
@@ -275,12 +215,12 @@ impl TextButton {
         unsafe{ self.wrapper.set_title(&self.text) }
     }
 
-    pub fn set_rect(&mut self, rect: Rect) {
+    pub fn set_rect(&mut self, rect: OffsetRect) {
         self.wrapper.set_pos(rect.topleft);
         self.wrapper.set_inner_size(rect.width(), rect.height());
     }
 
-    pub fn get_ideal_rect(&self) -> Rect {
+    pub fn get_ideal_rect(&self) -> OriginRect {
         unsafe {
             let mut ideal_size = SIZE {
                 cx: 0,
@@ -292,7 +232,7 @@ impl TextButton {
                 0,
                 &mut ideal_size as *mut SIZE as LPARAM
             );
-            Rect::new(0, 0, ideal_size.cx, ideal_size.cy)
+            OriginRect::new(ideal_size.cx, ideal_size.cy)
         }
     }
 }
