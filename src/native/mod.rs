@@ -9,36 +9,6 @@ use std::default::Default;
 use std::path::PathBuf;
 use std::marker::{Send, Sync};
 
-/// A struct that contains configuration information for any new window that's created.
-/// The functions are present to allow the use of method-chaining to set the arguments,
-/// which can be more concisely placed into a window creation function than just struct
-/// creation. Note that those functions actually take ownership of the value instead of
-/// a mutable reference - this is because they aren't intended to be used to mutate a
-/// commonly-used WindowConfig but instead to mutate a one-off config used for one window,
-/// like this:
-/// 
-/// ```
-/// # use tub::config::WindowConfig;
-/// # use tub::platform::Window;
-/// # use std::path::Path;
-/// let window = Window::new(
-///     WindowConfig::new()
-///         .name("It's a window!".to_owned())
-///         .icon(Some(Path::new("tub.ico").to_path_buf()))
-///         .size(Some((500, 500))),
-///     Default::default()).unwrap();
-/// ```
-///
-/// If you want to mutate a commonly-used WindowConfig, directly change the struct's fields
-/// like so:
-///
-/// ```
-/// # use tub::config::WindowConfig;
-/// let mut window_config = WindowConfig::new();
-///
-/// window_config.name = "A name!".to_owned();
-/// window_config.borderless = false;
-/// ```
 #[derive(Debug, Clone)]
 pub struct WindowConfig {
     /// The window's name
