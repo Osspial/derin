@@ -1,6 +1,10 @@
-use std::ops::{Add, AddAssign, BitAnd, Range};
+use std::ops::{Add, AddAssign, BitOr, Range};
 use std::cmp;
 use std::os::raw::c_int;
+
+use boolinator::Boolinator;
+
+use ui::layout::{Place, PlaceInCell};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Point {
@@ -70,11 +74,11 @@ impl Rect for OffsetRect {
     }
 }
 
-impl BitAnd for OffsetRect {
+impl BitOr for OffsetRect {
     type Output = OffsetRect;
-    /// "And"s the two rectangles together, creating a new rectangle that covers the areas of both
+    /// "Or"s the two rectangles together, creating a new rectangle that covers the areas of both
     /// rects.
-    fn bitand(self, rhs: OffsetRect) -> OffsetRect {
+    fn bitor(self, rhs: OffsetRect) -> OffsetRect {
         OffsetRect::new(
             cmp::min(self.topleft.x, rhs.topleft.x),
             cmp::min(self.topleft.y, rhs.topleft.y),
@@ -303,10 +307,71 @@ impl GridDims {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct HintedCell {
+    master_rect: OffsetRect,
+    place_in_mr: PlaceInCell,
+
+    master_rect_resized: bool
+}
+
+impl HintedCell {
+    pub fn new(master_rect: OffsetRect, place_in_mr: PlaceInCell) -> HintedCell {
+        HintedCell {
+            master_rect: master_rect,
+            place_in_mr: place_in_mr,
+
+            master_rect_resized: false
+        }
+    }
+
+    pub fn transform_min_rect(&mut self, minrect: OriginRect) -> OffsetRect {
+        macro_rules! place_on_axis {
+            ($axis:ident $minrect_size_axis:expr => $output_rect:ident) => {
+                match self.place_in_mr.x {
+                    Place::Stretch => {
+                        $output_rect.topleft.$axis = self.master_rect.topleft.$axis;
+                        $output_rect.lowright.$axis = self.master_rect.lowright.$axis;
+                    },
+                    Place::Start => {
+                        $output_rect.topleft.$axis = self.master_rect.topleft.$axis;
+                        $output_rect.lowright.$axis = self.master_rect.topleft.$axis + $minrect_size_axis;
+                    },
+                    Place::End => {
+                        $output_rect.lowright.$axis = self.master_rect.lowright.$axis;
+                        $output_rect.topleft.$axis = self.master_rect.lowright.$axis - $minrect_size_axis;
+                    },
+                    Place::Center => {
+                        let center = (self.master_rect.topleft.$axis + self.master_rect.lowright.$axis) / 2;
+                        $output_rect.topleft.$axis = center - $minrect_size_axis / 2;
+                        $output_rect.lowright.$axis = center + $minrect_size_axis / 2;
+                    }
+                }
+            }
+        }
+
+        let new_master_rect = self.master_rect | minrect.offset(self.master_rect.topleft);
+        if self.master_rect != new_master_rect {
+            self.master_rect = new_master_rect;
+            self.master_rect_resized = true;
+        }
+
+        let mut output_rect = OffsetRect::default();
+        place_on_axis!(x minrect.width() => output_rect);
+        place_on_axis!(y minrect.height() => output_rect);
+        output_rect
+    }
+
+    pub fn master_rect_resized(&self) -> Option<OffsetRect> {
+        self.master_rect_resized.as_some(self.master_rect)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use super::GridLine;
+    use ui::layout::{Place, PlaceInCell};
 
     #[test]
     fn test_expand_line_size() {
@@ -366,5 +431,46 @@ mod tests {
         assert_eq!(None, gd.get_cell_rect(3, 0));
         // Make sure the 2x2 grid is AOK.
         assert_2x2_grid(&gd);
+    }
+
+    #[test]
+    fn test_cell_hints() {
+        let mr = OffsetRect::new(16, 16, 32, 32);
+
+        {
+            let mut hc = HintedCell::new(mr, PlaceInCell::new(Place::Stretch, Place::Stretch));
+            assert_eq!(mr, hc.transform_min_rect(OriginRect::new(8, 8)));
+            assert_eq!(None, hc.master_rect_resized());
+
+            hc.transform_min_rect(OriginRect::new(64, 64));
+            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.master_rect_resized());
+        }
+
+        {
+            let mut hc = HintedCell::new(mr, PlaceInCell::new(Place::Start, Place::Start));
+            assert_eq!(OffsetRect::new(16, 16, 24, 24), hc.transform_min_rect(OriginRect::new(8, 8)));
+            assert_eq!(None, hc.master_rect_resized());
+
+            hc.transform_min_rect(OriginRect::new(64, 64));
+            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.master_rect_resized());
+        }
+
+        {
+            let mut hc = HintedCell::new(mr, PlaceInCell::new(Place::End, Place::End));
+            assert_eq!(OffsetRect::new(24, 24, 32, 32), hc.transform_min_rect(OriginRect::new(8, 8)));
+            assert_eq!(None, hc.master_rect_resized());
+
+            hc.transform_min_rect(OriginRect::new(64, 64));
+            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.master_rect_resized());
+        }
+
+        {
+            let mut hc = HintedCell::new(mr, PlaceInCell::new(Place::Center, Place::Center));
+            assert_eq!(OffsetRect::new(20, 20, 28, 28), hc.transform_min_rect(OriginRect::new(8, 8)));
+            assert_eq!(None, hc.master_rect_resized());
+
+            hc.transform_min_rect(OriginRect::new(64, 64));
+            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.master_rect_resized());
+        }
     }
 }
