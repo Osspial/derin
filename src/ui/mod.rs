@@ -1,4 +1,7 @@
 pub mod intrinsics;
+pub mod layout;
+
+use self::layout::GridLayout;
 
 pub enum MouseEvent {
     Click(MouseButton),
@@ -36,7 +39,10 @@ pub trait Node {
 /// should be `derive`d and not manually implemented, as the current system is set up to allow us
 /// to emulate higher-kinded types within the current limitations of the type system.
 pub trait ParentNode<NP, E>: Node {
+    type Layout: GridLayout;
+
     fn children(&mut self, NP) -> Result<(), E>;
+    fn child_layout(&self) -> Self::Layout;
 }
 
 pub trait Control: Node {
