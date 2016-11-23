@@ -198,6 +198,10 @@ impl Toplevel {
 
         Ok(Toplevel(WindowWrapper(window_handle)))
     }
+
+    pub fn get_inner_size(&self) -> Option<(u32, u32)> {
+        self.0.get_inner_size()
+    }
 }
 
 pub struct TextButton {

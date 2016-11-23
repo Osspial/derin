@@ -90,14 +90,20 @@ two_axis_type!{
     #[derive(Default, Debug, Clone, Copy)]
     pub struct NodeSizing(Option<u32>);
 
-    #[derive(Debug, Clone, Copy)]
-    pub struct GridSize(Option<u32>);
+    #[derive(Default, Debug, Clone, Copy)]
+    pub struct GridSize(u32);
 
     #[derive(Debug, Clone, Copy)]
     pub struct NodeSpan(Into<DyRange<u32>>);
 
     #[derive(Default, Debug, Clone, Copy)]
     pub struct PlaceInCell(Place);
+}
+
+impl Default for NodeSpan {
+    fn default() -> NodeSpan {
+        NodeSpan::new(.., ..)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -131,8 +137,14 @@ pub struct LayoutHint {
     pub place_in_cell: PlaceInCell
 }
 
+#[derive(Default, Clone, Copy)]
+pub struct GridSlot {
+    pub node_span: NodeSpan,
+    pub place_in_cell: PlaceInCell
+}
+
 /// An iterator adapter that turns `LayoutHint`s into specific `NodeSpan`es
-pub trait GridLayout: Iterator<Item = NodeSpan> {
+pub trait GridLayout: Iterator<Item = GridSlot> {
     fn grid_size(&self) -> GridSize;
 }
 
@@ -149,35 +161,48 @@ impl SingleNodeLayout {
 
 impl GridLayout for SingleNodeLayout {
     fn grid_size(&self) -> GridSize {
-        GridSize::new(Some(1), Some(1))
+        GridSize::new(1, 1)
     }
 }
 
 impl Iterator for SingleNodeLayout {
-    type Item = NodeSpan;
+    type Item = GridSlot;
 
-    fn next(&mut self) -> Option<NodeSpan> {
+    fn next(&mut self) -> Option<GridSlot> {
         match self.consumed {
             true => None,
             false => {
                 self.consumed = true;
-                Some(NodeSpan::new(0..1, 0..1))
+                Some(GridSlot {
+                    node_span: NodeSpan::new(0..1, 0..1),
+                    place_in_cell: PlaceInCell::default()
+                })
             }
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (1, Some(1))
+    }
 }
+impl ExactSizeIterator for SingleNodeLayout {}
 
 #[derive(Default, Clone)]
 pub struct EmptyNodeLayout;
 
 impl GridLayout for EmptyNodeLayout {
     fn grid_size(&self) -> GridSize {
-        GridSize::new(Some(0), Some(0))
+        GridSize::new(0, 0)
     }
 }
 
 impl Iterator for EmptyNodeLayout {
-    type Item = NodeSpan;
+    type Item = GridSlot;
 
-    fn next(&mut self) -> Option<NodeSpan> {None}
+    fn next(&mut self) -> Option<GridSlot> {None}
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(0))
+    }
 }
+impl ExactSizeIterator for EmptyNodeLayout {}

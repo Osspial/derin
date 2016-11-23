@@ -23,12 +23,12 @@ pub enum MouseButton {
 /// add type-specific optimizations, all due to specialization. Of course, at this point
 /// specialization isn't stable, limiting this library to nightly, but the increases in
 /// implementation ergonomics and flexability are well worth it.
-pub trait NodeProcessor<'a, N: Node + ?Sized> {
+pub trait NodeProcessor<N: Node>: Sized {
     type Error;
-    fn add_child(&'a mut self, name: &'static str, node: &mut N) -> Result<(), Self::Error>;
+    fn add_child(&mut self, name: &'static str, node: &mut N) -> Result<(), Self::Error>;
 }
 
-pub trait Node {
+pub trait Node: Sized {
     fn type_name() -> &'static str;
     /// An identifier for the current state. Calling this function provides only one guarantee: that
     /// if `node_a != node_b`, `state_id(node_a) != state_id(node_b)`.
@@ -38,10 +38,11 @@ pub trait Node {
 /// A node that can have other children as nodes. Unless you have a **VERY** good reason to, this
 /// should be `derive`d and not manually implemented, as the current system is set up to allow us
 /// to emulate higher-kinded types within the current limitations of the type system.
-pub trait ParentNode<NP, E>: Node {
+pub trait ParentNode<NP>: Node
+        where NP: NodeProcessor<Self> {
     type Layout: GridLayout;
 
-    fn children(&mut self, NP) -> Result<(), E>;
+    fn children(&mut self, NP) -> Result<(), NP::Error>;
     fn child_layout(&self) -> Self::Layout;
 }
 

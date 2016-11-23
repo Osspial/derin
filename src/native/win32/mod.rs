@@ -1,7 +1,7 @@
 mod wrapper;
 mod geometry;
 use self::wrapper::{WindowNode, Toplevel, CallbackData, CALLBACK_DATA};
-use self::geometry::{Rect, OffsetRect, OriginRect};
+use self::geometry::{HintedCell, GridDims, OriginRect};
 
 use user32;
 
@@ -10,6 +10,7 @@ use std::mem;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::thread;
+use std::os::raw::c_int;
 
 use boolinator::Boolinator;
 
@@ -18,6 +19,7 @@ use native::WindowConfig;
 
 use ui::{Node, NodeProcessor, ParentNode};
 use ui::intrinsics::TextButton;
+use ui::layout::{GridLayout, EmptyNodeLayout, SingleNodeLayout, GridSize};
 
 
 type WindowReceiver = Receiver<NativeResult<WindowNode>>;
@@ -76,6 +78,13 @@ impl<N: Node> Window<N> {
         // case that gets propagated.
         let wrapper_window = window_receiver.recv().unwrap()?;
 
+        let mut grid = GridDims::with_dims(GridSize::new(1, 1));
+        if let WindowNode::Toplevel(ref tl) = wrapper_window {
+            let (width, height) = tl.get_inner_size().unwrap();
+
+            grid.expand_cell_rect(0, 0, OriginRect::new(width as c_int, height as c_int));
+        } else {unreachable!()}
+
         Ok(
             Window {
                 root: root,
@@ -84,6 +93,7 @@ impl<N: Node> Window<N> {
                     state_id: 0,
                     name: "toplevel",
                     window: Some(wrapper_window),
+                    grid: grid,
                     children: Vec::with_capacity(1)
                 },
 
@@ -97,7 +107,9 @@ impl<N: Node> Window<N> {
             node_branch: &mut self.node_tree_root,
             parent_window: None,
             receiver: &self.window_receiver,
-            child_index: 0
+            child_index: 0,
+
+            children_layout: SingleNodeLayout::new()
         }.add_child("root", &mut self.root)
     }
 }
@@ -107,6 +119,7 @@ struct NodeTreeBranch {
     state_id: u16,
     name: &'static str,
     window: Option<WindowNode>,
+    grid: GridDims,
     children: Vec<NodeTreeBranch>
 }
 
@@ -121,12 +134,13 @@ impl<N: Node> IntoNTB for N {
             state_id: self.state_id(),
             name: name,
             window: None,
+            grid: GridDims::new(),
             children: Vec::new()
         })
     }
 }
 
-struct NodeTraverser<'a> {
+struct NodeTraverser<'a, L: GridLayout> {
     /// The branch that this instance of NodeTraverser is currently processing
     node_branch: &'a mut NodeTreeBranch,
     /// The `WindowNode` belonging to the parent `NodeTreeBranch` of this `NodeTraverser`. In the event
@@ -135,91 +149,134 @@ struct NodeTraverser<'a> {
     receiver: &'a WindowReceiver,
     /// The index in the child vector to first look at when searching for a child. As new
     /// children get added, this gets incremented.
-    child_index: usize
+    child_index: usize,
+
+    children_layout: L
 }
 
-impl<'a> NodeTraverser<'a> {
-    fn take(&'a mut self, child_index: usize) -> NodeTraverser<'a> {
+impl<'a, L: GridLayout> NodeTraverser<'a, L> {
+    fn take<CL: GridLayout>(&mut self, child_index: usize, layout: CL) -> NodeTraverser<CL> {
+        let nb = &mut self.node_branch.children[child_index];
+        nb.grid.set_dims(layout.grid_size());
+
         NodeTraverser {
-            node_branch: &mut self.node_branch.children[child_index],
+            node_branch: nb,
             parent_window: self.node_branch.window.as_ref(),
             receiver: self.receiver,
-            child_index: 0
+            child_index: 0,
+
+            children_layout: layout
         }
+    }
+
+    /// Process a child node, where that child node has no children.
+    fn process_child_node_nochildren<N, PF>(&mut self, name: &'static str, node: &mut N, proc_func: PF)
+            -> NativeResult<()>
+            where N: Node,
+                  PF: FnOnce(&mut N, NodeTraverser<EmptyNodeLayout>, &mut HintedCell) -> NativeResult<()>
+    {
+        self.process_child_node(name, node, EmptyNodeLayout, proc_func)
     }
 
     /// Take a name, a node, and a function to run upon updating the node and either add the node to the
     /// node tree (which runs the function as well) or determine whether or not to run the update function
     /// and run it if necessary.
-    fn process_node_child<N, PF>(&'a mut self, name: &'static str, node: &mut N, mut proc_func: PF)
+    fn process_child_node<N, CL, PF>(&mut self, name: &'static str, node: &mut N, child_layout: CL, proc_func: PF)
             -> NativeResult<()>
             where N: Node,
-                  PF: FnMut(&mut N, NodeTraverser<'a>) -> NativeResult<()>
+                  CL: GridLayout,
+                  PF: FnOnce(&mut N, NodeTraverser<CL>, &mut HintedCell) -> NativeResult<()>
     {
-        // If the desired node branch is at the current child index, get that and run the contents of the
-        // `if` statement. Otherwise, search the entire children vector for the desired node and run the
-        // `if` statement if that's found. If both of those fail, insert a new node branch and run the
-        // necessary processing function.
-        if let Some(i) = self.node_branch.children.get(self.child_index)
-                             .and_then(|branch| (branch.name == name).as_some(self.child_index))
-                             .or(self.node_branch.children
-                                    .iter().enumerate()
-                                    .filter_map(|(i, branch)| (branch.name == name).as_some(i))
-                                    .next()) {
-            self.child_index = i + 1;
-
-            // Compare the newly-generated state id and the cached state id. If there is a mismatch, update the
-            // cached id and run the processing function.
-            let new_state_id = node.state_id();
-            if self.node_branch.children[i].state_id != new_state_id {
-                self.node_branch.children[i].state_id = new_state_id;
-                proc_func(node, self.take(i))
-            } else {
-                Ok(())
-            }
-        } else {
-            self.node_branch.children.insert(
-                self.child_index, 
-                node.into_ntb(
-                    name,
-                    self.parent_window.or(self.node_branch.window.as_ref()).expect("Attempted to create child window without parent"),
-                    self.receiver
-                )?
+        if let Some(slot) = self.children_layout.next() {
+            let (slot_x, slot_y) = (slot.node_span.x.start.unwrap(), slot.node_span.y.start.unwrap());
+            let mut hinted_cell = HintedCell::new(
+                self.node_branch.grid
+                    .get_cell_rect(slot_x, slot_y)
+                    .expect("Out of bounds error; handle without panicing in future"),
+                slot.place_in_cell
             );
-            let child_index = self.child_index;
-            self.child_index += 1;
-            
-            proc_func(node, self.take(child_index))
+
+            // If the desired node branch is at the current child index, get that and run the contents of the
+            // `if` statement. Otherwise, search the entire children vector for the desired node and run the
+            // `if` statement if that's found. If both of those fail, insert a new node branch and run the
+            // necessary processing function.
+            if let Some(i) = self.node_branch.children.get(self.child_index)
+                                 .and_then(|branch| (branch.name == name).as_some(self.child_index))
+                                 .or(self.node_branch.children
+                                        .iter().enumerate()
+                                        .filter_map(|(i, branch)| (branch.name == name).as_some(i))
+                                        .next()) {
+                self.child_index = i + 1;
+
+                // Compare the newly-generated state id and the cached state id. If there is a mismatch, update the
+                // cached id and run the processing function.
+                let new_state_id = node.state_id();
+                if self.node_branch.children[i].state_id != new_state_id {
+                    self.node_branch.children[i].state_id = new_state_id;
+                    proc_func(node, self.take(i, child_layout), &mut hinted_cell)?;
+                }
+            } else {
+                self.node_branch.children.insert(
+                    self.child_index, 
+                    node.into_ntb(
+                        name,
+                        self.parent_window.or(self.node_branch.window.as_ref()).expect("Attempted to create child window without parent"),
+                        self.receiver
+                    )?
+                );
+                let child_index = self.child_index;
+                self.child_index += 1;
+                proc_func(node, self.take(child_index, child_layout), &mut hinted_cell)?;
+            }
+
+            self.node_branch.grid.expand_cell_rect(
+                slot_x, slot_y, 
+                hinted_cell.inner_rect()
+                    .map(|r| OriginRect::from(r))
+                    .unwrap_or(OriginRect::default())
+                );
         }
+        Ok(())
     }
 }
 
-impl<'a, N: Node> NodeProcessor<'a, N> for NodeTraverser<'a> {
+impl<'a, N: Node, L: GridLayout> NodeProcessor<N> for NodeTraverser<'a, L> {
     type Error = NativeError;
-
-    default fn add_child(&'a mut self, name: &'static str, node: &mut N) -> NativeResult<()> {
+    default fn add_child(&mut self, name: &'static str, node: &mut N) -> NativeResult<()> {
         // We have no information about what's in the child node, so we can't really do anything.
         // It still needs to get added to the tree though.
-        self.process_node_child(name, node, |_, _| Ok(()))
+        self.process_child_node_nochildren(name, node, |_, _, _| Ok(()))
     }
 }
 
+impl<'a, N, L> NodeProcessor<N> for NodeTraverser<'a, L> 
+        where L: GridLayout,
+  for<'b, 'c> N: ParentNode<NodeTraverser<'b, <N as ParentNode<NodeTraverser<'c, EmptyNodeLayout>>>::Layout>> +
+                 ParentNode<NodeTraverser<'c, EmptyNodeLayout>>
+                // ...yup, that's one ugly-ass type annotation. The reason we're doing this is because we assume
+                // that ParentNode is generic over all types that implement NodeProcessor, NodeTraverser being one
+                // of them. Because we can't just HKT our way into saying that, we provide two annotations: the
+                // first saying that N is a ParentNode for a NodeTraverser which has the layout of the ParentNode,
+                // and the second one allowing us to access the Layout associated type without causing the type
+                // system to recurse forever. That second one is used to get the layout used for the actual ParentNode.
+{
+    default fn add_child(&mut self, name: &'static str, node: &mut N) -> NativeResult<()> {
+        let child_layout = <N as ParentNode<NodeTraverser<EmptyNodeLayout>>>::child_layout(node);
 
-impl<'a, N> NodeProcessor<'a, N> for NodeTraverser<'a> 
-        where N: ParentNode<NodeTraverser<'a>, NativeError> {
-    default fn add_child(&'a mut self, name: &'static str, node: &mut N) -> NativeResult<()> {
-        self.process_node_child(name, node,
-            |node, traverser| node.children(traverser))
+        self.process_child_node(name, node, child_layout,
+            |node, traverser, _| node.children(traverser))
     }
 }
 
-impl<'a, S: AsRef<str>> NodeProcessor<'a, TextButton<S>> for NodeTraverser<'a> {
-    fn add_child(&'a mut self, name: &'static str, node: &mut TextButton<S>) -> NativeResult<()> {
-        self.process_node_child(name, node, |node, traverser| {
+impl<'a, S, L> NodeProcessor<TextButton<S>> for NodeTraverser<'a, L>
+        where S: AsRef<str>,
+              L: GridLayout {
+    fn add_child(&mut self, name: &'static str, node: &mut TextButton<S>) -> NativeResult<()> {
+        self.process_child_node_nochildren(name, node, |node, traverser, rhint| {
             if let Some(WindowNode::TextButton(ref mut b)) = traverser.node_branch.window {
                 b.set_text(node.as_ref());
-                let ideal_rect = b.get_ideal_rect();
-                b.set_rect(ideal_rect);
+                let button_rect = rhint.transform_min_rect(b.get_ideal_rect());
+                b.set_rect(button_rect);
 
                 Ok(())
             } else {panic!("Mismatched WindowNode in TextButton. Please report code that caused this in derin repository.")}
@@ -233,6 +290,7 @@ impl<'a, S: AsRef<str>> IntoNTB for TextButton<S> {
             state_id: self.state_id(),
             name: name,
             window: Some(parent.new_text_button(receiver)?),
+            grid: GridDims::new(),
             children: Vec::new()
         })
     }

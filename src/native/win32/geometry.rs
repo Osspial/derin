@@ -2,9 +2,7 @@ use std::ops::{Add, AddAssign, BitOr, Range};
 use std::cmp;
 use std::os::raw::c_int;
 
-use boolinator::Boolinator;
-
-use ui::layout::{Place, PlaceInCell};
+use ui::layout::{Place, PlaceInCell, GridSize, NodeSpan};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Point {
@@ -177,7 +175,7 @@ impl GridLine {
                 self.largest_cells.end = cmp::max(cell_num + 1, self.largest_cells.end);
                 false
             },
-            Ordering::Less => self.largest_cells.start <= cell_num && cell_num < self.largest_cells.end
+            Ordering::Less => self.largest_cells.start == cell_num || cell_num == self.largest_cells.end - 1
         }
     }
 }
@@ -200,40 +198,42 @@ impl GridDims {
         }
     }
 
-    pub fn with_dims(num_cols: u32, num_rows: u32) -> GridDims {
+    pub fn with_dims(dims: GridSize) -> GridDims {
         GridDims {
-            num_cols: num_cols,
-            num_rows: num_rows,
-            dims: vec![GridLine::default(); (num_cols + num_rows) as usize]
+            num_cols: dims.x,
+            num_rows: dims.y,
+            dims: vec![GridLine::default(); (dims.x + dims.y) as usize]
         }
     }
 
-    pub fn set_dims(&mut self, num_cols: u32, num_rows: u32) {
+    pub fn set_dims(&mut self, dims: GridSize) {
         use std::ptr;
 
         unsafe {
-            // If the new length of the vector is going to be greater than the current length of the vector,
-            // extend it before doing any calculations. Why not resize if the vector is going to be shorter?
-            // Well, we need to shift the row data over, so if we resize the vector before doing that we're
-            // going to be shifting from undefined data!
-            if num_cols + num_rows > self.num_cols + self.num_rows {
-                self.dims.resize((num_cols + num_rows) as usize, GridLine::default());
-            }
+            if 0 < dims.x + dims.y {
+                // If the new length of the vector is going to be greater than the current length of the vector,
+                // extend it before doing any calculations. Why not resize if the vector is going to be shorter?
+                // Well, we need to shift the row data over, so if we resize the vector before doing that we're
+                // going to be shifting from undefined data!
+                if dims.x + dims.y > self.num_cols + self.num_rows {
+                    self.dims.resize((dims.x + dims.y) as usize, GridLine::default());
+                }
 
-            // Shift the row data over, if it actually needs shifting.
-            if num_cols != self.num_cols {
-                ptr::copy(&self.dims[self.num_cols as usize], &mut self.dims[num_cols as usize], self.num_rows as usize);
-            }
-            // If we shifted the row data to the right, fill the new empty space with zeroes. In the event that
-            // it was shifted to the left or not shifted at all, nothing is done due to the saturating subtraction.
-            ptr::write_bytes(&mut self.dims[self.num_cols as usize], 0, num_cols.saturating_sub(self.num_cols) as usize);
-            
-            self.num_cols = num_cols;
-            self.num_rows = num_rows;
+                // Shift the row data over, if it actually needs shifting.
+                if dims.x != self.num_cols {
+                    ptr::copy(&self.dims[self.num_cols as usize], &mut self.dims[dims.x as usize], self.num_rows as usize);
+                }
+                // If we shifted the row data to the right, fill the new empty space with zeroes. In the event that
+                // it was shifted to the left or not shifted at all, nothing is done due to the saturating subtraction.
+                ptr::write_bytes(&mut self.dims[self.num_cols as usize], 0, dims.x.saturating_sub(self.num_cols) as usize);
+                
+                self.num_cols = dims.x;
+                self.num_rows = dims.y;
 
-            // Finally, set the length of the vector to be correct. This would have been done already if the
-            // grid's size was expanded, but if it was decreased we need to do it here.
-            self.dims.set_len((num_cols + num_rows) as usize);
+                // Finally, set the length of the vector to be correct. This would have been done already if the
+                // grid's size was expanded, but if it was decreased we need to do it here.
+                self.dims.set_len((dims.x + dims.y) as usize);
+            }
         }
     }
 
@@ -253,19 +253,15 @@ impl GridDims {
     }
 
     pub fn row_height(&self, row_num: u32) -> Option<c_int> {
-        match row_num < self.num_rows {
-            true => Some(self.dims[(row_num + self.num_cols) as usize].size_px),
-            false => None
-        }
+        // We can just call `get`, unlike in `column_width`, because the rows are stored at the end
+        // of the vector.
+        self.dims.get((row_num + self.num_cols) as usize).map(|gl| gl.size_px)
     }
 
-    pub fn set_cell(&mut self, column_num: u32, row_num: u32, rect: OriginRect) -> bool {
+    pub fn expand_cell_rect(&mut self, column_num: u32, row_num: u32, rect: OriginRect) -> bool {
         assert!(column_num < self.num_cols);
         assert!(row_num < self.num_rows);
 
-        self.num_cols = cmp::max(self.num_cols, column_num + 1);
-        self.num_rows = cmp::max(self.num_rows, row_num + 1);
-        
         // A bitwise or is used here because it doesn't short-circuit, and both of these functions
         // have side effects that need to occur.
         self.dims[column_num as usize].expand_line_size(row_num, rect.width()) |
@@ -273,20 +269,14 @@ impl GridDims {
     }
 
     pub fn get_cell_offset(&self, column_num: u32, row_num: u32) -> Option<Point> {
-        let mut offset = Point::default();
-
+        // This process could probably be sped up with Rayon. Something to come back to.
         if column_num < self.num_cols &&
-           row_num < self.num_rows {
-            // Sum up the x offset by adding together the widths of all the columns
-            for c in 0..column_num {
-                offset.x += self.dims[c as usize].size_px;
-            }
-            // Sum up the y offset by adding together the heights of all the rows
-            for r in 0..row_num {
-                offset.y += self.dims[(r + self.num_cols) as usize].size_px;
-            }
-
-            Some(offset)
+           row_num < self.num_rows
+        {
+            Some(Point::new(
+                (0..column_num).map(|c| self.dims[c as usize].size_px).sum(),
+                (0..row_num).map(|r| self.dims[(r + self.num_cols) as usize].size_px).sum()
+            ))
         } else {
             None
         }
@@ -305,65 +295,83 @@ impl GridDims {
         self.get_cell_origin_rect(column_num, row_num)
             .map(|rect| rect.offset(self.get_cell_offset(column_num, row_num).unwrap()))
     }
+
+    pub fn get_span_origin_rect(&self, span: NodeSpan) -> Option<OriginRect> {
+        let col_range = span.x.start.unwrap_or(0)..span.x.end.unwrap_or(self.num_cols);
+        let row_range = span.y.start.unwrap_or(0)..span.y.end.unwrap_or(self.num_rows);
+
+        if col_range.end < self.num_cols &&
+           row_range.end < self.num_rows
+        {
+            Some(OriginRect::new(
+                col_range.map(|c| self.dims[c as usize].size_px).sum(),
+                row_range.map(|r| self.dims[(r + self.num_cols) as usize].size_px).sum()
+            ))
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct HintedCell {
-    master_rect: OffsetRect,
-    place_in_mr: PlaceInCell,
+    /// The rectangle that contains the entire cell. The inner rect may be smaller than this, but it
+    /// cannot be larger than this.
+    outer_rect: OffsetRect,
+    place_in_or: PlaceInCell,
 
-    master_rect_resized: bool
+    /// The actual rectangle of the element the cell contains. Is an `Option`, as this rectangle doesn't
+    /// exist when the cell is created.
+    inner_rect: Option<OffsetRect>
 }
 
 impl HintedCell {
-    pub fn new(master_rect: OffsetRect, place_in_mr: PlaceInCell) -> HintedCell {
+    pub fn new(outer_rect: OffsetRect, place_in_or: PlaceInCell) -> HintedCell {
         HintedCell {
-            master_rect: master_rect,
-            place_in_mr: place_in_mr,
+            outer_rect: outer_rect,
+            place_in_or: place_in_or,
 
-            master_rect_resized: false
+            inner_rect: None
         }
     }
 
     pub fn transform_min_rect(&mut self, minrect: OriginRect) -> OffsetRect {
         macro_rules! place_on_axis {
-            ($axis:ident $minrect_size_axis:expr => $output_rect:ident) => {
-                match self.place_in_mr.x {
+            ($axis:ident $minrect_size_axis:expr => $inner_rect:ident) => {
+                match self.place_in_or.x {
                     Place::Stretch => {
-                        $output_rect.topleft.$axis = self.master_rect.topleft.$axis;
-                        $output_rect.lowright.$axis = self.master_rect.lowright.$axis;
+                        $inner_rect.topleft.$axis = self.outer_rect.topleft.$axis;
+                        $inner_rect.lowright.$axis = self.outer_rect.lowright.$axis;
                     },
                     Place::Start => {
-                        $output_rect.topleft.$axis = self.master_rect.topleft.$axis;
-                        $output_rect.lowright.$axis = self.master_rect.topleft.$axis + $minrect_size_axis;
+                        $inner_rect.topleft.$axis = self.outer_rect.topleft.$axis;
+                        $inner_rect.lowright.$axis = self.outer_rect.topleft.$axis + $minrect_size_axis;
                     },
                     Place::End => {
-                        $output_rect.lowright.$axis = self.master_rect.lowright.$axis;
-                        $output_rect.topleft.$axis = self.master_rect.lowright.$axis - $minrect_size_axis;
+                        $inner_rect.lowright.$axis = self.outer_rect.lowright.$axis;
+                        $inner_rect.topleft.$axis = self.outer_rect.lowright.$axis - $minrect_size_axis;
                     },
                     Place::Center => {
-                        let center = (self.master_rect.topleft.$axis + self.master_rect.lowright.$axis) / 2;
-                        $output_rect.topleft.$axis = center - $minrect_size_axis / 2;
-                        $output_rect.lowright.$axis = center + $minrect_size_axis / 2;
+                        let center = (self.outer_rect.topleft.$axis + self.outer_rect.lowright.$axis) / 2;
+                        $inner_rect.topleft.$axis = center - $minrect_size_axis / 2;
+                        $inner_rect.lowright.$axis = center + $minrect_size_axis / 2;
                     }
                 }
             }
         }
 
-        let new_master_rect = self.master_rect | minrect.offset(self.master_rect.topleft);
-        if self.master_rect != new_master_rect {
-            self.master_rect = new_master_rect;
-            self.master_rect_resized = true;
-        }
+        self.outer_rect = self.outer_rect | minrect.offset(self.outer_rect.topleft);
 
-        let mut output_rect = OffsetRect::default();
-        place_on_axis!(x minrect.width() => output_rect);
-        place_on_axis!(y minrect.height() => output_rect);
-        output_rect
+        let mut inner_rect = OffsetRect::default();
+        place_on_axis!(x minrect.width() => inner_rect);
+        place_on_axis!(y minrect.height() => inner_rect);
+        self.inner_rect = Some(inner_rect);
+        
+        inner_rect
     }
 
-    pub fn master_rect_resized(&self) -> Option<OffsetRect> {
-        self.master_rect_resized.as_some(self.master_rect)
+    pub fn inner_rect(&self) -> Option<OffsetRect> {
+        self.inner_rect
     }
 }
 
@@ -371,7 +379,7 @@ impl HintedCell {
 mod tests {
     use super::*;
     use super::GridLine;
-    use ui::layout::{Place, PlaceInCell};
+    use ui::layout::{Place, PlaceInCell, GridSize};
 
     #[test]
     fn test_expand_line_size() {
@@ -401,7 +409,7 @@ mod tests {
             assert_eq!(Some(OffsetRect::new(16, 32, 32, 48)), gd.get_cell_rect(1, 1));
         }
 
-        let mut gd = GridDims::with_dims(2, 2);
+        let mut gd = GridDims::with_dims(GridSize::new(2, 2));
 
         // Test insertion of a cell that isn't the base cell
         gd.set_cell(1, 1, OriginRect::new(16, 16));
@@ -415,7 +423,7 @@ mod tests {
         assert_2x2_grid(&gd);
 
         // Resize the grid to contain space for the new cell
-        gd.set_dims(4, 2);
+        gd.set_dims(GridSize::new(4, 2));
 
         // Test insertion of a cell offset from the diagonal centerline of the grid. Notice how, because
         // it smaller on the y axis than the cell already in that row, it gets rescaled...
@@ -427,7 +435,7 @@ mod tests {
         assert_2x2_grid(&gd);
 
         // Downsize the grid again, cutting off the new cell.
-        gd.set_dims(2, 2);
+        gd.set_dims(GridSize::new(2, 2));
         assert_eq!(None, gd.get_cell_rect(3, 0));
         // Make sure the 2x2 grid is AOK.
         assert_2x2_grid(&gd);
@@ -440,37 +448,37 @@ mod tests {
         {
             let mut hc = HintedCell::new(mr, PlaceInCell::new(Place::Stretch, Place::Stretch));
             assert_eq!(mr, hc.transform_min_rect(OriginRect::new(8, 8)));
-            assert_eq!(None, hc.master_rect_resized());
+            assert_eq!(None, hc.outer_rect_expanded());
 
             hc.transform_min_rect(OriginRect::new(64, 64));
-            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.master_rect_resized());
+            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.outer_rect_expanded());
         }
 
         {
             let mut hc = HintedCell::new(mr, PlaceInCell::new(Place::Start, Place::Start));
             assert_eq!(OffsetRect::new(16, 16, 24, 24), hc.transform_min_rect(OriginRect::new(8, 8)));
-            assert_eq!(None, hc.master_rect_resized());
+            assert_eq!(None, hc.outer_rect_expanded());
 
             hc.transform_min_rect(OriginRect::new(64, 64));
-            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.master_rect_resized());
+            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.outer_rect_expanded());
         }
 
         {
             let mut hc = HintedCell::new(mr, PlaceInCell::new(Place::End, Place::End));
             assert_eq!(OffsetRect::new(24, 24, 32, 32), hc.transform_min_rect(OriginRect::new(8, 8)));
-            assert_eq!(None, hc.master_rect_resized());
+            assert_eq!(None, hc.outer_rect_expanded());
 
             hc.transform_min_rect(OriginRect::new(64, 64));
-            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.master_rect_resized());
+            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.outer_rect_expanded());
         }
 
         {
             let mut hc = HintedCell::new(mr, PlaceInCell::new(Place::Center, Place::Center));
             assert_eq!(OffsetRect::new(20, 20, 28, 28), hc.transform_min_rect(OriginRect::new(8, 8)));
-            assert_eq!(None, hc.master_rect_resized());
+            assert_eq!(None, hc.outer_rect_expanded());
 
             hc.transform_min_rect(OriginRect::new(64, 64));
-            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.master_rect_resized());
+            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.outer_rect_expanded());
         }
     }
 }
