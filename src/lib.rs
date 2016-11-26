@@ -14,6 +14,8 @@ extern crate kernel32;
 extern crate dwmapi;
 #[cfg(target_os="windows")]
 extern crate winapi;
+#[cfg(target_os="windows")]
+extern crate comctl32;
 
 pub mod native;
 pub mod ui;

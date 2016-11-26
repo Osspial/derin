@@ -1,5 +1,6 @@
 use user32;
 use kernel32;
+use comctl32;
 use dwmapi;
 
 use winapi::winbase::*;
@@ -9,6 +10,7 @@ use winapi::windef::*;
 use winapi::minwindef::*;
 use winapi::winuser::*;
 use winapi::commctrl::*;
+use winapi::basetsd::*;
 
 use super::WindowReceiver;
 use super::geometry::{Rect, OffsetRect, OriginRect, Point};
@@ -380,7 +382,7 @@ lazy_static!{
         let window_class = WNDCLASSEXW {
             cbSize: mem::size_of::<WNDCLASSEXW>() as UINT,
             style: CS_OWNDC | CS_VREDRAW | CS_HREDRAW | CS_DBLCLKS,
-            lpfnWndProc: Some(callback),
+            lpfnWndProc: Some(toplevel_callback),
             cbClsExtra: 0,
             cbWndExtra: 0,
             hInstance: kernel32::GetModuleHandleW(ptr::null()),
@@ -398,14 +400,22 @@ lazy_static!{
     static ref BUTTON_CLASS: Ucs2String = ucs2_str("BUTTON").collect();
 }
 
+pub enum RawEvent {
+    CloseClicked,
+    ToplevelResized(c_int, c_int)
+}
+
 pub struct CallbackData {
-    pub window_sender: Sender<NativeResult<WindowNode>>
+    pub window_sender: Sender<NativeResult<WindowNode>>,
+    pub event_sender: Sender<RawEvent>
 }
 
 thread_local!{
     pub static CALLBACK_DATA: RefCell<Option<CallbackData>> = RefCell::new(None);
 }
 
+
+const BUTTON_SUBCLASS: UINT_PTR = 0;
 
 // A bunch of different derin messages for creating controls and such. These are all handled by the
 // toplevel window, as the child controls each have their own callback specified by windows.
@@ -416,13 +426,28 @@ thread_local!{
 /// * `wparam`: Parent `HWND` handle
 const TM_NEWTEXTBUTTON: UINT = WM_USER + 0;
 
-unsafe extern "system" fn callback(hwnd: HWND, msg: UINT,
-                                   wparam: WPARAM, lparam: LPARAM)
-                                   -> LRESULT {
+unsafe extern "system"
+    fn toplevel_callback(hwnd: HWND, msg: UINT,
+                         wparam: WPARAM, lparam: LPARAM) -> LRESULT
+{
     match msg {
-        WM_CLOSE => {
-            0
-        }
+        WM_CLOSE => CALLBACK_DATA.with(|cd| {
+            let cd = cd.borrow();
+            if let Some(ref cd) = *cd {
+                cd.event_sender.send(RawEvent::CloseClicked).ok();
+                0
+            } else {1}
+        }),
+
+        WM_SIZE => CALLBACK_DATA.with(|cd| {
+            let cd = cd.borrow();
+            if let Some(ref cd) = *cd {
+                let (width, height) = (loword(lparam), hiword(lparam));
+                cd.event_sender.send(RawEvent::ToplevelResized(width as c_int, height as c_int)).ok();
+
+                0
+            } else {1}
+        }),
 
         TM_NEWTEXTBUTTON => {
             let button_hwnd = user32::CreateWindowExW(
@@ -439,24 +464,40 @@ unsafe extern "system" fn callback(hwnd: HWND, msg: UINT,
                 kernel32::GetModuleHandleW(ptr::null()),
                 ptr::null_mut()
             );
+            comctl32::SetWindowSubclass(button_hwnd, Some(pushbutton_callback), BUTTON_SUBCLASS, 0);
             
             CALLBACK_DATA.with(|cd| {
                 let cd = cd.borrow();
-                let cd = cd.as_ref().unwrap();
-                cd.window_sender.send(
-                    (button_hwnd != ptr::null_mut()).as_result(
-                        WindowNode::TextButton(TextButton {
-                            wrapper: WindowWrapper(button_hwnd),
-                            text: Ucs2String::new()
-                        }),
-                        NativeError::OsError(format!("{}", io::Error::last_os_error()))
-                    )).ok();
-            });
-            0
+                if let Some(ref cd) = *cd {                
+                    cd.window_sender.send(
+                        (button_hwnd != ptr::null_mut()).as_result(
+                            WindowNode::TextButton(TextButton {
+                                wrapper: WindowWrapper(button_hwnd),
+                                text: Ucs2String::new()
+                            }),
+                            NativeError::OsError(format!("{}", io::Error::last_os_error()))
+                        )).ok();
+                    0
+                } else {1}
+            })
         }
 
         _ => user32::DefWindowProcW(hwnd, msg, wparam, lparam)
     }
+}
+
+unsafe extern "system"
+    fn pushbutton_callback(hwnd: HWND, msg: UINT,
+                           wparam: WPARAM, lparam: LPARAM,
+                           _: UINT_PTR, _: DWORD_PTR) -> LRESULT
+{
+    match msg {
+        WM_LBUTTONDOWN => {
+            println!("button pressed!");
+        }
+        _ => ()
+    }
+    comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
 }
 
 /// Enables win32 visual styles in the hackiest of methods. Basically, this steals the application
@@ -491,4 +532,14 @@ pub unsafe fn enable_visual_styles() {
         kernel32::CreateActCtxW(&styles_ctx),
         &mut activation_cookie
     );
+}
+
+#[inline(always)]
+fn loword(lparam: LPARAM) -> WORD {
+    lparam as WORD
+}
+
+#[inline(always)]
+fn hiword(lparam: LPARAM) -> WORD {
+    (lparam >> 16) as WORD
 }

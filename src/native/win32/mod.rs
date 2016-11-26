@@ -1,6 +1,6 @@
 mod wrapper;
 mod geometry;
-use self::wrapper::{WindowNode, Toplevel, CallbackData, CALLBACK_DATA};
+use self::wrapper::{WindowNode, Toplevel, CallbackData, RawEvent, CALLBACK_DATA};
 use self::geometry::{HintedCell, GridDims, OriginRect};
 
 use user32;
@@ -28,13 +28,16 @@ pub struct Window<N: Node> {
     root: N,
     node_tree_root: NodeTreeBranch,
 
-    window_receiver: WindowReceiver
+    window_receiver: WindowReceiver,
+    event_receiver: Receiver<RawEvent>
 }
 
 impl<N: Node> Window<N> {
     pub fn new(root: N, config: WindowConfig) -> NativeResult<Window<N>> {
         // Channel for the handle to the window
         let (window_sender, window_receiver) = mpsc::channel();
+        let (event_sender, event_receiver) = mpsc::channel();
+
         unsafe{ self::wrapper::enable_visual_styles() };
 
         // Spawn a child thread in which UI windows are created. Messages are sent to this thread via the
@@ -60,7 +63,8 @@ impl<N: Node> Window<N> {
                 CALLBACK_DATA.with(|cd| {
                     let mut cd = cd.borrow_mut();
                     *cd = Some(CallbackData {
-                        window_sender: window_sender
+                        window_sender: window_sender,
+                        event_sender: event_sender
                     });
                 });
 
