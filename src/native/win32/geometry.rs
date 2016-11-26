@@ -186,7 +186,8 @@ pub struct GridDims {
     num_rows: u32,
     /// A vector that contains the dimensions of the rows and columns of the grid. The first `num_cols`
     /// elements are the column widths, the next `num_rows` elements are the row heights.
-    dims: Vec<GridLine>
+    dims: Vec<GridLine>,
+    size_px: OriginRect
 }
 
 impl GridDims {
@@ -194,55 +195,98 @@ impl GridDims {
         GridDims {
             num_cols: 0,
             num_rows: 0,
-            dims: Vec::new()
+            dims: Vec::new(),
+            size_px: OriginRect::default()
         }
     }
 
-    pub fn with_dims(dims: GridSize) -> GridDims {
-        GridDims {
-            num_cols: dims.x,
-            num_rows: dims.y,
-            dims: vec![GridLine::default(); (dims.x + dims.y) as usize]
-        }
+    pub fn with_size(grid_size: GridSize, size_px: OriginRect) -> GridDims {
+        let mut dims = GridDims::new();
+        dims.set_grid_size(grid_size);
+        dims.expand_size_px(size_px);
+        dims
     }
 
-    pub fn set_dims(&mut self, dims: GridSize) {
+    pub fn set_grid_size(&mut self, size: GridSize) {
         use std::ptr;
 
         unsafe {
-            if 0 < dims.x + dims.y {
+            if 0 < size.x + size.y {
                 // If the new length of the vector is going to be greater than the current length of the vector,
                 // extend it before doing any calculations. Why not resize if the vector is going to be shorter?
                 // Well, we need to shift the row data over, so if we resize the vector before doing that we're
                 // going to be shifting from undefined data!
-                if dims.x + dims.y > self.num_cols + self.num_rows {
-                    self.dims.resize((dims.x + dims.y) as usize, GridLine::default());
+                if size.x + size.y > self.num_cols + self.num_rows {
+                    self.dims.resize((size.x + size.y) as usize, GridLine::default());
+                } else if size.x + size.y < self.num_cols + self.num_rows {
+                    self.size_px.lowright.x -= self.dims[size.x as usize..self.num_cols as usize].iter().map(|d| d.size_px).sum();
+                    self.size_px.lowright.y -= self.dims[(self.num_cols + size.y) as usize..].iter().map(|d| d.size_px).sum();
                 }
 
                 // Shift the row data over, if it actually needs shifting.
-                if dims.x != self.num_cols {
-                    ptr::copy(&self.dims[self.num_cols as usize], &mut self.dims[dims.x as usize], self.num_rows as usize);
+                if size.x != self.num_cols {
+                    ptr::copy(&self.dims[self.num_cols as usize], &mut self.dims[size.x as usize], self.num_rows as usize);
                 }
                 // If we shifted the row data to the right, fill the new empty space with zeroes. In the event that
                 // it was shifted to the left or not shifted at all, nothing is done due to the saturating subtraction.
-                ptr::write_bytes(&mut self.dims[self.num_cols as usize], 0, dims.x.saturating_sub(self.num_cols) as usize);
+                ptr::write_bytes(&mut self.dims[self.num_cols as usize], 0, size.x.saturating_sub(self.num_cols) as usize);
                 
-                self.num_cols = dims.x;
-                self.num_rows = dims.y;
+                self.num_cols = size.x;
+                self.num_rows = size.y;
 
                 // Finally, set the length of the vector to be correct. This would have been done already if the
                 // grid's size was expanded, but if it was decreased we need to do it here.
-                self.dims.set_len((dims.x + dims.y) as usize);
+                self.dims.set_len((size.x + size.y) as usize);
             }
         }
     }
 
+    pub fn expand_size_px(&mut self, size_px: OriginRect) {
+        assert!(self.size_px.width() <= size_px.width());
+        assert!(self.size_px.height() <= size_px.height());
+
+        let old_rect = self.get_span_origin_rect(NodeSpan::new(.., ..)).unwrap();
+        let width_diff = (size_px.width() - old_rect.width()) as usize;
+        let height_diff = (size_px.height() - old_rect.height()) as usize;
+
+        let num_cols = self.num_cols as usize;
+        let num_rows = self.num_rows as usize;
+
+        let width_add = (width_diff / num_cols) as c_int;
+        let height_add = (height_diff / num_rows) as c_int;
+
+        for col in &mut self.dims[0..width_diff % num_cols] {
+            col.size_px += width_add + 1;
+        }
+        for col in &mut self.dims[width_diff % num_cols..num_cols] {
+            col.size_px += width_add;
+        }
+
+        for row in &mut self.dims[num_cols..num_cols + (height_diff % num_rows)] {
+            row.size_px += height_add + 1;
+        }
+        for row in &mut self.dims[num_cols + (height_diff % num_rows)..] {
+            row.size_px += height_add;
+        }
+
+        self.size_px = size_px;
+    }
+
     pub fn zero_column(&mut self, column_num: u32) {
+        self.size_px.lowright.x -= self.dims[column_num as usize].size_px;
         self.dims[column_num as usize] = GridLine::default()
     }
 
     pub fn zero_row(&mut self, row_num: u32) {
-        self.dims[row_num as usize] = GridLine::default()
+        self.size_px.lowright.y -= self.dims[(self.num_cols + row_num) as usize].size_px;
+        self.dims[(self.num_cols + row_num) as usize] = GridLine::default()
+    }
+
+    pub fn zero_all(&mut self) {
+        for d in &mut self.dims {
+            *d = GridLine::default();
+        }
+        self.size_px = OriginRect::default();
     }
 
     pub fn column_width(&self, column_num: u32) -> Option<c_int> {
@@ -262,10 +306,21 @@ impl GridDims {
         assert!(column_num < self.num_cols);
         assert!(row_num < self.num_rows);
 
+        // Remove the width and height of the cell from before the expansion from the master pixel size.
+        self.size_px.lowright.x -= self.dims[column_num as usize].size_px;
+        self.size_px.lowright.y -= self.dims[(self.num_cols + row_num) as usize].size_px;
+
         // A bitwise or is used here because it doesn't short-circuit, and both of these functions
         // have side effects that need to occur.
-        self.dims[column_num as usize].expand_line_size(row_num, rect.width()) |
-        self.dims[(self.num_cols + row_num) as usize].expand_line_size(column_num, rect.height())
+        let ret = self.dims[column_num as usize].expand_line_size(row_num, rect.width()) |
+        self.dims[(self.num_cols + row_num) as usize].expand_line_size(column_num, rect.height());
+
+        // Add the width of the height of the cell after the expansion back to the master pixel size. This
+        // ensures that it's accurate.
+        self.size_px.lowright.x += self.dims[column_num as usize].size_px;
+        self.size_px.lowright.y += self.dims[(self.num_cols + row_num) as usize].size_px;
+
+        ret
     }
 
     pub fn get_cell_offset(&self, column_num: u32, row_num: u32) -> Option<Point> {
@@ -300,8 +355,8 @@ impl GridDims {
         let col_range = span.x.start.unwrap_or(0)..span.x.end.unwrap_or(self.num_cols);
         let row_range = span.y.start.unwrap_or(0)..span.y.end.unwrap_or(self.num_rows);
 
-        if col_range.end < self.num_cols &&
-           row_range.end < self.num_rows
+        if col_range.end <= self.num_cols &&
+           row_range.end <= self.num_rows
         {
             Some(OriginRect::new(
                 col_range.map(|c| self.dims[c as usize].size_px).sum(),
@@ -310,6 +365,14 @@ impl GridDims {
         } else {
             None
         }
+    }
+
+    pub fn width(&self) -> c_int {
+        self.size_px.width()
+    }
+
+    pub fn height(&self) -> c_int {
+        self.size_px.height()
     }
 }
 
@@ -373,6 +436,10 @@ impl HintedCell {
     pub fn inner_rect(&self) -> Option<OffsetRect> {
         self.inner_rect
     }
+
+    pub fn outer_rect(&self) -> OffsetRect {
+        self.outer_rect
+    }
 }
 
 #[cfg(test)]
@@ -409,25 +476,25 @@ mod tests {
             assert_eq!(Some(OffsetRect::new(16, 32, 32, 48)), gd.get_cell_rect(1, 1));
         }
 
-        let mut gd = GridDims::with_dims(GridSize::new(2, 2));
+        let mut gd = GridDims::with_size(GridSize::new(2, 2), OriginRect::default());
 
         // Test insertion of a cell that isn't the base cell
-        gd.set_cell(1, 1, OriginRect::new(16, 16));
+        gd.expand_cell_rect(1, 1, OriginRect::new(16, 16));
         // We aren't using assert_2x2_grid here because the cell at (0, 0) hasn't been filled in yet.
         assert_eq!(Some(Point::new(0, 0)), gd.get_cell_offset(1, 1));
         assert_eq!(Some(OriginRect::new(16, 16)), gd.get_cell_origin_rect(1, 1));
         assert_eq!(Some(OffsetRect::new(0, 0, 16, 16)), gd.get_cell_rect(1, 1));
 
         // Test insertion of a cell at (0, 0)
-        gd.set_cell(0, 0, OriginRect::new(16, 32));
+        gd.expand_cell_rect(0, 0, OriginRect::new(16, 32));
         assert_2x2_grid(&gd);
 
         // Resize the grid to contain space for the new cell
-        gd.set_dims(GridSize::new(4, 2));
+        gd.set_grid_size(GridSize::new(4, 2));
 
         // Test insertion of a cell offset from the diagonal centerline of the grid. Notice how, because
         // it smaller on the y axis than the cell already in that row, it gets rescaled...
-        gd.set_cell(3, 0, OriginRect::new(8, 8));
+        gd.expand_cell_rect(3, 0, OriginRect::new(8, 8));
         assert_eq!(Some(Point::new(32, 0)), gd.get_cell_offset(3, 0));
         assert_eq!(Some(OriginRect::new(8, 32)), gd.get_cell_origin_rect(3, 0));
         assert_eq!(Some(OffsetRect::new(32, 0, 40, 32)), gd.get_cell_rect(3, 0));
@@ -435,7 +502,7 @@ mod tests {
         assert_2x2_grid(&gd);
 
         // Downsize the grid again, cutting off the new cell.
-        gd.set_dims(GridSize::new(2, 2));
+        gd.set_grid_size(GridSize::new(2, 2));
         assert_eq!(None, gd.get_cell_rect(3, 0));
         // Make sure the 2x2 grid is AOK.
         assert_2x2_grid(&gd);
@@ -448,37 +515,37 @@ mod tests {
         {
             let mut hc = HintedCell::new(mr, PlaceInCell::new(Place::Stretch, Place::Stretch));
             assert_eq!(mr, hc.transform_min_rect(OriginRect::new(8, 8)));
-            assert_eq!(None, hc.outer_rect_expanded());
+            assert_eq!(mr, hc.outer_rect());
 
             hc.transform_min_rect(OriginRect::new(64, 64));
-            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.outer_rect_expanded());
+            assert_eq!(OffsetRect::new(16, 16, 80, 80), hc.outer_rect());
         }
 
         {
             let mut hc = HintedCell::new(mr, PlaceInCell::new(Place::Start, Place::Start));
             assert_eq!(OffsetRect::new(16, 16, 24, 24), hc.transform_min_rect(OriginRect::new(8, 8)));
-            assert_eq!(None, hc.outer_rect_expanded());
+            assert_eq!(mr, hc.outer_rect());
 
             hc.transform_min_rect(OriginRect::new(64, 64));
-            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.outer_rect_expanded());
+            assert_eq!(OffsetRect::new(16, 16, 80, 80), hc.outer_rect());
         }
 
         {
             let mut hc = HintedCell::new(mr, PlaceInCell::new(Place::End, Place::End));
             assert_eq!(OffsetRect::new(24, 24, 32, 32), hc.transform_min_rect(OriginRect::new(8, 8)));
-            assert_eq!(None, hc.outer_rect_expanded());
+            assert_eq!(mr, hc.outer_rect());
 
             hc.transform_min_rect(OriginRect::new(64, 64));
-            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.outer_rect_expanded());
+            assert_eq!(OffsetRect::new(16, 16, 80, 80), hc.outer_rect());
         }
 
         {
             let mut hc = HintedCell::new(mr, PlaceInCell::new(Place::Center, Place::Center));
             assert_eq!(OffsetRect::new(20, 20, 28, 28), hc.transform_min_rect(OriginRect::new(8, 8)));
-            assert_eq!(None, hc.outer_rect_expanded());
+            assert_eq!(mr, hc.outer_rect());
 
             hc.transform_min_rect(OriginRect::new(64, 64));
-            assert_eq!(Some(OffsetRect::new(16, 16, 80, 80)), hc.outer_rect_expanded());
+            assert_eq!(OffsetRect::new(16, 16, 80, 80), hc.outer_rect());
         }
     }
 }

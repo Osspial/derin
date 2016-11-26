@@ -82,12 +82,10 @@ impl<N: Node> Window<N> {
         // case that gets propagated.
         let wrapper_window = window_receiver.recv().unwrap()?;
 
-        let mut grid = GridDims::with_dims(GridSize::new(1, 1));
-        if let WindowNode::Toplevel(ref tl) = wrapper_window {
+        let grid = if let WindowNode::Toplevel(ref tl) = wrapper_window {
             let (width, height) = tl.get_inner_size().unwrap();
-
-            grid.expand_cell_rect(0, 0, OriginRect::new(width as c_int, height as c_int));
-        } else {unreachable!()}
+            GridDims::with_size(GridSize::new(1, 1), OriginRect::new(width as c_int, height as c_int))
+        } else {unreachable!()};
 
         Ok(
             Window {
@@ -98,16 +96,31 @@ impl<N: Node> Window<N> {
                     name: "toplevel",
                     window: Some(wrapper_window),
                     grid: grid,
-                    children: Vec::with_capacity(1)
+                    children: Vec::with_capacity(1),
+                    cascade_change: true
                 },
 
-                window_receiver: window_receiver
+                window_receiver: window_receiver,
+                event_receiver: event_receiver
             }
         )
     }
 
     pub fn process(&mut self) -> NativeResult<()> {
+        while let Ok(event) = self.event_receiver.try_recv() {
+            match event {
+                RawEvent::ToplevelResized(x, y) => {
+                    self.node_tree_root.grid.zero_all();
+                    self.node_tree_root.grid.expand_size_px(OriginRect::new(x, y));
+                    self.node_tree_root.cascade_change = true;
+                }
+                _ => ()
+            }
+        }
+
         NodeTraverser {
+            cascade_change: self.node_tree_root.cascade_change,
+
             node_branch: &mut self.node_tree_root,
             parent_window: None,
             receiver: &self.window_receiver,
@@ -124,7 +137,8 @@ struct NodeTreeBranch {
     name: &'static str,
     window: Option<WindowNode>,
     grid: GridDims,
-    children: Vec<NodeTreeBranch>
+    children: Vec<NodeTreeBranch>,
+    cascade_change: bool
 }
 
 /// Trait for converting `Node`s into `NodeTreeBranch`es.
@@ -139,7 +153,8 @@ impl<N: Node> IntoNTB for N {
             name: name,
             window: None,
             grid: GridDims::new(),
-            children: Vec::new()
+            children: Vec::new(),
+            cascade_change: true
         })
     }
 }
@@ -155,15 +170,18 @@ struct NodeTraverser<'a, L: GridLayout> {
     /// children get added, this gets incremented.
     child_index: usize,
 
-    children_layout: L
+    children_layout: L,
+    cascade_change: bool
 }
 
 impl<'a, L: GridLayout> NodeTraverser<'a, L> {
     fn take<CL: GridLayout>(&mut self, child_index: usize, layout: CL) -> NodeTraverser<CL> {
         let nb = &mut self.node_branch.children[child_index];
-        nb.grid.set_dims(layout.grid_size());
+        nb.grid.set_grid_size(layout.grid_size());
 
         NodeTraverser {
+            cascade_change: self.cascade_change || nb.cascade_change,
+
             node_branch: nb,
             parent_window: self.node_branch.window.as_ref(),
             receiver: self.receiver,
@@ -215,7 +233,7 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                 // Compare the newly-generated state id and the cached state id. If there is a mismatch, update the
                 // cached id and run the processing function.
                 let new_state_id = node.state_id();
-                if self.node_branch.children[i].state_id != new_state_id {
+                if self.cascade_change || self.node_branch.children[i].state_id != new_state_id {
                     self.node_branch.children[i].state_id = new_state_id;
                     proc_func(node, self.take(i, child_layout), &mut hinted_cell)?;
                 }
@@ -241,6 +259,12 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                 );
         }
         Ok(())
+    }
+}
+
+impl<'a, L: GridLayout> Drop for NodeTraverser<'a, L> {
+    fn drop(&mut self) {
+        self.node_branch.cascade_change = false;
     }
 }
 
@@ -295,7 +319,8 @@ impl<'a, S: AsRef<str>> IntoNTB for TextButton<S> {
             name: name,
             window: Some(parent.new_text_button(receiver)?),
             grid: GridDims::new(),
-            children: Vec::new()
+            children: Vec::new(),
+            cascade_change: true
         })
     }
 }
