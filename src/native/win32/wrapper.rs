@@ -76,7 +76,7 @@ pub struct Toplevel( WindowWrapper );
 impl Toplevel {
     /// Create a new toplevel window. This is unsafe because it must be called on the correct thread in
     /// order to have the win32 message pump get the messages for this window.
-    pub unsafe fn new(config: &WindowConfig, callback_data: CallbackData) -> NativeResult<Toplevel> {
+    pub unsafe fn new(config: &WindowConfig, callback_data: *const CallbackData) -> NativeResult<Toplevel> {
         let (style, style_ex) = {
             use native::InitialState::*;
 
@@ -151,7 +151,6 @@ impl Toplevel {
             ptr::null_mut()
         );
 
-        let callback_data = Box::into_raw(Box::new(callback_data));
         comctl32::SetWindowSubclass(window_handle, Some(toplevel_callback), TOPLEVEL_SUBCLASS, callback_data as UINT_PTR);
 
         if window_handle == ptr::null_mut() {
@@ -431,7 +430,7 @@ unsafe extern "system"
                          wparam: WPARAM, lparam: LPARAM,
                          _: UINT_PTR, cd: DWORD_PTR) -> LRESULT
 {
-    let cd = &mut *(cd as *mut CallbackData);
+    let cd = &*(cd as *const CallbackData);
 
     match msg {
         WM_CLOSE => {
@@ -441,13 +440,7 @@ unsafe extern "system"
 
         TM_DESTROYWINDOW => {
             user32::DestroyWindow(hwnd);
-            0
-        },
-
-        WM_NCDESTROY => {
-            Box::from_raw(cd);
             user32::PostQuitMessage(0);
-
             0
         },
 

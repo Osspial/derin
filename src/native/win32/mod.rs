@@ -52,7 +52,7 @@ impl<N: Node> Window<N> {
 
                 // Create a wrapper toplevel window. If the creation succeeds, send back the window. Otherwise, send
                 // back the error it created and terminate this thread.
-                let wrapper_window = Toplevel::new(&config, cd);
+                let wrapper_window = Toplevel::new(&config, &cd as *const CallbackData);
                 match wrapper_window {
                     Ok(wr) => {
                         window_sender.send(Ok(WindowNode::Toplevel(wr))).unwrap();
