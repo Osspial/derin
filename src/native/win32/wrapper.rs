@@ -21,7 +21,6 @@ use std::io;
 use std::ops::Drop;
 use std::ffi::OsStr;
 use std::iter::{once};
-use std::cell::RefCell;
 use std::sync::mpsc::{Sender};
 use std::os::raw::{c_int, c_uint};
 use std::os::windows::ffi::OsStrExt;
@@ -77,7 +76,7 @@ pub struct Toplevel( WindowWrapper );
 impl Toplevel {
     /// Create a new toplevel window. This is unsafe because it must be called on the correct thread in
     /// order to have the win32 message pump get the messages for this window.
-    pub unsafe fn new(config: &WindowConfig) -> NativeResult<Toplevel> {
+    pub unsafe fn new(config: &WindowConfig, callback_data: CallbackData) -> NativeResult<Toplevel> {
         let (style, style_ex) = {
             use native::InitialState::*;
 
@@ -151,6 +150,9 @@ impl Toplevel {
             kernel32::GetModuleHandleW(ptr::null()),
             ptr::null_mut()
         );
+
+        let callback_data = Box::into_raw(Box::new(callback_data));
+        comctl32::SetWindowSubclass(window_handle, Some(toplevel_callback), TOPLEVEL_SUBCLASS, callback_data as UINT_PTR);
 
         if window_handle == ptr::null_mut() {
             return Err(NativeError::OsError(format!("{}", io::Error::last_os_error())));
@@ -366,7 +368,7 @@ impl WindowWrapper {
 
 impl Drop for WindowWrapper {
     fn drop(&mut self) {
-        unsafe{ user32::PostMessageW(self.0, WM_DESTROY, 0, 0) };
+        unsafe{ user32::PostMessageW(self.0, TM_DESTROYWINDOW, 0, 0) };
     }
 }
 
@@ -382,7 +384,7 @@ lazy_static!{
         let window_class = WNDCLASSEXW {
             cbSize: mem::size_of::<WNDCLASSEXW>() as UINT,
             style: CS_OWNDC | CS_VREDRAW | CS_HREDRAW | CS_DBLCLKS,
-            lpfnWndProc: Some(toplevel_callback),
+            lpfnWndProc: Some(user32::DefWindowProcW),
             cbClsExtra: 0,
             cbWndExtra: 0,
             hInstance: kernel32::GetModuleHandleW(ptr::null()),
@@ -410,44 +412,51 @@ pub struct CallbackData {
     pub event_sender: Sender<RawEvent>
 }
 
-thread_local!{
-    pub static CALLBACK_DATA: RefCell<Option<CallbackData>> = RefCell::new(None);
-}
 
-
-const BUTTON_SUBCLASS: UINT_PTR = 0;
+const TOPLEVEL_SUBCLASS: UINT_PTR = 0;
+const BUTTON_SUBCLASS: UINT_PTR = 1;
 
 // A bunch of different derin messages for creating controls and such. These are all handled by the
 // toplevel window, as the child controls each have their own callback specified by windows.
 
+const TM_DESTROYWINDOW: UINT = WM_USER + 0;
 /// Create a title-less push button.
 ///
 /// # Callback parameters
 /// * `wparam`: Parent `HWND` handle
-const TM_NEWTEXTBUTTON: UINT = WM_USER + 0;
+const TM_NEWTEXTBUTTON: UINT = WM_USER + 1;
 
 unsafe extern "system"
     fn toplevel_callback(hwnd: HWND, msg: UINT,
-                         wparam: WPARAM, lparam: LPARAM) -> LRESULT
+                         wparam: WPARAM, lparam: LPARAM,
+                         _: UINT_PTR, cd: DWORD_PTR) -> LRESULT
 {
+    let cd = &mut *(cd as *mut CallbackData);
+
     match msg {
-        WM_CLOSE => CALLBACK_DATA.with(|cd| {
-            let cd = cd.borrow();
-            if let Some(ref cd) = *cd {
-                cd.event_sender.send(RawEvent::CloseClicked).ok();
-                0
-            } else {1}
-        }),
+        WM_CLOSE => {
+            cd.event_sender.send(RawEvent::CloseClicked).ok();
+            0
+        },
 
-        WM_SIZE => CALLBACK_DATA.with(|cd| {
-            let cd = cd.borrow();
-            if let Some(ref cd) = *cd {
-                let (width, height) = (loword(lparam), hiword(lparam));
-                cd.event_sender.send(RawEvent::ToplevelResized(width as c_int, height as c_int)).ok();
+        TM_DESTROYWINDOW => {
+            user32::DestroyWindow(hwnd);
+            0
+        },
 
-                0
-            } else {1}
-        }),
+        WM_NCDESTROY => {
+            Box::from_raw(cd);
+            user32::PostQuitMessage(0);
+
+            0
+        },
+
+        WM_SIZE => {
+            let (width, height) = (loword(lparam), hiword(lparam));
+            cd.event_sender.send(RawEvent::ToplevelResized(width as c_int, height as c_int)).ok();
+
+            0
+        },
 
         TM_NEWTEXTBUTTON => {
             let button_hwnd = user32::CreateWindowExW(
@@ -466,23 +475,18 @@ unsafe extern "system"
             );
             comctl32::SetWindowSubclass(button_hwnd, Some(pushbutton_callback), BUTTON_SUBCLASS, 0);
             
-            CALLBACK_DATA.with(|cd| {
-                let cd = cd.borrow();
-                if let Some(ref cd) = *cd {                
-                    cd.window_sender.send(
-                        (button_hwnd != ptr::null_mut()).as_result(
-                            WindowNode::TextButton(TextButton {
-                                wrapper: WindowWrapper(button_hwnd),
-                                text: Ucs2String::new()
-                            }),
-                            NativeError::OsError(format!("{}", io::Error::last_os_error()))
-                        )).ok();
-                    0
-                } else {1}
-            })
+            cd.window_sender.send(
+                (button_hwnd != ptr::null_mut()).as_result(
+                    WindowNode::TextButton(TextButton {
+                        wrapper: WindowWrapper(button_hwnd),
+                        text: Ucs2String::new()
+                    }),
+                    NativeError::OsError(format!("{}", io::Error::last_os_error()))
+                )).ok();
+            0
         }
 
-        _ => user32::DefWindowProcW(hwnd, msg, wparam, lparam)
+        _ => comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
     }
 }
 

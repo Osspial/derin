@@ -1,6 +1,6 @@
 mod wrapper;
 mod geometry;
-use self::wrapper::{WindowNode, Toplevel, CallbackData, RawEvent, CALLBACK_DATA};
+use self::wrapper::{WindowNode, Toplevel, CallbackData, RawEvent};
 use self::geometry::{HintedCell, GridDims, OriginRect};
 
 use user32;
@@ -45,9 +45,14 @@ impl<N: Node> Window<N> {
         // via Rust's MPSC channels.
         thread::spawn(move || {
             unsafe {
+                let cd = CallbackData {
+                    window_sender: window_sender.clone(),
+                    event_sender: event_sender
+                };
+
                 // Create a wrapper toplevel window. If the creation succeeds, send back the window. Otherwise, send
                 // back the error it created and terminate this thread.
-                let wrapper_window = Toplevel::new(&config);
+                let wrapper_window = Toplevel::new(&config, cd);
                 match wrapper_window {
                     Ok(wr) => {
                         window_sender.send(Ok(WindowNode::Toplevel(wr))).unwrap();
@@ -58,15 +63,6 @@ impl<N: Node> Window<N> {
                         panic!("Window creation error; see sent result for details");
                     }
                 }
-                
-                // Populate the thread-local callback data with the data needed for the `win32` callback.
-                CALLBACK_DATA.with(|cd| {
-                    let mut cd = cd.borrow_mut();
-                    *cd = Some(CallbackData {
-                        window_sender: window_sender,
-                        event_sender: event_sender
-                    });
-                });
 
                 // Win32 message loop
                 let mut msg = mem::uninitialized();
