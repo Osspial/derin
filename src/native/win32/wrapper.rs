@@ -13,7 +13,8 @@ use winapi::commctrl::*;
 use winapi::basetsd::*;
 
 use super::WindowReceiver;
-use super::geometry::{Rect, OffsetRect, OriginRect, Point};
+use super::geometry::{Rect, OffsetRect, OriginRect, Point, GridDims, HintedCell};
+use ui::layout::{PlaceInCell, NodeSpan, GridSlot, GridSize};
 
 use std::ptr;
 use std::mem;
@@ -24,6 +25,7 @@ use std::iter::{once};
 use std::sync::mpsc::{Sender};
 use std::os::raw::{c_int, c_uint};
 use std::os::windows::ffi::OsStrExt;
+use std::ops::Deref;
 
 use smallvec::SmallVec;
 use boolinator::Boolinator;
@@ -47,40 +49,24 @@ impl WindowNode {
         }
     }
 
-    fn root_hwnd(&self) -> HWND {
-        const GA_ROOT: c_uint = 2;
-
-        match *self {
-            WindowNode::Toplevel(ref tl) => (tl.0).0,
-            WindowNode::TextButton(ref tb) => unsafe{ user32::GetAncestor(tb.wrapper.0, GA_ROOT) }
-        }
-    }
-
-    /// Create a new zero-sized text button with no contents.
-    pub fn new_text_button(&self, receiver: &WindowReceiver) -> NativeResult<WindowNode> {
-        unsafe {
+    pub fn set_slot(&self, slot: GridSlot) {
+        unsafe {            
             user32::SendMessageW(
-                self.root_hwnd(),
-                TM_NEWTEXTBUTTON,
-                self.hwnd() as WPARAM,
+                self.hwnd(),
+                DM_SETSLOT,
+                &slot as *const GridSlot as WPARAM,
                 0
             );
-            receiver.recv()
-                .expect("Unexpected close of window channel")
         }
     }
-}
 
-pub struct Toplevel( WindowWrapper );
-
-impl Toplevel {
     /// Create a new toplevel window. This is unsafe because it must be called on the correct thread in
     /// order to have the win32 message pump get the messages for this window.
-    pub unsafe fn new(config: &WindowConfig, callback_data: *const CallbackData) -> NativeResult<Toplevel> {
+    pub unsafe fn new_toplevel(config: &WindowConfig, callback_data: *mut CallbackData) -> NativeResult<WindowNode> {
         let (style, style_ex) = {
             use native::InitialState::*;
 
-            let mut style = WS_SYSMENU;
+            let mut style = WS_SYSMENU | WS_CLIPCHILDREN;
             let mut style_ex = 0;
 
             if !config.borderless && !config.tool_window {
@@ -151,7 +137,8 @@ impl Toplevel {
             ptr::null_mut()
         );
 
-        comctl32::SetWindowSubclass(window_handle, Some(toplevel_callback), TOPLEVEL_SUBCLASS, callback_data as UINT_PTR);
+        let node_data = Box::new(NodeData::new(callback_data, GridSlot::default(), GridDims::with_grid_size(GridSize::new(1, 1))));
+        comctl32::SetWindowSubclass(window_handle, Some(toplevel_callback), TOPLEVEL_SUBCLASS, Box::into_raw(node_data) as UINT_PTR);
 
         if window_handle == ptr::null_mut() {
             return Err(NativeError::OsError(format!("{}", io::Error::last_os_error())));
@@ -199,13 +186,26 @@ impl Toplevel {
             }
         }
 
-        Ok(Toplevel(WindowWrapper(window_handle)))
+        Ok(WindowNode::Toplevel(Toplevel(WindowWrapper(window_handle))))
     }
 
-    pub fn get_inner_size(&self) -> Option<(u32, u32)> {
-        self.0.get_inner_size()
+    /// Create a new zero-sized text button with no contents.
+    pub fn new_text_button(&self, receiver: &WindowReceiver) -> NativeResult<WindowNode> {
+        unsafe {
+            user32::SendMessageW(
+                self.hwnd(),
+                DM_NEWTEXTBUTTON,
+                0,
+                0
+            );
+            receiver.recv()
+                .expect("Unexpected close of window channel")
+        }
     }
 }
+
+pub struct Toplevel( WindowWrapper );
+pub struct LayoutGroup( WindowWrapper );
 
 pub struct TextButton {
     wrapper: WindowWrapper,
@@ -228,13 +228,18 @@ impl TextButton {
     }
 
     pub fn get_ideal_rect(&self) -> OriginRect {
+        TextButton::get_ideal_rect_raw(self.wrapper.0)
+    }
+
+    #[inline]
+    fn get_ideal_rect_raw(hwnd: HWND) -> OriginRect {
         unsafe {
             let mut ideal_size = SIZE {
                 cx: 0,
                 cy: 0
             };
             user32::SendMessageW(
-                self.wrapper.0,
+                hwnd,
                 BCM_GETIDEALSIZE,
                 0,
                 &mut ideal_size as *mut SIZE as LPARAM
@@ -249,7 +254,25 @@ struct WindowWrapper( HWND );
 unsafe impl Send for WindowWrapper {}
 unsafe impl Sync for WindowWrapper {}
 
-impl WindowWrapper {
+impl Deref for WindowWrapper {
+    type Target = WindowWrapperRef;
+
+    fn deref(&self) -> &WindowWrapperRef {
+        unsafe{ &*(&self.0 as *const _ as *const WindowWrapperRef) }
+    }
+}
+
+impl Drop for WindowWrapper {
+    fn drop(&mut self) {
+        unsafe{ user32::PostMessageW(self.0, DM_DESTROYWINDOW, 0, 0) };
+    }
+}
+
+struct WindowWrapperRef( HWND );
+unsafe impl Send for WindowWrapperRef {}
+unsafe impl Sync for WindowWrapperRef {}
+
+impl WindowWrapperRef {
     /// Take a null-terminated UCS2-formatted string slice and set the window title to it
     unsafe fn set_title(&self, title: &[u16]) {
         user32::SetWindowTextW(self.0, title.as_ptr());
@@ -356,6 +379,29 @@ impl WindowWrapper {
         }
     }
 
+    #[inline(always)]
+    fn enum_children<F>(&self, mut func: F)
+            where for<'a> F: FnMut(&'a WindowWrapperRef) -> bool 
+    {
+        unsafe extern "system" fn enum_child_proc<F>(hwnd: HWND, func: LPARAM) -> BOOL
+                where for<'a> F: FnMut(&'a WindowWrapperRef) -> bool
+        {
+            let func = &mut *(func as *mut F);
+            match func(&WindowWrapperRef(hwnd)) {
+                true => TRUE,
+                false => FALSE
+            }
+        }
+
+        unsafe {
+            user32::EnumChildWindows(
+                self.0,
+                Some(enum_child_proc::<F>),
+                &mut func as *mut F as LPARAM
+            );
+        }
+    }
+
     fn get_style(&self) -> u32 {
         unsafe{ user32::GetWindowLongW(self.0, -16) as u32 }
     }
@@ -363,11 +409,13 @@ impl WindowWrapper {
     fn get_style_ex(&self) -> u32 {
         unsafe{ user32::GetWindowLongW(self.0, -20) as u32 }
     }
-}
 
-impl Drop for WindowWrapper {
-    fn drop(&mut self) {
-        unsafe{ user32::PostMessageW(self.0, TM_DESTROYWINDOW, 0, 0) };
+    fn update_child_scales(&self, layout: &mut GridDims) {
+        self.enum_children(|child| unsafe {
+            user32::BringWindowToTop(child.0);
+            user32::SendMessageW(child.0, DM_RECALCSCALE, layout as *mut _ as WPARAM, 0);
+            true
+        });
     }
 }
 
@@ -382,7 +430,7 @@ lazy_static!{
 
         let window_class = WNDCLASSEXW {
             cbSize: mem::size_of::<WNDCLASSEXW>() as UINT,
-            style: CS_OWNDC | CS_VREDRAW | CS_HREDRAW | CS_DBLCLKS,
+            style: 0,
             lpfnWndProc: Some(user32::DefWindowProcW),
             cbClsExtra: 0,
             cbWndExtra: 0,
@@ -411,6 +459,23 @@ pub struct CallbackData {
     pub event_sender: Sender<RawEvent>
 }
 
+struct NodeData {
+    callback_data: *mut CallbackData,
+    slot: GridSlot,
+    layout: GridDims
+}
+
+impl NodeData {
+    #[inline]
+    fn new(callback_data: *mut CallbackData, slot: GridSlot, layout: GridDims) -> NodeData {
+        NodeData {
+            callback_data: callback_data,
+            slot: slot,
+            layout: layout
+        }
+    }
+}
+
 
 const TOPLEVEL_SUBCLASS: UINT_PTR = 0;
 const BUTTON_SUBCLASS: UINT_PTR = 1;
@@ -418,40 +483,28 @@ const BUTTON_SUBCLASS: UINT_PTR = 1;
 // A bunch of different derin messages for creating controls and such. These are all handled by the
 // toplevel window, as the child controls each have their own callback specified by windows.
 
-const TM_DESTROYWINDOW: UINT = WM_USER + 0;
+const DM_DESTROYWINDOW: UINT = WM_APP + 0;
 /// Create a title-less push button.
 ///
 /// # Callback parameters
 /// * `wparam`: Parent `HWND` handle
-const TM_NEWTEXTBUTTON: UINT = WM_USER + 1;
+const DM_NEWTEXTBUTTON: UINT = WM_APP + 1;
+const DM_RECALCSCALE: UINT = WM_APP + 2;
+const DM_SETSLOT: UINT = WM_APP + 3;
 
-unsafe extern "system"
-    fn toplevel_callback(hwnd: HWND, msg: UINT,
-                         wparam: WPARAM, lparam: LPARAM,
-                         _: UINT_PTR, cd: DWORD_PTR) -> LRESULT
+unsafe fn try_create_children(hwnd: HWND, msg: UINT, 
+                       wparam: WPARAM, lparam: LPARAM,
+                       nd: &mut NodeData) -> LRESULT
 {
-    let cd = &*(cd as *const CallbackData);
-
+    let cd = &mut *nd.callback_data;
     match msg {
-        WM_CLOSE => {
-            cd.event_sender.send(RawEvent::CloseClicked).ok();
-            0
-        },
+        DM_NEWTEXTBUTTON => {
+            let node_data = Box::new(NodeData::new(
+                cd,
+                GridSlot::default(),
+                GridDims::new()
+            ));
 
-        TM_DESTROYWINDOW => {
-            user32::DestroyWindow(hwnd);
-            user32::PostQuitMessage(0);
-            0
-        },
-
-        WM_SIZE => {
-            let (width, height) = (loword(lparam), hiword(lparam));
-            cd.event_sender.send(RawEvent::ToplevelResized(width as c_int, height as c_int)).ok();
-
-            0
-        },
-
-        TM_NEWTEXTBUTTON => {
             let button_hwnd = user32::CreateWindowExW(
                 0,
                 BUTTON_CLASS.as_ptr(),
@@ -461,13 +514,18 @@ unsafe extern "system"
                 0,
                 0,
                 0,
-                wparam as HWND,
+                hwnd,
                 ptr::null_mut(),
                 kernel32::GetModuleHandleW(ptr::null()),
                 ptr::null_mut()
             );
-            comctl32::SetWindowSubclass(button_hwnd, Some(pushbutton_callback), BUTTON_SUBCLASS, 0);
-            
+            comctl32::SetWindowSubclass(
+                button_hwnd,
+                Some(pushbutton_callback),
+                BUTTON_SUBCLASS,
+                Box::into_raw(node_data) as DWORD_PTR
+            );
+
             cd.window_sender.send(
                 (button_hwnd != ptr::null_mut()).as_result(
                     WindowNode::TextButton(TextButton {
@@ -476,25 +534,98 @@ unsafe extern "system"
                     }),
                     NativeError::OsError(format!("{}", io::Error::last_os_error()))
                 )).ok();
-            0
-        }
 
+            WindowWrapperRef(hwnd).update_child_scales(&mut nd.layout);
+            0
+        },
         _ => comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
+    }
+}
+
+unsafe extern "system"
+    fn toplevel_callback(hwnd: HWND, msg: UINT,
+                         wparam: WPARAM, lparam: LPARAM,
+                         _: UINT_PTR, nd: DWORD_PTR) -> LRESULT
+{
+    let nd = &mut *(nd as *mut NodeData);
+    let cd = &mut *nd.callback_data;
+
+    match msg {
+        WM_CLOSE => {
+            cd.event_sender.send(RawEvent::CloseClicked).ok();
+            0
+        },
+
+        DM_DESTROYWINDOW => {
+            user32::DestroyWindow(hwnd);
+            user32::PostQuitMessage(0);
+            Box::from_raw(nd);
+            0
+        },
+
+        WM_SIZE => {
+            let hwnd_ref = WindowWrapperRef(hwnd);
+            let new_rect = OriginRect::new(loword(lparam) as c_int, hiword(lparam) as c_int);
+
+            cd.event_sender.send(RawEvent::ToplevelResized(new_rect.width(), new_rect.height())).ok();
+
+            nd.layout.expand_size_px(new_rect).unwrap_or_else(|_| {
+                nd.layout.zero_all();
+                nd.layout.expand_size_px(new_rect).unwrap();
+            });
+
+            hwnd_ref.update_child_scales(&mut nd.layout);
+            0
+        },
+        _ => try_create_children(hwnd, msg, wparam, lparam, nd)
     }
 }
 
 unsafe extern "system"
     fn pushbutton_callback(hwnd: HWND, msg: UINT,
                            wparam: WPARAM, lparam: LPARAM,
-                           _: UINT_PTR, _: DWORD_PTR) -> LRESULT
+                           _: UINT_PTR, nd: DWORD_PTR) -> LRESULT
 {
+    let nd = &mut *(nd as *mut NodeData);
     match msg {
         WM_LBUTTONDOWN => {
             println!("button pressed!");
+            comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
         }
-        _ => ()
+
+        WM_NCDESTROY => {
+            // Free the memory for the node data associated with this button.
+            Box::from_raw(nd);
+            comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
+        }
+ 
+        DM_RECALCSCALE => {
+            let cell_x = nd.slot.node_span.x.start.unwrap();
+            let cell_y = nd.slot.node_span.y.start.unwrap();
+
+            let layout = &mut *(wparam as *mut GridDims);
+            let min_rect = TextButton::get_ideal_rect_raw(hwnd);
+            let mut rect_hint = HintedCell::new(
+                layout.get_cell_rect(
+                    cell_x,
+                    cell_y
+                ).unwrap(), nd.slot.place_in_cell);
+            let new_rect = rect_hint.transform_min_rect(min_rect);
+            layout.expand_cell_rect(cell_x, cell_y, rect_hint.outer_rect().into());
+
+            let hwnd_ref = WindowWrapperRef(hwnd);
+            hwnd_ref.set_pos(new_rect.topleft);
+            hwnd_ref.set_inner_size(new_rect.width(), new_rect.height());
+            1
+        }
+
+        DM_SETSLOT => {
+            nd.slot = *(wparam as *const GridSlot);
+            1
+        }
+
+        _ => comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
     }
-    comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
 }
 
 /// Enables win32 visual styles in the hackiest of methods. Basically, this steals the application

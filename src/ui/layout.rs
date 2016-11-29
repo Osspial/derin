@@ -1,4 +1,5 @@
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
+use boolinator::Boolinator;
 
 #[derive(Debug, Clone, Copy)]
 pub struct DyRange<Idx> {
@@ -102,7 +103,7 @@ two_axis_type!{
 
 impl Default for NodeSpan {
     fn default() -> NodeSpan {
-        NodeSpan::new(.., ..)
+        NodeSpan::new(0..0, 0..0)
     }
 }
 

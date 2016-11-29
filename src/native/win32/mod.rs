@@ -1,7 +1,7 @@
 mod wrapper;
 mod geometry;
-use self::wrapper::{WindowNode, Toplevel, CallbackData, RawEvent};
-use self::geometry::{HintedCell, GridDims, OriginRect};
+
+use self::wrapper::{WindowNode, CallbackData, RawEvent};
 
 use user32;
 
@@ -10,16 +10,15 @@ use std::mem;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::thread;
-use std::os::raw::c_int;
 
 use boolinator::Boolinator;
 
 use native::{NativeResult, NativeError};
 use native::WindowConfig;
 
-use ui::{Node, NodeProcessor, ParentNode};
+use ui::{Node, NodeProcessor, NodeProcessorAT, ParentNode};
 use ui::intrinsics::TextButton;
-use ui::layout::{GridLayout, EmptyNodeLayout, SingleNodeLayout, GridSize};
+use ui::layout::{GridLayout, EmptyNodeLayout, SingleNodeLayout};
 
 
 type WindowReceiver = Receiver<NativeResult<WindowNode>>;
@@ -45,17 +44,17 @@ impl<N: Node> Window<N> {
         // via Rust's MPSC channels.
         thread::spawn(move || {
             unsafe {
-                let cd = CallbackData {
+                let mut cd = CallbackData {
                     window_sender: window_sender.clone(),
                     event_sender: event_sender
                 };
 
                 // Create a wrapper toplevel window. If the creation succeeds, send back the window. Otherwise, send
                 // back the error it created and terminate this thread.
-                let wrapper_window = Toplevel::new(&config, &cd as *const CallbackData);
+                let wrapper_window = WindowNode::new_toplevel(&config, &mut cd as *mut CallbackData);
                 match wrapper_window {
                     Ok(wr) => {
-                        window_sender.send(Ok(WindowNode::Toplevel(wr))).unwrap();
+                        window_sender.send(Ok(wr)).unwrap();
                     }
 
                     Err(e) => {
@@ -78,11 +77,6 @@ impl<N: Node> Window<N> {
         // case that gets propagated.
         let wrapper_window = window_receiver.recv().unwrap()?;
 
-        let grid = if let WindowNode::Toplevel(ref tl) = wrapper_window {
-            let (width, height) = tl.get_inner_size().unwrap();
-            GridDims::with_size(GridSize::new(1, 1), OriginRect::new(width as c_int, height as c_int))
-        } else {unreachable!()};
-
         Ok(
             Window {
                 root: root,
@@ -91,9 +85,7 @@ impl<N: Node> Window<N> {
                     state_id: 0,
                     name: "toplevel",
                     window: Some(wrapper_window),
-                    grid: grid,
-                    children: Vec::with_capacity(1),
-                    cascade_change: true
+                    children: Vec::with_capacity(1)
                 },
 
                 window_receiver: window_receiver,
@@ -105,20 +97,12 @@ impl<N: Node> Window<N> {
     pub fn process(&mut self) -> NativeResult<()> {
         while let Ok(event) = self.event_receiver.try_recv() {
             match event {
-                RawEvent::ToplevelResized(x, y) => {
-                    self.node_tree_root.grid.zero_all();
-                    self.node_tree_root.grid.expand_size_px(OriginRect::new(x, y));
-                    self.node_tree_root.cascade_change = true;
-                }
                 _ => ()
             }
         }
 
         NodeTraverser {
-            cascade_change: self.node_tree_root.cascade_change,
-
             node_branch: &mut self.node_tree_root,
-            parent_window: None,
             receiver: &self.window_receiver,
             child_index: 0,
 
@@ -132,9 +116,7 @@ struct NodeTreeBranch {
     state_id: u16,
     name: &'static str,
     window: Option<WindowNode>,
-    grid: GridDims,
-    children: Vec<NodeTreeBranch>,
-    cascade_change: bool
+    children: Vec<NodeTreeBranch>
 }
 
 /// Trait for converting `Node`s into `NodeTreeBranch`es.
@@ -148,9 +130,7 @@ impl<N: Node> IntoNTB for N {
             state_id: self.state_id(),
             name: name,
             window: None,
-            grid: GridDims::new(),
-            children: Vec::new(),
-            cascade_change: true
+            children: Vec::new()
         })
     }
 }
@@ -158,28 +138,20 @@ impl<N: Node> IntoNTB for N {
 struct NodeTraverser<'a, L: GridLayout> {
     /// The branch that this instance of NodeTraverser is currently processing
     node_branch: &'a mut NodeTreeBranch,
-    /// The `WindowNode` belonging to the parent `NodeTreeBranch` of this `NodeTraverser`. In the event
-    /// that this `NodeTraverser` represents the root node, this is `None`.
-    parent_window: Option<&'a WindowNode>,
     receiver: &'a WindowReceiver,
     /// The index in the child vector to first look at when searching for a child. As new
     /// children get added, this gets incremented.
     child_index: usize,
 
-    children_layout: L,
-    cascade_change: bool
+    children_layout: L
 }
 
 impl<'a, L: GridLayout> NodeTraverser<'a, L> {
     fn take<CL: GridLayout>(&mut self, child_index: usize, layout: CL) -> NodeTraverser<CL> {
         let nb = &mut self.node_branch.children[child_index];
-        nb.grid.set_grid_size(layout.grid_size());
 
         NodeTraverser {
-            cascade_change: self.cascade_change || nb.cascade_change,
-
             node_branch: nb,
-            parent_window: self.node_branch.window.as_ref(),
             receiver: self.receiver,
             child_index: 0,
 
@@ -191,7 +163,7 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
     fn process_child_node_nochildren<N, PF>(&mut self, name: &'static str, node: &mut N, proc_func: PF)
             -> NativeResult<()>
             where N: Node,
-                  PF: FnOnce(&mut N, NodeTraverser<EmptyNodeLayout>, &mut HintedCell) -> NativeResult<()>
+                  PF: FnOnce(&mut N, NodeTraverser<EmptyNodeLayout>) -> NativeResult<()>
     {
         self.process_child_node(name, node, EmptyNodeLayout, proc_func)
     }
@@ -203,17 +175,9 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
             -> NativeResult<()>
             where N: Node,
                   CL: GridLayout,
-                  PF: FnOnce(&mut N, NodeTraverser<CL>, &mut HintedCell) -> NativeResult<()>
+                  PF: FnOnce(&mut N, NodeTraverser<CL>) -> NativeResult<()>
     {
         if let Some(slot) = self.children_layout.next() {
-            let (slot_x, slot_y) = (slot.node_span.x.start.unwrap(), slot.node_span.y.start.unwrap());
-            let mut hinted_cell = HintedCell::new(
-                self.node_branch.grid
-                    .get_cell_rect(slot_x, slot_y)
-                    .expect("Out of bounds error; handle without panicing in future"),
-                slot.place_in_cell
-            );
-
             // If the desired node branch is at the current child index, get that and run the contents of the
             // `if` statement. Otherwise, search the entire children vector for the desired node and run the
             // `if` statement if that's found. If both of those fail, insert a new node branch and run the
@@ -229,48 +193,48 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                 // Compare the newly-generated state id and the cached state id. If there is a mismatch, update the
                 // cached id and run the processing function.
                 let new_state_id = node.state_id();
-                if self.cascade_change || self.node_branch.children[i].state_id != new_state_id {
+                if self.node_branch.children[i].state_id != new_state_id {
+                    proc_func(node, self.take(i, child_layout))?;
                     self.node_branch.children[i].state_id = new_state_id;
-                    proc_func(node, self.take(i, child_layout), &mut hinted_cell)?;
+                    
+                    if let Some(ref window) = self.node_branch.children[i].window {
+                        window.set_slot(slot);
+                    }
                 }
             } else {
                 self.node_branch.children.insert(
                     self.child_index, 
                     node.into_ntb(
                         name,
-                        self.parent_window.or(self.node_branch.window.as_ref()).expect("Attempted to create child window without parent"),
+                        self.node_branch.window.as_ref().expect("Attempted to create child window without parent"),
                         self.receiver
                     )?
                 );
                 let child_index = self.child_index;
                 self.child_index += 1;
-                proc_func(node, self.take(child_index, child_layout), &mut hinted_cell)?;
-            }
+                proc_func(node, self.take(child_index, child_layout))?;
+                // Store the state id after running the processor function, so that the cached ID
+                // is accurate.
+                self.node_branch.children[child_index].state_id = node.state_id();
 
-            self.node_branch.grid.expand_cell_rect(
-                slot_x, slot_y, 
-                hinted_cell.inner_rect()
-                    .map(|r| OriginRect::from(r))
-                    .unwrap_or(OriginRect::default())
-                );
+                if let Some(ref window) = self.node_branch.children[child_index].window {
+                    window.set_slot(slot);
+                }
+            }
         }
         Ok(())
     }
 }
 
-impl<'a, L: GridLayout> Drop for NodeTraverser<'a, L> {
-    fn drop(&mut self) {
-        self.node_branch.cascade_change = false;
-    }
-}
-
 impl<'a, N: Node, L: GridLayout> NodeProcessor<N> for NodeTraverser<'a, L> {
-    type Error = NativeError;
     default fn add_child(&mut self, name: &'static str, node: &mut N) -> NativeResult<()> {
         // We have no information about what's in the child node, so we can't really do anything.
         // It still needs to get added to the tree though.
-        self.process_child_node_nochildren(name, node, |_, _, _| Ok(()))
+        self.process_child_node_nochildren(name, node, |_, _| Ok(()))
     }
+}
+impl<'a, L: GridLayout> NodeProcessorAT for NodeTraverser<'a, L> {
+    type Error = NativeError;
 }
 
 impl<'a, N, L> NodeProcessor<N> for NodeTraverser<'a, L> 
@@ -288,7 +252,7 @@ impl<'a, N, L> NodeProcessor<N> for NodeTraverser<'a, L>
         let child_layout = <N as ParentNode<NodeTraverser<EmptyNodeLayout>>>::child_layout(node);
 
         self.process_child_node(name, node, child_layout,
-            |node, traverser, _| node.children(traverser))
+            |node, traverser| node.children(traverser))
     }
 }
 
@@ -296,11 +260,9 @@ impl<'a, S, L> NodeProcessor<TextButton<S>> for NodeTraverser<'a, L>
         where S: AsRef<str>,
               L: GridLayout {
     fn add_child(&mut self, name: &'static str, node: &mut TextButton<S>) -> NativeResult<()> {
-        self.process_child_node_nochildren(name, node, |node, traverser, rhint| {
+        self.process_child_node_nochildren(name, node, |node, traverser| {
             if let Some(WindowNode::TextButton(ref mut b)) = traverser.node_branch.window {
                 b.set_text(node.as_ref());
-                let button_rect = rhint.transform_min_rect(b.get_ideal_rect());
-                b.set_rect(button_rect);
 
                 Ok(())
             } else {panic!("Mismatched WindowNode in TextButton. Please report code that caused this in derin repository.")}
@@ -314,9 +276,7 @@ impl<'a, S: AsRef<str>> IntoNTB for TextButton<S> {
             state_id: self.state_id(),
             name: name,
             window: Some(parent.new_text_button(receiver)?),
-            grid: GridDims::new(),
-            children: Vec::new(),
-            cascade_change: true
+            children: Vec::new()
         })
     }
 }

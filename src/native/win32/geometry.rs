@@ -203,7 +203,13 @@ impl GridDims {
     pub fn with_size(grid_size: GridSize, size_px: OriginRect) -> GridDims {
         let mut dims = GridDims::new();
         dims.set_grid_size(grid_size);
-        dims.expand_size_px(size_px);
+        dims.expand_size_px(size_px).ok();
+        dims
+    }
+
+    pub fn with_grid_size(grid_size: GridSize) -> GridDims {
+        let mut dims = GridDims::new();
+        dims.set_grid_size(grid_size);
         dims
     }
 
@@ -241,9 +247,12 @@ impl GridDims {
         }
     }
 
-    pub fn expand_size_px(&mut self, size_px: OriginRect) {
-        assert!(self.size_px.width() <= size_px.width());
-        assert!(self.size_px.height() <= size_px.height());
+    pub fn expand_size_px(&mut self, size_px: OriginRect) -> Result<(), OriginRect> {
+        if self.size_px.width() > size_px.width() ||
+           self.size_px.height() > size_px.height()
+        {
+            return Err(size_px);
+        }
 
         let old_rect = self.get_span_origin_rect(NodeSpan::new(.., ..)).unwrap();
         let width_diff = (size_px.width() - old_rect.width()) as usize;
@@ -270,6 +279,7 @@ impl GridDims {
         }
 
         self.size_px = size_px;
+        Ok(())
     }
 
     pub fn zero_column(&mut self, column_num: u32) {
@@ -286,7 +296,7 @@ impl GridDims {
         for d in &mut self.dims {
             *d = GridLine::default();
         }
-        self.size_px = OriginRect::default();
+        self.size_px = OriginRect::new(0, 0);
     }
 
     pub fn column_width(&self, column_num: u32) -> Option<c_int> {
