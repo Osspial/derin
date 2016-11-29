@@ -207,3 +207,37 @@ impl Iterator for EmptyNodeLayout {
     }
 }
 impl ExactSizeIterator for EmptyNodeLayout {}
+
+#[derive(Default, Clone)]
+pub struct VerticalLayout {
+    len: u32,
+    cur: u32
+}
+
+impl VerticalLayout {
+    pub fn new(len: u32) -> VerticalLayout {
+        VerticalLayout {
+            len: len,
+            cur: 0
+        }
+    }
+}
+
+impl GridLayout for VerticalLayout {
+    fn grid_size(&self) -> GridSize {
+        GridSize::new(1, self.len)
+    }
+}
+
+impl Iterator for VerticalLayout {
+    type Item = GridSlot;
+
+    fn next(&mut self) -> Option<GridSlot> {
+        (self.cur < self.len).as_some({
+            GridSlot {
+                node_span: NodeSpan::new(0..1, self.cur..self.cur+1),
+                place_in_cell: PlaceInCell::default()
+            }
+        })
+    }
+}
