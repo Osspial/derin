@@ -234,10 +234,12 @@ impl Iterator for VerticalLayout {
 
     fn next(&mut self) -> Option<GridSlot> {
         (self.cur < self.len).as_some({
-            GridSlot {
+            let slot = GridSlot {
                 node_span: NodeSpan::new(0..1, self.cur..self.cur+1),
                 place_in_cell: PlaceInCell::default()
-            }
+            };
+            self.cur += 1;
+            slot
         })
     }
 }
