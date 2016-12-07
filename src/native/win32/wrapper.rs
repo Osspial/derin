@@ -727,11 +727,11 @@ unsafe extern "system"
 {
     let nd = &mut *(nd as *mut NodeData);
     match msg {
-        WM_SIZE => {
+        WM_SETTEXT => {
             let owner_hwnd = user32::GetParent(hwnd);
             assert_ne!(owner_hwnd, ptr::null_mut());
             user32::PostMessageW(owner_hwnd, DM_UPDATECHILDSCALES, 0, 0);
-            0
+            comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
         }
 
         WM_NCDESTROY => {
