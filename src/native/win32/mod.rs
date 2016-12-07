@@ -194,12 +194,12 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                 // cached id and run the processing function.
                 let new_state_id = node.state_id();
                 if self.node_branch.children[i].state_id != new_state_id {
-                    proc_func(node, self.take(i, child_layout))?;
-                    self.node_branch.children[i].state_id = new_state_id;
-                    
                     if let Some(ref window) = self.node_branch.children[i].window {
                         window.set_slot(slot);
                     }
+
+                    proc_func(node, self.take(i, child_layout))?;
+                    self.node_branch.children[i].state_id = new_state_id;
                 }
             } else {
                 self.node_branch.children.insert(
@@ -212,14 +212,16 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                 );
                 let child_index = self.child_index;
                 self.child_index += 1;
+                
+                if let Some(ref window) = self.node_branch.children[child_index].window {
+                    window.set_slot(slot);
+                }
+
                 proc_func(node, self.take(child_index, child_layout))?;
                 // Store the state id after running the processor function, so that the cached ID
                 // is accurate.
                 self.node_branch.children[child_index].state_id = node.state_id();
 
-                if let Some(ref window) = self.node_branch.children[child_index].window {
-                    window.set_slot(slot);
-                }
             }
         }
         Ok(())
@@ -252,7 +254,26 @@ impl<'a, N, L> NodeProcessor<N> for NodeTraverser<'a, L>
         let child_layout = <N as ParentNode<NodeTraverser<EmptyNodeLayout>>>::child_layout(node);
 
         self.process_child_node(name, node, child_layout,
-            |node, traverser| node.children(traverser))
+            |node, traverser| {
+                if let Some(WindowNode::LayoutGroup(ref lg)) = traverser.node_branch.window {
+                    lg.set_grid_size(traverser.children_layout.grid_size());
+                } else {unreachable!()}
+                node.children(traverser)
+            })
+    }
+}
+
+impl<N> IntoNTB for N where
+    for<'b, 'c> N: ParentNode<NodeTraverser<'b, <N as ParentNode<NodeTraverser<'c, EmptyNodeLayout>>>::Layout>> +
+                   ParentNode<NodeTraverser<'c, EmptyNodeLayout>>
+{
+    default fn into_ntb(&self, name: &'static str, parent: &WindowNode, receiver: &WindowReceiver) -> NativeResult<NodeTreeBranch> {
+        Ok(NodeTreeBranch {
+            state_id: self.state_id(),
+            name: name,
+            window: Some(parent.new_layout_group(receiver)?),
+            children: Vec::new()
+        })
     }
 }
 

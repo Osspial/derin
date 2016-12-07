@@ -138,7 +138,7 @@ pub struct LayoutHint {
     pub place_in_cell: PlaceInCell
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct GridSlot {
     pub node_span: NodeSpan,
     pub place_in_cell: PlaceInCell

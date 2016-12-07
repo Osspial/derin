@@ -247,11 +247,21 @@ impl GridDims {
         }
     }
 
+    /// Attempt to increase the grid's size. If the given size is less than the current size, return
+    /// an error containing the grid's current, non-expanded size.
+    ///
+    /// If the grid contains no cells, this function does nothing, but does not fail.
     pub fn expand_size_px(&mut self, size_px: OriginRect) -> Result<(), OriginRect> {
         if self.size_px.width() > size_px.width() ||
            self.size_px.height() > size_px.height()
         {
-            return Err(size_px);
+            return Err(self.size_px);
+        } else if self.num_cols == 0 ||
+                  self.num_rows == 0 ||
+                 (self.size_px.width() == size_px.width() &&
+                  self.size_px.height() == size_px.height())
+        {
+            return Ok(())
         }
 
         let old_rect = self.get_span_origin_rect(NodeSpan::new(.., ..)).unwrap();
