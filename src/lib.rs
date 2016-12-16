@@ -5,6 +5,7 @@ extern crate boolinator;
 #[macro_use]
 extern crate lazy_static;
 extern crate smallvec;
+extern crate dle;
 
 #[cfg(target_os="windows")]
 extern crate user32;

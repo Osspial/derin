@@ -1,5 +1,4 @@
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
-use boolinator::Boolinator;
 
 #[derive(Debug, Clone, Copy)]
 pub struct DyRange<Idx> {
@@ -233,13 +232,15 @@ impl Iterator for VerticalLayout {
     type Item = GridSlot;
 
     fn next(&mut self) -> Option<GridSlot> {
-        (self.cur < self.len).as_some({
+        if self.cur < self.len {
             let slot = GridSlot {
                 node_span: NodeSpan::new(0..1, self.cur..self.cur+1),
                 place_in_cell: PlaceInCell::default()
             };
             self.cur += 1;
-            slot
-        })
+            Some(slot)
+        } else {
+            None
+        }
     }
 }

@@ -8,9 +8,13 @@ rand = "0.3"
 boolinator = "2.0"
 lazy_static = "0.2"
 smallvec = "0.2"
+dle = {path = "./dle"}
 
 winapi = "0.2"
 user32-sys = "0.1"
 kernel32-sys = "0.2"
 dwmapi-sys = "0.1"
 comctl32-sys = "0.2"
+
+[workspace]
+members = ["./dle"]
