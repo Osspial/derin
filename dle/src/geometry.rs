@@ -14,6 +14,14 @@ impl Point {
             y: y
         }
     }
+
+    pub fn min() -> Point {
+        Point::new(0, 0)
+    }
+
+    pub fn max() -> Point {
+        Point::new(u32::max_value(), u32::max_value())
+    }
 }
 
 impl Add for Point {
@@ -102,6 +110,18 @@ impl OriginRect {
     pub fn new(lr_x: u32, lr_y: u32) -> OriginRect {
         OriginRect {
             lowright: Point::new(lr_x, lr_y)
+        }
+    }
+
+    pub fn min() -> OriginRect {
+        OriginRect {
+            lowright: Point::min()
+        }
+    }
+
+    pub fn max() -> OriginRect {
+        OriginRect {
+            lowright: Point::max()
         }
     }
 }
