@@ -2,9 +2,11 @@
 
 pub mod geometry;
 pub mod layout;
+mod grid;
 
 use geometry::{OriginRect, OffsetRect};
 use layout::{NodeSpan, PlaceInCell};
+use grid::GridDims;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -60,6 +62,7 @@ pub struct LayoutEngine<C: Container>
         where for<'a> &'a C: ContainerRef<'a, Widget = C::Widget>
 {
     container: C,
+    grid: GridDims,
     id: u32
 }
 
@@ -71,6 +74,7 @@ impl<C: Container> LayoutEngine<C>
 
         LayoutEngine {
             container: container,
+            grid: GridDims::new(),
             id: ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32
         }
     }
