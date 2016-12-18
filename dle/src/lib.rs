@@ -25,11 +25,34 @@ impl Default for SizeBounds {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+pub struct WidgetData<W: Widget> {
+    pub widget: W,
+    pub layout_info: WidgetLayoutInfo
+}
+
+#[derive(Default, Debug, Clone, Copy)]
 pub struct WidgetLayoutInfo {
-    pub size_bounds: SizeBounds,
-    pub node_span: NodeSpan,
-    pub placement: PlaceInCell
+    size_bounds: SizeBounds,
+    node_span: NodeSpan,
+    placement: PlaceInCell
+}
+
+impl WidgetLayoutInfo {
+    pub fn new() -> WidgetLayoutInfo {
+        WidgetLayoutInfo::default()
+    }
+
+    pub fn size_bounds(self) -> SizeBounds {
+        self.size_bounds
+    }
+
+    pub fn node_span(self) -> NodeSpan {
+        self.node_span
+    }
+
+    pub fn placement(self) -> PlaceInCell {
+        self.placement
+    }
 }
 
 pub trait Widget {
@@ -39,13 +62,13 @@ pub trait Widget {
 pub trait Container
         where for<'a> &'a Self: ContainerRef<'a, Widget = Self::Widget> {
     type Widget: Widget;
-    type Key;
+    type Key: Clone + Copy;
 
-    fn get(&self, Self::Key) -> Option<&(Self::Widget, WidgetLayoutInfo)>;
-    fn get_mut(&mut self, Self::Key) -> Option<&mut (Self::Widget, WidgetLayoutInfo)>;
+    fn get(&self, Self::Key) -> Option<&WidgetData<Self::Widget>>;
+    fn get_mut(&mut self, Self::Key) -> Option<&mut WidgetData<Self::Widget>>;
 
-    fn insert(&mut self, key: Self::Key, widget: Self::Widget);
-    fn remove(&mut self, key: Self::Key) -> Self::Widget;
+    fn insert(&mut self, key: Self::Key, widget: Self::Widget) -> Option<WidgetData<Self::Widget>>;
+    fn remove(&mut self, key: Self::Key) -> Option<WidgetData<Self::Widget>>;
 
     fn widgets_in_span(&self, span: NodeSpan) -> <&Self as ContainerRef>::SpanIter;
     fn widgets_in_span_mut(&mut self, span: NodeSpan) -> <&Self as ContainerRef>::SpanIterMut;
@@ -80,10 +103,10 @@ impl<C: Container> LayoutEngine<C>
     }
 
     pub fn get_widget(&self, key: C::Key) -> Option<&C::Widget> {
-        self.container.get(key).map(|w| &w.0)
+        self.container.get(key).map(|w| &w.widget)
     }
 
     pub fn get_widget_mut(&mut self, key: C::Key) -> Option<&mut C::Widget> {
-        self.container.get_mut(key).map(|w| &mut w.0)
+        self.container.get_mut(key).map(|w| &mut w.widget)
     }
 }
