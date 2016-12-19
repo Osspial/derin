@@ -4,39 +4,39 @@ use std::ops::Range;
 use std::cmp::Ordering;
 
 pub enum SetSizeResult {
-    /// The line's size is completely unchanged.
+    /// The track's size is completely unchanged.
     NoEffect,
-    /// The passed cell was the biggest in the line, but no longer is. The size of the line is therefore
+    /// The passed cell was the biggest in the track, but no longer is. The size of the track is therefore
     /// smaller than it was, but `GridDims` cannot determine how much smaller. It must be recalculated by
-    /// calling `set_{col|row}_cell_{width|height}` for each widget in the line.
+    /// calling `set_{col|row}_cell_{width|height}` for each widget in the track.
     SizeDownscale,
-    /// The line's new size is larger than it was before `set_{col|row}_cell_{width|height}` was called.
+    /// The track's new size is larger than it was before `set_{col|row}_cell_{width|height}` was called.
     SizeUpscale
 }
 
 pub enum SetMinSizeResult {
-    /// The line's minimum size is completely unchanged
+    /// The track's minimum size is completely unchanged
     NoEffect,
-    /// The line's minimum size is smaller than it was before the function was called. It must be
-    /// recalculated by calling `set_{col|row}_cell_min_{width|height}` for each widget in the line.
+    /// The track's minimum size is smaller than it was before the function was called. It must be
+    /// recalculated by calling `set_{col|row}_cell_min_{width|height}` for each widget in the track.
     MinSizeDownscale,
-    /// The line's minimum size was increased, but not enough to result requiring any recalculations.
+    /// The track's minimum size was increased, but not enough to result requiring any recalculations.
     MinSizeUpscale,
-    /// The line's minimum with was increased past the line size, resulting in the line size becoming
+    /// The track's minimum with was increased past the track size, resulting in the track size becoming
     /// larger.
     SizeUpscale
 }
 
 #[derive(Clone, Copy)]
-struct GridLine {
-    /// The size, in pixels, of this grid line. For columns, this is the width; for rows, the height.
+struct GridTrack {
+    /// The size, in pixels, of this grid track. For columns, this is the width; for rows, the height.
     size_px: u32,
     num_biggest: u32,
     min_size_px: u32,
     min_num_biggest: u32
 }
 
-impl GridLine {
+impl GridTrack {
     fn set_cell_size_px(&mut self, mut new_size: u32, old_size: u32) -> SetSizeResult {
         let is_biggest_size = self.size_px <= new_size;
         let was_biggest_size = self.size_px == old_size;
@@ -89,9 +89,9 @@ impl GridLine {
     }
 }
 
-impl Default for GridLine {
-    fn default() -> GridLine {
-        GridLine {
+impl Default for GridTrack {
+    fn default() -> GridTrack {
+        GridTrack {
             size_px: 0,
             num_biggest: 0,
             min_size_px: 0,
@@ -139,7 +139,7 @@ pub struct GridDims {
     num_rows: u32,
     /// A vector that contains the dimensions of the rows and columns of the grid. The first `num_cols`
     /// elements are the column widths, the next `num_rows` elements are the row heights.
-    dims: Vec<GridLine>,
+    dims: Vec<GridTrack>,
     size_px: OriginRect,
     min_size_px: OriginRect
 }
@@ -165,7 +165,7 @@ impl GridDims {
                 // Well, we need to shift the row data over, so if we resize the vector before doing that we're
                 // going to be shifting from undefined data!
                 if size.x + size.y > self.num_cols + self.num_rows {
-                    self.dims.resize((size.x + size.y) as usize, GridLine::default());
+                    self.dims.resize((size.x + size.y) as usize, GridTrack::default());
                 } else if size.x + size.y < self.num_cols + self.num_rows {
                     self.size_px.lowright.x -= self.dims[size.x as usize..self.num_cols as usize].iter().map(|d| d.size_px).sum();
                     self.size_px.lowright.y -= self.dims[(self.num_cols + size.y) as usize..].iter().map(|d| d.size_px).sum();
@@ -312,7 +312,7 @@ impl GridDims {
         self.size_px.height()
     }
 
-    fn get_col(&self, column_num: u32) -> Option<&GridLine> {
+    fn get_col(&self, column_num: u32) -> Option<&GridTrack> {
         if column_num < self.num_cols {
             self.dims.get(column_num as usize)
         } else {
@@ -320,11 +320,11 @@ impl GridDims {
         }
     }
 
-    fn get_row(&self, row_num: u32) -> Option<&GridLine> {
+    fn get_row(&self, row_num: u32) -> Option<&GridTrack> {
         self.dims.get((self.num_cols + row_num) as usize)
     }
 
-    fn get_cell_lines_mut(&mut self, column_num: u32, row_num: u32) -> (Option<&mut GridLine>, Option<&mut GridLine>) {
+    fn get_cell_tracks_mut(&mut self, column_num: u32, row_num: u32) -> (Option<&mut GridTrack>, Option<&mut GridTrack>) {
         if self.num_cols <= column_num {
             (None, self.get_row_mut(row_num))
         } else {
@@ -333,7 +333,7 @@ impl GridDims {
         }
     }
 
-    fn get_col_mut(&mut self, column_num: u32) -> Option<&mut GridLine> {
+    fn get_col_mut(&mut self, column_num: u32) -> Option<&mut GridTrack> {
         if column_num < self.num_cols {
             self.dims.get_mut(column_num as usize)
         } else {
@@ -341,11 +341,11 @@ impl GridDims {
         }
     }
 
-    fn get_row_mut(&mut self, row_num: u32) -> Option<&mut GridLine> {
+    fn get_row_mut(&mut self, row_num: u32) -> Option<&mut GridTrack> {
         self.dims.get_mut((self.num_cols + row_num) as usize)
     }
 
-    fn col_iter<'a>(&'a self, range: Range<u32>) -> Option<impl Iterator<Item = &'a GridLine>> {
+    fn col_iter<'a>(&'a self, range: Range<u32>) -> Option<impl Iterator<Item = &'a GridTrack>> {
         if range.end <= self.num_cols {
             let range_usize = range.start as usize..range.end as usize;
             Some(self.dims[range_usize].iter())
@@ -354,7 +354,7 @@ impl GridDims {
         }
     }
 
-    fn row_iter<'a>(&'a self, range: Range<u32>) -> Option<impl Iterator<Item = &'a GridLine>> {
+    fn row_iter<'a>(&'a self, range: Range<u32>) -> Option<impl Iterator<Item = &'a GridTrack>> {
         if range.end <= self.dims.len() as u32 {
             let range_usize = (range.start + self.num_cols) as usize..(range.end + self.num_cols)as usize;
             Some(self.dims[range_usize].iter())
@@ -363,7 +363,7 @@ impl GridDims {
         }
     }
 
-    fn col_iter_mut<'a>(&'a mut self, range: Range<u32>) -> Option<impl Iterator<Item = &'a mut GridLine>> {
+    fn col_iter_mut<'a>(&'a mut self, range: Range<u32>) -> Option<impl Iterator<Item = &'a mut GridTrack>> {
         if range.end <= self.num_cols {
             let range_usize = range.start as usize..range.end as usize;
             Some(self.dims[range_usize].iter_mut())
@@ -372,7 +372,7 @@ impl GridDims {
         }
     }
 
-    fn row_iter_mut<'a>(&'a mut self, range: Range<u32>) -> Option<impl Iterator<Item = &'a mut GridLine>> {
+    fn row_iter_mut<'a>(&'a mut self, range: Range<u32>) -> Option<impl Iterator<Item = &'a mut GridTrack>> {
         if range.end <= self.dims.len() as u32 {
             let range_usize = (range.start + self.num_cols) as usize..(range.end + self.num_cols)as usize;
             Some(self.dims[range_usize].iter_mut())
