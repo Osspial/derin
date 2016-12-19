@@ -3,29 +3,133 @@ use super::layout::{NodeSpan, GridSize};
 use std::ops::Range;
 use std::cmp::Ordering;
 
-pub struct SetLineStatus {
-    pub size_px: Ordering,
-    pub min_size_px: Ordering
+pub enum SetSizeResult {
+    /// The line's size is completely unchanged.
+    NoEffect,
+    /// The passed cell was the biggest in the line, but no longer is. The size of the line is therefore
+    /// smaller than it was, but `GridDims` cannot determine how much smaller. It must be recalculated by
+    /// calling `set_{col|row}_cell_{width|height}` for each widget in the line.
+    SizeDownscale,
+    /// The line's new size is larger than it was before `set_{col|row}_cell_{width|height}` was called.
+    SizeUpscale
 }
 
-pub struct SetCellStatus {
-    pub col_status: SetLineStatus,
-    pub row_status: SetLineStatus
+pub enum SetMinSizeResult {
+    /// The line's minimum size is completely unchanged
+    NoEffect,
+    /// The line's minimum size is smaller than it was before the function was called. It must be
+    /// recalculated by calling `set_{col|row}_cell_min_{width|height}` for each widget in the line.
+    MinSizeDownscale,
+    /// The line's minimum size was increased, but not enough to result requiring any recalculations.
+    MinSizeUpscale,
+    /// The line's minimum with was increased past the line size, resulting in the line size becoming
+    /// larger.
+    SizeUpscale
 }
 
 #[derive(Clone, Copy)]
 struct GridLine {
     /// The size, in pixels, of this grid line. For columns, this is the width; for rows, the height.
     size_px: u32,
-    num_biggest: u32
+    num_biggest: u32,
+    min_size_px: u32,
+    min_num_biggest: u32
+}
+
+impl GridLine {
+    fn set_cell_size_px(&mut self, mut new_size: u32, old_size: u32) -> SetSizeResult {
+        let is_biggest_size = self.size_px <= new_size;
+        let was_biggest_size = self.size_px == old_size;
+
+        self.num_biggest += is_biggest_size as u32;
+        self.num_biggest -= was_biggest_size as u32;
+
+        if self.size_px < new_size {
+            self.size_px = new_size;
+            self.num_biggest = 1;
+
+            SetSizeResult::SizeUpscale
+        } else if self.num_biggest == 0 {
+            self.size_px = 0;
+            self.num_biggest = 0;
+
+            SetSizeResult::SizeDownscale
+        } else {
+            SetSizeResult::NoEffect
+        }
+    }
+
+    fn set_cell_min_size_px(&mut self, new_min_size: u32, old_min_size: u32) -> SetMinSizeResult {
+        let mut ret = SetMinSizeResult::NoEffect;
+
+        let is_biggest_min_size = self.min_size_px <= new_min_size;
+        let was_biggest_min_size = self.min_size_px == old_min_size;
+
+        self.min_num_biggest += is_biggest_min_size as u32;
+        self.min_num_biggest -= was_biggest_min_size as u32;
+
+        if self.min_size_px < new_min_size {
+            self.min_size_px = new_min_size;
+            self.min_num_biggest = 1;
+
+            ret = SetMinSizeResult::MinSizeUpscale;
+        } else if self.min_num_biggest == 0 {
+            self.min_size_px = 0;
+            self.min_num_biggest = 0;
+
+            ret = SetMinSizeResult::MinSizeDownscale;
+        }
+
+        if self.size_px < new_min_size {
+            self.size_px = new_min_size;
+            ret = SetMinSizeResult::SizeUpscale;
+        }
+
+        ret
+    }
 }
 
 impl Default for GridLine {
     fn default() -> GridLine {
         GridLine {
             size_px: 0,
-            num_biggest: 0
+            num_biggest: 0,
+            min_size_px: 0,
+            min_num_biggest: 0
         }
+    }
+}
+
+macro_rules! fn_set_cell_size_px {
+    () => ();
+    (
+        $(#[$attr:meta])*
+        pub fn $fn_name:ident(&mut self, $num:ident: u32, $new_cell_size:ident: u32, $old_cell_size:ident: u32) -> $ret:ty
+            where get = self.$get:ident,
+                  for<$cell:ident> set = $set:expr,
+                  acc = self.$acc_field:ident.lowright.$acc_dim:ident,
+        $($rest:tt)*
+    ) => {
+        $(#[$attr])*
+        pub fn $fn_name(&mut self, $num: u32, $new_cell_size: u32, $old_cell_size: u32) -> $ret {
+            let old_size: u32;
+            let new_size: u32;
+            let ret: $ret;
+            {
+                let $cell = self.$get($num).expect(concat!("Invalid ", stringify!($cell), " number passed"));
+
+                old_size = $cell.size_px;
+                ret = $set;
+                new_size = $cell.size_px;
+            }
+
+            self.$acc_field.lowright.$acc_dim += old_size;
+            self.$acc_field.lowright.$acc_dim -= new_size;
+
+            ret
+        }
+
+        fn_set_cell_size_px!($($rest)*);
     }
 }
 
@@ -36,7 +140,8 @@ pub struct GridDims {
     /// A vector that contains the dimensions of the rows and columns of the grid. The first `num_cols`
     /// elements are the column widths, the next `num_rows` elements are the row heights.
     dims: Vec<GridLine>,
-    size_px: OriginRect
+    size_px: OriginRect,
+    min_size_px: OriginRect
 }
 
 impl GridDims {
@@ -45,21 +150,9 @@ impl GridDims {
             num_cols: 0,
             num_rows: 0,
             dims: Vec::new(),
-            size_px: OriginRect::default()
+            size_px: OriginRect::default(),
+            min_size_px: OriginRect::default()
         }
-    }
-
-    pub fn with_size(grid_size: GridSize, size_px: OriginRect) -> GridDims {
-        let mut dims = GridDims::new();
-        dims.set_grid_size(grid_size);
-        dims.set_size_px(size_px).ok();
-        dims
-    }
-
-    pub fn with_grid_size(grid_size: GridSize) -> GridDims {
-        let mut dims = GridDims::new();
-        dims.set_grid_size(grid_size);
-        dims
     }
 
     pub fn set_grid_size(&mut self, size: GridSize) {
@@ -135,75 +228,36 @@ impl GridDims {
     }
 
     pub fn row_height(&self, row_num: u32) -> Option<u32> {
-        // We can just call `get`, unlike in `column_width`, because the rows are stored at the end
-        // of the vector.
         self.get_row(row_num).map(|gl| gl.size_px)
     }
 
-    pub fn set_col_width(&mut self, column_num: u32, new_width: u32, old_width: u32) -> SetLineStatus {
-        let mut width_delta = 0i32;
-        {        
-            let col = self.get_col_mut(column_num).expect("Invalid column number passed");
+    fn_set_cell_size_px!{
+        /// Given a column num, set the width of a single cell in the column. Note that this does *not*
+        /// necessarily set the actual width of the column, but instead takes into account the widths of
+        /// other cells in the column to determine whether or not to downscale the column's width, upscale
+        /// it, or leave it unchanged.
+        pub fn set_col_cell_width(&mut self, column_num: u32, new_cell_width: u32, old_cell_width: u32) -> SetSizeResult
+            where get = self.get_col_mut,
+                  for<col> set = col.set_cell_size_px(new_cell_width, old_cell_width),
+                  acc = self.size_px.lowright.x,
 
-            let was_biggest_width = col.size_px == old_width;
-            let is_biggest_width = col.size_px <= new_width;
+        /// See `set_col_cell_width`'s documentation. The concept is the same, except for rows and not columns.
+        pub fn set_row_cell_height(&mut self, row_num: u32, new_cell_height: u32, old_cell_height: u32) -> SetSizeResult
+            where get = self.get_row_mut,
+                  for<row> set = row.set_cell_size_px(new_cell_height, old_cell_height),
+                  acc = self.size_px.lowright.y,
 
-            col.num_biggest += is_biggest_width as u32;
-            col.num_biggest -= was_biggest_width as u32;
 
-            if col.size_px < new_width {
-                width_delta -= col.size_px as i32;
-                width_delta += new_width as i32;
-                
-                col.size_px = new_width;
-                col.num_biggest = 1;
-            } else if col.num_biggest == 0 {
-                width_delta -= col.size_px as i32;
-                
-                col.size_px = 0;
-                col.num_biggest = 0;
-            }
-        }
+        /// Given a column num, set the minimum width of a single cell in the column. 
+        pub fn set_col_cell_min_width(&mut self, column_num: u32, new_min_width: u32, old_min_width: u32) -> SetMinSizeResult
+            where get = self.get_col_mut,
+                  for<col> set = col.set_cell_min_size_px(new_min_width, old_min_width),
+                  acc = self.min_size_px.lowright.x,
 
-        self.size_px.lowright.x = (self.size_px.lowright.x as i32 + width_delta) as u32;
-
-        SetLineStatus {
-            size_px: width_delta.cmp(&0),
-            min_size_px: Ordering::Equal
-        }
-    }
-
-    pub fn set_row_height(&mut self, row_num: u32, new_height: u32, old_height: u32) -> SetLineStatus {
-        let mut height_delta = 0i32;
-        {        
-            let row = self.get_row_mut(row_num).expect("Invalid row number passed");
-
-            let was_biggest_height = row.size_px == old_height;
-            let is_biggest_height = row.size_px <= new_height;
-
-            row.num_biggest += is_biggest_height as u32;
-            row.num_biggest -= was_biggest_height as u32;
-
-            if row.size_px < new_height {
-                height_delta -= row.size_px as i32;
-                height_delta += new_height as i32;
-                
-                row.size_px = new_height;
-                row.num_biggest = 1;
-            } else if row.num_biggest == 0 {
-                height_delta -= row.size_px as i32;
-                
-                row.size_px = 0;
-                row.num_biggest = 0;
-            }
-        }
-
-        self.size_px.lowright.y = (self.size_px.lowright.y as i32 + height_delta) as u32;
-
-        SetLineStatus {
-            size_px: height_delta.cmp(&0),
-            min_size_px: Ordering::Equal
-        }
+        pub fn set_row_cell_min_width(&mut self, row_num: u32, new_min_height: u32, old_min_height: u32) -> SetMinSizeResult
+            where get = self.get_row_mut,
+                  for<row> set = row.set_cell_min_size_px(new_min_height, old_min_height),
+                  acc = self.min_size_px.lowright.y,
     }
 
     pub fn get_cell_offset(&self, column_num: u32, row_num: u32) -> Option<Point> {
