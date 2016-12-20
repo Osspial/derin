@@ -1,9 +1,9 @@
 use super::geometry::{OriginRect, OffsetRect, Rect, Point};
 use super::layout::{NodeSpan, GridSize};
 use std::ops::Range;
-use std::cmp::Ordering;
+use std::cmp;
 
-pub enum SetSizeResult {
+pub enum SizeResult {
     /// The track's size is completely unchanged.
     NoEffect,
     /// The passed cell was the biggest in the track, but no longer is. The size of the track is therefore
@@ -14,7 +14,7 @@ pub enum SetSizeResult {
     SizeUpscale
 }
 
-pub enum SetMinSizeResult {
+pub enum MinSizeResult {
     /// The track's minimum size is completely unchanged
     NoEffect,
     /// The track's minimum size is smaller than it was before the function was called. It must be
@@ -27,6 +27,16 @@ pub enum SetMinSizeResult {
     SizeUpscale
 }
 
+pub enum MinSizeMasterResult {
+    NoEffect,
+    SizeUpscale
+}
+
+pub enum MaxSizeMasterResult {
+    NoEffect,
+    SizeDownscale
+}
+
 #[derive(Clone, Copy)]
 pub enum GridTrack {
     Bounded(BoundedTrack),
@@ -34,17 +44,24 @@ pub enum GridTrack {
 }
 
 impl GridTrack {
-    pub fn size_px(self) -> u32 {
+    pub fn size(self) -> u32 {
         match self {
-            GridTrack::Bounded(BoundedTrack{size_px, ..}) |
-            GridTrack::Definite(size_px) => size_px
+            GridTrack::Bounded(BoundedTrack{size, ..}) |
+            GridTrack::Definite(size) => size
         }
     }
 
-    pub fn min_size_px(self) -> u32 {
+    pub fn min_size(self) -> u32 {
         match self {
-            GridTrack::Bounded(BoundedTrack{min_size_px, ..}) |
-            GridTrack::Definite(min_size_px) => min_size_px
+            GridTrack::Bounded(bt) => bt.min_size(),
+            GridTrack::Definite(size) => size
+        }
+    }
+
+    pub fn max_size(self) -> u32 {
+        match self {
+            GridTrack::Bounded(bt) => bt.max_size(),
+            GridTrack::Definite(size) => size
         }
     }
 }
@@ -52,83 +69,119 @@ impl GridTrack {
 #[derive(Clone, Copy)]
 pub struct BoundedTrack {
     /// The size, in pixels, of this grid track. For columns, this is the width; for rows, the height.
-    size_px: u32,
+    size: u32,
     num_biggest: u32,
-    min_size_px: u32,
-    min_num_biggest: u32
+
+    min_size: u32,
+    min_num_biggest: u32,
+
+    min_size_master: u32,
+    max_size_master: u32
 }
 
 impl BoundedTrack {
-    pub fn size_px(&self) -> u32 {
-        self.size_px
+    pub fn size(&self) -> u32 {
+        self.size
     }
 
-    pub fn min_size_px(&self) -> u32 {
-        self.min_size_px
+    pub fn min_size(&self) -> u32 {
+        cmp::max(self.min_size, self.min_size_master)
+    }
+
+    pub fn max_size(&self) -> u32 {
+        // If the maximum size is less than the minimum size, which is technically allowed to happen but
+        // doesn't logically make sense, clamp the maximum size to the minimum size.
+        cmp::max(self.max_size_master, self.min_size)
     }
 
     /// Set the size of a single cell in the track. Note that this does *not* necessarily set the
     /// actual size of the track, but instead takes into account the sizes of other cells in the track
     /// to determine whether or not to downscale the track's size, upscale it, or leave it unchanged. 
-    pub fn set_cell_size_px(&mut self, mut new_size: u32, old_size: u32) -> SetSizeResult {
-        let is_biggest_size = self.size_px <= new_size;
-        let was_biggest_size = self.size_px == old_size;
+    pub fn set_cell_size(&mut self, mut new_size: u32, old_size: u32) -> SizeResult {
+        let is_biggest_size = self.size <= new_size;
+        let was_biggest_size = self.size == old_size;
 
         self.num_biggest += is_biggest_size as u32;
         self.num_biggest -= was_biggest_size as u32;
 
-        if self.size_px < new_size {
-            self.size_px = new_size;
+        if self.size < new_size && self.size != self.max_size() {
+            self.size = cmp::min(new_size, self.max_size());
             self.num_biggest = 1;
 
-            SetSizeResult::SizeUpscale
+            SizeResult::SizeUpscale
         } else if self.num_biggest == 0 {
-            self.size_px = 0;
+            self.size = 0;
             self.num_biggest = 0;
 
-            SetSizeResult::SizeDownscale
+            SizeResult::SizeDownscale
         } else {
-            SetSizeResult::NoEffect
+            SizeResult::NoEffect
         }
     }
 
-    pub fn set_cell_min_size_px(&mut self, new_min_size: u32, old_min_size: u32) -> SetMinSizeResult {
-        let mut ret = SetMinSizeResult::NoEffect;
+    pub fn set_cell_min_size(&mut self, new_min_size: u32, old_min_size: u32) -> MinSizeResult {
+        let mut ret = MinSizeResult::NoEffect;
 
-        let is_biggest_min_size = self.min_size_px <= new_min_size;
-        let was_biggest_min_size = self.min_size_px == old_min_size;
+        let is_biggest_min_size = self.min_size <= new_min_size;
+        let was_biggest_min_size = self.min_size == old_min_size;
 
         self.min_num_biggest += is_biggest_min_size as u32;
         self.min_num_biggest -= was_biggest_min_size as u32;
 
-        if self.min_size_px < new_min_size {
-            self.min_size_px = new_min_size;
+        if self.min_size < new_min_size {
+            self.min_size = new_min_size;
             self.min_num_biggest = 1;
 
-            ret = SetMinSizeResult::MinSizeUpscale;
+            ret = MinSizeResult::MinSizeUpscale;
         } else if self.min_num_biggest == 0 {
-            self.min_size_px = 0;
+            self.min_size = 0;
             self.min_num_biggest = 0;
 
-            ret = SetMinSizeResult::MinSizeDownscale;
+            ret = MinSizeResult::MinSizeDownscale;
         }
 
-        if self.size_px < new_min_size {
-            self.size_px = new_min_size;
-            ret = SetMinSizeResult::SizeUpscale;
+        if self.size < self.min_size() {
+            self.size = self.min_size();
+            ret = MinSizeResult::SizeUpscale;
         }
 
         ret
+    }
+
+    pub fn set_min_size_master(&mut self, min_size_master: u32) -> MinSizeMasterResult {
+        self.min_size_master = min_size_master;
+
+        if self.size < self.min_size() {
+            self.size = self.min_size();
+            MinSizeMasterResult::SizeUpscale
+        } else {
+            MinSizeMasterResult::NoEffect
+        }
+    }
+
+    pub fn set_max_size_master(&mut self, max_size_master: u32) -> MaxSizeMasterResult {
+        self.max_size_master = max_size_master;
+
+        if self.size > self.max_size() {
+            self.size = self.max_size();
+            MaxSizeMasterResult::SizeDownscale
+        } else {
+            MaxSizeMasterResult::NoEffect
+        }
     }
 }
 
 impl Default for BoundedTrack {
     fn default() -> BoundedTrack {
         BoundedTrack {
-            size_px: 0,
+            size: 0,
             num_biggest: 0,
-            min_size_px: 0,
-            min_num_biggest: 0
+            
+            min_size: 0,
+            min_num_biggest: 0,
+
+            min_size_master: 0,
+            max_size_master: u32::max_value()
         }
     }
 }
@@ -156,21 +209,27 @@ impl GridDims {
 
         unsafe {
             if 0 < size.x + size.y {
+                let old_num_cols = self.num_cols;
+                let old_num_rows = self.num_rows;
                 // If the new length of the vector is going to be greater than the current length of the vector,
                 // extend it before doing any calculations. Why not resize if the vector is going to be shorter?
                 // Well, we need to shift the row data over, so if we resize the vector before doing that we're
                 // going to be shifting from undefined data!
-                if size.x + size.y > self.num_cols + self.num_rows {
-                    self.dims.resize((size.x + size.y) as usize, GridTrack::Definite(0));
+                if size.x + size.y > old_num_cols + old_num_rows {
+                    self.dims.resize((size.x + size.y) as usize, GridTrack::Bounded(BoundedTrack::default()));
                 }
 
-                // Shift the row data over, if it actually needs shifting.
-                if size.x != self.num_cols {
-                    ptr::copy(&self.dims[self.num_cols as usize], &mut self.dims[size.x as usize], self.num_rows as usize);
+                // Shift the row data over, if the number of columns has changed.
+                if size.x != old_num_cols {
+                    ptr::copy(&self.dims[old_num_cols as usize], &mut self.dims[size.x as usize], old_num_rows as usize);
                 }
-                // If we shifted the row data to the right, fill the new empty space with zeroes. In the event that
-                // it was shifted to the left or not shifted at all, nothing is done due to the saturating subtraction.
-                ptr::write_bytes(&mut self.dims[self.num_cols as usize], 0, size.x.saturating_sub(self.num_cols) as usize);
+
+                // If the number of columns was increased and the row data shifted to the right, fill the new 
+                // empty space with bounded tracks. In the event that it was shifted to the left or not shifted
+                // at all, nothing is done due to the saturating subtraction.
+                for gt in &mut self.dims[old_num_cols as usize..(old_num_cols + size.x.saturating_sub(old_num_cols)) as usize] {
+                    *gt = GridTrack::Bounded(BoundedTrack::default());
+                }
                 
                 self.num_cols = size.x;
                 self.num_rows = size.y;
@@ -183,11 +242,11 @@ impl GridDims {
     }
 
     pub fn column_width(&self, column_num: u32) -> Option<u32> {
-        self.get_col(column_num).map(|gl| gl.size_px())
+        self.get_col(column_num).map(|gt| gt.size())
     }
 
     pub fn row_height(&self, row_num: u32) -> Option<u32> {
-        self.get_row(row_num).map(|gl| gl.size_px())
+        self.get_row(row_num).map(|gt| gt.size())
     }
 
     pub fn get_cell_offset(&self, column_num: u32, row_num: u32) -> Option<Point> {
@@ -196,8 +255,8 @@ impl GridDims {
            row_num < self.num_rows
         {
             Some(Point::new(
-                (0..column_num).map(|c| self.get_col(c).unwrap().size_px()).sum(),
-                (0..row_num).map(|r| self.get_row(r).unwrap().size_px()).sum()
+                (0..column_num).map(|c| self.get_col(c).unwrap().size()).sum(),
+                (0..row_num).map(|r| self.get_row(r).unwrap().size()).sum()
             ))
         } else {
             None
@@ -226,8 +285,8 @@ impl GridDims {
            row_range.end <= self.num_rows
         {
             Some(OriginRect::new(
-                self.col_iter(col_range).unwrap().map(|t| t.size_px()).sum(),
-                self.row_iter(row_range).unwrap().map(|t| t.size_px()).sum()
+                self.col_iter(col_range).unwrap().map(|t| t.size()).sum(),
+                self.row_iter(row_range).unwrap().map(|t| t.size()).sum()
             ))
         } else {
             None
@@ -235,19 +294,29 @@ impl GridDims {
     }
 
     pub fn width(&self) -> u32 {
-        self.col_iter(0..self.num_cols).unwrap().map(|c| c.size_px()).sum()
+        self.col_iter(0..self.num_cols).unwrap().map(|c| c.size()).sum()
     }
 
     pub fn height(&self) -> u32 {
-        self.row_iter(0..self.num_rows).unwrap().map(|r| r.size_px()).sum()
+        self.row_iter(0..self.num_rows).unwrap().map(|r| r.size()).sum()
     }
 
     pub fn min_width(&self) -> u32 {
-        self.col_iter(0..self.num_cols).unwrap().map(|c| c.min_size_px()).sum()
+        self.col_iter(0..self.num_cols).unwrap().map(|c| c.min_size()).sum()
     }
 
     pub fn min_height(&self) -> u32 {
-        self.row_iter(0..self.num_rows).unwrap().map(|r| r.min_size_px()).sum()
+        self.row_iter(0..self.num_rows).unwrap().map(|r| r.min_size()).sum()
+    }
+
+    pub fn max_width(&self) -> u32 {
+        self.col_iter(0..self.num_cols).unwrap()
+            .fold(0, |acc, c| acc.saturating_add(c.max_size()))
+    }
+
+    pub fn max_height(&self) -> u32 {
+        self.row_iter(0..self.num_rows).unwrap()
+            .fold(0, |acc, r| acc.saturating_add(r.max_size()))
     }
 
     pub fn get_col(&self, column_num: u32) -> Option<&GridTrack> {
