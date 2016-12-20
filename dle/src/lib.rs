@@ -1,4 +1,4 @@
-#![feature(const_fn, conservative_impl_trait)]
+#![feature(const_fn)]
 
 pub mod geometry;
 pub mod layout;

@@ -1,5 +1,5 @@
 use super::geometry::{OriginRect, OffsetRect, Rect, Point};
-use super::layout::{NodeSpan, GridSize};
+use super::layout::{NodeSpan, GridSize, DyRange};
 use std::ops::Range;
 use std::cmp;
 
@@ -285,37 +285,43 @@ impl GridDims {
            row_range.end <= self.num_rows
         {
             Some(OriginRect::new(
-                self.col_iter(col_range).unwrap().map(|t| t.size()).sum(),
-                self.row_iter(row_range).unwrap().map(|t| t.size()).sum()
+                self.get_cols(col_range).unwrap().iter().map(|t| t.size()).sum(),
+                self.get_rows(row_range).unwrap().iter().map(|t| t.size()).sum()
             ))
         } else {
             None
         }
     }
 
+
     pub fn width(&self) -> u32 {
-        self.col_iter(0..self.num_cols).unwrap().map(|c| c.size()).sum()
+        self.get_cols(0..self.num_cols).unwrap().iter()
+            .map(|c| c.size()).sum()
     }
 
     pub fn height(&self) -> u32 {
-        self.row_iter(0..self.num_rows).unwrap().map(|r| r.size()).sum()
+        self.get_rows(0..self.num_rows).unwrap().iter()
+            .map(|r| r.size()).sum()
     }
 
     pub fn min_width(&self) -> u32 {
-        self.col_iter(0..self.num_cols).unwrap().map(|c| c.min_size()).sum()
+        self.get_cols(0..self.num_cols).unwrap().iter()
+            .map(|c| c.min_size()).sum()
     }
 
     pub fn min_height(&self) -> u32 {
-        self.row_iter(0..self.num_rows).unwrap().map(|r| r.min_size()).sum()
+        self.get_rows(0..self.num_rows).unwrap().iter()
+            .map(|r| r.min_size()).sum()
     }
 
     pub fn max_width(&self) -> u32 {
-        self.col_iter(0..self.num_cols).unwrap()
+        self.get_cols(0..self.num_cols).unwrap().iter()
             .fold(0, |acc, c| acc.saturating_add(c.max_size()))
     }
 
+
     pub fn max_height(&self) -> u32 {
-        self.row_iter(0..self.num_rows).unwrap()
+        self.get_rows(0..self.num_rows).unwrap().iter()
             .fold(0, |acc, r| acc.saturating_add(r.max_size()))
     }
 
@@ -352,37 +358,57 @@ impl GridDims {
         }
     }
 
-    pub fn col_iter<'a>(&'a self, range: Range<u32>) -> Option<impl Iterator<Item = &'a GridTrack>> {
-        if range.end <= self.num_cols {
-            let range_usize = range.start as usize..range.end as usize;
-            Some(self.dims[range_usize].iter())
+    pub fn get_cols<R>(&self, range: R) -> Option<&[GridTrack]>
+            where R: Into<DyRange<u32>>
+    {
+        let range = range.into();
+        let range_usize = range.start.unwrap_or(0) as usize
+                          ..range.end.unwrap_or(self.num_cols) as usize;
+
+        if range_usize.end as u32 <= self.num_cols {
+            Some(&self.dims[range_usize])
         } else {
             None
         }
     }
 
-    pub fn row_iter<'a>(&'a self, range: Range<u32>) -> Option<impl Iterator<Item = &'a GridTrack>> {
-        if range.end <= self.dims.len() as u32 {
-            let range_usize = (range.start + self.num_cols) as usize..(range.end + self.num_cols)as usize;
-            Some(self.dims[range_usize].iter())
+    pub fn get_rows<R>(&self, range: R) -> Option<&[GridTrack]>
+            where R: Into<DyRange<u32>>
+    {
+        let range = range.into();
+        let range_usize = (range.start.unwrap_or(0) + self.num_cols) as usize
+                          ..(range.end.unwrap_or(self.num_rows) + self.num_cols) as usize;
+
+        if range_usize.end as u32 <= self.num_cols {
+            Some(&self.dims[range_usize])
         } else {
             None
         }
     }
 
-    pub fn col_iter_mut<'a>(&'a mut self, range: Range<u32>) -> Option<impl Iterator<Item = &'a mut GridTrack>> {
-        if range.end <= self.num_cols {
-            let range_usize = range.start as usize..range.end as usize;
-            Some(self.dims[range_usize].iter_mut())
+    pub fn get_cols_mut<R>(&mut self, range: R) -> Option<&mut [GridTrack]>
+            where R: Into<DyRange<u32>>
+    {
+        let range = range.into();
+        let range_usize = range.start.unwrap_or(0) as usize
+                          ..range.end.unwrap_or(self.num_cols) as usize;
+
+        if range_usize.end as u32 <= self.num_cols {
+            Some(&mut self.dims[range_usize])
         } else {
             None
         }
     }
 
-    pub fn row_iter_mut<'a>(&'a mut self, range: Range<u32>) -> Option<impl Iterator<Item = &'a mut GridTrack>> {
-        if range.end <= self.dims.len() as u32 {
-            let range_usize = (range.start + self.num_cols) as usize..(range.end + self.num_cols)as usize;
-            Some(self.dims[range_usize].iter_mut())
+    pub fn get_rows_mut<R>(&mut self, range: R) -> Option<&mut [GridTrack]>
+            where R: Into<DyRange<u32>>
+    {
+        let range = range.into();
+        let range_usize = (range.start.unwrap_or(0) + self.num_cols) as usize
+                          ..(range.end.unwrap_or(self.num_rows) + self.num_cols) as usize;
+
+        if range_usize.end as u32 <= self.num_cols {
+            Some(&mut self.dims[range_usize])
         } else {
             None
         }
