@@ -91,7 +91,7 @@ impl BoundedTrack {
     pub fn max_size(&self) -> u32 {
         // If the maximum size is less than the minimum size, which is technically allowed to happen but
         // doesn't logically make sense, clamp the maximum size to the minimum size.
-        cmp::max(self.max_size_master, self.min_size)
+        cmp::max(self.max_size_master, self.min_size())
     }
 
     /// Set the size of a single cell in the track. Note that this does *not* necessarily set the
