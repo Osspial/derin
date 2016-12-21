@@ -241,6 +241,11 @@ impl GridDims {
         }
     }
 
+    /// Shrink down the internal dimensions vector as much as possible.
+    pub fn shrink_to_fit(&mut self) {
+        self.dims.shrink_to_fit();
+    }
+
     pub fn column_width(&self, column_num: u32) -> Option<u32> {
         self.get_col(column_num).map(|gt| gt.size())
     }
