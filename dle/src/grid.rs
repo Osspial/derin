@@ -38,36 +38,7 @@ pub enum MaxSizeMasterResult {
 }
 
 #[derive(Clone, Copy)]
-pub enum GridTrack {
-    Bounded(BoundedTrack),
-    Definite(u32)
-}
-
-impl GridTrack {
-    pub fn size(self) -> u32 {
-        match self {
-            GridTrack::Bounded(BoundedTrack{size, ..}) |
-            GridTrack::Definite(size) => size
-        }
-    }
-
-    pub fn min_size(self) -> u32 {
-        match self {
-            GridTrack::Bounded(bt) => bt.min_size(),
-            GridTrack::Definite(size) => size
-        }
-    }
-
-    pub fn max_size(self) -> u32 {
-        match self {
-            GridTrack::Bounded(bt) => bt.max_size(),
-            GridTrack::Definite(size) => size
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct BoundedTrack {
+pub struct GridTrack {
     /// The size of this grid track in pixels. For columns, this is the width; for rows, the height.
     size: u32,
     /// The number of cells in this track that are as large as the track's size.
@@ -85,7 +56,7 @@ pub struct BoundedTrack {
     max_size_master: u32
 }
 
-impl BoundedTrack {
+impl GridTrack {
     /// Get the size of this grid track in pixels.
     pub fn size(&self) -> u32 {
         self.size
@@ -188,9 +159,9 @@ impl BoundedTrack {
     }
 }
 
-impl Default for BoundedTrack {
-    fn default() -> BoundedTrack {
-        BoundedTrack {
+impl Default for GridTrack {
+    fn default() -> GridTrack {
+        GridTrack {
             size: 0,
             num_biggest: 0,
 
@@ -235,7 +206,7 @@ impl GridDims {
                 // Well, we need to shift the row data over, so if we resize the vector before doing that we're
                 // going to be shifting from undefined data!
                 if size.x + size.y > old_num_cols + old_num_rows {
-                    self.dims.resize((size.x + size.y) as usize, GridTrack::Bounded(BoundedTrack::default()));
+                    self.dims.resize((size.x + size.y) as usize, GridTrack::default());
                 }
 
                 // Shift the row data over, if the number of columns has changed.
@@ -247,7 +218,7 @@ impl GridDims {
                 // empty space with bounded tracks. In the event that it was shifted to the left or not shifted
                 // at all, nothing is done due to the saturating subtraction.
                 for gt in &mut self.dims[old_num_cols as usize..(old_num_cols + size.x.saturating_sub(old_num_cols)) as usize] {
-                    *gt = GridTrack::Bounded(BoundedTrack::default());
+                    *gt = GridTrack::default();
                 }
 
                 self.num_cols = size.x;
