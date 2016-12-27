@@ -10,6 +10,9 @@ use grid::GridDims;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+pub type Tr = u32;
+pub type Px = u32;
+
 #[derive(Debug, Clone, Copy)]
 pub struct SizeBounds {
     pub min: OriginRect,

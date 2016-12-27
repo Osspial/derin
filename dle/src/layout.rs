@@ -1,3 +1,4 @@
+use super::{Tr, Px};
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 
 #[derive(Debug, Clone, Copy)]
@@ -88,13 +89,13 @@ macro_rules! two_axis_type {
 
 two_axis_type!{
     #[derive(Default, Debug, Clone, Copy)]
-    pub struct NodeSizing(Option<u32>);
+    pub struct NodeSizing(Option<Tr>);
 
     #[derive(Default, Debug, Clone, Copy)]
-    pub struct GridSize(u32);
+    pub struct GridSize(Tr);
 
     #[derive(Debug, Clone, Copy)]
-    pub struct NodeSpan(Into<DyRange<u32>>);
+    pub struct NodeSpan(Into<DyRange<Tr>>);
 
     #[derive(Default, Debug, Clone, Copy)]
     pub struct PlaceInCell(Place);

@@ -1,14 +1,15 @@
+use super::Px;
 use std::cmp;
 use std::ops::{Add, AddAssign, BitOr};
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Point {
-    pub x: u32,
-    pub y: u32
+    pub x: Px,
+    pub y: Px
 }
 
 impl Point {
-    pub fn new(x: u32, y: u32) -> Point {
+    pub fn new(x: Px, y: Px) -> Point {
         Point {
             x: x,
             y: y
@@ -20,7 +21,7 @@ impl Point {
     }
 
     pub fn max() -> Point {
-        Point::new(u32::max_value(), u32::max_value())
+        Point::new(Px::max_value(), Px::max_value())
     }
 }
 
@@ -41,8 +42,8 @@ impl AddAssign for Point {
 }
 
 pub trait Rect {
-    fn width(self) -> u32;
-    fn height(self) -> u32;
+    fn width(self) -> Px;
+    fn height(self) -> Px;
     fn offset(self, offset: Point) -> OffsetRect;
 }
 
@@ -53,7 +54,7 @@ pub struct OffsetRect {
 }
 
 impl OffsetRect {
-    pub fn new(tl_x: u32, tl_y: u32, lr_x: u32, lr_y: u32) -> OffsetRect {
+    pub fn new(tl_x: Px, tl_y: Px, lr_x: Px, lr_y: Px) -> OffsetRect {
         OffsetRect {
             topleft: Point::new(tl_x, tl_y),
             lowright: Point::new(lr_x, lr_y)
@@ -62,11 +63,11 @@ impl OffsetRect {
 }
 
 impl Rect for OffsetRect {
-    fn width(self) -> u32 {
+    fn width(self) -> Px {
         self.lowright.x - self.topleft.x
     }
 
-    fn height(self) -> u32 {
+    fn height(self) -> Px {
         self.lowright.y - self.topleft.y
     }
 
@@ -107,7 +108,7 @@ pub struct OriginRect {
 }
 
 impl OriginRect {
-    pub fn new(lr_x: u32, lr_y: u32) -> OriginRect {
+    pub fn new(lr_x: Px, lr_y: Px) -> OriginRect {
         OriginRect {
             lowright: Point::new(lr_x, lr_y)
         }
@@ -127,11 +128,11 @@ impl OriginRect {
 }
 
 impl Rect for OriginRect {
-    fn width(self) -> u32 {
+    fn width(self) -> Px {
         self.lowright.x
     }
 
-    fn height(self) -> u32 {
+    fn height(self) -> Px {
         self.lowright.y
     }
 
