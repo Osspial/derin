@@ -287,6 +287,11 @@ impl GridDims {
         None
     }
 
+    pub fn get_span_rect(&self, span: NodeSpan) -> Option<OffsetRect> {
+        self.get_span_origin_rect(span)
+            .map(|rect| rect.offset(self.get_cell_offset(span.x.start.unwrap_or(0), span.y.start.unwrap_or(0)).unwrap()))
+    }
+
 
     /// Get the total width of the layout in pixels.
     pub fn width(&self) -> Px {
