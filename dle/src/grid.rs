@@ -176,18 +176,18 @@ impl Default for GridTrack {
 }
 
 #[derive(Default, Clone)]
-pub struct GridDims {
+pub struct TrackVec<T = GridTrack> {
     num_cols: Tr,
     num_rows: Tr,
     /// A vector that contains the dimensions of the rows and columns of the grid. The first `num_cols`
     /// elements are the column widths, the next `num_rows` elements are the row heights.
-    dims: Vec<GridTrack>
+    dims: Vec<T>
 }
 
-impl GridDims {
-    /// Create a new GridDims
-    pub fn new() -> GridDims {
-        GridDims {
+impl<T> TrackVec<T> {
+    /// Create a new TrackVec<T>
+    pub fn new() -> TrackVec<T> {
+        TrackVec {
             num_cols: 0,
             num_rows: 0,
             dims: Vec::new()
@@ -195,7 +195,8 @@ impl GridDims {
     }
 
     /// Set the number of columns and rows in the layout.
-    pub fn set_grid_size(&mut self, size: GridSize) {
+    pub fn set_grid_size(&mut self, size: GridSize)
+            where T: Default + Clone {
         use std::ptr;
 
         unsafe {
@@ -207,7 +208,7 @@ impl GridDims {
                 // Well, we need to shift the row data over, so if we resize the vector before doing that we're
                 // going to be shifting from undefined data!
                 if size.x + size.y > old_num_cols + old_num_rows {
-                    self.dims.resize((size.x + size.y) as usize, GridTrack::default());
+                    self.dims.resize((size.x + size.y) as usize, T::default());
                 }
 
                 // Shift the row data over, if the number of columns has changed.
@@ -219,7 +220,7 @@ impl GridDims {
                 // empty space with bounded tracks. In the event that it was shifted to the left or not shifted
                 // at all, nothing is done due to the saturating subtraction.
                 for gt in &mut self.dims[old_num_cols as usize..(old_num_cols + size.x.saturating_sub(old_num_cols)) as usize] {
-                    *gt = GridTrack::default();
+                    *gt = T::default();
                 }
 
                 self.num_cols = size.x;
@@ -237,16 +238,105 @@ impl GridDims {
         self.dims.shrink_to_fit();
     }
 
-    /// Get the width of the specified column.
-    pub fn column_width(&self, column_num: Tr) -> Option<Px> {
-        self.get_col(column_num).map(|gt| gt.size())
+
+    /// Get a reference to the column at the specified column number. Returns `None` if the number
+    /// is >= `num_cols`.
+    pub fn get_col(&self, column_num: Tr) -> Option<&T> {
+        if column_num < self.num_cols {
+            self.dims.get(column_num as usize)
+        } else {
+            None
+        }
     }
 
-    /// Get the height of the specified row.
-    pub fn row_height(&self, row_num: Tr) -> Option<Px> {
-        self.get_row(row_num).map(|gt| gt.size())
+    /// Get a reference to the row at the specified row number. Returns `None` if the number
+    /// is >= `num_rows`.
+    pub fn get_row(&self, row_num: Tr) -> Option<&T> {
+        self.dims.get((self.num_cols + row_num) as usize)
     }
 
+    /// Get a mutable to the column at the specified column number. Returns `None` if the number
+    /// is >= `num_cols`.
+    pub fn get_col_mut(&mut self, column_num: Tr) -> Option<&mut T> {
+        if column_num < self.num_cols {
+            self.dims.get_mut(column_num as usize)
+        } else {
+            None
+        }
+    }
+
+    /// Get a mutable reference to the row at the specified row number. Returns `None` if the number
+    /// is >= `num_rows`.
+    pub fn get_row_mut(&mut self, row_num: Tr) -> Option<&mut T> {
+        self.dims.get_mut((self.num_cols + row_num) as usize)
+    }
+
+    /// Take a range and get a slice of columns corresponding to that range. Returns `None` if the
+    /// range specifies columns that don't exist.
+    pub fn get_cols<R>(&self, range: R) -> Option<&[T]>
+            where R: Into<DyRange<u32>>
+    {
+        let range = range.into();
+        let range_usize = range.start.unwrap_or(0) as usize
+                          ..range.end.unwrap_or(self.num_cols) as usize;
+
+        if range_usize.end as u32 <= self.num_cols {
+            Some(&self.dims[range_usize])
+        } else {
+            None
+        }
+    }
+
+    /// Take a range and get a slice of rows corresponding to that range. Returns `None` if the
+    /// range specifies rows that don't exist.
+    pub fn get_rows<R>(&self, range: R) -> Option<&[T]>
+            where R: Into<DyRange<u32>>
+    {
+        let range = range.into();
+        let range_usize = (range.start.unwrap_or(0) + self.num_cols) as usize
+                          ..(range.end.unwrap_or(self.num_rows) + self.num_cols) as usize;
+
+        if range_usize.end as u32 <= self.num_cols {
+            Some(&self.dims[range_usize])
+        } else {
+            None
+        }
+    }
+
+    /// Take a range and get a mutable slice of columns corresponding to that range. Returns `None` if the
+    /// range specifies columns that don't exist.
+    pub fn get_cols_mut<R>(&mut self, range: R) -> Option<&mut [T]>
+            where R: Into<DyRange<u32>>
+    {
+        let range = range.into();
+        let range_usize = range.start.unwrap_or(0) as usize
+                          ..range.end.unwrap_or(self.num_cols) as usize;
+
+        if range_usize.end as u32 <= self.num_cols {
+            Some(&mut self.dims[range_usize])
+        } else {
+            None
+        }
+    }
+
+    /// Take a range and get a mutable slice of rows corresponding to that range. Returns `None` if the
+    /// range specifies rows that don't exist.
+    pub fn get_rows_mut<R>(&mut self, range: R) -> Option<&mut [T]>
+            where R: Into<DyRange<u32>>
+    {
+        let range = range.into();
+        let range_usize = (range.start.unwrap_or(0) + self.num_cols) as usize
+                          ..(range.end.unwrap_or(self.num_rows) + self.num_cols) as usize;
+
+        if range_usize.end as u32 <= self.num_cols {
+            Some(&mut self.dims[range_usize])
+        } else {
+            None
+        }
+    }
+}
+
+impl TrackVec<GridTrack> {
     /// Get the given cell's offset from the origin point of the layout.
     pub fn get_cell_offset(&self, column_num: Tr, row_num: Tr) -> Option<Point> {
         if column_num < self.num_cols &&
@@ -265,8 +355,8 @@ impl GridDims {
 
     /// Get the rect of the cell, without accounting for offset.
     pub fn get_cell_origin_rect(&self, column_num: Tr, row_num: Tr) -> Option<OriginRect> {
-        self.column_width(column_num)
-            .and_then(|cw| self.row_height(row_num)
+        self.get_col(column_num).map(|col| col.size())
+            .and_then(|cw| self.get_row(row_num).map(|row| row.size())
                  .map(|rh| OriginRect::new(cw, rh)))
     }
 
@@ -292,7 +382,6 @@ impl GridDims {
             .map(|rect| rect.offset(self.get_cell_offset(span.x.start.unwrap_or(0), span.y.start.unwrap_or(0)).unwrap()))
     }
 
-
     /// Get the total width of the layout in pixels.
     pub fn width(&self) -> Px {
         self.get_cols(0..self.num_cols).unwrap().iter()
@@ -305,18 +394,6 @@ impl GridDims {
             .map(|r| r.size()).sum()
     }
 
-    /// Get the minimum width of the layout in pixels
-    pub fn min_width(&self) -> Px {
-        self.get_cols(0..self.num_cols).unwrap().iter()
-            .map(|c| c.min_size()).sum()
-    }
-
-    /// Get the minimum height of the layout in pixels
-    pub fn min_height(&self) -> Px {
-        self.get_rows(0..self.num_rows).unwrap().iter()
-            .map(|r| r.min_size()).sum()
-    }
-
     /// Get the maximum width of the layout in pixels
     pub fn max_width(&self) -> Px {
         self.get_cols(0..self.num_cols).unwrap().iter()
@@ -327,102 +404,5 @@ impl GridDims {
     pub fn max_height(&self) -> Px {
         self.get_rows(0..self.num_rows).unwrap().iter()
             .fold(0, |acc, r| acc.saturating_add(r.max_size()))
-    }
-
-
-    /// Get a reference to the column at the specified column number. Returns `None` if the number
-    /// is >= `num_cols`.
-    pub fn get_col(&self, column_num: Tr) -> Option<&GridTrack> {
-        if column_num < self.num_cols {
-            self.dims.get(column_num as usize)
-        } else {
-            None
-        }
-    }
-
-    /// Get a reference to the row at the specified row number. Returns `None` if the number
-    /// is >= `num_rows`.
-    pub fn get_row(&self, row_num: Tr) -> Option<&GridTrack> {
-        self.dims.get((self.num_cols + row_num) as usize)
-    }
-
-    /// Get a mutable to the column at the specified column number. Returns `None` if the number
-    /// is >= `num_cols`.
-    pub fn get_col_mut(&mut self, column_num: Tr) -> Option<&mut GridTrack> {
-        if column_num < self.num_cols {
-            self.dims.get_mut(column_num as usize)
-        } else {
-            None
-        }
-    }
-
-    /// Get a mutable reference to the row at the specified row number. Returns `None` if the number
-    /// is >= `num_rows`.
-    pub fn get_row_mut(&mut self, row_num: Tr) -> Option<&mut GridTrack> {
-        self.dims.get_mut((self.num_cols + row_num) as usize)
-    }
-
-    /// Take a range and get a slice of columns corresponding to that range. Returns `None` if the
-    /// range specifies columns that don't exist.
-    pub fn get_cols<R>(&self, range: R) -> Option<&[GridTrack]>
-            where R: Into<DyRange<u32>>
-    {
-        let range = range.into();
-        let range_usize = range.start.unwrap_or(0) as usize
-                          ..range.end.unwrap_or(self.num_cols) as usize;
-
-        if range_usize.end as u32 <= self.num_cols {
-            Some(&self.dims[range_usize])
-        } else {
-            None
-        }
-    }
-
-    /// Take a range and get a slice of rows corresponding to that range. Returns `None` if the
-    /// range specifies rows that don't exist.
-    pub fn get_rows<R>(&self, range: R) -> Option<&[GridTrack]>
-            where R: Into<DyRange<u32>>
-    {
-        let range = range.into();
-        let range_usize = (range.start.unwrap_or(0) + self.num_cols) as usize
-                          ..(range.end.unwrap_or(self.num_rows) + self.num_cols) as usize;
-
-        if range_usize.end as u32 <= self.num_cols {
-            Some(&self.dims[range_usize])
-        } else {
-            None
-        }
-    }
-
-    /// Take a range and get a mutable slice of columns corresponding to that range. Returns `None` if the
-    /// range specifies columns that don't exist.
-    pub fn get_cols_mut<R>(&mut self, range: R) -> Option<&mut [GridTrack]>
-            where R: Into<DyRange<u32>>
-    {
-        let range = range.into();
-        let range_usize = range.start.unwrap_or(0) as usize
-                          ..range.end.unwrap_or(self.num_cols) as usize;
-
-        if range_usize.end as u32 <= self.num_cols {
-            Some(&mut self.dims[range_usize])
-        } else {
-            None
-        }
-    }
-
-    /// Take a range and get a mutable slice of rows corresponding to that range. Returns `None` if the
-    /// range specifies rows that don't exist.
-    pub fn get_rows_mut<R>(&mut self, range: R) -> Option<&mut [GridTrack]>
-            where R: Into<DyRange<u32>>
-    {
-        let range = range.into();
-        let range_usize = (range.start.unwrap_or(0) + self.num_cols) as usize
-                          ..(range.end.unwrap_or(self.num_rows) + self.num_cols) as usize;
-
-        if range_usize.end as u32 <= self.num_cols {
-            Some(&mut self.dims[range_usize])
-        } else {
-            None
-        }
     }
 }

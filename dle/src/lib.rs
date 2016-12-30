@@ -6,7 +6,7 @@ mod grid;
 
 use geometry::{OriginRect, OffsetRect};
 use layout::{NodeSpan, PlaceInCell};
-use grid::GridDims;
+use grid::TrackVec;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -88,7 +88,7 @@ pub struct LayoutEngine<C: Container>
         where for<'a> &'a C: ContainerRef<'a, Widget = C::Widget>
 {
     container: C,
-    grid: GridDims,
+    grid: TrackVec,
     id: u32
 }
 
@@ -100,7 +100,7 @@ impl<C: Container> LayoutEngine<C>
 
         LayoutEngine {
             container: container,
-            grid: GridDims::new(),
+            grid: TrackVec::new(),
             id: ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32
         }
     }
