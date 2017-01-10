@@ -1,60 +1,29 @@
-use super::{Tr, Px};
+use super::{Tr, Px, Fr};
 use super::geometry::{OriginRect, OffsetRect, Rect, Point};
 use super::layout::{NodeSpan, GridSize, DyRange};
-use std::ops::Range;
 use std::cmp;
 
+#[derive(Debug, Clone, Copy)]
 pub enum SizeResult {
-    /// The track's size is completely unchanged.
-    NoEffect,
-    /// The passed cell was the biggest in the track, but no longer is. The size of the track is therefore
-    /// smaller than it was, but `GridDims` cannot determine how much smaller. It must be recalculated by
-    /// calling `set_{col|row}_cell_{width|height}` for each widget in the track.
+    NoEffectEq,
+    NoEffectDown,
+    NoEffectUp,
+    SizeUpscale,
+    SizeUpscaleClamp,
     SizeDownscale,
-    /// The track's new size is larger than it was before `set_{col|row}_cell_{width|height}` was called.
-    SizeUpscale
-}
-
-pub enum MinSizeResult {
-    /// The track's minimum size is completely unchanged
-    NoEffect,
-    /// The track's minimum size is smaller than it was before the function was called. It must be
-    /// recalculated by calling `set_{col|row}_cell_min_{width|height}` for each widget in the track.
-    MinSizeDownscale,
-    /// The track's minimum size was increased, but not enough to result requiring any recalculations.
-    MinSizeUpscale,
-    /// The track's minimum with was increased past the track size, resulting in the track size becoming
-    /// larger.
-    SizeUpscale
-}
-
-pub enum MinSizeMasterResult {
-    NoEffect,
-    SizeUpscale
-}
-
-pub enum MaxSizeMasterResult {
-    NoEffect,
-    SizeDownscale
+    SizeDownscaleClamp
 }
 
 #[derive(Clone, Copy)]
 pub struct GridTrack {
     /// The size of this grid track in pixels. For columns, this is the width; for rows, the height.
     size: Px,
-    /// The number of cells in this track that are as large as the track's size.
-    num_biggest: u32,
-
-    /// The minimum size of the cells in the grid track.
-    min_size: Px,
-    /// The number of cells in this track that have a minimum size equal to the track's minimum size.
-    min_num_biggest: u32,
-
     /// Track-level minimum size. If the child minimum size is less than this, this is used instead.
     min_size_master: Px,
     /// Track-level maximum size. If this is less than the minimum size, minimum size takes priority
     /// and overrides this.
-    max_size_master: Px
+    max_size_master: Px,
+    pub fr_size: Fr
 }
 
 impl GridTrack {
@@ -63,100 +32,61 @@ impl GridTrack {
         self.size
     }
 
-    /// Get the minimum size of this grid track in pixels.
-    pub fn min_size(&self) -> Px {
-        cmp::max(self.min_size, self.min_size_master)
+    /// Get the track-level minimum size of this grid track in pixels.
+    pub fn min_size_master(&self) -> Px {
+        self.min_size_master
     }
 
-    pub fn max_size(&self) -> Px {
+    pub fn max_size_master(&self) -> Px {
         // If the maximum size is less than the minimum size, which is technically allowed to happen but
         // doesn't logically make sense, clamp the maximum size to the minimum size.
-        cmp::max(self.max_size_master, self.min_size())
+        cmp::max(self.max_size_master, self.min_size_master)
     }
 
-    /// Set the size of a single cell in the track. Note that this does *not* necessarily set the
-    /// actual size of the track, but instead takes into account the sizes of other cells in the track
-    /// to determine whether or not to downscale the track's size, upscale it, or leave it unchanged.
-    pub fn set_cell_size(&mut self, mut new_size: Px, old_size: Px) -> SizeResult {
-        // Figure out if the cell WAS the biggest in the track and if it's GOING to be the biggest in the
-        // track after the size. If it was the biggest, subtract one from the biggest size count. If it's
-        // going to be, add one.
-        let is_biggest_size = self.size <= new_size;
-        let was_biggest_size = self.size == old_size;
-        self.num_biggest += is_biggest_size as Px;
-        self.num_biggest -= was_biggest_size as Px;
+    pub fn shrink_size(&mut self) {
+        self.size = self.min_size_master();
+    }
 
-        if self.size < new_size && self.size != self.max_size() {
-            self.size = cmp::min(new_size, self.max_size());
-            self.num_biggest = 1;
+    pub fn expand_size(&mut self) {
+        self.size = self.max_size_master();
+    }
 
-            SizeResult::SizeUpscale
-        } else if self.num_biggest == 0 {
-            self.size = 0;
-            self.num_biggest = 0;
-
-            SizeResult::SizeDownscale
+    pub fn change_size(&mut self, new_size: Px) -> SizeResult {
+        if self.size < new_size && self.size != self.max_size_master() {
+            if new_size <= self.max_size_master() {
+                self.size = new_size;
+                SizeResult::SizeUpscale
+            } else {
+                self.size = self.max_size_master();
+                SizeResult::SizeUpscaleClamp
+            }
+        } else if self.size > new_size && self.size != self.min_size_master() {
+            if new_size >= self.min_size_master() {
+                self.size = new_size;
+                SizeResult::SizeDownscale
+            } else {
+                self.size = self.min_size_master();
+                SizeResult::SizeDownscaleClamp
+            }
+        } else if new_size < self.min_size_master() {
+            SizeResult::NoEffectDown
+        } else if new_size > self.max_size_master() {
+            SizeResult::NoEffectUp
         } else {
-            SizeResult::NoEffect
+            SizeResult::NoEffectEq
         }
-    }
-
-    /// Sets the minimum size of a single cell in the track. Like `set_cell_size`, this doesn't
-    /// directly set the cell size but takes into account the minimum sizes of the other cells in the
-    /// track.
-    pub fn set_cell_min_size(&mut self, new_min_size: Px, old_min_size: Px) -> MinSizeResult {
-        let mut ret = MinSizeResult::NoEffect;
-
-        // Like in `set_cell_size`, was/will be biggest calculation and count incrementation.
-        let is_biggest_min_size = self.min_size <= new_min_size;
-        let was_biggest_min_size = self.min_size == old_min_size;
-        self.min_num_biggest += is_biggest_min_size as Px;
-        self.min_num_biggest -= was_biggest_min_size as Px;
-
-        if self.min_size < new_min_size {
-            self.min_size = new_min_size;
-            self.min_num_biggest = 1;
-
-            ret = MinSizeResult::MinSizeUpscale;
-        } else if self.min_num_biggest == 0 {
-            self.min_size = 0;
-            self.min_num_biggest = 0;
-
-            ret = MinSizeResult::MinSizeDownscale;
-        }
-
-        // If the new minimum size of the track is greater than the size of the track, increase the size
-        // to equal the minimum size.
-        if self.size < self.min_size() {
-            self.size = self.min_size();
-            ret = MinSizeResult::SizeUpscale;
-        }
-
-        ret
     }
 
     /// Sets track-level minimum size.
-    pub fn set_min_size_master(&mut self, min_size_master: Px) -> MinSizeMasterResult {
+    pub fn set_min_size_master(&mut self, min_size_master: Px) {
         self.min_size_master = min_size_master;
-
-        if self.size < self.min_size() {
-            self.size = self.min_size();
-            MinSizeMasterResult::SizeUpscale
-        } else {
-            MinSizeMasterResult::NoEffect
-        }
+        self.size = cmp::max(self.size, self.min_size_master());
     }
 
     /// Sets track-level maximum size.
-    pub fn set_max_size_master(&mut self, max_size_master: Px) -> MaxSizeMasterResult {
+    pub fn set_max_size_master(&mut self, max_size_master: Px) {
         self.max_size_master = max_size_master;
-
-        if self.size > self.max_size() {
-            self.size = self.max_size();
-            MaxSizeMasterResult::SizeDownscale
-        } else {
-            MaxSizeMasterResult::NoEffect
-        }
+        self.size = cmp::min(self.size, self.max_size_master());
     }
 }
 
@@ -164,13 +94,10 @@ impl Default for GridTrack {
     fn default() -> GridTrack {
         GridTrack {
             size: 0,
-            num_biggest: 0,
-
-            min_size: 0,
-            min_num_biggest: 0,
 
             min_size_master: 0,
-            max_size_master: Px::max_value()
+            max_size_master: Px::max_value(),
+            fr_size: 0.0
         }
     }
 }
@@ -196,46 +123,77 @@ impl<T> TrackVec<T> {
 
     /// Set the number of columns and rows in the layout.
     pub fn set_grid_size(&mut self, size: GridSize)
-            where T: Default + Clone {
+            where T: Default + Clone
+    {
+        self.set_num_cols(size.x);
+        self.set_num_rows(size.y);
+    }
+
+    pub fn set_num_cols(&mut self, num_cols: Tr)
+            where T: Default + Clone
+    {
         use std::ptr;
-
         unsafe {
-            if 0 < size.x + size.y {
-                let old_num_cols = self.num_cols;
-                let old_num_rows = self.num_rows;
-                // If the new length of the vector is going to be greater than the current length of the vector,
-                // extend it before doing any calculations. Why not resize if the vector is going to be shorter?
-                // Well, we need to shift the row data over, so if we resize the vector before doing that we're
-                // going to be shifting from undefined data!
-                if size.x + size.y > old_num_cols + old_num_rows {
-                    self.dims.resize((size.x + size.y) as usize, T::default());
-                }
+            let old_num_cols = self.num_cols;
+            let num_rows = self.num_rows;
 
-                // Shift the row data over, if the number of columns has changed.
-                if size.x != old_num_cols {
-                    ptr::copy(&self.dims[old_num_cols as usize], &mut self.dims[size.x as usize], old_num_rows as usize);
-                }
-
-                // If the number of columns was increased and the row data shifted to the right, fill the new
-                // empty space with bounded tracks. In the event that it was shifted to the left or not shifted
-                // at all, nothing is done due to the saturating subtraction.
-                for gt in &mut self.dims[old_num_cols as usize..(old_num_cols + size.x.saturating_sub(old_num_cols)) as usize] {
-                    *gt = T::default();
-                }
-
-                self.num_cols = size.x;
-                self.num_rows = size.y;
-
-                // Finally, set the length of the vector to be correct. This would have been done already if the
-                // grid's size was expanded, but if it was decreased we need to do it here.
-                self.dims.set_len((size.x + size.y) as usize);
+            // If the new length of the vector is going to be greater than the current length of the vector,
+            // extend it before doing any calculations. Why not resize if the vector is going to be shorter?
+            // Well, we need to shift the row data over, so if we resize the vector before doing that we're
+            // going to be shifting from undefined data!
+            if num_cols > old_num_cols {
+                self.dims.resize((num_cols + num_rows) as usize, T::default());
             }
+
+            // Drop any columns that are going to be removed.
+            for col in self.col_range_mut(num_cols..old_num_cols) {
+                ptr::drop_in_place(col);
+            }
+
+            // Shift the row data over.
+            ptr::copy(&self.dims[old_num_cols as usize], &mut self.dims[num_cols as usize], num_rows as usize);
+
+            // If the number of columns was increased and the row data shifted to the right, fill the new
+            // empty space with the default for the data type. In the event that it was shifted to the left
+            // or not shifted at all, nothing is done due to the saturating subtraction.
+            for gt in &mut self.dims[old_num_cols as usize..(old_num_cols + num_cols.saturating_sub(old_num_cols)) as usize] {
+                *gt = T::default();
+            }
+
+            self.num_cols = num_cols;
         }
+    }
+
+    pub fn set_num_rows(&mut self, num_rows: Tr)
+            where T: Default + Clone
+    {
+        self.dims.resize((self.num_cols + num_rows) as usize, T::default());
+        self.num_rows = num_rows;
     }
 
     /// Shrink down the internal dimensions vector as much as possible.
     pub fn shrink_to_fit(&mut self) {
         self.dims.shrink_to_fit();
+    }
+
+    pub fn push_col(&mut self, col: T) {
+        self.dims.insert(self.num_cols as usize, col);
+        self.num_cols += 1;
+    }
+
+    pub fn push_row(&mut self, row: T) {
+        self.dims.push(row);
+        self.num_rows += 1;
+    }
+
+    pub fn remove_col(&mut self, column_num: u32) {
+        self.dims.remove(column_num as usize);
+        self.num_cols -= 1;
+    }
+
+    pub fn remove_row(&mut self, row_num: u32) {
+        self.dims.remove((self.num_cols + row_num) as usize);
+        self.num_rows -= 1;
     }
 
 
@@ -273,7 +231,7 @@ impl<T> TrackVec<T> {
 
     /// Take a range and get a slice of columns corresponding to that range. Returns `None` if the
     /// range specifies columns that don't exist.
-    pub fn get_cols<R>(&self, range: R) -> Option<&[T]>
+    pub fn col_range<R>(&self, range: R) -> Option<&[T]>
             where R: Into<DyRange<u32>>
     {
         let range = range.into();
@@ -289,7 +247,7 @@ impl<T> TrackVec<T> {
 
     /// Take a range and get a slice of rows corresponding to that range. Returns `None` if the
     /// range specifies rows that don't exist.
-    pub fn get_rows<R>(&self, range: R) -> Option<&[T]>
+    pub fn row_range<R>(&self, range: R) -> Option<&[T]>
             where R: Into<DyRange<u32>>
     {
         let range = range.into();
@@ -305,7 +263,7 @@ impl<T> TrackVec<T> {
 
     /// Take a range and get a mutable slice of columns corresponding to that range. Returns `None` if the
     /// range specifies columns that don't exist.
-    pub fn get_cols_mut<R>(&mut self, range: R) -> Option<&mut [T]>
+    pub fn col_range_mut<R>(&mut self, range: R) -> Option<&mut [T]>
             where R: Into<DyRange<u32>>
     {
         let range = range.into();
@@ -321,7 +279,7 @@ impl<T> TrackVec<T> {
 
     /// Take a range and get a mutable slice of rows corresponding to that range. Returns `None` if the
     /// range specifies rows that don't exist.
-    pub fn get_rows_mut<R>(&mut self, range: R) -> Option<&mut [T]>
+    pub fn row_range_mut<R>(&mut self, range: R) -> Option<&mut [T]>
             where R: Into<DyRange<u32>>
     {
         let range = range.into();
@@ -333,6 +291,30 @@ impl<T> TrackVec<T> {
         } else {
             None
         }
+    }
+
+    pub fn clear_cols(&mut self) {
+        for _ in self.dims.drain(0..self.num_cols as usize) {}
+        self.num_cols = 0;
+    }
+
+    pub fn clear_rows(&mut self) {
+        self.dims.truncate(self.num_cols as usize);
+        self.num_rows = 0;
+    }
+
+    pub fn clear(&mut self) {
+        self.dims.clear();
+        self.num_cols = 0;
+        self.num_rows = 0;
+    }
+
+    pub fn num_cols(&self) -> Tr {
+        self.num_cols
+    }
+
+    pub fn num_rows(&self) -> Tr {
+        self.num_rows
     }
 }
 
@@ -368,8 +350,8 @@ impl TrackVec<GridTrack> {
 
     /// Get the rect of the given span, without accounting for offset.
     pub fn get_span_origin_rect(&self, span: NodeSpan) -> Option<OriginRect> {
-        if let Some(lr_x) = self.get_cols(span.x).map(|cols| cols.iter().map(|t| t.size()).sum()) {
-            if let Some(lr_y) = self.get_rows(span.y).map(|rows| rows.iter().map(|t| t.size()).sum()) {
+        if let Some(lr_x) = self.col_range(span.x).map(|cols| cols.iter().map(|t| t.size()).sum()) {
+            if let Some(lr_y) = self.row_range(span.y).map(|rows| rows.iter().map(|t| t.size()).sum()) {
                 return Some(OriginRect::new(lr_x, lr_y));
             }
         }
@@ -384,25 +366,27 @@ impl TrackVec<GridTrack> {
 
     /// Get the total width of the layout in pixels.
     pub fn width(&self) -> Px {
-        self.get_cols(0..self.num_cols).unwrap().iter()
+        self.col_range(0..self.num_cols).unwrap().iter()
             .map(|c| c.size()).sum()
     }
 
     /// Get the total height of the layout in pixels.
     pub fn height(&self) -> Px {
-        self.get_rows(0..self.num_rows).unwrap().iter()
+        self.row_range(0..self.num_rows).unwrap().iter()
             .map(|r| r.size()).sum()
     }
 
     /// Get the maximum width of the layout in pixels
     pub fn max_width(&self) -> Px {
-        self.get_cols(0..self.num_cols).unwrap().iter()
-            .fold(0, |acc, c| acc.saturating_add(c.max_size()))
+        self.col_range(0..self.num_cols).unwrap().iter()
+            .fold(0, |acc, c| acc.saturating_add(c.max_size_master()))
     }
 
     /// Get the maximum height of the layout in pixels
     pub fn max_height(&self) -> Px {
-        self.get_rows(0..self.num_rows).unwrap().iter()
-            .fold(0, |acc, r| acc.saturating_add(r.max_size()))
+        self.row_range(0..self.num_rows).unwrap().iter()
+            .fold(0, |acc, r| acc.saturating_add(r.max_size_master()))
     }
 }
+
+

@@ -1,10 +1,18 @@
-use super::{Tr, Px};
-use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
+use super::Tr;
+use std::ops::{Range, RangeFrom, RangeFull, RangeTo, Sub};
 
 #[derive(Debug, Clone, Copy)]
 pub struct DyRange<Idx> {
     pub start: Option<Idx>,
     pub end: Option<Idx>
+}
+
+impl<Idx> DyRange<Idx> where Idx: Sub {
+    /// Get the size of the DyRange, using `start_opt` if `self.start` is `None` and `end_opt` if
+    /// `self.end` is `None`.
+    pub fn size(self, start_opt: Idx, end_opt: Idx) -> Idx::Output {
+        self.end.unwrap_or(end_opt) - self.start.unwrap_or(start_opt)
+    }
 }
 
 impl<Idx> From<Range<Idx>> for DyRange<Idx> {
