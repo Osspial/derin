@@ -388,5 +388,3 @@ impl TrackVec<GridTrack> {
             .fold(0, |acc, r| acc.saturating_add(r.max_size_master()))
     }
 }
-
-

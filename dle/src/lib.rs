@@ -6,7 +6,7 @@ pub mod layout;
 mod grid;
 
 use geometry::{Rect, OriginRect, OffsetRect};
-use layout::{NodeSpan, PlaceInCell, GridSize};
+use layout::{NodeSpan, PlaceInCell, Place, GridSize};
 use grid::{TrackVec, SizeResult};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -255,10 +255,11 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                 for &mut WidgetData{ref mut widget, ref mut layout_info} in engine.container.get_iter_mut() {
                     macro_rules! widget_scale {
-                        ($axis:ident, $size:ident, $track_range:ident, $track_range_mut:ident, $free_size:expr) => {
+                        ($axis:ident, $size:ident, $track_range:ident, $track_range_mut:ident, $free_size:expr) => {{
                             let mut min_size_debt = layout_info.size_bounds.min.$size();
                             let mut frac_size = 0;
                             let mut fr_widget = 0.0;
+                            let mut axis_size = 0;
 
                             // If the widget has been flagged as unsolvable, check to see that is was marked as unsolvable
                             // during the current call to `pop_engine`. If it wasn't, then tentatively mark it as solvable.
@@ -269,7 +270,8 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                             }
 
                             for (index, track) in engine.grid.$track_range(layout_info.node_span.x).unwrap().iter().enumerate() {
-                                min_size_debt -= track.size();
+                                min_size_debt = min_size_debt.saturating_sub(track.size());
+                                axis_size += track.size();
 
                                 if track.fr_size == 0.0 ||
                                    track.size() < track.min_size_master() ||
@@ -300,13 +302,13 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                         match track.change_size(old_size + expansion) {
                                             // If the size was upscaled with no issues, just subtract the expansion from `min_size_debt`.
                                             SizeResult::SizeUpscale => {
-                                                min_size_debt -= expansion;
+                                                min_size_debt = min_size_debt.saturating_sub(expansion);
                                                 rigid_index += 1;
                                             },
                                             // If the size was upscaled but ended up being clamped, reduce `min_size_debt` and also remove
                                             // the clamped rigid track from the list.
                                             SizeResult::SizeUpscaleClamp => {
-                                                min_size_debt -= track.size() - old_size;
+                                                min_size_debt = min_size_debt.saturating_sub(track.size() - old_size);
                                                 rigid_tracks_widget.remove(rigid_index);
                                             }
                                             SizeResult::NoEffectEq  |
@@ -342,11 +344,11 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                                             match track.change_size(new_size) {
                                                 SizeResult::SizeUpscale => {
-                                                    frac_expand_debt -= track.size() - old_size;
+                                                    frac_expand_debt = frac_expand_debt.saturating_sub(track.size() - old_size);
                                                     index += 1;
                                                 },
                                                 SizeResult::SizeUpscaleClamp => {
-                                                    frac_expand_debt -= track.size() - old_size;
+                                                    frac_expand_debt = frac_expand_debt.saturating_sub(track.size() - old_size);
                                                     frac_tracks_widget.remove(index);
                                                     need_repass = true;
                                                 },
@@ -385,11 +387,28 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                             rigid_tracks_widget.clear();
                             frac_tracks_widget.clear();
-                        }
+
+                            axis_size
+                        }}
                     }
 
-                    widget_scale!(x, width, col_range, col_range_mut, free_width);
-                    widget_scale!(y, height, row_range, row_range_mut, free_height);
+                    // The widget_scale macro isn't guaranteed to return, but if it does it returns the axis size
+                    // if it does. If it doesn't, the rest of this body is skipped and we go back to the beginning
+                    // of the `update` loop.
+                    let size_x = widget_scale!(x, width, col_range, col_range_mut, free_width);
+                    let size_y = widget_scale!(y, height, row_range, row_range_mut, free_height);
+
+                    // Perform cell hinting and set
+                    let widget_origin_rect = OriginRect::new(size_x, size_y);
+
+                    let offset = engine.grid.get_cell_offset(
+                        layout_info.node_span.x.start.unwrap_or(0),
+                        layout_info.node_span.y.start.unwrap_or(0)
+                    ).unwrap();
+
+                    let outer_rect = widget_origin_rect.offset(offset);
+                    let cell_hinter = CellHinter::new(outer_rect, layout_info.placement);
+                    widget.set_rect(cell_hinter.transform_min_rect(layout_info.size_bounds.min));
                 }
 
                 break 'update;
@@ -456,15 +475,6 @@ struct Solvable {
     y: SolveAxis
 }
 
-impl Solvable {
-    fn new(x: SolveAxis, y: SolveAxis) -> Solvable {
-        Solvable {
-            x: x,
-            y: y
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SolveAxis {
     Solvable,
@@ -485,5 +495,52 @@ impl SolveAxis {
 impl Default for SolveAxis {
     fn default() -> SolveAxis {
         SolveAxis::Solvable
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct CellHinter {
+    outer_rect: OffsetRect,
+    place_in_or: PlaceInCell
+}
+
+impl CellHinter {
+    pub fn new(outer_rect: OffsetRect, place_in_or: PlaceInCell) -> CellHinter {
+        CellHinter {
+            outer_rect: outer_rect,
+            place_in_or: place_in_or,
+        }
+    }
+
+    pub fn transform_min_rect(&self, min_rect: OriginRect) -> OffsetRect {
+        macro_rules! place_on_axis {
+            ($axis:ident $min_rect_size_axis:expr => $inner_rect:ident) => {
+                match self.place_in_or.x {
+                    Place::Stretch => {
+                        $inner_rect.topleft.$axis = self.outer_rect.topleft.$axis;
+                        $inner_rect.lowright.$axis = self.outer_rect.lowright.$axis;
+                    },
+                    Place::Start => {
+                        $inner_rect.topleft.$axis = self.outer_rect.topleft.$axis;
+                        $inner_rect.lowright.$axis = self.outer_rect.topleft.$axis + $min_rect_size_axis;
+                    },
+                    Place::End => {
+                        $inner_rect.lowright.$axis = self.outer_rect.lowright.$axis;
+                        $inner_rect.topleft.$axis = self.outer_rect.lowright.$axis - $min_rect_size_axis;
+                    },
+                    Place::Center => {
+                        let center = (self.outer_rect.topleft.$axis + self.outer_rect.lowright.$axis) / 2;
+                        $inner_rect.topleft.$axis = center - $min_rect_size_axis / 2;
+                        $inner_rect.lowright.$axis = center + $min_rect_size_axis / 2;
+                    }
+                }
+            }
+        }
+
+        let mut inner_rect = OffsetRect::default();
+        place_on_axis!(x min_rect.width() => inner_rect);
+        place_on_axis!(y min_rect.height() => inner_rect);
+
+        inner_rect
     }
 }
