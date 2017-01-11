@@ -1,6 +1,6 @@
 use super::{Tr, Px, Fr};
-use super::geometry::{OriginRect, OffsetRect, Rect, Point};
-use super::layout::{NodeSpan, GridSize, DyRange};
+use super::geometry::Point;
+use super::layout::{GridSize, DyRange};
 use std::cmp;
 
 #[derive(Debug, Clone, Copy)]
@@ -171,11 +171,6 @@ impl<T> TrackVec<T> {
         self.num_rows = num_rows;
     }
 
-    /// Shrink down the internal dimensions vector as much as possible.
-    pub fn shrink_to_fit(&mut self) {
-        self.dims.shrink_to_fit();
-    }
-
     pub fn push_col(&mut self, col: T) {
         self.dims.insert(self.num_cols as usize, col);
         self.num_cols += 1;
@@ -292,30 +287,6 @@ impl<T> TrackVec<T> {
             None
         }
     }
-
-    pub fn clear_cols(&mut self) {
-        for _ in self.dims.drain(0..self.num_cols as usize) {}
-        self.num_cols = 0;
-    }
-
-    pub fn clear_rows(&mut self) {
-        self.dims.truncate(self.num_cols as usize);
-        self.num_rows = 0;
-    }
-
-    pub fn clear(&mut self) {
-        self.dims.clear();
-        self.num_cols = 0;
-        self.num_rows = 0;
-    }
-
-    pub fn num_cols(&self) -> Tr {
-        self.num_cols
-    }
-
-    pub fn num_rows(&self) -> Tr {
-        self.num_rows
-    }
 }
 
 impl TrackVec<GridTrack> {
@@ -333,35 +304,6 @@ impl TrackVec<GridTrack> {
         } else {
             None
         }
-    }
-
-    /// Get the rect of the cell, without accounting for offset.
-    pub fn get_cell_origin_rect(&self, column_num: Tr, row_num: Tr) -> Option<OriginRect> {
-        self.get_col(column_num).map(|col| col.size())
-            .and_then(|cw| self.get_row(row_num).map(|row| row.size())
-                 .map(|rh| OriginRect::new(cw, rh)))
-    }
-
-    /// Get the rect of the cell, accounting for offset.
-    pub fn get_cell_rect(&self, column_num: Tr, row_num: Tr) -> Option<OffsetRect> {
-        self.get_cell_origin_rect(column_num, row_num)
-            .map(|rect| rect.offset(self.get_cell_offset(column_num, row_num).unwrap()))
-    }
-
-    /// Get the rect of the given span, without accounting for offset.
-    pub fn get_span_origin_rect(&self, span: NodeSpan) -> Option<OriginRect> {
-        if let Some(lr_x) = self.col_range(span.x).map(|cols| cols.iter().map(|t| t.size()).sum()) {
-            if let Some(lr_y) = self.row_range(span.y).map(|rows| rows.iter().map(|t| t.size()).sum()) {
-                return Some(OriginRect::new(lr_x, lr_y));
-            }
-        }
-
-        None
-    }
-
-    pub fn get_span_rect(&self, span: NodeSpan) -> Option<OffsetRect> {
-        self.get_span_origin_rect(span)
-            .map(|rect| rect.offset(self.get_cell_offset(span.x.start.unwrap_or(0), span.y.start.unwrap_or(0)).unwrap()))
     }
 
     /// Get the total width of the layout in pixels.
