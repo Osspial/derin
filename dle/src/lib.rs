@@ -408,7 +408,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                     let outer_rect = widget_origin_rect.offset(offset);
                     let cell_hinter = CellHinter::new(outer_rect, layout_info.placement);
-                    widget.set_rect(cell_hinter.transform_min_rect(layout_info.size_bounds.min));
+                    widget.set_rect(cell_hinter.hint_with_bounds(layout_info.size_bounds));
                 }
 
                 break 'update;
@@ -512,34 +512,40 @@ impl CellHinter {
         }
     }
 
-    pub fn transform_min_rect(&self, min_rect: OriginRect) -> OffsetRect {
+    pub fn hint_with_bounds(&self, bounds: SizeBounds) -> OffsetRect {
+        let mut inner_rect = OffsetRect::default();
+
         macro_rules! place_on_axis {
-            ($axis:ident $min_rect_size_axis:expr => $inner_rect:ident) => {
+            ($axis:ident $size:ident) => {
                 match self.place_in_or.x {
                     Place::Stretch => {
-                        $inner_rect.topleft.$axis = self.outer_rect.topleft.$axis;
-                        $inner_rect.lowright.$axis = self.outer_rect.lowright.$axis;
+                        inner_rect.topleft.$axis = self.outer_rect.topleft.$axis;
+                        inner_rect.lowright.$axis = self.outer_rect.lowright.$axis;
+
+                        if inner_rect.$size() > bounds.max.$size() {
+                            inner_rect.topleft.$axis += bounds.max.$size() / 2 + bounds.max.$size() % 2;
+                            inner_rect.lowright.$axis -= bounds.max.$size() / 2;
+                        }
                     },
                     Place::Start => {
-                        $inner_rect.topleft.$axis = self.outer_rect.topleft.$axis;
-                        $inner_rect.lowright.$axis = self.outer_rect.topleft.$axis + $min_rect_size_axis;
+                        inner_rect.topleft.$axis = self.outer_rect.topleft.$axis;
+                        inner_rect.lowright.$axis = self.outer_rect.topleft.$axis + bounds.min.$size();
                     },
                     Place::End => {
-                        $inner_rect.lowright.$axis = self.outer_rect.lowright.$axis;
-                        $inner_rect.topleft.$axis = self.outer_rect.lowright.$axis - $min_rect_size_axis;
+                        inner_rect.lowright.$axis = self.outer_rect.lowright.$axis;
+                        inner_rect.topleft.$axis = self.outer_rect.lowright.$axis - bounds.min.$size();
                     },
                     Place::Center => {
                         let center = (self.outer_rect.topleft.$axis + self.outer_rect.lowright.$axis) / 2;
-                        $inner_rect.topleft.$axis = center - $min_rect_size_axis / 2;
-                        $inner_rect.lowright.$axis = center + $min_rect_size_axis / 2;
+                        inner_rect.topleft.$axis = center - bounds.min.$size() / 2;
+                        inner_rect.lowright.$axis = center + bounds.min.$size() / 2;
                     }
                 }
             }
         }
 
-        let mut inner_rect = OffsetRect::default();
-        place_on_axis!(x min_rect.width() => inner_rect);
-        place_on_axis!(y min_rect.height() => inner_rect);
+        place_on_axis!(x width);
+        place_on_axis!(y height);
 
         inner_rect
     }
