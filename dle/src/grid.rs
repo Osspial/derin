@@ -1,9 +1,11 @@
 use super::{Tr, Px, Fr};
 use super::geometry::Point;
 use super::layout::{GridSize, DyRange};
-use std::cmp;
 
-#[derive(Debug, Clone, Copy)]
+use std::cmp;
+use std::fmt::{Debug, Formatter, Error};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SizeResult {
     NoEffectEq,
     NoEffectDown,
@@ -14,9 +16,10 @@ pub enum SizeResult {
     SizeDownscaleClamp
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GridTrack {
     /// The size of this grid track in pixels. For columns, this is the width; for rows, the height.
+    /// This must be greater than `min_size_master` and less than `max_size_master`.
     size: Px,
     /// Track-level minimum size. If the child minimum size is less than this, this is used instead.
     min_size_master: Px,
@@ -143,15 +146,17 @@ impl<T> TrackVec<T> {
             // going to be shifting from undefined data!
             if num_cols > old_num_cols {
                 self.dims.resize((num_cols + num_rows) as usize, T::default());
+            } else if num_cols < old_num_cols {
+                // Drop any columns that are going to be removed.
+                for col in self.col_range_mut(num_cols..old_num_cols) {
+                    ptr::drop_in_place(col);
+                }
             }
 
-            // Drop any columns that are going to be removed.
-            for col in self.col_range_mut(num_cols..old_num_cols) {
-                ptr::drop_in_place(col);
+            if 0 < num_rows {
+                // Shift the row data over.
+                ptr::copy(&self.dims[old_num_cols as usize], &mut self.dims[num_cols as usize], num_rows as usize);
             }
-
-            // Shift the row data over.
-            ptr::copy(&self.dims[old_num_cols as usize], &mut self.dims[num_cols as usize], num_rows as usize);
 
             // If the number of columns was increased and the row data shifted to the right, fill the new
             // empty space with the default for the data type. In the event that it was shifted to the left
@@ -191,6 +196,15 @@ impl<T> TrackVec<T> {
         self.num_rows -= 1;
     }
 
+    pub fn clear_cols(&mut self) {
+        for _ in self.dims.drain(0..self.num_cols as usize) {}
+        self.num_cols = 0;
+    }
+
+    pub fn clear_rows(&mut self) {
+        self.dims.truncate(self.num_cols as usize);
+        self.num_rows = 0;
+    }
 
     /// Get a reference to the column at the specified column number. Returns `None` if the number
     /// is >= `num_cols`.
@@ -249,7 +263,7 @@ impl<T> TrackVec<T> {
         let range_usize = (range.start.unwrap_or(0) + self.num_cols) as usize
                           ..(range.end.unwrap_or(self.num_rows) + self.num_cols) as usize;
 
-        if range_usize.end as u32 <= self.num_cols {
+        if range_usize.end as u32 <= self.num_rows + self.num_cols {
             Some(&self.dims[range_usize])
         } else {
             None
@@ -281,7 +295,7 @@ impl<T> TrackVec<T> {
         let range_usize = (range.start.unwrap_or(0) + self.num_cols) as usize
                           ..(range.end.unwrap_or(self.num_rows) + self.num_cols) as usize;
 
-        if range_usize.end as u32 <= self.num_cols {
+        if range_usize.end as u32 <= self.num_rows + self.num_cols {
             Some(&mut self.dims[range_usize])
         } else {
             None
@@ -308,13 +322,13 @@ impl TrackVec<GridTrack> {
 
     /// Get the total width of the layout in pixels.
     pub fn width(&self) -> Px {
-        self.col_range(0..self.num_cols).unwrap().iter()
+        self.col_range(..).unwrap().iter()
             .map(|c| c.size()).sum()
     }
 
     /// Get the total height of the layout in pixels.
     pub fn height(&self) -> Px {
-        self.row_range(0..self.num_rows).unwrap().iter()
+        self.row_range(..).unwrap().iter()
             .map(|r| r.size()).sum()
     }
 
@@ -328,5 +342,162 @@ impl TrackVec<GridTrack> {
     pub fn max_height(&self) -> Px {
         self.row_range(0..self.num_rows).unwrap().iter()
             .fold(0, |acc, r| acc.saturating_add(r.max_size_master()))
+    }
+}
+
+impl<T: Debug> Debug for TrackVec<T> {
+    fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
+        fmt.debug_struct("TrackVec")
+            .field("cols", &self.col_range(..).unwrap())
+            .field("rows", &self.row_range(..).unwrap())
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quickcheck::{Arbitrary, Gen};
+    use std::cmp;
+
+    impl Arbitrary for GridTrack {
+        fn arbitrary<G: Gen>(g: &mut G) -> GridTrack {
+            let mut track = GridTrack::default();
+            track.set_min_size_master(g.next_u32());
+            track.set_max_size_master(g.next_u32());
+            track.change_size(g.next_u32());
+            track.fr_size = g.next_f32();
+            track
+        }
+    }
+
+    impl<A: Arbitrary> Arbitrary for TrackVec<A> {
+        fn arbitrary<G: Gen>(g: &mut G) -> TrackVec<A> {
+            let size = g.size();
+            let num_cols = g.gen_range(0, size);
+            let num_rows = g.gen_range(0, size);
+
+            let mut tv: TrackVec<A> = TrackVec::new();
+            for col in (0..num_cols).map(|_| A::arbitrary(g)) {
+                tv.push_col(col);
+            }
+            for row in (0..num_rows).map(|_| A::arbitrary(g)) {
+                tv.push_row(row);
+            }
+            tv
+        }
+
+        fn shrink(&self) -> Box<Iterator<Item=TrackVec<A>>> {
+            struct TrackVecShrinker<A: Arbitrary> {
+                source: TrackVec<A>,
+                index: usize
+            }
+
+            impl<A: Arbitrary> Iterator for TrackVecShrinker<A> {
+                type Item = TrackVec<A>;
+
+                /// This is a three-cycle shrink: first, shrink the columns and leave rows untouched. Then, shrink
+                /// the rows and leave columns untouched. Finally, shrink both rows and columns.
+                fn next(&mut self) -> Option<TrackVec<A>> {
+                    if self.source.num_cols > 0 || self.source.num_rows > 0 {
+                        self.index += 1;
+                        match (self.index - 1) % 3 {
+                            0 => {
+                                if let Some(col_shrunk) = self.source.col_range(..).unwrap().to_vec().shrink().next() {
+                                    let mut new_vec = self.source.clone();
+                                    new_vec.clear_cols();
+                                    for col in col_shrunk {
+                                        new_vec.push_col(col);
+                                    }
+                                    Some(new_vec)
+                                } else {
+                                    self.next()
+                                }
+                            }
+
+                            1 => {
+                                if let Some(row_shrunk) = self.source.row_range(..).unwrap().to_vec().shrink().next() {
+                                    let mut new_vec = self.source.clone();
+                                    new_vec.clear_rows();
+                                    for row in row_shrunk {
+                                        new_vec.push_row(row);
+                                    }
+                                    Some(new_vec)
+                                } else {
+                                    self.next()
+                                }
+                            }
+
+                            2 => {
+                                if let Some(col_shrunk) = self.source.col_range(..).unwrap().to_vec().shrink().next() {
+                                if let Some(row_shrunk) = self.source.row_range(..).unwrap().to_vec().shrink().next() {
+                                    let mut new_vec = TrackVec::new();
+
+                                    for col in col_shrunk {
+                                        new_vec.push_col(col);
+                                    }
+                                    for row in row_shrunk {
+                                        new_vec.push_row(row);
+                                    }
+                                    self.source = new_vec.clone();
+                                    return Some(new_vec);
+                                }}
+                                None
+                            }
+                            _ => unreachable!()
+                        }
+                    } else {
+                        None
+                    }
+                }
+            }
+
+            Box::new(TrackVecShrinker {
+                source: self.clone(),
+                index: 0
+            })
+        }
+    }
+
+    quickcheck!{
+        fn track_vec_set_num_cols(track_vec: TrackVec, new_num_cols: Tr) -> bool {
+            let mut ntv = track_vec.clone();
+            ntv.set_num_cols(new_num_cols);
+
+            // Test that the column data is unchanged (except for truncation)
+            track_vec.col_range(..cmp::min(new_num_cols, track_vec.num_cols))
+            == ntv.col_range(..cmp::min(new_num_cols, track_vec.num_cols))
+            &&
+            // Test that the row data is unchanged
+            track_vec.row_range(..) == ntv.row_range(..)
+        }
+
+        // We don't test `TrackVec.set_num_rows` because the implementation is the stock vec implementation.
+
+        fn grid_track_change_size(grid_track: GridTrack, new_size: Px) -> bool {
+            let set_size_result = grid_track.clone().change_size(new_size);
+
+            set_size_result == if new_size < grid_track.min_size_master() {
+                if grid_track.min_size_master() < grid_track.size() {
+                    SizeResult::SizeDownscaleClamp
+                } else {
+                    SizeResult::NoEffectDown
+                }
+            } else if grid_track.max_size_master() < new_size {
+                if grid_track.size() < grid_track.max_size_master() {
+                    SizeResult::SizeUpscaleClamp
+                } else {
+                    SizeResult::NoEffectUp
+                }
+            } else {
+                if grid_track.size() < new_size {
+                    SizeResult::SizeUpscale
+                } else if new_size < grid_track.size() {
+                    SizeResult::SizeDownscale
+                } else {
+                    SizeResult::NoEffectEq
+                }
+            }
+        }
     }
 }
