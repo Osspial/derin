@@ -206,6 +206,13 @@ impl<T> TrackVec<T> {
         self.num_rows = 0;
     }
 
+    pub fn clear(&mut self) {
+        self.dims.clear();
+        self.num_cols = 0;
+        self.num_rows = 0;
+    }
+
+
     /// Get a reference to the column at the specified column number. Returns `None` if the number
     /// is >= `num_cols`.
     pub fn get_col(&self, column_num: Tr) -> Option<&T> {
@@ -301,6 +308,14 @@ impl<T> TrackVec<T> {
             None
         }
     }
+
+    pub fn num_cols(&self) -> Tr {
+        self.num_cols
+    }
+
+    pub fn num_rows(&self) -> Tr {
+        self.num_rows
+    }
 }
 
 impl TrackVec<GridTrack> {
@@ -318,30 +333,6 @@ impl TrackVec<GridTrack> {
         } else {
             None
         }
-    }
-
-    /// Get the total width of the layout in pixels.
-    pub fn width(&self) -> Px {
-        self.col_range(..).unwrap().iter()
-            .map(|c| c.size()).sum()
-    }
-
-    /// Get the total height of the layout in pixels.
-    pub fn height(&self) -> Px {
-        self.row_range(..).unwrap().iter()
-            .map(|r| r.size()).sum()
-    }
-
-    /// Get the maximum width of the layout in pixels
-    pub fn max_width(&self) -> Px {
-        self.col_range(0..self.num_cols).unwrap().iter()
-            .fold(0, |acc, c| acc.saturating_add(c.max_size_master()))
-    }
-
-    /// Get the maximum height of the layout in pixels
-    pub fn max_height(&self) -> Px {
-        self.row_range(0..self.num_rows).unwrap().iter()
-            .fold(0, |acc, r| acc.saturating_add(r.max_size_master()))
     }
 }
 

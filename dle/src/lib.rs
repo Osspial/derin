@@ -86,9 +86,18 @@ pub enum LayoutUpdate<K: Clone + Copy> {
     PixelSize(OriginRect)
 }
 
+#[derive(Default)]
+struct UQHeapCache {
+    frac_tracks: TrackVec<Tr>,
+    potential_frac_tracks: TrackVec<Tr>,
+    rigid_tracks_widget: Vec<Tr>,
+    frac_tracks_widget: Vec<Tr>
+}
+
 pub struct UpdateQueue<K: Clone + Copy> {
     update_queue: Vec<LayoutUpdate<K>>,
     id_stack: Vec<(u32, usize)>,
+    heap_cache: UQHeapCache,
     unsolvable_id: u64
 }
 
@@ -97,6 +106,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
         UpdateQueue {
             update_queue: Vec::new(),
             id_stack: Vec::new(),
+            heap_cache: UQHeapCache::default(),
             unsolvable_id: 0
         }
     }
@@ -141,13 +151,12 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                 }
             }
 
-            // TODO: CACHE HEAP ALLOCS
-            let mut frac_tracks: TrackVec<Tr> = TrackVec::new();
+            let mut frac_tracks = &mut self.heap_cache.frac_tracks;
+            let mut potential_frac_tracks = &mut self.heap_cache.potential_frac_tracks;
 
-            let mut rigid_tracks_widget: Vec<Tr> = Vec::new();
-            let mut frac_tracks_widget: Vec<Tr> = Vec::new();
+            let mut rigid_tracks_widget = &mut self.heap_cache.rigid_tracks_widget;
+            let mut frac_tracks_widget = &mut self.heap_cache.frac_tracks_widget;
 
-            let mut potential_frac_tracks: TrackVec<Tr> = TrackVec::new();
 
 
             // We start out by setting the free space to its maximum possible value.
@@ -175,7 +184,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                 /// independent from the other but the computations required for both are basically the same,
                 /// they're placed in a macro to allow DRY.
                 macro_rules! track_constraints {
-                    ($get_track:ident, $get_track_mut:ident, $push_track:ident,
+                    ($get_track:ident, $get_track_mut:ident, $push_track:ident, $num_tracks_method:ident,
                      $remove_track:ident, $free_size:expr, $fr_total:expr) => {(|| {
                         //                                                      ^^
                         // Why is this a closure? Consecutive loops in the same function get a warning
@@ -221,11 +230,11 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                         'frac: loop {
                             let mut frac_index = 0;
-                            let mut px_expander = PxExpander::default();
+                            let mut px_expander = FrDivider::new(frac_tracks.$num_tracks_method(), $free_size, $fr_total);
                             while let Some(track_index) = frac_tracks.$get_track(frac_index).map(|t| *t as Tr) {
                                 let track = engine.grid.$get_track_mut(track_index).unwrap();
 
-                                let new_size = px_expander.expand($free_size as Fr * track.fr_size / $fr_total);
+                                let new_size = px_expander.divvy(track.fr_size);
 
                                 match track.change_size(new_size) {
                                     // If the resize occured without issues, increment frac_index and go on to the next track.
@@ -254,8 +263,8 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                     })()}
                 }
 
-                track_constraints!(get_col, get_col_mut, push_col, remove_col, free_width, fr_total_width);
-                track_constraints!(get_row, get_row_mut, push_row, remove_row, free_height, fr_total_height);
+                track_constraints!(get_col, get_col_mut, push_col, num_cols, remove_col, free_width, fr_total_width);
+                track_constraints!(get_row, get_row_mut, push_row, num_rows, remove_row, free_height, fr_total_height);
 
                 for &mut WidgetData{ref mut widget, ref mut layout_info} in engine.container.get_iter_mut() {
                     macro_rules! widget_scale {
@@ -331,20 +340,22 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                 // up to size.
                                 if 0 < min_size_debt {
                                     let frac_expand = min_size_debt;
+                                    let desired_size = axis_size + frac_expand;
 
                                     // Check that the fractional tracks can actually be expanded by `frac_expand` amount. Note that this
-                                    // does not expand the fractional tracks - it only checks that they can get to the full size.
+                                    // does not actually expand the fractional tracks - it only checks that they can get to the full size.
+                                    // Expansion is deferred to the main rescaling loop in the `track_constraints!` macro.
                                     let mut frac_expand_debt = frac_expand;
                                     while 0 < frac_tracks_widget.len() {
                                         let mut need_repass = false;
 
                                         let mut index = 0;
-                                        let mut px_expander = PxExpander::default();
+                                        let mut px_expander = FrDivider::new(frac_tracks_widget.len() as Tr, desired_size, fr_widget);
                                         while let Some(track_index) = frac_tracks_widget.get(index).cloned() {
                                             let mut track = engine.grid.$track_range(layout_info.node_span.x).unwrap()[track_index as usize].clone();
 
                                             let old_size = track.size();
-                                            let new_size = px_expander.expand(frac_expand as f32 * track.fr_size / fr_widget);
+                                            let new_size = px_expander.divvy(frac_expand as f32 * track.fr_size / fr_widget);
 
                                             match track.change_size(new_size) {
                                                 SizeResult::SizeUpscale => {
@@ -353,11 +364,13 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                                 },
                                                 SizeResult::SizeUpscaleClamp => {
                                                     frac_expand_debt = frac_expand_debt.saturating_sub(track.size() - old_size);
+                                                    fr_widget -= track.fr_size;
                                                     frac_tracks_widget.remove(index);
                                                     need_repass = true;
                                                 },
                                                 SizeResult::NoEffectEq  |
                                                 SizeResult::NoEffectUp => {
+                                                    fr_widget -= track.fr_size;
                                                     frac_tracks_widget.remove(index);
                                                     need_repass = true;
                                                 },
@@ -412,13 +425,20 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                     let outer_rect = widget_origin_rect.offset(offset);
                     let cell_hinter = CellHinter::new(outer_rect, layout_info.placement);
-                    widget.set_rect(cell_hinter.hint_with_bounds(layout_info.size_bounds));
+
+                    if let Ok(widget_rect) = cell_hinter.hint_with_bounds(layout_info.size_bounds) {
+                        widget.set_rect(widget_rect);
+                    }
                 }
 
                 break 'update;
             }
 
             self.unsolvable_id.wrapping_add(1);
+            frac_tracks.clear();
+            potential_frac_tracks.clear();
+            rigid_tracks_widget.clear();
+            frac_tracks_widget.clear();
         }
     }
 }
@@ -430,6 +450,7 @@ pub struct LayoutEngine<C: Container>
     grid: TrackVec,
     desired_size: OriginRect,
     actual_size: OriginRect,
+    min_size: OriginRect,
     id: u32
 }
 
@@ -444,6 +465,7 @@ impl<C: Container> LayoutEngine<C>
             grid: TrackVec::new(),
             desired_size: OriginRect::min(),
             actual_size: OriginRect::min(),
+            min_size: OriginRect::min(),
             id: ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32
         }
     }
@@ -457,19 +479,48 @@ impl<C: Container> LayoutEngine<C>
     }
 }
 
-/// Struct for converting `f32`s to `Px` via remainder accumulation.
-#[derive(Default)]
-struct PxExpander {
+struct FrDivider {
+    num_tracks: Tr,
+    desired_size: Px,
+    fr_total: Fr,
+    /// An accumulation of the fractional parts of the `new_size_float` variable computed in the
+    /// `divvy` function.
     remainder: f32
 }
 
-impl PxExpander {
-    fn expand(&mut self, new_size_float: f32) -> Px {
+impl FrDivider {
+    fn new(num_tracks: Tr, desired_size: Px, fr_total: Fr) -> FrDivider {
+        FrDivider {
+            num_tracks: num_tracks,
+            desired_size: desired_size,
+            fr_total: fr_total,
+            remainder: 0.0
+        }
+    }
+
+    /// Given a fractional track size, divvy up a part of the desired pixel size and return it.
+    fn divvy(&mut self, track_fr_size: Fr) -> Px {
+        // Compute the size of the track as a floating-point number. We can't just return this value, as
+        // tracks are alligned to the pixel and floats mess with that.
+        let new_size_float = self.desired_size as Fr * track_fr_size / self.fr_total;
+
+        // Add the fractional part of `new_size_float` to the remainder accumulator, and if that accumulator
+        // is greater than one add it to the `new_size` variable. Then, make sure the remainder accumulator
+        // is less than one.
         self.remainder += new_size_float.fract();
         let new_size = new_size_float as Px + self.remainder as Px;
         self.remainder -= self.remainder.trunc();
 
-        new_size
+        //
+        self.fr_total -= track_fr_size;
+        self.desired_size -= new_size;
+        self.num_tracks -= 1;
+
+        if self.num_tracks == 0 && self.desired_size > 0 {
+            new_size + self.desired_size
+        } else {
+            new_size
+        }
     }
 }
 
@@ -516,7 +567,13 @@ impl CellHinter {
         }
     }
 
-    pub fn hint_with_bounds(&self, bounds: SizeBounds) -> OffsetRect {
+    pub fn hint_with_bounds(&self, bounds: SizeBounds) -> Result<OffsetRect, HintError> {
+        if bounds.min.width() < self.outer_rect.width() ||
+           bounds.min.height() < self.outer_rect.height()
+        {
+            return Err(HintError::ORTooSmall)
+        }
+
         let mut inner_rect = OffsetRect::default();
 
         macro_rules! place_on_axis {
@@ -551,6 +608,75 @@ impl CellHinter {
         place_on_axis!(x width);
         place_on_axis!(y height);
 
-        inner_rect
+        Ok(inner_rect)
+    }
+}
+
+enum HintError {
+    /// The outer rect is smaller than the minimum size bound, making constraint unsolvable
+    ORTooSmall
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use quickcheck::{Arbitrary, Gen};
+    use layout::{PlaceInCell, Place};
+    use geometry::*;
+    use std::mem;
+
+    quickcheck!{
+        fn test_px_divvy(desired_size: Px, frac_sizes: Vec<Fr>) -> bool {
+            let mut frac_sizes = frac_sizes;
+
+            // Make sure that none of the frac_sizes are negative, because `FrDivider` does not
+            // support that.
+            for track_fr_size in &mut frac_sizes {
+                *track_fr_size = track_fr_size.abs();
+            }
+
+            if frac_sizes.len() == 0 {
+                return true;
+            }
+
+            let num_fracts = frac_sizes.len() as Tr;
+            let fr_total: Fr = frac_sizes.iter().cloned().sum();
+
+            let mut expander = FrDivider::new(num_fracts, desired_size, fr_total);
+
+            let mut actual_size = 0;
+            for track_fr_size in frac_sizes {
+                actual_size += expander.divvy(track_fr_size);
+            }
+
+            actual_size == desired_size
+        }
+    }
+
+    impl Arbitrary for OffsetRect {
+        fn arbitrary<G: Gen>(g: &mut G) -> OffsetRect {
+            let mut topleft = Point::arbitrary(g);
+            let mut lowright = Point::arbitrary(g);
+
+            // Make sure that topleft is above and to the left of lowright.
+            if lowright.x < topleft.x {
+                mem::swap(&mut lowright.x, &mut topleft.x);
+            }
+            if lowright.y < topleft.y {
+                mem::swap(&mut lowright.y, &mut topleft.y);
+            }
+
+            OffsetRect {
+                topleft: topleft,
+                lowright: lowright
+            }
+        }
+    }
+
+    impl Arbitrary for Point {
+        fn arbitrary<G: Gen>(g: &mut G) -> Point {
+            Point::new(g.next_u32(), g.next_u32())
+        }
     }
 }
