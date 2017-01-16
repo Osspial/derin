@@ -1,6 +1,6 @@
 use super::{Tr, Px, Fr};
-use super::geometry::Point;
-use super::layout::{GridSize, DyRange};
+use geometry::Point;
+use widget_hints::{GridSize, DyRange};
 
 use std::cmp;
 use std::fmt::{Debug, Formatter, Error};

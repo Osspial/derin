@@ -5,12 +5,11 @@
 extern crate quickcheck;
 
 pub mod geometry;
-#[macro_use]
-pub mod layout;
+pub mod widget_hints;
 mod grid;
 
 use geometry::{Rect, OriginRect, OffsetRect};
-use layout::{NodeSpan, PlaceInCell, Place, GridSize};
+use widget_hints::{NodeSpan, PlaceInCell, Place, GridSize};
 use grid::{TrackVec, SizeResult};
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -622,7 +621,7 @@ enum HintError {
 mod tests {
     use super::*;
     use quickcheck::{Arbitrary, Gen};
-    use layout::{PlaceInCell, Place};
+    use widget_hints::{PlaceInCell, Place};
     use geometry::*;
     use std::mem;
 
