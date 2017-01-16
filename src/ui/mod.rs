@@ -1,5 +1,5 @@
 pub mod intrinsics;
-pub use dle::layout;
+pub mod layout;
 
 use self::layout::GridLayout;
 
