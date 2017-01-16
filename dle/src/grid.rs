@@ -196,16 +196,6 @@ impl<T> TrackVec<T> {
         self.num_rows -= 1;
     }
 
-    pub fn clear_cols(&mut self) {
-        for _ in self.dims.drain(0..self.num_cols as usize) {}
-        self.num_cols = 0;
-    }
-
-    pub fn clear_rows(&mut self) {
-        self.dims.truncate(self.num_cols as usize);
-        self.num_rows = 0;
-    }
-
     pub fn clear(&mut self) {
         self.dims.clear();
         self.num_cols = 0;
@@ -351,6 +341,60 @@ mod tests {
     use quickcheck::{Arbitrary, Gen};
     use std::cmp;
 
+    quickcheck!{
+        fn track_vec_set_num_cols(track_vec: TrackVec, new_num_cols: Tr) -> bool {
+            let mut ntv = track_vec.clone();
+            ntv.set_num_cols(new_num_cols);
+
+            // Test that the column data is unchanged (except for truncation)
+            track_vec.col_range(..cmp::min(new_num_cols, track_vec.num_cols))
+            == ntv.col_range(..cmp::min(new_num_cols, track_vec.num_cols))
+            &&
+            // Test that the row data is unchanged
+            track_vec.row_range(..) == ntv.row_range(..)
+        }
+
+        // We don't test `TrackVec.set_num_rows` because the implementation is the stock vec implementation.
+
+        fn grid_track_change_size(grid_track: GridTrack, new_size: Px) -> bool {
+            let set_size_result = grid_track.clone().change_size(new_size);
+
+            set_size_result == if new_size < grid_track.min_size_master() {
+                if grid_track.min_size_master() < grid_track.size() {
+                    SizeResult::SizeDownscaleClamp
+                } else {
+                    SizeResult::NoEffectDown
+                }
+            } else if grid_track.max_size_master() < new_size {
+                if grid_track.size() < grid_track.max_size_master() {
+                    SizeResult::SizeUpscaleClamp
+                } else {
+                    SizeResult::NoEffectUp
+                }
+            } else {
+                if grid_track.size() < new_size {
+                    SizeResult::SizeUpscale
+                } else if new_size < grid_track.size() {
+                    SizeResult::SizeDownscale
+                } else {
+                    SizeResult::NoEffectEq
+                }
+            }
+        }
+    }
+
+    impl<T> TrackVec<T> {
+        fn clear_cols(&mut self) {
+            for _ in self.dims.drain(0..self.num_cols as usize) {}
+            self.num_cols = 0;
+        }
+
+        fn clear_rows(&mut self) {
+            self.dims.truncate(self.num_cols as usize);
+            self.num_rows = 0;
+        }
+    }
+
     impl Arbitrary for GridTrack {
         fn arbitrary<G: Gen>(g: &mut G) -> GridTrack {
             let mut track = GridTrack::default();
@@ -447,48 +491,6 @@ mod tests {
                 source: self.clone(),
                 index: 0
             })
-        }
-    }
-
-    quickcheck!{
-        fn track_vec_set_num_cols(track_vec: TrackVec, new_num_cols: Tr) -> bool {
-            let mut ntv = track_vec.clone();
-            ntv.set_num_cols(new_num_cols);
-
-            // Test that the column data is unchanged (except for truncation)
-            track_vec.col_range(..cmp::min(new_num_cols, track_vec.num_cols))
-            == ntv.col_range(..cmp::min(new_num_cols, track_vec.num_cols))
-            &&
-            // Test that the row data is unchanged
-            track_vec.row_range(..) == ntv.row_range(..)
-        }
-
-        // We don't test `TrackVec.set_num_rows` because the implementation is the stock vec implementation.
-
-        fn grid_track_change_size(grid_track: GridTrack, new_size: Px) -> bool {
-            let set_size_result = grid_track.clone().change_size(new_size);
-
-            set_size_result == if new_size < grid_track.min_size_master() {
-                if grid_track.min_size_master() < grid_track.size() {
-                    SizeResult::SizeDownscaleClamp
-                } else {
-                    SizeResult::NoEffectDown
-                }
-            } else if grid_track.max_size_master() < new_size {
-                if grid_track.size() < grid_track.max_size_master() {
-                    SizeResult::SizeUpscaleClamp
-                } else {
-                    SizeResult::NoEffectUp
-                }
-            } else {
-                if grid_track.size() < new_size {
-                    SizeResult::SizeUpscale
-                } else if new_size < grid_track.size() {
-                    SizeResult::SizeDownscale
-                } else {
-                    SizeResult::NoEffectEq
-                }
-            }
         }
     }
 }
