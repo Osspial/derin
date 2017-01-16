@@ -633,8 +633,10 @@ impl CellHinter {
                         inner_rect.lowright.$axis = self.outer_rect.lowright.$axis;
 
                         if inner_rect.$size() > bounds.max.$size() {
-                            inner_rect.topleft.$axis += bounds.max.$size() / 2 + bounds.max.$size() % 2;
-                            inner_rect.lowright.$axis -= bounds.max.$size() / 2;
+                            let size_diff = inner_rect.$size() - bounds.max.$size();
+
+                            inner_rect.topleft.$axis += size_diff / 2 + size_diff % 2;
+                            inner_rect.lowright.$axis -= size_diff / 2;
                         }
                     },
                     Place::Start => {
@@ -649,6 +651,13 @@ impl CellHinter {
                         let center = (self.outer_rect.topleft.$axis + self.outer_rect.lowright.$axis) / 2;
                         inner_rect.topleft.$axis = center - bounds.min.$size() / 2;
                         inner_rect.lowright.$axis = center + bounds.min.$size() / 2;
+
+                        if inner_rect.$size() > bounds.max.$size() {
+                            let size_diff = inner_rect.$size() - bounds.max.$size();
+
+                            inner_rect.topleft.$axis += size_diff / 2 + size_diff % 2;
+                            inner_rect.lowright.$axis -= size_diff / 2;
+                        }
                     }
                 }
             }
