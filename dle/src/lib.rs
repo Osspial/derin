@@ -93,9 +93,15 @@ struct UQHeapCache {
     frac_tracks_widget: Vec<Tr>
 }
 
+struct IdStackEntry {
+    engine_id: u32,
+    update_queue_index: usize,
+    container_contents_changed: bool
+}
+
 pub struct UpdateQueue<K: Clone + Copy> {
     update_queue: Vec<LayoutUpdate<K>>,
-    id_stack: Vec<(u32, usize)>,
+    id_stack: Vec<IdStackEntry>,
     heap_cache: UQHeapCache,
     unsolvable_id: u64
 }
@@ -113,7 +119,36 @@ impl<K: Clone + Copy> UpdateQueue<K> {
     pub fn push_engine<C: Container>(&mut self, engine: &LayoutEngine<C>)
             where for<'a> &'a C: ContainerRef<'a, Widget = C::Widget>
     {
-        self.id_stack.push((engine.id, self.update_queue.len()));
+        self.id_stack.push(IdStackEntry {
+            engine_id: engine.id,
+            update_queue_index: self.update_queue.len(),
+            container_contents_changed: false
+        });
+    }
+
+    pub fn insert_widget<C: Container>(&mut self, key: K, widget: C::Widget,
+                                       engine: &mut LayoutEngine<C>)
+            -> Option<WidgetData<C::Widget>>
+            where C: Container<Key = K>,
+                  for<'a> &'a C: ContainerRef<'a, Widget = C::Widget>
+    {
+        let id_stack_top = self.id_stack.last_mut().expect("Attempted to modify engine with no engine on stack");
+        assert_eq!(engine.id, id_stack_top.engine_id);
+        id_stack_top.container_contents_changed = true;
+
+        engine.container.insert(key, widget)
+    }
+
+    pub fn remove_widget<C: Container>(&mut self, key: K, engine: &mut LayoutEngine<C>)
+            -> Option<WidgetData<C::Widget>>
+            where C: Container<Key = K>,
+                  for<'a> &'a C: ContainerRef<'a, Widget = C::Widget>
+    {
+        let id_stack_top = self.id_stack.last_mut().expect("Attempted to modify engine with no engine on stack");
+        assert_eq!(engine.id, id_stack_top.engine_id);
+        id_stack_top.container_contents_changed = true;
+
+        engine.container.remove(key)
     }
 
     /// This method is the heart and soul of the derin layout engine, and is easily the most complex
@@ -129,11 +164,12 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                   for<'a> &'a C: ContainerRef<'a, Widget = C::Widget>
     {
         let id_stack_top = self.id_stack.pop().expect("Attempted to pop engine with no engine on stack");
-        assert_eq!(engine.id, id_stack_top.0);
+        assert_eq!(engine.id, id_stack_top.engine_id);
 
-        // Perform the processing only if updates were actually pushed to the update queue.
-        if id_stack_top.1 > self.update_queue.len() {
-            for update in self.update_queue.drain(id_stack_top.1..) {
+        // Perform the processing only if updates were actually pushed to the update queue, or if widgets
+        // were added or removed from the container.
+        if id_stack_top.update_queue_index > self.update_queue.len() {
+            for update in self.update_queue.drain(id_stack_top.update_queue_index..) {
                 use self::LayoutUpdate::*;
 
                 match update {
@@ -156,14 +192,11 @@ impl<K: Clone + Copy> UpdateQueue<K> {
             let mut rigid_tracks_widget = &mut self.heap_cache.rigid_tracks_widget;
             let mut frac_tracks_widget = &mut self.heap_cache.frac_tracks_widget;
 
-
-
             // We start out by setting the free space to its maximum possible value.
             let mut free_width = engine.desired_size.width();
             let mut fr_total_width = 0.0;
             let mut free_height = engine.desired_size.height();
             let mut fr_total_height = 0.0;
-
 
             // Next, we perform an iteration over the tracks, subtracting from the free space if the track is
             // rigid.
@@ -194,7 +227,10 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                             let track = engine.grid.$get_track(track_index).unwrap();
                             let mut track_copy = track.clone();
 
+                            // While this isn't an *exact* calculation of the new size of the track (due to remainders and whatnot
+                            // as implemented in `FrDivider`), it's a good enough estimate.
                             let new_size = (($free_size + track.size()) as Fr * track.fr_size / ($fr_total + track.fr_size)) as Px;
+
                             match track_copy.change_size(new_size) {
                                 // If the track can be freely rescaled, add it back to `frac_tracks` and remove it from
                                 // `potential_frac_tracks`.
@@ -447,9 +483,10 @@ pub struct LayoutEngine<C: Container>
 {
     container: C,
     grid: TrackVec,
-    desired_size: OriginRect,
+    pub desired_size: OriginRect,
     actual_size: OriginRect,
     min_size: OriginRect,
+    max_size: OriginRect,
     id: u32
 }
 
@@ -465,6 +502,7 @@ impl<C: Container> LayoutEngine<C>
             desired_size: OriginRect::min(),
             actual_size: OriginRect::min(),
             min_size: OriginRect::min(),
+            max_size: OriginRect::max(),
             id: ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32
         }
     }
@@ -475,6 +513,18 @@ impl<C: Container> LayoutEngine<C>
 
     pub fn get_widget_mut(&mut self, key: C::Key) -> Option<&mut C::Widget> {
         self.container.get_mut(key).map(|w| &mut w.widget)
+    }
+
+    pub fn min_size(&self) -> OriginRect {
+        self.min_size
+    }
+
+    pub fn max_size(&self) -> OriginRect {
+        self.max_size
+    }
+
+    pub fn actual_size(&self) -> OriginRect {
+        self.actual_size
     }
 }
 
@@ -621,7 +671,6 @@ enum HintError {
 mod tests {
     use super::*;
     use quickcheck::{Arbitrary, Gen};
-    use widget_hints::{PlaceInCell, Place};
     use geometry::*;
     use std::mem;
 
