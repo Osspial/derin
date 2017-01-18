@@ -25,23 +25,24 @@ pub struct SizeBounds {
 }
 
 impl SizeBounds {
+    /// Bound a rectangle to be within the size bounds. Returns `Ok` if the rect wasn't bounded, and
+    /// `Err` if it was bounded.
     fn bound_rect(self, mut desired_size: OriginRect) -> Result<OriginRect, OriginRect> {
         let mut size_bounded = false;
-        if desired_size.width() > self.max.width() {
-            desired_size.lowright.x = self.max.width();
-            size_bounded = true;
-        }
-        if desired_size.height() > self.max.height() {
-            desired_size.lowright.y = self.max.height();
-            size_bounded = true;
-        }
 
         if desired_size.width() < self.min.width() {
             desired_size.lowright.x = self.min.width();
             size_bounded = true;
+        } else if desired_size.width() > self.max.width() {
+            desired_size.lowright.x = self.max.width();
+            size_bounded = true;
         }
+
         if desired_size.height() < self.min.height() {
             desired_size.lowright.y = self.min.height();
+            size_bounded = true;
+        } else if desired_size.height() > self.max.height() {
+            desired_size.lowright.y = self.max.height();
             size_bounded = true;
         }
 
@@ -213,7 +214,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                     GridSize(gs)  => engine.grid.set_grid_size(gs),
                     PixelSize(ps) => engine.desired_size = ps,
-                    PixelSizeBounds(psb) => engine.size_bounds = psb
+                    PixelSizeBounds(psb) => engine.desired_size_bounds = psb
                 }
             }
 
@@ -229,18 +230,17 @@ impl<K: Clone + Copy> UpdateQueue<K> {
             let mut free_height = engine.desired_size.height();
             let mut fr_total_height = 0.0;
 
-            // Same with the min size and max size. The initial values for these are determined in the first
-            // pass over all the tracks below.
-            engine.size_bounds = SizeBounds::default();
+            // Reset the actual size bounds to zero.
+            engine.actual_size_bounds = SizeBounds::default();
 
             // Next, we perform an iteration over the tracks, subtracting from the free space if the track is
             // rigid.
             macro_rules! first_track_pass {
                 ($axis:ident, $push_track:ident, $track_range_mut:ident, $free_size:expr, $fr_total:expr) => {
                     for (index, track) in engine.grid.$track_range_mut(..).unwrap().iter_mut().enumerate() {
-                        engine.size_bounds.min.lowright.$axis += track.min_size_master();
-                        engine.size_bounds.max.lowright.$axis =
-                            engine.size_bounds.max.lowright.$axis.saturating_add(track.max_size_master());
+                        engine.actual_size_bounds.min.lowright.$axis += track.min_size_master();
+                        engine.actual_size_bounds.max.lowright.$axis =
+                            engine.actual_size_bounds.max.lowright.$axis.saturating_add(track.max_size_master());
 
                         if track.fr_size <= 0.0 {
                             track.shrink_size();
@@ -257,10 +257,12 @@ impl<K: Clone + Copy> UpdateQueue<K> {
             first_track_pass!(x, push_col, col_range_mut, free_width, fr_total_width);
             first_track_pass!(y, push_row, row_range_mut, free_height, fr_total_height);
 
-            engine.actual_size = match engine.size_bounds.bound_rect(engine.desired_size) {
-                Ok(r)   |
-                Err(r) => r
-            };
+            engine.actual_size_bounds.min =
+                engine.desired_size_bounds.bound_rect(engine.actual_size_bounds.min).converge();
+            engine.actual_size_bounds.max =
+                engine.desired_size_bounds.bound_rect(engine.actual_size_bounds.max).converge();
+
+            engine.actual_size = engine.actual_size_bounds.bound_rect(engine.desired_size).converge();
 
             'update: loop {
                 /// Macro for solving the track constraints independent of axis. Because each axis is
@@ -368,12 +370,14 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                 }
                             }
 
-                            let mut axis_min_size = 0;
+                            // The minimum size of the tracks in the grid that this widget occupies, without accounting for
+                            // the minimum size of this widget.
+                            let mut grid_tracks_min_size = 0;
 
                             for (index, track) in engine.grid.$track_range(layout_info.node_span.x).unwrap().iter().enumerate() {
                                 min_size_debt = min_size_debt.saturating_sub(track.size());
                                 axis_size += track.size();
-                                axis_min_size += track.min_size_master();
+                                grid_tracks_min_size += track.min_size_master();
 
                                 if track.fr_size == 0.0 ||
                                    track.size() < track.min_size_master() ||
@@ -387,8 +391,11 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                 }
                             }
 
-                            if axis_min_size < layout_info.size_bounds.min.$size() {
-                                engine.size_bounds.min.lowright.$axis += layout_info.size_bounds.min.$size() - axis_min_size;
+                            // If the minimum size of the tracks that this widget occupies is less than the minimum size of
+                            // this widget, increase the minimum size of the grid to account for the increase of the minimum
+                            // size of the widget tracks.
+                            if grid_tracks_min_size < layout_info.size_bounds.min.$size() {
+                                engine.actual_size_bounds.min.lowright.$axis += layout_info.size_bounds.min.$size() - grid_tracks_min_size;
                             }
 
                             // If the minimum size hasn't been met without expansion and the widget hasn't been marked as
@@ -494,7 +501,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                         ner.lowright.$axis += size_expand;
                                         ner
                                     };
-                                    match engine.size_bounds.bound_rect(new_engine_rect) {
+                                    match engine.actual_size_bounds.bound_rect(new_engine_rect) {
                                         Ok(r) => engine.actual_size = r,
                                         Err(r) => {
                                             engine.actual_size = r;
@@ -556,7 +563,8 @@ pub struct LayoutEngine<C: Container>
     grid: TrackVec,
     desired_size: OriginRect,
     actual_size: OriginRect,
-    size_bounds: SizeBounds,
+    desired_size_bounds: SizeBounds,
+    actual_size_bounds: SizeBounds,
     id: u32
 }
 
@@ -571,7 +579,8 @@ impl<C: Container> LayoutEngine<C>
             grid: TrackVec::new(),
             desired_size: OriginRect::min(),
             actual_size: OriginRect::min(),
-            size_bounds: SizeBounds::default(),
+            desired_size_bounds: SizeBounds::default(),
+            actual_size_bounds: SizeBounds::default(),
             id: ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32
         }
     }
@@ -592,8 +601,12 @@ impl<C: Container> LayoutEngine<C>
         self.actual_size
     }
 
-    pub fn size_bounds(&self) -> SizeBounds {
-        self.size_bounds
+    pub fn desired_size_bounds(&self) -> SizeBounds {
+        self.desired_size_bounds
+    }
+
+    pub fn actual_size_bounds(&self) -> SizeBounds {
+        self.actual_size_bounds
     }
 }
 
@@ -742,6 +755,21 @@ impl CellHinter {
 enum HintError {
     /// The outer rect is smaller than the minimum size bound, making constraint unsolvable
     ORTooSmall
+}
+
+trait Converge<T> {
+    /// Given a result where both `Ok` and `Err` contain the same type, "converge" those values
+    /// to just one value.
+    fn converge(self) -> T;
+}
+
+impl<T> Converge<T> for Result<T, T> {
+    fn converge(self) -> T {
+        match self {
+            Ok(t) |
+            Err(t) => t
+        }
+    }
 }
 
 
