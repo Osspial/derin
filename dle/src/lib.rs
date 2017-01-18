@@ -24,6 +24,35 @@ pub struct SizeBounds {
     pub max: OriginRect
 }
 
+impl SizeBounds {
+    fn bound_rect(self, mut desired_size: OriginRect) -> Result<OriginRect, OriginRect> {
+        let mut size_bounded = false;
+        if desired_size.width() > self.max.width() {
+            desired_size.lowright.x = self.max.width();
+            size_bounded = true;
+        }
+        if desired_size.height() > self.max.height() {
+            desired_size.lowright.y = self.max.height();
+            size_bounded = true;
+        }
+
+        if desired_size.width() < self.min.width() {
+            desired_size.lowright.x = self.min.width();
+            size_bounded = true;
+        }
+        if desired_size.height() < self.min.height() {
+            desired_size.lowright.y = self.min.height();
+            size_bounded = true;
+        }
+
+        if !size_bounded {
+            Ok(desired_size)
+        } else {
+            Err(desired_size)
+        }
+    }
+}
+
 impl Default for SizeBounds {
     fn default() -> SizeBounds {
         SizeBounds {
@@ -82,7 +111,8 @@ pub enum LayoutUpdate<K: Clone + Copy> {
     WidgetMaxRect(K, OriginRect),
 
     GridSize(GridSize),
-    PixelSize(OriginRect)
+    PixelSize(OriginRect),
+    PixelSizeBounds(SizeBounds)
 }
 
 #[derive(Default)]
@@ -182,7 +212,8 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                     WidgetMaxRect(k, r) => engine.container.get_mut(k).unwrap().layout_info.size_bounds.max = r,
 
                     GridSize(gs)  => engine.grid.set_grid_size(gs),
-                    PixelSize(ps) => engine.desired_size = ps
+                    PixelSize(ps) => engine.desired_size = ps,
+                    PixelSizeBounds(psb) => engine.size_bounds = psb
                 }
             }
 
@@ -198,18 +229,38 @@ impl<K: Clone + Copy> UpdateQueue<K> {
             let mut free_height = engine.desired_size.height();
             let mut fr_total_height = 0.0;
 
+            // Same with the min size and max size. The initial values for these are determined in the first
+            // pass over all the tracks below.
+            engine.size_bounds = SizeBounds::default();
+
             // Next, we perform an iteration over the tracks, subtracting from the free space if the track is
             // rigid.
-            for (index, track) in engine.grid.col_range_mut(..).unwrap().iter_mut().enumerate() {
-                if track.fr_size == 0.0 {
-                    track.shrink_size();
-                    free_width -= track.size();
-                } else {
-                    track.expand_size();
-                    fr_total_width += track.fr_size;
-                    frac_tracks.push_col(index as Tr);
+            macro_rules! first_track_pass {
+                ($axis:ident, $push_track:ident, $track_range_mut:ident, $free_size:expr, $fr_total:expr) => {
+                    for (index, track) in engine.grid.$track_range_mut(..).unwrap().iter_mut().enumerate() {
+                        engine.size_bounds.min.lowright.$axis += track.min_size_master();
+                        engine.size_bounds.max.lowright.$axis =
+                            engine.size_bounds.max.lowright.$axis.saturating_add(track.max_size_master());
+
+                        if track.fr_size <= 0.0 {
+                            track.shrink_size();
+                            $free_size -= track.size();
+                        } else {
+                            track.expand_size();
+                            $fr_total += track.fr_size;
+                            frac_tracks.$push_track(index as Tr);
+                        }
+                    }
                 }
             }
+
+            first_track_pass!(x, push_col, col_range_mut, free_width, fr_total_width);
+            first_track_pass!(y, push_row, row_range_mut, free_height, fr_total_height);
+
+            engine.actual_size = match engine.size_bounds.bound_rect(engine.desired_size) {
+                Ok(r)   |
+                Err(r) => r
+            };
 
             'update: loop {
                 /// Macro for solving the track constraints independent of axis. Because each axis is
@@ -317,9 +368,12 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                 }
                             }
 
+                            let mut axis_min_size = 0;
+
                             for (index, track) in engine.grid.$track_range(layout_info.node_span.x).unwrap().iter().enumerate() {
                                 min_size_debt = min_size_debt.saturating_sub(track.size());
                                 axis_size += track.size();
+                                axis_min_size += track.min_size_master();
 
                                 if track.fr_size == 0.0 ||
                                    track.size() < track.min_size_master() ||
@@ -331,6 +385,10 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                     frac_size += track.size();
                                     frac_tracks_widget.push(index as Tr);
                                 }
+                            }
+
+                            if axis_min_size < layout_info.size_bounds.min.$size() {
+                                engine.size_bounds.min.lowright.$axis += layout_info.size_bounds.min.$size() - axis_min_size;
                             }
 
                             // If the minimum size hasn't been met without expansion and the widget hasn't been marked as
@@ -431,6 +489,19 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                     let size_expand = (frac_expand as f32 * frac_proportion).ceil() as Px;
                                     $free_size += size_expand;
 
+                                    let new_engine_rect = {
+                                        let mut ner = engine.actual_size;
+                                        ner.lowright.$axis += size_expand;
+                                        ner
+                                    };
+                                    match engine.size_bounds.bound_rect(new_engine_rect) {
+                                        Ok(r) => engine.actual_size = r,
+                                        Err(r) => {
+                                            engine.actual_size = r;
+                                            layout_info.solvable.$axis = SolveAxis::Unsolvable(self.unsolvable_id);
+                                        }
+                                    }
+
                                     rigid_tracks_widget.clear();
                                     frac_tracks_widget.clear();
                                     continue 'update;
@@ -483,10 +554,9 @@ pub struct LayoutEngine<C: Container>
 {
     container: C,
     grid: TrackVec,
-    pub desired_size: OriginRect,
+    desired_size: OriginRect,
     actual_size: OriginRect,
-    min_size: OriginRect,
-    max_size: OriginRect,
+    size_bounds: SizeBounds,
     id: u32
 }
 
@@ -501,8 +571,7 @@ impl<C: Container> LayoutEngine<C>
             grid: TrackVec::new(),
             desired_size: OriginRect::min(),
             actual_size: OriginRect::min(),
-            min_size: OriginRect::min(),
-            max_size: OriginRect::max(),
+            size_bounds: SizeBounds::default(),
             id: ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32
         }
     }
@@ -515,16 +584,16 @@ impl<C: Container> LayoutEngine<C>
         self.container.get_mut(key).map(|w| &mut w.widget)
     }
 
-    pub fn min_size(&self) -> OriginRect {
-        self.min_size
-    }
-
-    pub fn max_size(&self) -> OriginRect {
-        self.max_size
+    pub fn desired_size(&self) -> OriginRect {
+        self.desired_size
     }
 
     pub fn actual_size(&self) -> OriginRect {
         self.actual_size
+    }
+
+    pub fn size_bounds(&self) -> SizeBounds {
+        self.size_bounds
     }
 }
 
