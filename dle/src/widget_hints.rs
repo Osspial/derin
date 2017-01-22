@@ -2,21 +2,27 @@ use super::Tr;
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo, Sub};
 
 #[derive(Debug, Clone, Copy)]
-pub struct DyRange<Idx> {
-    pub start: Option<Idx>,
-    pub end: Option<Idx>
+pub struct DyRange {
+    pub start: Option<Tr>,
+    pub end: Option<Tr>
 }
 
-impl<Idx> DyRange<Idx> where Idx: Sub {
+impl DyRange {
     /// Get the size of the DyRange, using `start_opt` if `self.start` is `None` and `end_opt` if
     /// `self.end` is `None`.
-    pub fn size(self, start_opt: Idx, end_opt: Idx) -> Idx::Output {
+    pub fn size(self, start_opt: Tr, end_opt: Tr) -> Tr {
         self.end.unwrap_or(end_opt) - self.start.unwrap_or(start_opt)
     }
 }
 
-impl<Idx> From<Range<Idx>> for DyRange<Idx> {
-    fn from(r: Range<Idx>) -> DyRange<Idx> {
+impl From<Tr> for DyRange {
+    fn from(n: Tr) -> DyRange {
+        DyRange::from(n..n + 1)
+    }
+}
+
+impl From<Range<Tr>> for DyRange {
+    fn from(r: Range<Tr>) -> DyRange {
         DyRange {
             start: Some(r.start),
             end: Some(r.end)
@@ -24,8 +30,8 @@ impl<Idx> From<Range<Idx>> for DyRange<Idx> {
     }
 }
 
-impl<Idx> From<RangeFrom<Idx>> for DyRange<Idx> {
-    fn from(r: RangeFrom<Idx>) -> DyRange<Idx> {
+impl From<RangeFrom<Tr>> for DyRange {
+    fn from(r: RangeFrom<Tr>) -> DyRange {
         DyRange {
             start: Some(r.start),
             end: None
@@ -33,8 +39,8 @@ impl<Idx> From<RangeFrom<Idx>> for DyRange<Idx> {
     }
 }
 
-impl<Idx> From<RangeFull> for DyRange<Idx> {
-    fn from(_: RangeFull) -> DyRange<Idx> {
+impl From<RangeFull> for DyRange {
+    fn from(_: RangeFull) -> DyRange {
         DyRange {
             start: None,
             end: None
@@ -42,8 +48,8 @@ impl<Idx> From<RangeFull> for DyRange<Idx> {
     }
 }
 
-impl<Idx> From<RangeTo<Idx>> for DyRange<Idx> {
-    fn from(r: RangeTo<Idx>) -> DyRange<Idx> {
+impl From<RangeTo<Tr>> for DyRange {
+    fn from(r: RangeTo<Tr>) -> DyRange {
         DyRange {
             start: None,
             end: Some(r.end)
@@ -103,7 +109,7 @@ two_axis_type!{
     pub struct GridSize(Tr);
 
     #[derive(Debug, Clone, Copy)]
-    pub struct NodeSpan(Into<DyRange<Tr>>);
+    pub struct NodeSpan(Into<DyRange>);
 
     #[derive(Default, Debug, Clone, Copy)]
     pub struct PlaceInCell(Place);

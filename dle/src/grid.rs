@@ -238,7 +238,7 @@ impl<T> TrackVec<T> {
     /// Take a range and get a slice of columns corresponding to that range. Returns `None` if the
     /// range specifies columns that don't exist.
     pub fn col_range<R>(&self, range: R) -> Option<&[T]>
-            where R: Into<DyRange<u32>>
+            where R: Into<DyRange>
     {
         let range = range.into();
         let range_usize = range.start.unwrap_or(0) as usize
@@ -254,7 +254,7 @@ impl<T> TrackVec<T> {
     /// Take a range and get a slice of rows corresponding to that range. Returns `None` if the
     /// range specifies rows that don't exist.
     pub fn row_range<R>(&self, range: R) -> Option<&[T]>
-            where R: Into<DyRange<u32>>
+            where R: Into<DyRange>
     {
         let range = range.into();
         let range_usize = (range.start.unwrap_or(0) + self.num_cols) as usize
@@ -270,7 +270,7 @@ impl<T> TrackVec<T> {
     /// Take a range and get a mutable slice of columns corresponding to that range. Returns `None` if the
     /// range specifies columns that don't exist.
     pub fn col_range_mut<R>(&mut self, range: R) -> Option<&mut [T]>
-            where R: Into<DyRange<u32>>
+            where R: Into<DyRange>
     {
         let range = range.into();
         let range_usize = range.start.unwrap_or(0) as usize
@@ -286,7 +286,7 @@ impl<T> TrackVec<T> {
     /// Take a range and get a mutable slice of rows corresponding to that range. Returns `None` if the
     /// range specifies rows that don't exist.
     pub fn row_range_mut<R>(&mut self, range: R) -> Option<&mut [T]>
-            where R: Into<DyRange<u32>>
+            where R: Into<DyRange>
     {
         let range = range.into();
         let range_usize = (range.start.unwrap_or(0) + self.num_cols) as usize
