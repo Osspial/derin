@@ -614,7 +614,6 @@ unsafe extern "system"
 
         WM_SIZE => {
             let new_rect = OriginRect::new(loword(lparam) as u32, hiword(lparam) as u32);
-            println!("top new rect {:?}", new_rect);
             let mut update_queue = nd.callback_data.update_queue.borrow_mut();
 
             update_queue.push_engine(&nd.child_layout);
@@ -668,7 +667,6 @@ unsafe fn parent_proc(hwnd: HWND, msg: UINT,
                 let mut update_queue = nd.callback_data.update_queue.borrow_mut();
 
                 let new_size = OriginRect::from(offset_rect_decode_wlparams(wparam, lparam));
-                println!("par new size {:?}", new_size);
 
                 let size_update = LayoutUpdate::PixelSize(new_size);
 
@@ -834,8 +832,6 @@ unsafe fn common_proc(hwnd: HWND, msg: UINT,
                 0,
                 window.get_style_ex()
             );
-
-            println!("dressed {:?}", dressed_rect);
 
             user32::SetWindowPos(
                 hwnd,

@@ -568,10 +568,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                     let outer_rect = widget_origin_rect.offset(offset);
                     let cell_hinter = CellHinter::new(outer_rect, layout_info.placement);
 
-                    println!("or: {:?}", outer_rect);
-                    println!("bounds: {:?}", layout_info.size_bounds);
                     if let Ok(widget_rect) = cell_hinter.hint_with_bounds(layout_info.size_bounds) {
-                        println!("hint okay");
                         widget.set_rect(widget_rect);
                     }
                 }
@@ -584,9 +581,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
             potential_frac_tracks.clear();
             rigid_tracks_widget.clear();
             frac_tracks_widget.clear();
-            println!("");
         }
-
     }
 }
 
