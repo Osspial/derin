@@ -403,7 +403,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                             // the minimum size of this widget.
                             let mut grid_tracks_min_size = 0;
 
-                            for (index, track) in engine.grid.$track_range(layout_info.node_span.x).expect("Node span larger than grid").iter().enumerate() {
+                            for (index, track) in engine.grid.$track_range(layout_info.node_span.$axis).expect("Node span larger than grid").iter().enumerate() {
                                 min_size_debt = min_size_debt.saturating_sub(track.size());
                                 axis_size += track.size();
                                 grid_tracks_min_size += track.min_size_master();
@@ -437,7 +437,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                                     let mut rigid_index = 0;
                                     while let Some(track_index) = rigid_tracks_widget.get(rigid_index).cloned() {
-                                        let track = &mut engine.grid.$track_range_mut(layout_info.node_span.x).unwrap()[track_index as usize];
+                                        let track = &mut engine.grid.$track_range_mut(layout_info.node_span.$axis).unwrap()[track_index as usize];
 
                                         let old_size = track.size();
                                         let expansion = size_expand + (expand_rem != 0) as Px;
@@ -481,7 +481,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                         let mut index = 0;
                                         let mut px_expander = FrDivider::new(frac_tracks_widget.len() as Tr, desired_size, fr_widget);
                                         while let Some(track_index) = frac_tracks_widget.get(index).cloned() {
-                                            let mut track = engine.grid.$track_range(layout_info.node_span.x).unwrap()[track_index as usize].clone();
+                                            let mut track = engine.grid.$track_range(layout_info.node_span.$axis).unwrap()[track_index as usize].clone();
 
                                             let old_size = track.size();
                                             let new_size = px_expander.divvy(frac_expand as f32 * track.fr_size / fr_widget);
@@ -738,7 +738,7 @@ impl CellHinter {
 
         macro_rules! place_on_axis {
             ($axis:ident $size:ident) => {
-                match self.place_in_or.x {
+                match self.place_in_or.$axis {
                     Place::Stretch => {
                         inner_rect.topleft.$axis = self.outer_rect.topleft.$axis;
                         inner_rect.lowright.$axis = self.outer_rect.lowright.$axis;
