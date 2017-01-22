@@ -7,6 +7,10 @@ extern crate lazy_static;
 extern crate smallvec;
 extern crate dle;
 
+#[cfg(test)]
+#[cfg_attr(test, macro_use)]
+extern crate quickcheck;
+
 #[cfg(target_os="windows")]
 extern crate user32;
 #[cfg(target_os="windows")]

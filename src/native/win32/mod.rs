@@ -1,5 +1,4 @@
 mod wrapper;
-mod geometry;
 
 use self::wrapper::{WindowNode, CallbackData, RawEvent};
 
@@ -44,14 +43,11 @@ impl<N: Node> Window<N> {
         // via Rust's MPSC channels.
         thread::spawn(move || {
             unsafe {
-                let mut cd = CallbackData {
-                    window_sender: window_sender.clone(),
-                    event_sender: event_sender
-                };
+                let cd = CallbackData::new(window_sender.clone(), event_sender);
 
                 // Create a wrapper toplevel window. If the creation succeeds, send back the window. Otherwise, send
                 // back the error it created and terminate this thread.
-                let wrapper_window = WindowNode::new_toplevel(&config, &mut cd as *mut CallbackData);
+                let wrapper_window = WindowNode::new_toplevel(&config, cd);
                 match wrapper_window {
                     Ok(wr) => {
                         window_sender.send(Ok(wr)).unwrap();
@@ -101,13 +97,18 @@ impl<N: Node> Window<N> {
             }
         }
 
-        NodeTraverser {
-            node_branch: &mut self.node_tree_root,
-            receiver: &self.window_receiver,
-            child_index: 0,
+        if self.node_tree_root.window.is_some() {
+            NodeTraverser {
+                node_branch: &mut self.node_tree_root,
+                receiver: &self.window_receiver,
+                child_index: 0,
 
-            children_layout: SingleNodeLayout::new()
-        }.add_child("root", &mut self.root)
+                children_layout: SingleNodeLayout::new(),
+                queue_opened: false
+            }.add_child("root", &mut self.root)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -143,7 +144,8 @@ struct NodeTraverser<'a, L: GridLayout> {
     /// children get added, this gets incremented.
     child_index: usize,
 
-    children_layout: L
+    children_layout: L,
+    queue_opened: bool
 }
 
 impl<'a, L: GridLayout> NodeTraverser<'a, L> {
@@ -155,7 +157,8 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
             receiver: self.receiver,
             child_index: 0,
 
-            children_layout: layout
+            children_layout: layout,
+            queue_opened: false
         }
     }
 
@@ -177,6 +180,12 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                   CL: GridLayout,
                   PF: FnOnce(&mut N, NodeTraverser<CL>) -> NativeResult<()>
     {
+        if !self.queue_opened {
+            self.queue_opened = true;
+            self.node_branch.window.as_ref().expect("Attempted to perform `take` on node with no window")
+                        .open_update_queue();
+        }
+
         if let Some(slot) = self.children_layout.next() {
             // If the desired node branch is at the current child index, get that and run the contents of the
             // `if` statement. Otherwise, search the entire children vector for the desired node and run the
@@ -203,7 +212,7 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                 }
             } else {
                 self.node_branch.children.insert(
-                    self.child_index, 
+                    self.child_index,
                     node.into_ntb(
                         name,
                         self.node_branch.window.as_ref().expect("Attempted to create child window without parent"),
@@ -212,7 +221,7 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                 );
                 let child_index = self.child_index;
                 self.child_index += 1;
-                
+
                 if let Some(ref window) = self.node_branch.children[child_index].window {
                     window.set_slot(slot);
                 }
@@ -228,6 +237,15 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
     }
 }
 
+impl<'a, L: GridLayout> Drop for NodeTraverser<'a, L> {
+    fn drop(&mut self) {
+        if self.queue_opened {
+            self.node_branch.window.as_ref().unwrap()
+                .flush_update_queue();
+        }
+    }
+}
+
 impl<'a, N: Node, L: GridLayout> NodeProcessor<N> for NodeTraverser<'a, L> {
     default fn add_child(&mut self, name: &'static str, node: &mut N) -> NativeResult<()> {
         // We have no information about what's in the child node, so we can't really do anything.
@@ -235,11 +253,12 @@ impl<'a, N: Node, L: GridLayout> NodeProcessor<N> for NodeTraverser<'a, L> {
         self.process_child_node_nochildren(name, node, |_, _| Ok(()))
     }
 }
+
 impl<'a, L: GridLayout> NodeProcessorAT for NodeTraverser<'a, L> {
     type Error = NativeError;
 }
 
-impl<'a, N, L> NodeProcessor<N> for NodeTraverser<'a, L> 
+impl<'a, N, L> NodeProcessor<N> for NodeTraverser<'a, L>
         where L: GridLayout,
   for<'b, 'c> N: ParentNode<NodeTraverser<'b, <N as ParentNode<NodeTraverser<'c, EmptyNodeLayout>>>::Layout>> +
                  ParentNode<NodeTraverser<'c, EmptyNodeLayout>>

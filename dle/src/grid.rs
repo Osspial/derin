@@ -100,7 +100,7 @@ impl Default for GridTrack {
 
             min_size_master: 0,
             max_size_master: Px::max_value(),
-            fr_size: 0.0
+            fr_size: 1.0
         }
     }
 }

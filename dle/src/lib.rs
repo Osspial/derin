@@ -68,6 +68,15 @@ pub struct WidgetData<W: Widget> {
     pub layout_info: WidgetLayoutInfo
 }
 
+impl<W: Widget> WidgetData<W> {
+    pub fn new(widget: W) -> WidgetData<W> {
+        WidgetData {
+            widget: widget,
+            layout_info: WidgetLayoutInfo::default()
+        }
+    }
+}
+
 #[derive(Default, Debug, Clone, Copy)]
 pub struct WidgetLayoutInfo {
     pub size_bounds: SizeBounds,
@@ -85,14 +94,14 @@ pub trait Container
     type Widget: Widget;
     type Key: Clone + Copy;
 
-    fn get(&self, Self::Key) -> Option<&WidgetData<Self::Widget>>;
-    fn get_mut(&mut self, Self::Key) -> Option<&mut WidgetData<Self::Widget>>;
+    fn get_widget(&self, Self::Key) -> Option<&WidgetData<Self::Widget>>;
+    fn get_widget_mut(&mut self, Self::Key) -> Option<&mut WidgetData<Self::Widget>>;
 
-    fn insert(&mut self, key: Self::Key, widget: Self::Widget) -> Option<WidgetData<Self::Widget>>;
-    fn remove(&mut self, key: Self::Key) -> Option<WidgetData<Self::Widget>>;
+    fn insert_widget(&mut self, key: Self::Key, widget: Self::Widget) -> Option<Self::Widget>;
+    fn remove_widget(&mut self, key: Self::Key) -> Option<Self::Widget>;
 
-    fn get_iter(&self) -> <&Self as ContainerRef>::WDIter;
-    fn get_iter_mut(&mut self) -> <&Self as ContainerRef>::WDIterMut;
+    fn get_widget_iter(&self) -> <&Self as ContainerRef>::WDIter;
+    fn get_widget_iter_mut(&mut self) -> <&Self as ContainerRef>::WDIterMut;
 }
 
 pub trait ContainerRef<'a> {
@@ -102,14 +111,16 @@ pub trait ContainerRef<'a> {
 }
 
 
+#[derive(Debug, Clone, Copy)]
 pub enum LayoutUpdate<K: Clone + Copy> {
     RowMinSize(Tr, Px),
     RowMaxSize(Tr, Px),
     ColMinSize(Tr, Px),
     ColMaxSize(Tr, Px),
 
-    WidgetMinRect(K, OriginRect),
-    WidgetMaxRect(K, OriginRect),
+    WidgetSizeBounds(K, SizeBounds),
+    WidgetNodeSpan(K, NodeSpan),
+    WidgetPlaceInCell(K, PlaceInCell),
 
     GridSize(GridSize),
     PixelSize(OriginRect),
@@ -157,9 +168,20 @@ impl<K: Clone + Copy> UpdateQueue<K> {
         });
     }
 
+    pub fn engine_is_top<C: Container>(&mut self, engine: &LayoutEngine<C>) -> bool
+            where for<'a> &'a C: ContainerRef<'a, Widget = C::Widget>
+    {
+        self.id_stack.last().map(|id_stack_top| id_stack_top.engine_id) == Some(engine.id)
+    }
+
+    pub fn push_update(&mut self, update: LayoutUpdate<K>) {
+        assert_ne!(0, self.id_stack.len());
+        self.update_queue.push(update);
+    }
+
     pub fn insert_widget<C: Container>(&mut self, key: K, widget: C::Widget,
                                        engine: &mut LayoutEngine<C>)
-            -> Option<WidgetData<C::Widget>>
+            -> Option<C::Widget>
             where C: Container<Key = K>,
                   for<'a> &'a C: ContainerRef<'a, Widget = C::Widget>
     {
@@ -167,11 +189,11 @@ impl<K: Clone + Copy> UpdateQueue<K> {
         assert_eq!(engine.id, id_stack_top.engine_id);
         id_stack_top.container_contents_changed = true;
 
-        engine.container.insert(key, widget)
+        engine.container.insert_widget(key, widget)
     }
 
     pub fn remove_widget<C: Container>(&mut self, key: K, engine: &mut LayoutEngine<C>)
-            -> Option<WidgetData<C::Widget>>
+            -> Option<C::Widget>
             where C: Container<Key = K>,
                   for<'a> &'a C: ContainerRef<'a, Widget = C::Widget>
     {
@@ -179,7 +201,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
         assert_eq!(engine.id, id_stack_top.engine_id);
         id_stack_top.container_contents_changed = true;
 
-        engine.container.remove(key)
+        engine.container.remove_widget(key)
     }
 
     /// This method is the heart and soul of the derin layout engine, and is easily the most complex
@@ -187,19 +209,25 @@ impl<K: Clone + Copy> UpdateQueue<K> {
     /// engine, and performs constraint solving to ensure that all* of the constraints within the engine
     /// are solved.
     ///
+    /// Returns `Ok(())` if the size of the engine was not changed, and `Err(new_rect)` if the size WAS
+    /// changed.
+    ///
     /// <sup>\* The only situation where some constraints may end up violated would be when the maximum
     /// size is less than the minimum size. In that case, minimum size overrides maximum size, as doing
     /// otherwise could cause rendering issues. </sup>
     pub fn pop_engine<C>(&mut self, engine: &mut LayoutEngine<C>)
             where C: Container<Key = K>,
-                  for<'a> &'a C: ContainerRef<'a, Widget = C::Widget>
+                  for<'a> &'a C: ContainerRef<'a, Widget = C::Widget>,
+                  K: ::std::fmt::Debug
     {
         let id_stack_top = self.id_stack.pop().expect("Attempted to pop engine with no engine on stack");
         assert_eq!(engine.id, id_stack_top.engine_id);
 
         // Perform the processing only if updates were actually pushed to the update queue, or if widgets
         // were added or removed from the container.
-        if id_stack_top.update_queue_index > self.update_queue.len() {
+        if id_stack_top.update_queue_index < self.update_queue.len() ||
+           id_stack_top.container_contents_changed
+        {
             for update in self.update_queue.drain(id_stack_top.update_queue_index..) {
                 use self::LayoutUpdate::*;
 
@@ -209,8 +237,9 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                     ColMinSize(tr, px) => engine.grid.get_col_mut(tr).unwrap().set_min_size_master(px),
                     ColMaxSize(tr, px) => engine.grid.get_col_mut(tr).unwrap().set_max_size_master(px),
 
-                    WidgetMinRect(k, r) => engine.container.get_mut(k).unwrap().layout_info.size_bounds.min = r,
-                    WidgetMaxRect(k, r) => engine.container.get_mut(k).unwrap().layout_info.size_bounds.max = r,
+                    WidgetSizeBounds(k, sb) => engine.container.get_widget_mut(k).unwrap().layout_info.size_bounds = sb,
+                    WidgetNodeSpan(k, ns) => engine.container.get_widget_mut(k).unwrap().layout_info.node_span = ns,
+                    WidgetPlaceInCell(k, pic) => engine.container.get_widget_mut(k).unwrap().layout_info.placement = pic,
 
                     GridSize(gs)  => engine.grid.set_grid_size(gs),
                     PixelSize(ps) => engine.desired_size = ps,
@@ -354,7 +383,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                 track_constraints!(get_col, get_col_mut, push_col, num_cols, remove_col, free_width, fr_total_width);
                 track_constraints!(get_row, get_row_mut, push_row, num_rows, remove_row, free_height, fr_total_height);
 
-                for &mut WidgetData{ref mut widget, ref mut layout_info} in engine.container.get_iter_mut() {
+                for &mut WidgetData{ref mut widget, ref mut layout_info} in engine.container.get_widget_iter_mut() {
                     macro_rules! widget_scale {
                         ($axis:ident, $size:ident, $track_range:ident, $track_range_mut:ident, $free_size:expr) => {{
                             let mut min_size_debt = layout_info.size_bounds.min.$size();
@@ -374,7 +403,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                             // the minimum size of this widget.
                             let mut grid_tracks_min_size = 0;
 
-                            for (index, track) in engine.grid.$track_range(layout_info.node_span.x).unwrap().iter().enumerate() {
+                            for (index, track) in engine.grid.$track_range(layout_info.node_span.x).expect("Node span larger than grid").iter().enumerate() {
                                 min_size_debt = min_size_debt.saturating_sub(track.size());
                                 axis_size += track.size();
                                 grid_tracks_min_size += track.min_size_master();
@@ -539,7 +568,10 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                     let outer_rect = widget_origin_rect.offset(offset);
                     let cell_hinter = CellHinter::new(outer_rect, layout_info.placement);
 
+                    println!("or: {:?}", outer_rect);
+                    println!("bounds: {:?}", layout_info.size_bounds);
                     if let Ok(widget_rect) = cell_hinter.hint_with_bounds(layout_info.size_bounds) {
+                        println!("hint okay");
                         widget.set_rect(widget_rect);
                     }
                 }
@@ -552,7 +584,9 @@ impl<K: Clone + Copy> UpdateQueue<K> {
             potential_frac_tracks.clear();
             rigid_tracks_widget.clear();
             frac_tracks_widget.clear();
+            println!("");
         }
+
     }
 }
 
@@ -586,11 +620,11 @@ impl<C: Container> LayoutEngine<C>
     }
 
     pub fn get_widget(&self, key: C::Key) -> Option<&C::Widget> {
-        self.container.get(key).map(|w| &w.widget)
+        self.container.get_widget(key).map(|w| &w.widget)
     }
 
     pub fn get_widget_mut(&mut self, key: C::Key) -> Option<&mut C::Widget> {
-        self.container.get_mut(key).map(|w| &mut w.widget)
+        self.container.get_widget_mut(key).map(|w| &mut w.widget)
     }
 
     pub fn desired_size(&self) -> OriginRect {
@@ -699,8 +733,8 @@ impl CellHinter {
     }
 
     pub fn hint_with_bounds(&self, bounds: SizeBounds) -> Result<OffsetRect, HintError> {
-        if bounds.min.width() < self.outer_rect.width() ||
-           bounds.min.height() < self.outer_rect.height()
+        if bounds.min.width() > self.outer_rect.width() ||
+           bounds.min.height() > self.outer_rect.height()
         {
             return Err(HintError::ORTooSmall)
         }
