@@ -25,6 +25,7 @@ use std::ptr;
 use std::mem;
 use std::io;
 use std::slice;
+use std::cmp;
 use std::ops::Drop;
 use std::ffi::OsStr;
 use std::iter::{once};
@@ -153,6 +154,10 @@ impl WindowNode {
         node_data.update_callback_ptr_location();
         mem::forget(node_data);
 
+        if window_handle == ptr::null_mut() {
+            return Err(NativeError::OsError(format!("{}", io::Error::last_os_error())));
+        }
+
         // Initialize the grid size of the toplevel window to (1, 1)
         let grid_size_update: LayoutUpdate<HWND> = LayoutUpdate::GridSize(GridSize::new(1, 1));
         user32::SendMessageW(
@@ -161,10 +166,6 @@ impl WindowNode {
             &grid_size_update as *const _ as WPARAM,
             1
         );
-
-        if window_handle == ptr::null_mut() {
-            return Err(NativeError::OsError(format!("{}", io::Error::last_os_error())));
-        }
 
         // If the window should be borderless, make it borderless
         if config.borderless {
@@ -290,10 +291,6 @@ impl TextButton {
         self.text.clear();
         self.text.extend(ucs2_str(text));
         unsafe{ self.wrapper.set_title(&self.text) }
-    }
-
-    pub fn get_ideal_rect(&self) -> OriginRect {
-        TextButton::get_ideal_rect_raw(self.wrapper.0)
     }
 
     #[inline]
@@ -448,6 +445,21 @@ impl WindowWrapperRef {
             None
         } else {
             Some(WindowWrapperRef(parent_hwnd))
+        }
+    }
+
+    fn update_size_bounds(&self, size_bounds: SizeBounds) {
+        unsafe {
+            if let Some(parent) = self.get_parent() {
+                let size_bounds_update = LayoutUpdate::WidgetSizeBounds(self.0, size_bounds);
+                user32::SendMessageW(
+                    parent.0,
+                    DM_QUEUECHILDUPDATES,
+                    &size_bounds_update as *const _ as WPARAM,
+                    1
+                );
+            }
+
         }
     }
 }
@@ -637,17 +649,13 @@ unsafe extern "system"
             let ret = comctl32::DefSubclassProc(hwnd, msg, wparam, lparam);
 
             let window = WindowWrapperRef(hwnd);
-            let parent_hwnd = window.get_parent().expect("Pushbutton without parent");
 
-            if let Some(size_bounds) = parent_hwnd.get_size_bounds() {
-                let size_bounds_update = LayoutUpdate::WidgetSizeBounds(hwnd, size_bounds);
-                user32::SendMessageW(
-                    parent_hwnd.0,
-                    DM_QUEUECHILDUPDATES,
-                    &size_bounds_update as *const _ as WPARAM,
-                    1
-                );
-            }
+            let size_bounds = SizeBounds {
+                min: TextButton::get_ideal_rect_raw(hwnd),
+                max: OriginRect::max()
+            };
+
+            window.update_size_bounds(size_bounds);
 
             ret
         }
@@ -662,7 +670,56 @@ unsafe fn parent_proc(hwnd: HWND, msg: UINT,
                       nd: &mut NodeData) -> LRESULT
 {
     match msg {
+        WM_GETMINMAXINFO => {
+            let mmi = &mut *(lparam as *mut MINMAXINFO);
+
+            let window = WindowWrapperRef(hwnd);
+
+            let size_bounds = nd.child_layout.actual_size_bounds();
+
+            // The `MINMAXINFO` struct takes sizes that include the window dressings, so we have to
+            // expand the rectangles to include the dressings.
+            let mut min_rect = RECT {
+                right: size_bounds.min.width() as c_int,
+                bottom: size_bounds.min.height() as c_int,
+                left: 0,
+                top: 0
+            };
+            user32::AdjustWindowRectEx(
+                &mut min_rect,
+                window.get_style(),
+                0,
+                window.get_style_ex()
+            );
+
+            let mut max_rect = RECT {
+                right: cmp::min(size_bounds.max.width(), (c_int::max_value() / 2) as u32) as c_int,
+                bottom: cmp::min(size_bounds.max.height(), (c_int::max_value() / 2) as u32) as c_int,
+                left: 0,
+                top: 0
+            };
+            user32::AdjustWindowRectEx(
+                &mut max_rect,
+                window.get_style(),
+                0,
+                window.get_style_ex()
+            );
+
+            mmi.ptMinTrackSize = POINT {
+                x: min_rect.right - min_rect.left,
+                y: min_rect.bottom - min_rect.top
+            };
+            mmi.ptMaxTrackSize = POINT {
+                x: max_rect.right - max_rect.left,
+                y: max_rect.bottom - max_rect.top
+            };
+
+            0
+        }
+
         DM_RECT => {
+            let old_size_bounds = nd.child_layout.actual_size_bounds();
+
             {
                 let mut update_queue = nd.callback_data.update_queue.borrow_mut();
 
@@ -673,6 +730,10 @@ unsafe fn parent_proc(hwnd: HWND, msg: UINT,
                 update_queue.push_engine(&nd.child_layout);
                 update_queue.push_update(size_update);
                 update_queue.pop_engine(&mut nd.child_layout);
+            }
+
+            if old_size_bounds != nd.child_layout.actual_size_bounds() {
+                WindowWrapperRef(hwnd).update_size_bounds(nd.child_layout.actual_size_bounds());
             }
 
             common_proc(hwnd, msg, wparam, lparam, nd)
@@ -689,13 +750,23 @@ unsafe fn parent_proc(hwnd: HWND, msg: UINT,
         }
 
         DM_FLUSHUPDATEQUEUE => {
-            let mut update_queue = nd.callback_data.update_queue.borrow_mut();
-            if update_queue.engine_is_top(&nd.child_layout) {
-                update_queue.pop_engine(&mut nd.child_layout);
-                1
-            } else {
-                -1
+            let old_size_bounds = nd.child_layout.actual_size_bounds();
+
+            let ret = {
+                let mut update_queue = nd.callback_data.update_queue.borrow_mut();
+                if update_queue.engine_is_top(&nd.child_layout) {
+                    update_queue.pop_engine(&mut nd.child_layout);
+                    1
+                } else {
+                    -1
+                }
+            };
+
+            if old_size_bounds != nd.child_layout.actual_size_bounds() {
+                WindowWrapperRef(hwnd).update_size_bounds(nd.child_layout.actual_size_bounds());
             }
+
+            ret
         }
 
         DM_QUEUECHILDUPDATES => {
@@ -704,19 +775,30 @@ unsafe fn parent_proc(hwnd: HWND, msg: UINT,
 
             let updates = slice::from_raw_parts(updates_ptr, num_updates);
 
-            let mut update_queue = nd.callback_data.update_queue.borrow_mut();
-            if update_queue.engine_is_top(&nd.child_layout) {
-                for update in updates {
-                    update_queue.push_update(*update);
-                }
-            } else {
-                update_queue.push_engine(&nd.child_layout);
+            let old_size_bounds = nd.child_layout.actual_size_bounds();
+            let mut update_size_bounds = false;
 
-                for update in updates {
-                    update_queue.push_update(*update);
-                }
+            {
+                let mut update_queue = nd.callback_data.update_queue.borrow_mut();
+                if update_queue.engine_is_top(&nd.child_layout) {
+                    for update in updates {
+                        update_queue.push_update(*update);
+                    }
+                } else {
+                    update_queue.push_engine(&nd.child_layout);
 
-                update_queue.pop_engine(&mut nd.child_layout);
+                    for update in updates {
+                        update_queue.push_update(*update);
+                    }
+
+                    update_queue.pop_engine(&mut nd.child_layout);
+
+                    update_size_bounds = old_size_bounds != nd.child_layout.actual_size_bounds();
+                }
+            }
+
+            if update_size_bounds {
+                WindowWrapperRef(hwnd).update_size_bounds(nd.child_layout.actual_size_bounds());
             }
 
             0

@@ -12,13 +12,14 @@ use geometry::{Rect, OriginRect, OffsetRect};
 use widget_hints::{NodeSpan, PlaceInCell, Place, GridSize};
 use grid::{TrackVec, SizeResult};
 
+use std::cmp;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub type Tr = u32;
 pub type Px = u32;
 pub type Fr = f32;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SizeBounds {
     pub min: OriginRect,
     pub max: OriginRect
@@ -356,7 +357,8 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                 match track.change_size(new_size) {
                                     // If the resize occured without issues, increment frac_index and go on to the next track.
                                     SizeResult::SizeUpscale    |
-                                    SizeResult::SizeDownscale => frac_index += 1,
+                                    SizeResult::SizeDownscale  |
+                                    SizeResult::NoEffectEq    => frac_index += 1,
 
                                     // If changing the track size resulted in the track reaching its minimum size, that track can be
                                     // considered rigid because it cannot shrink any further. Mark it for removal from the fractional
@@ -371,11 +373,10 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                         potential_frac_tracks.$push_track(track_index as u32);
                                         continue 'frac;
                                     }
-                                    SizeResult::NoEffectEq => panic!("Unexpected fractional track scale equality"),
                                 }
                             }
 
-                            break;
+                            break 'frac;
                         }
                     })()}
                 }
@@ -385,9 +386,8 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                 for &mut WidgetData{ref mut widget, ref mut layout_info} in engine.container.get_widget_iter_mut() {
                     macro_rules! widget_scale {
-                        ($axis:ident, $size:ident, $track_range:ident, $track_range_mut:ident, $free_size:expr) => {{
+                        ($axis:ident, $size:ident, $track_range:ident, $track_range_mut:ident, $free_size:expr, $fr_axis:expr) => {{
                             let mut min_size_debt = layout_info.size_bounds.min.$size();
-                            let mut frac_size = 0;
                             let mut fr_widget = 0.0;
                             let mut axis_size = 0;
 
@@ -399,14 +399,9 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                 }
                             }
 
-                            // The minimum size of the tracks in the grid that this widget occupies, without accounting for
-                            // the minimum size of this widget.
-                            let mut grid_tracks_min_size = 0;
-
                             for (index, track) in engine.grid.$track_range(layout_info.node_span.$axis).expect("Node span larger than grid").iter().enumerate() {
                                 min_size_debt = min_size_debt.saturating_sub(track.size());
                                 axis_size += track.size();
-                                grid_tracks_min_size += track.min_size_master();
 
                                 if track.fr_size == 0.0 ||
                                    track.size() < track.min_size_master() ||
@@ -415,17 +410,17 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                     rigid_tracks_widget.push(index as Tr);
                                 } else {
                                     fr_widget += track.fr_size;
-                                    frac_size += track.size();
                                     frac_tracks_widget.push(index as Tr);
                                 }
                             }
 
-                            // If the minimum size of the tracks that this widget occupies is less than the minimum size of
-                            // this widget, increase the minimum size of the grid to account for the increase of the minimum
-                            // size of the widget tracks.
-                            if grid_tracks_min_size < layout_info.size_bounds.min.$size() {
-                                engine.actual_size_bounds.min.lowright.$axis += layout_info.size_bounds.min.$size() - grid_tracks_min_size;
-                            }
+                            // Calculate the minimum size the layout engine can be to contain the widget, and expand the
+                            // engine minimum size to match that.
+                            let min_size_axis = (layout_info.size_bounds.min.$size() as Fr * $fr_axis / fr_widget).ceil() as Px;
+                            engine.actual_size_bounds.min.lowright.$axis = cmp::max(
+                                min_size_axis,
+                                engine.actual_size_bounds.min.$size()
+                            );
 
                             // If the minimum size hasn't been met without expansion and the widget hasn't been marked as
                             // unsolvable during this update, expand the rigid tracks to meet the minimum.
@@ -484,7 +479,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                             let mut track = engine.grid.$track_range(layout_info.node_span.$axis).unwrap()[track_index as usize].clone();
 
                                             let old_size = track.size();
-                                            let new_size = px_expander.divvy(frac_expand as f32 * track.fr_size / fr_widget);
+                                            let new_size = px_expander.divvy(track.fr_size);
 
                                             match track.change_size(new_size) {
                                                 SizeResult::SizeUpscale => {
@@ -521,7 +516,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                         layout_info.solvable.$axis = SolveAxis::Unsolvable(self.unsolvable_id);
                                     }
 
-                                    let frac_proportion = $free_size as f32 / frac_size as f32;
+                                    let frac_proportion = $fr_axis / fr_widget;
                                     let size_expand = (frac_expand as f32 * frac_proportion).ceil() as Px;
                                     $free_size += size_expand;
 
@@ -537,6 +532,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                             layout_info.solvable.$axis = SolveAxis::Unsolvable(self.unsolvable_id);
                                         }
                                     }
+
 
                                     rigid_tracks_widget.clear();
                                     frac_tracks_widget.clear();
@@ -554,8 +550,8 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                     // The widget_scale macro isn't guaranteed to return, but if it does it returns the axis size
                     // if it does. If it doesn't, the rest of this body is skipped and we go back to the beginning
                     // of the `update` loop.
-                    let size_x = widget_scale!(x, width, col_range, col_range_mut, free_width);
-                    let size_y = widget_scale!(y, height, row_range, row_range_mut, free_height);
+                    let size_x = widget_scale!(x, width, col_range, col_range_mut, free_width, fr_total_width);
+                    let size_y = widget_scale!(y, height, row_range, row_range_mut, free_height, fr_total_height);
 
                     // Perform cell hinting and set
                     let widget_origin_rect = OriginRect::new(size_x, size_y);
@@ -671,7 +667,6 @@ impl FrDivider {
         let new_size = new_size_float as Px + self.remainder as Px;
         self.remainder -= self.remainder.trunc();
 
-        //
         self.fr_total -= track_fr_size;
         self.desired_size -= new_size;
         self.num_tracks -= 1;
