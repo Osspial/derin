@@ -1,4 +1,4 @@
-pub use dle::widget_hints::*;
+pub use dle::hints::*;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct GridSlot {

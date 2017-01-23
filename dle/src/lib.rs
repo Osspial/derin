@@ -5,11 +5,11 @@
 extern crate quickcheck;
 
 pub mod geometry;
-pub mod widget_hints;
+pub mod hints;
 mod grid;
 
 use geometry::{Rect, OriginRect, OffsetRect};
-use widget_hints::{NodeSpan, PlaceInCell, Place, GridSize};
+use hints::{NodeSpan, PlaceInCell, Place, GridSize};
 use grid::{TrackVec, SizeResult};
 
 use std::cmp;
@@ -64,16 +64,19 @@ impl Default for SizeBounds {
     }
 }
 
+#[derive(Default, Debug, Clone)]
 pub struct WidgetData<W: Widget> {
     pub widget: W,
-    pub layout_info: WidgetLayoutInfo
+    pub layout_info: WidgetLayoutInfo,
+    solvable: Solvable
 }
 
 impl<W: Widget> WidgetData<W> {
     pub fn new(widget: W) -> WidgetData<W> {
         WidgetData {
             widget: widget,
-            layout_info: WidgetLayoutInfo::default()
+            layout_info: WidgetLayoutInfo::default(),
+            solvable: Solvable::default()
         }
     }
 }
@@ -82,8 +85,7 @@ impl<W: Widget> WidgetData<W> {
 pub struct WidgetLayoutInfo {
     pub size_bounds: SizeBounds,
     pub node_span: NodeSpan,
-    pub placement: PlaceInCell,
-    solvable: Solvable
+    pub placement: PlaceInCell
 }
 
 pub trait Widget {
@@ -387,7 +389,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                 track_constraints!(get_col, get_col_mut, push_col, num_cols, remove_col, free_width, fr_total_width);
                 track_constraints!(get_row, get_row_mut, push_row, num_rows, remove_row, free_height, fr_total_height);
 
-                for &mut WidgetData{ref mut widget, ref mut layout_info} in engine.container.get_widget_iter_mut() {
+                for &mut WidgetData{ref mut widget, ref layout_info, ref mut solvable} in engine.container.get_widget_iter_mut() {
                     macro_rules! widget_scale {
                         ($axis:ident, $size:ident, $track_range:ident, $track_range_mut:ident, $free_size:expr, $fr_axis:expr) => {{
                             let mut min_size_debt = layout_info.size_bounds.min.$size();
@@ -396,9 +398,9 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                             // If the widget has been flagged as unsolvable, check to see that is was marked as unsolvable
                             // during the current call to `pop_engine`. If it wasn't, then tentatively mark it as solvable.
-                            if let SolveAxis::Unsolvable(unsolvable_id) = layout_info.solvable.$axis {
+                            if let SolveAxis::Unsolvable(unsolvable_id) = solvable.$axis {
                                 if unsolvable_id != self.unsolvable_id {
-                                    layout_info.solvable.$axis = SolveAxis::Solvable;
+                                    solvable.$axis = SolveAxis::Solvable;
                                 }
                             }
 
@@ -427,7 +429,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                             // If the minimum size hasn't been met without expansion and the widget hasn't been marked as
                             // unsolvable during this update, expand the rigid tracks to meet the minimum.
-                            if 0 < min_size_debt && !layout_info.solvable.$axis.is_unsolvable_with(self.unsolvable_id) {
+                            if 0 < min_size_debt && !solvable.$axis.is_unsolvable_with(self.unsolvable_id) {
                                 while 0 < min_size_debt && 0 < rigid_tracks_widget.len() {
                                     // The size that each widget individually needs to expand.
                                     let size_expand = min_size_debt / rigid_tracks_widget.len() as Px;
@@ -514,7 +516,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                     // I don't have the free width expansion inside of an else clause here, becaue expanding the tracks
                                     // as much as possible should hopefully minimize visual bugs.
                                     if 0 < frac_expand_debt {
-                                        layout_info.solvable.$axis = SolveAxis::Unsolvable(self.unsolvable_id);
+                                        solvable.$axis = SolveAxis::Unsolvable(self.unsolvable_id);
                                     }
 
                                     let frac_proportion = $fr_axis / fr_widget;
@@ -530,7 +532,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                         Ok(r) => engine.actual_size = r,
                                         Err(r) => {
                                             engine.actual_size = r;
-                                            layout_info.solvable.$axis = SolveAxis::Unsolvable(self.unsolvable_id);
+                                            solvable.$axis = SolveAxis::Unsolvable(self.unsolvable_id);
                                         }
                                     }
                                 }
