@@ -261,7 +261,10 @@ impl<K: Clone + Copy> UpdateQueue<K> {
             let mut fr_total_height = 0.0;
 
             // Reset the actual size bounds to zero.
-            engine.actual_size_bounds = SizeBounds::default();
+            engine.actual_size_bounds = SizeBounds {
+                min: OriginRect::min(),
+                max: OriginRect::min()
+            };
 
             // Next, we perform an iteration over the tracks, subtracting from the free space if the track is
             // rigid.
@@ -269,13 +272,13 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                 ($axis:ident, $push_track:ident, $track_range_mut:ident, $free_size:expr, $fr_total:expr) => {
                     for (index, track) in engine.grid.$track_range_mut(..).unwrap().iter_mut().enumerate() {
                         engine.actual_size_bounds.min.lowright.$axis += track.min_size_master();
-                        engine.actual_size_bounds.max.lowright.$axis =
-                            engine.actual_size_bounds.max.lowright.$axis.saturating_add(track.max_size_master());
 
                         if track.fr_size <= 0.0 {
                             track.shrink_size();
                             $free_size -= track.size();
                         } else {
+                            engine.actual_size_bounds.max.lowright.$axis =
+                                engine.actual_size_bounds.max.lowright.$axis.saturating_add(track.max_size_master());
                             track.expand_size();
                             $fr_total += track.fr_size;
                             frac_tracks.$push_track(index as Tr);
@@ -438,22 +441,20 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                         let expansion = size_expand + (expand_rem != 0) as Px;
                                         match track.change_size(old_size + expansion) {
                                             // If the size was upscaled with no issues, just subtract the expansion from `min_size_debt`.
-                                            SizeResult::SizeUpscale => {
-                                                min_size_debt = min_size_debt.saturating_sub(expansion);
-                                                rigid_index += 1;
-                                            },
-                                            // If the size was upscaled but ended up being clamped, reduce `min_size_debt` and also remove
-                                            // the clamped rigid track from the list.
-                                            SizeResult::SizeUpscaleClamp => {
-                                                min_size_debt = min_size_debt.saturating_sub(track.size() - old_size);
-                                                rigid_tracks_widget.remove(rigid_index);
-                                            }
-                                            SizeResult::NoEffectEq  |
-                                            SizeResult::NoEffectUp => {rigid_tracks_widget.remove(rigid_index);},
+                                            SizeResult::SizeUpscale => rigid_index += 1,
+
+                                            SizeResult::NoEffectEq        |
+                                            SizeResult::NoEffectUp        |
+                                            SizeResult::SizeUpscaleClamp => {rigid_tracks_widget.remove(rigid_index);},
+
                                             SizeResult::NoEffectDown        |
                                             SizeResult::SizeDownscale       |
                                             SizeResult::SizeDownscaleClamp => unreachable!()
                                         }
+                                        let expanded_size = track.size() - old_size;
+                                        engine.actual_size_bounds.min.lowright.$axis += expanded_size;
+                                        engine.actual_size_bounds.max.lowright.$axis += expanded_size;
+                                        min_size_debt = min_size_debt.saturating_sub(expansion);
 
                                         expand_rem = expand_rem.saturating_sub(1);
                                     }
@@ -532,12 +533,11 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                             layout_info.solvable.$axis = SolveAxis::Unsolvable(self.unsolvable_id);
                                         }
                                     }
-
-
-                                    rigid_tracks_widget.clear();
-                                    frac_tracks_widget.clear();
-                                    continue 'update;
                                 }
+
+                                rigid_tracks_widget.clear();
+                                frac_tracks_widget.clear();
+                                continue 'update;
                             }
 
                             rigid_tracks_widget.clear();
