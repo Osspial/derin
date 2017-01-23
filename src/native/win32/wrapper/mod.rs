@@ -15,8 +15,9 @@ use winapi::commctrl::*;
 use winapi::basetsd::*;
 
 use super::WindowReceiver;
-use dle::{LayoutEngine, UpdateQueue, LayoutUpdate, Container, ContainerRef, Widget, WidgetData, SizeBounds};
-use dle::geometry::{Rect, OffsetRect, OriginRect, Point};
+use dle::{LayoutEngine, UpdateQueue, LayoutUpdate, Container, ContainerRef, Widget, WidgetData};
+use dle::hints::SizeBounds;
+use dle::geometry::{Rect, OffsetRect, OriginRect};
 use ui::layout::{GridSlot, GridSize};
 
 use self::mcvec::MCVec;

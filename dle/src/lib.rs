@@ -9,7 +9,7 @@ pub mod hints;
 mod grid;
 
 use geometry::{Rect, OriginRect, OffsetRect};
-use hints::{NodeSpan, PlaceInCell, Place, GridSize};
+use hints::{NodeSpan, PlaceInCell, Place, GridSize, SizeBounds, WidgetLayoutInfo};
 use grid::{TrackVec, SizeResult};
 
 use std::cmp;
@@ -18,12 +18,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 pub type Tr = u32;
 pub type Px = u32;
 pub type Fr = f32;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SizeBounds {
-    pub min: OriginRect,
-    pub max: OriginRect
-}
 
 impl SizeBounds {
     /// Bound a rectangle to be within the size bounds. Returns `Ok` if the rect wasn't bounded, and
@@ -79,13 +73,6 @@ impl<W: Widget> WidgetData<W> {
             solvable: Solvable::default()
         }
     }
-}
-
-#[derive(Default, Debug, Clone, Copy)]
-pub struct WidgetLayoutInfo {
-    pub size_bounds: SizeBounds,
-    pub node_span: NodeSpan,
-    pub placement: PlaceInCell
 }
 
 pub trait Widget {

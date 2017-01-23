@@ -1,5 +1,6 @@
 use super::Tr;
-use std::ops::{Range, RangeFrom, RangeFull, RangeTo, Sub};
+use geometry::OriginRect;
+use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 
 #[derive(Debug, Clone, Copy)]
 pub struct DyRange {
@@ -150,4 +151,17 @@ impl Default for GridArea {
 pub struct LayoutHint {
     pub grid_area: GridArea,
     pub place_in_cell: PlaceInCell
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SizeBounds {
+    pub min: OriginRect,
+    pub max: OriginRect
+}
+
+#[derive(Default, Debug, Clone, Copy)]
+pub struct WidgetLayoutInfo {
+    pub size_bounds: SizeBounds,
+    pub node_span: NodeSpan,
+    pub placement: PlaceInCell
 }
