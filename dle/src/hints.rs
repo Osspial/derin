@@ -1,5 +1,5 @@
 use super::Tr;
-use geometry::OriginRect;
+use geometry::{OriginRect, Rect};
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 
 #[derive(Debug, Clone, Copy)]
@@ -141,6 +141,53 @@ pub struct SizeBounds {
     pub min: OriginRect,
     pub max: OriginRect
 }
+
+impl SizeBounds {
+    pub fn new(min: OriginRect, max: OriginRect) -> SizeBounds {
+        SizeBounds {
+            min: min,
+            max: max
+        }
+    }
+
+    /// Bound a rectangle to be within the size bounds. Returns `Ok` if the rect wasn't bounded, and
+    /// `Err` if it was bounded.
+    pub fn bound_rect(self, mut desired_size: OriginRect) -> Result<OriginRect, OriginRect> {
+        let mut size_bounded = false;
+
+        if desired_size.width() < self.min.width() {
+            desired_size.lowright.x = self.min.width();
+            size_bounded = true;
+        } else if desired_size.width() > self.max.width() {
+            desired_size.lowright.x = self.max.width();
+            size_bounded = true;
+        }
+
+        if desired_size.height() < self.min.height() {
+            desired_size.lowright.y = self.min.height();
+            size_bounded = true;
+        } else if desired_size.height() > self.max.height() {
+            desired_size.lowright.y = self.max.height();
+            size_bounded = true;
+        }
+
+        if !size_bounded {
+            Ok(desired_size)
+        } else {
+            Err(desired_size)
+        }
+    }
+}
+
+impl Default for SizeBounds {
+    fn default() -> SizeBounds {
+        SizeBounds {
+            min: OriginRect::min(),
+            max: OriginRect::max()
+        }
+    }
+}
+
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct WidgetLayoutInfo {
