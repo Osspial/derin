@@ -16,9 +16,9 @@ use winapi::basetsd::*;
 
 use super::WindowReceiver;
 use dle::{LayoutEngine, UpdateQueue, LayoutUpdate, Container, ContainerRef, Widget, WidgetData};
-use dle::hints::SizeBounds;
+use dle::hints::{SizeBounds, WidgetLayoutInfo};
 use dle::geometry::{Rect, OffsetRect, OriginRect};
-use ui::layout::{GridSlot, GridSize};
+use ui::layout::GridSize;
 
 use self::mcvec::MCVec;
 
@@ -61,12 +61,12 @@ impl WindowNode {
         }
     }
 
-    pub fn set_slot(&self, slot: GridSlot) {
+    pub fn set_layout_info(&self, wli: WidgetLayoutInfo) {
         unsafe {
             user32::SendMessageW(
                 self.hwnd(),
-                DM_SETSLOT,
-                &slot as *const GridSlot as WPARAM,
+                DM_SETLAYOUTINFO,
+                &wli as *const WidgetLayoutInfo as WPARAM,
                 0
             );
         }
@@ -568,7 +568,7 @@ const DM_DESTROYWINDOW: UINT = WM_APP + 0;
 const DM_NEWTEXTBUTTON: UINT = WM_APP + 1;
 const DM_NEWLAYOUTGROUP: UINT = WM_APP + 2;
 
-const DM_SETSLOT: UINT = WM_APP + 4;
+const DM_SETLAYOUTINFO: UINT = WM_APP + 4;
 /// Remove the child window specified in `wparam`.
 const DM_REMOVECHILD: UINT = WM_APP + 5;
 /// Queue up updates for the child window, with a pointer to an slice of `LayoutUpdate` enums in the
@@ -929,20 +929,17 @@ unsafe fn common_proc(hwnd: HWND, msg: UINT,
             0
         }
 
-        DM_SETSLOT => {
-            let slot = *(wparam as *const GridSlot);
+        DM_SETLAYOUTINFO => {
+            let layout_info = *(wparam as *const WidgetLayoutInfo);
 
             if let Some(parent_hwnd) = WindowWrapperRef(hwnd).get_parent() {
-                let updates = [
-                    LayoutUpdate::WidgetNodeSpan(hwnd, slot.node_span),
-                    LayoutUpdate::WidgetPlaceInCell(hwnd, slot.place_in_cell)
-                ];
+                let update = LayoutUpdate::WidgetLayoutInfo(hwnd, layout_info);
 
                 user32::SendMessageW(
                     parent_hwnd.0,
                     DM_QUEUECHILDUPDATES,
-                    &updates[0] as *const _ as WPARAM,
-                    2
+                    &update as *const _ as WPARAM,
+                    1
                 );
             }
 

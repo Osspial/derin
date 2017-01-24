@@ -1,13 +1,7 @@
 pub use dle::hints::*;
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct GridSlot {
-    pub node_span: NodeSpan,
-    pub place_in_cell: PlaceInCell
-}
-
 /// An iterator adapter that turns `LayoutHint`s into specific `NodeSpan`es
-pub trait GridLayout: Iterator<Item = GridSlot> {
+pub trait GridLayout: Iterator<Item = WidgetLayoutInfo> {
     fn grid_size(&self) -> GridSize;
 }
 
@@ -29,15 +23,16 @@ impl GridLayout for SingleNodeLayout {
 }
 
 impl Iterator for SingleNodeLayout {
-    type Item = GridSlot;
+    type Item = WidgetLayoutInfo;
 
-    fn next(&mut self) -> Option<GridSlot> {
+    fn next(&mut self) -> Option<WidgetLayoutInfo> {
         match self.consumed {
             true => None,
             false => {
                 self.consumed = true;
-                Some(GridSlot {
-                    node_span: NodeSpan::new(0..1, 0..1),
+                Some(WidgetLayoutInfo {
+                    size_bounds: SizeBounds::default(),
+                    node_span: NodeSpan::new(0, 0),
                     place_in_cell: PlaceInCell::default()
                 })
             }
@@ -60,9 +55,9 @@ impl GridLayout for EmptyNodeLayout {
 }
 
 impl Iterator for EmptyNodeLayout {
-    type Item = GridSlot;
+    type Item = WidgetLayoutInfo;
 
-    fn next(&mut self) -> Option<GridSlot> {None}
+    fn next(&mut self) -> Option<WidgetLayoutInfo> {None}
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         (0, Some(0))
@@ -92,11 +87,12 @@ impl GridLayout for VerticalLayout {
 }
 
 impl Iterator for VerticalLayout {
-    type Item = GridSlot;
+    type Item = WidgetLayoutInfo;
 
-    fn next(&mut self) -> Option<GridSlot> {
+    fn next(&mut self) -> Option<WidgetLayoutInfo> {
         if self.cur < self.len {
-            let slot = GridSlot {
+            let slot = WidgetLayoutInfo {
+                size_bounds: SizeBounds::default(),
                 node_span: NodeSpan::new(0..1, self.cur..self.cur+1),
                 place_in_cell: PlaceInCell::default()
             };

@@ -186,7 +186,7 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                         .open_update_queue();
         }
 
-        if let Some(slot) = self.children_layout.next() {
+        if let Some(layout_info) = self.children_layout.next() {
             // If the desired node branch is at the current child index, get that and run the contents of the
             // `if` statement. Otherwise, search the entire children vector for the desired node and run the
             // `if` statement if that's found. If both of those fail, insert a new node branch and run the
@@ -204,7 +204,7 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                 let new_state_id = node.state_id();
                 if self.node_branch.children[i].state_id != new_state_id {
                     if let Some(ref window) = self.node_branch.children[i].window {
-                        window.set_slot(slot);
+                        window.set_layout_info(layout_info);
                     }
 
                     proc_func(node, self.take(i, child_layout))?;
@@ -223,7 +223,7 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                 self.child_index += 1;
 
                 if let Some(ref window) = self.node_branch.children[child_index].window {
-                    window.set_slot(slot);
+                    window.set_layout_info(layout_info);
                 }
 
                 proc_func(node, self.take(child_index, child_layout))?;

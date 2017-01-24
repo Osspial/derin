@@ -1,7 +1,7 @@
 extern crate derin;
 
 use derin::ui::*;
-use derin::ui::layout::{GridSlot, NodeSpan, PlaceInCell, Place, GridLayout};
+use derin::ui::layout::{WidgetLayoutInfo, NodeSpan, GridLayout};
 use derin::ui::intrinsics::*;
 use derin::native::{Window, WindowConfig};
 
@@ -33,7 +33,8 @@ impl Node for BasicParent {
     fn state_id(&self) -> u16 {
         self.button0.state_id() ^
         self.button1.state_id() ^
-        self.button2.state_id()
+        self.button2.state_id() ^
+        self.button3.state_id()
     }
 }
 
@@ -66,26 +67,26 @@ impl GridLayout for BPLayout {
 }
 
 impl Iterator for BPLayout {
-    type Item = GridSlot;
+    type Item = WidgetLayoutInfo;
 
-    fn next(&mut self) -> Option<GridSlot> {
+    fn next(&mut self) -> Option<WidgetLayoutInfo> {
         self.index += 1;
         match self.index {
-            1 => Some(GridSlot {
+            1 => Some(WidgetLayoutInfo {
                 node_span: NodeSpan::new(0..2, 0),
-                place_in_cell: PlaceInCell::new(Place::Stretch, Place::Stretch)
+                ..WidgetLayoutInfo::default()
             }),
-            2 => Some(GridSlot {
+            2 => Some(WidgetLayoutInfo {
                 node_span: NodeSpan::new(0, 1),
-                place_in_cell: PlaceInCell::new(Place::Stretch, Place::Stretch)
+                ..WidgetLayoutInfo::default()
             }),
-            3 => Some(GridSlot {
+            3 => Some(WidgetLayoutInfo {
                 node_span: NodeSpan::new(1, 1),
-                place_in_cell: PlaceInCell::new(Place::Stretch, Place::Stretch)
+                ..WidgetLayoutInfo::default()
             }),
-            4 => Some(GridSlot {
+            4 => Some(WidgetLayoutInfo {
                 node_span: NodeSpan::new(2, ..),
-                place_in_cell: PlaceInCell::new(Place::Stretch, Place::Stretch)
+                ..WidgetLayoutInfo::default()
             }),
             _ => None
         }

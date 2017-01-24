@@ -136,23 +136,6 @@ impl Default for Place {
     }
 }
 
-pub enum GridArea {
-    Concrete(NodeSizing),
-    Tagged(&'static str)
-}
-
-impl Default for GridArea {
-    fn default() -> GridArea {
-        GridArea::Concrete(NodeSizing::default())
-    }
-}
-
-#[derive(Default)]
-pub struct LayoutHint {
-    pub grid_area: GridArea,
-    pub place_in_cell: PlaceInCell
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SizeBounds {
     pub min: OriginRect,
@@ -163,5 +146,5 @@ pub struct SizeBounds {
 pub struct WidgetLayoutInfo {
     pub size_bounds: SizeBounds,
     pub node_span: NodeSpan,
-    pub placement: PlaceInCell
+    pub place_in_cell: PlaceInCell
 }

@@ -111,6 +111,7 @@ pub enum LayoutUpdate<K: Clone + Copy> {
     WidgetSizeBounds(K, SizeBounds),
     WidgetNodeSpan(K, NodeSpan),
     WidgetPlaceInCell(K, PlaceInCell),
+    WidgetLayoutInfo(K, WidgetLayoutInfo),
 
     GridSize(GridSize),
     PixelSize(OriginRect),
@@ -229,7 +230,8 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                     WidgetSizeBounds(k, sb) => engine.container.get_widget_mut(k).unwrap().layout_info.size_bounds = sb,
                     WidgetNodeSpan(k, ns) => engine.container.get_widget_mut(k).unwrap().layout_info.node_span = ns,
-                    WidgetPlaceInCell(k, pic) => engine.container.get_widget_mut(k).unwrap().layout_info.placement = pic,
+                    WidgetPlaceInCell(k, pic) => engine.container.get_widget_mut(k).unwrap().layout_info.place_in_cell = pic,
+                    WidgetLayoutInfo(k, wli) => engine.container.get_widget_mut(k).unwrap().layout_info = wli,
 
                     GridSize(gs)  => engine.grid.set_grid_size(gs),
                     PixelSize(ps) => engine.desired_size = ps,
@@ -551,7 +553,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                     ).unwrap();
 
                     let outer_rect = widget_origin_rect.offset(offset);
-                    let cell_hinter = CellHinter::new(outer_rect, layout_info.placement);
+                    let cell_hinter = CellHinter::new(outer_rect, layout_info.place_in_cell);
 
                     if let Ok(widget_rect) = cell_hinter.hint_with_bounds(layout_info.size_bounds) {
                         widget.set_rect(widget_rect);
@@ -575,9 +577,14 @@ pub struct LayoutEngine<C: Container>
 {
     container: C,
     grid: TrackVec,
+    /// The pixel size of the layout engine, as requested by the programmer.
     desired_size: OriginRect,
+    /// The pixel size of the layout engine, accounting for the size bounds of the widgets and the size
+    /// bounds of the engine.
     actual_size: OriginRect,
+    /// The size bounds of the engine, as requested by the programmer.
     desired_size_bounds: SizeBounds,
+    /// The size bounds of the engine, accounting for the size bounds of the widgets.
     actual_size_bounds: SizeBounds,
     id: u32
 }
