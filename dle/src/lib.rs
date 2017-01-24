@@ -23,6 +23,9 @@ pub type Fr = f32;
 pub struct WidgetData<W: Widget> {
     pub widget: W,
     pub layout_info: WidgetLayoutInfo,
+    /// The "absolute" size bounds, defined by the widget and not the user, beyond which there may be
+    /// rendering errors with the widget.
+    pub abs_size_bounds: SizeBounds,
     solvable: Solvable
 }
 
@@ -31,6 +34,7 @@ impl<W: Widget> WidgetData<W> {
         WidgetData {
             widget: widget,
             layout_info: WidgetLayoutInfo::default(),
+            abs_size_bounds: SizeBounds::default(),
             solvable: Solvable::default()
         }
     }
@@ -73,6 +77,7 @@ pub enum LayoutUpdate<K: Clone + Copy> {
     WidgetNodeSpan(K, NodeSpan),
     WidgetPlaceInCell(K, PlaceInCell),
     WidgetLayoutInfo(K, WidgetLayoutInfo),
+    WidgetAbsSizeBounds(K, SizeBounds),
 
     GridSize(GridSize),
     PixelSize(OriginRect),
@@ -193,6 +198,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                     WidgetNodeSpan(k, ns) => engine.container.get_widget_mut(k).unwrap().layout_info.node_span = ns,
                     WidgetPlaceInCell(k, pic) => engine.container.get_widget_mut(k).unwrap().layout_info.place_in_cell = pic,
                     WidgetLayoutInfo(k, wli) => engine.container.get_widget_mut(k).unwrap().layout_info = wli,
+                    WidgetAbsSizeBounds(k, sb) => engine.container.get_widget_mut(k).unwrap().abs_size_bounds = sb,
 
                     GridSize(gs)  => engine.grid.set_grid_size(gs),
                     PixelSize(ps) => engine.desired_size = ps,
@@ -339,10 +345,15 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                 track_constraints!(get_col, get_col_mut, push_col, num_cols, remove_col, free_width, fr_total_width);
                 track_constraints!(get_row, get_row_mut, push_row, num_rows, remove_row, free_height, fr_total_height);
 
-                for &mut WidgetData{ref mut widget, ref layout_info, ref mut solvable} in engine.container.get_widget_iter_mut() {
+                for &mut WidgetData{ref mut widget, layout_info, abs_size_bounds, ref mut solvable} in engine.container.get_widget_iter_mut() {
+                    let widget_size_bounds = SizeBounds {
+                        min: abs_size_bounds.bound_rect(layout_info.size_bounds.min).converge(),
+                        max: abs_size_bounds.bound_rect(layout_info.size_bounds.max).converge()
+                    };
+
                     macro_rules! widget_scale {
                         ($axis:ident, $size:ident, $track_range:ident, $track_range_mut:ident, $free_size:expr, $fr_axis:expr) => {{
-                            let mut min_size_debt = layout_info.size_bounds.min.$size();
+                            let mut min_size_debt = widget_size_bounds.min.$size();
                             let mut fr_widget = 0.0;
                             let mut axis_size = 0;
 
@@ -371,7 +382,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                             // Calculate the minimum size the layout engine can be to contain the widget, and expand the
                             // engine minimum size to match that.
-                            let min_size_axis = (layout_info.size_bounds.min.$size() as Fr * $fr_axis / fr_widget).ceil() as Px;
+                            let min_size_axis = (widget_size_bounds.min.$size() as Fr * $fr_axis / fr_widget).ceil() as Px;
                             engine.actual_size_bounds.min.lowright.$axis = cmp::max(
                                 min_size_axis,
                                 engine.actual_size_bounds.min.$size()
@@ -516,7 +527,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                     let outer_rect = widget_origin_rect.offset(offset);
                     let cell_hinter = CellHinter::new(outer_rect, layout_info.place_in_cell);
 
-                    if let Ok(widget_rect) = cell_hinter.hint_with_bounds(layout_info.size_bounds) {
+                    if let Ok(widget_rect) = cell_hinter.hint_with_bounds(widget_size_bounds) {
                         widget.set_rect(widget_rect);
                     }
                 }

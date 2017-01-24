@@ -452,7 +452,7 @@ impl WindowWrapperRef {
     fn update_size_bounds(&self, size_bounds: SizeBounds) {
         unsafe {
             if let Some(parent) = self.get_parent() {
-                let size_bounds_update = LayoutUpdate::WidgetSizeBounds(self.0, size_bounds);
+                let size_bounds_update = LayoutUpdate::WidgetAbsSizeBounds(self.0, size_bounds);
                 user32::SendMessageW(
                     parent.0,
                     DM_QUEUECHILDUPDATES,
