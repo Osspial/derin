@@ -1,6 +1,8 @@
 pub mod intrinsics;
 pub mod layout;
 
+pub use dle::geometry;
+
 use self::layout::GridLayout;
 
 pub enum MouseEvent {
