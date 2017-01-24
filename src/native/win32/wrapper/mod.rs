@@ -130,7 +130,7 @@ impl WindowNode {
                 (size_rect.right - size_rect.left, size_rect.bottom - size_rect.top)
             }
 
-            None => (CW_USEDEFAULT, CW_USEDEFAULT)
+            None => (0, 0)
         };
 
         let window_name: SmallUcs2String = ucs2_str(&config.name).collect();
@@ -554,8 +554,50 @@ unsafe extern "system"
             update_queue.push_engine(&nd.child_layout);
             update_queue.push_update(LayoutUpdate::PixelSize(new_rect));
             update_queue.pop_engine(&mut nd.child_layout);
+
             0
         },
+
+        DM_FLUSHUPDATEQUEUE => {
+            let ret = parent_proc(hwnd, msg, wparam, lparam, nd);
+            let new_size = nd.child_layout.actual_size();
+
+            let origin = {
+                let mut origin = POINT {
+                    x: 0,
+                    y: 0
+                };
+                user32::ClientToScreen(hwnd, &mut origin);
+                origin
+            };
+
+            let mut new_rect = RECT {
+                left: origin.x,
+                top: origin.y,
+                right: origin.x + new_size.width() as c_int,
+                bottom: origin.y + new_size.height() as c_int
+            };
+
+            let window = WindowWrapperRef(hwnd);
+            user32::AdjustWindowRectEx(
+                &mut new_rect,
+                window.get_style(),
+                0,
+                window.get_style_ex()
+            );
+
+            user32::SetWindowPos(
+                hwnd,
+                ptr::null_mut(),
+                new_rect.left,
+                new_rect.top,
+                new_rect.right - new_rect.left,
+                new_rect.bottom - new_rect.top,
+                SWP_NOACTIVATE | SWP_NOZORDER
+            );
+
+            ret
+        }
 
         _ => parent_proc(hwnd, msg, wparam, lparam, nd)
     }
