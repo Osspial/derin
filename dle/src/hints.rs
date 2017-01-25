@@ -1,4 +1,4 @@
-use super::Tr;
+use super::{Px, Tr, Fr};
 use geometry::{OriginRect, Rect};
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 
@@ -194,4 +194,11 @@ pub struct WidgetLayoutInfo {
     pub size_bounds: SizeBounds,
     pub node_span: NodeSpan,
     pub place_in_cell: PlaceInCell
+}
+
+#[derive(Default, Debug, Clone, Copy)]
+pub struct TrackLayoutInfo {
+    pub min_size: Px,
+    pub max_size: Px,
+    pub fr_size: Fr
 }

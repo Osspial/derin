@@ -9,7 +9,7 @@ pub mod hints;
 mod grid;
 
 use geometry::{Rect, OriginRect, OffsetRect};
-use hints::{NodeSpan, PlaceInCell, Place, GridSize, SizeBounds, WidgetLayoutInfo};
+use hints::{NodeSpan, PlaceInCell, Place, GridSize, SizeBounds, WidgetLayoutInfo, TrackLayoutInfo};
 use grid::{TrackVec, SizeResult};
 
 use std::cmp;
@@ -70,8 +70,12 @@ pub trait ContainerRef<'a> {
 pub enum LayoutUpdate<K: Clone + Copy> {
     RowMinSize(Tr, Px),
     RowMaxSize(Tr, Px),
+    RowFracSize(Tr, Fr),
+    RowLayoutInfo(Tr, TrackLayoutInfo),
     ColMinSize(Tr, Px),
     ColMaxSize(Tr, Px),
+    ColFracSize(Tr, Fr),
+    ColLayoutInfo(Tr, TrackLayoutInfo),
 
     WidgetSizeBounds(K, SizeBounds),
     WidgetNodeSpan(K, NodeSpan),
@@ -191,8 +195,22 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                 match update {
                     RowMinSize(tr, px) => engine.grid.get_row_mut(tr).unwrap().set_min_size_master(px),
                     RowMaxSize(tr, px) => engine.grid.get_row_mut(tr).unwrap().set_max_size_master(px),
+                    RowFracSize(tr, fr) => engine.grid.get_row_mut(tr).unwrap().fr_size = fr,
+                    RowLayoutInfo(tr, tli) => {
+                        let row = engine.grid.get_row_mut(tr).unwrap();
+                        row.set_min_size_master(tli.min_size);
+                        row.set_max_size_master(tli.max_size);
+                        row.fr_size = tli.fr_size;
+                    },
                     ColMinSize(tr, px) => engine.grid.get_col_mut(tr).unwrap().set_min_size_master(px),
                     ColMaxSize(tr, px) => engine.grid.get_col_mut(tr).unwrap().set_max_size_master(px),
+                    ColFracSize(tr, fr) => engine.grid.get_col_mut(tr).unwrap().fr_size = fr,
+                    ColLayoutInfo(tr, tli) => {
+                        let col = engine.grid.get_col_mut(tr).unwrap();
+                        col.set_min_size_master(tli.min_size);
+                        col.set_max_size_master(tli.max_size);
+                        col.fr_size = tli.fr_size;
+                    },
 
                     WidgetSizeBounds(k, sb) => engine.container.get_widget_mut(k).unwrap().layout_info.size_bounds = sb,
                     WidgetNodeSpan(k, ns) => engine.container.get_widget_mut(k).unwrap().layout_info.node_span = ns,
