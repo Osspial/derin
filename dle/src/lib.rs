@@ -9,7 +9,7 @@ pub mod hints;
 mod grid;
 
 use geometry::{Rect, OriginRect, OffsetRect};
-use hints::{NodeSpan, PlaceInCell, Place, GridSize, SizeBounds, WidgetLayoutInfo, TrackLayoutInfo};
+use hints::{NodeSpan, PlaceInCell, Place, GridSize, SizeBounds, WidgetHints, TrackHints};
 use grid::{TrackVec, SizeResult};
 
 use std::cmp;
@@ -22,7 +22,7 @@ pub type Fr = f32;
 #[derive(Default, Debug, Clone)]
 pub struct WidgetData<W: Widget> {
     pub widget: W,
-    pub layout_info: WidgetLayoutInfo,
+    pub layout_info: WidgetHints,
     /// The "absolute" size bounds, defined by the widget and not the user, beyond which there may be
     /// rendering errors with the widget.
     pub abs_size_bounds: SizeBounds,
@@ -33,7 +33,7 @@ impl<W: Widget> WidgetData<W> {
     pub fn new(widget: W) -> WidgetData<W> {
         WidgetData {
             widget: widget,
-            layout_info: WidgetLayoutInfo::default(),
+            layout_info: WidgetHints::default(),
             abs_size_bounds: SizeBounds::default(),
             solvable: Solvable::default()
         }
@@ -71,16 +71,16 @@ pub enum LayoutUpdate<K: Clone + Copy> {
     RowMinSize(Tr, Px),
     RowMaxSize(Tr, Px),
     RowFracSize(Tr, Fr),
-    RowLayoutInfo(Tr, TrackLayoutInfo),
+    RowHints(Tr, TrackHints),
     ColMinSize(Tr, Px),
     ColMaxSize(Tr, Px),
     ColFracSize(Tr, Fr),
-    ColLayoutInfo(Tr, TrackLayoutInfo),
+    ColHints(Tr, TrackHints),
 
     WidgetSizeBounds(K, SizeBounds),
     WidgetNodeSpan(K, NodeSpan),
     WidgetPlaceInCell(K, PlaceInCell),
-    WidgetLayoutInfo(K, WidgetLayoutInfo),
+    WidgetHints(K, WidgetHints),
     WidgetAbsSizeBounds(K, SizeBounds),
 
     GridSize(GridSize),
@@ -193,29 +193,29 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                 use self::LayoutUpdate::*;
 
                 match update {
-                    RowMinSize(tr, px) => engine.grid.get_row_mut(tr).unwrap().set_min_size_master(px),
-                    RowMaxSize(tr, px) => engine.grid.get_row_mut(tr).unwrap().set_max_size_master(px),
+                    RowMinSize(tr, px) => engine.grid.get_row_mut(tr).unwrap().set_min_size(px),
+                    RowMaxSize(tr, px) => engine.grid.get_row_mut(tr).unwrap().set_max_size(px),
                     RowFracSize(tr, fr) => engine.grid.get_row_mut(tr).unwrap().fr_size = fr,
-                    RowLayoutInfo(tr, tli) => {
+                    RowHints(tr, tli) => {
                         let row = engine.grid.get_row_mut(tr).unwrap();
-                        row.set_min_size_master(tli.min_size);
-                        row.set_max_size_master(tli.max_size);
+                        row.set_min_size(tli.min_size);
+                        row.set_max_size(tli.max_size);
                         row.fr_size = tli.fr_size;
                     },
-                    ColMinSize(tr, px) => engine.grid.get_col_mut(tr).unwrap().set_min_size_master(px),
-                    ColMaxSize(tr, px) => engine.grid.get_col_mut(tr).unwrap().set_max_size_master(px),
+                    ColMinSize(tr, px) => engine.grid.get_col_mut(tr).unwrap().set_min_size(px),
+                    ColMaxSize(tr, px) => engine.grid.get_col_mut(tr).unwrap().set_max_size(px),
                     ColFracSize(tr, fr) => engine.grid.get_col_mut(tr).unwrap().fr_size = fr,
-                    ColLayoutInfo(tr, tli) => {
+                    ColHints(tr, tli) => {
                         let col = engine.grid.get_col_mut(tr).unwrap();
-                        col.set_min_size_master(tli.min_size);
-                        col.set_max_size_master(tli.max_size);
+                        col.set_min_size(tli.min_size);
+                        col.set_max_size(tli.max_size);
                         col.fr_size = tli.fr_size;
                     },
 
                     WidgetSizeBounds(k, sb) => engine.container.get_widget_mut(k).unwrap().layout_info.size_bounds = sb,
                     WidgetNodeSpan(k, ns) => engine.container.get_widget_mut(k).unwrap().layout_info.node_span = ns,
                     WidgetPlaceInCell(k, pic) => engine.container.get_widget_mut(k).unwrap().layout_info.place_in_cell = pic,
-                    WidgetLayoutInfo(k, wli) => engine.container.get_widget_mut(k).unwrap().layout_info = wli,
+                    WidgetHints(k, wli) => engine.container.get_widget_mut(k).unwrap().layout_info = wli,
                     WidgetAbsSizeBounds(k, sb) => engine.container.get_widget_mut(k).unwrap().abs_size_bounds = sb,
 
                     GridSize(gs)  => engine.grid.set_grid_size(gs),
@@ -247,14 +247,14 @@ impl<K: Clone + Copy> UpdateQueue<K> {
             macro_rules! first_track_pass {
                 ($axis:ident, $push_track:ident, $track_range_mut:ident, $free_size:expr, $fr_total:expr) => {
                     for (index, track) in engine.grid.$track_range_mut(..).unwrap().iter_mut().enumerate() {
-                        engine.actual_size_bounds.min.lowright.$axis += track.min_size_master();
+                        engine.actual_size_bounds.min.lowright.$axis += track.min_size();
 
                         if track.fr_size <= 0.0 {
                             track.shrink_size();
                             $free_size -= track.size();
                         } else {
                             engine.actual_size_bounds.max.lowright.$axis =
-                                engine.actual_size_bounds.max.lowright.$axis.saturating_add(track.max_size_master());
+                                engine.actual_size_bounds.max.lowright.$axis.saturating_add(track.max_size());
                             track.expand_size();
                             $fr_total += track.fr_size;
                             frac_tracks.$push_track(index as Tr);
@@ -388,8 +388,8 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                 axis_size += track.size();
 
                                 if track.fr_size == 0.0 ||
-                                   track.size() < track.min_size_master() ||
-                                   track.size() > track.max_size_master()
+                                   track.size() < track.min_size() ||
+                                   track.size() > track.max_size()
                                 {
                                     rigid_tracks_widget.push(index as Tr);
                                 } else {

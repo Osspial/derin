@@ -204,7 +204,7 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                 let new_state_id = node.state_id();
                 if self.node_branch.children[i].state_id != new_state_id {
                     if let Some(ref window) = self.node_branch.children[i].window {
-                        window.set_layout_info(layout_info);
+                        window.set_widget_hints(layout_info);
                     }
 
                     proc_func(node, self.take(i, child_layout))?;
@@ -223,7 +223,7 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                 self.child_index += 1;
 
                 if let Some(ref window) = self.node_branch.children[child_index].window {
-                    window.set_layout_info(layout_info);
+                    window.set_widget_hints(layout_info);
                 }
 
                 proc_func(node, self.take(child_index, child_layout))?;

@@ -1,6 +1,6 @@
 use super::{Tr, Px, Fr};
 use geometry::Point;
-use hints::{GridSize, DyRange};
+use hints::{GridSize, TrRange};
 
 use std::cmp;
 use std::fmt::{Debug, Formatter, Error};
@@ -19,13 +19,13 @@ pub enum SizeResult {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GridTrack {
     /// The size of this grid track in pixels. For columns, this is the width; for rows, the height.
-    /// This must be greater than `min_size_master` and less than `max_size_master`.
+    /// This must be greater than `min_size` and less than `max_size`.
     size: Px,
     /// Track-level minimum size. If the child minimum size is less than this, this is used instead.
-    min_size_master: Px,
+    min_size: Px,
     /// Track-level maximum size. If this is less than the minimum size, minimum size takes priority
     /// and overrides this.
-    max_size_master: Px,
+    max_size: Px,
     pub fr_size: Fr
 }
 
@@ -36,44 +36,44 @@ impl GridTrack {
     }
 
     /// Get the track-level minimum size of this grid track in pixels.
-    pub fn min_size_master(&self) -> Px {
-        self.min_size_master
+    pub fn min_size(&self) -> Px {
+        self.min_size
     }
 
-    pub fn max_size_master(&self) -> Px {
+    pub fn max_size(&self) -> Px {
         // If the maximum size is less than the minimum size, which is technically allowed to happen but
         // doesn't logically make sense, clamp the maximum size to the minimum size.
-        cmp::max(self.max_size_master, self.min_size_master)
+        cmp::max(self.max_size, self.min_size)
     }
 
     pub fn shrink_size(&mut self) {
-        self.size = self.min_size_master();
+        self.size = self.min_size();
     }
 
     pub fn expand_size(&mut self) {
-        self.size = self.max_size_master();
+        self.size = self.max_size();
     }
 
     pub fn change_size(&mut self, new_size: Px) -> SizeResult {
-        if self.size < new_size && self.size != self.max_size_master() {
-            if new_size <= self.max_size_master() {
+        if self.size < new_size && self.size != self.max_size() {
+            if new_size <= self.max_size() {
                 self.size = new_size;
                 SizeResult::SizeUpscale
             } else {
-                self.size = self.max_size_master();
+                self.size = self.max_size();
                 SizeResult::SizeUpscaleClamp
             }
-        } else if self.size > new_size && self.size != self.min_size_master() {
-            if new_size >= self.min_size_master() {
+        } else if self.size > new_size && self.size != self.min_size() {
+            if new_size >= self.min_size() {
                 self.size = new_size;
                 SizeResult::SizeDownscale
             } else {
-                self.size = self.min_size_master();
+                self.size = self.min_size();
                 SizeResult::SizeDownscaleClamp
             }
-        } else if new_size < self.min_size_master() {
+        } else if new_size < self.min_size() {
             SizeResult::NoEffectDown
-        } else if new_size > self.max_size_master() {
+        } else if new_size > self.max_size() {
             SizeResult::NoEffectUp
         } else {
             SizeResult::NoEffectEq
@@ -81,15 +81,15 @@ impl GridTrack {
     }
 
     /// Sets track-level minimum size.
-    pub fn set_min_size_master(&mut self, min_size_master: Px) {
-        self.min_size_master = min_size_master;
-        self.size = cmp::max(self.size, self.min_size_master());
+    pub fn set_min_size(&mut self, min_size: Px) {
+        self.min_size = min_size;
+        self.size = cmp::max(self.size, self.min_size());
     }
 
     /// Sets track-level maximum size.
-    pub fn set_max_size_master(&mut self, max_size_master: Px) {
-        self.max_size_master = max_size_master;
-        self.size = cmp::min(self.size, self.max_size_master());
+    pub fn set_max_size(&mut self, max_size: Px) {
+        self.max_size = max_size;
+        self.size = cmp::min(self.size, self.max_size());
     }
 }
 
@@ -98,8 +98,8 @@ impl Default for GridTrack {
         GridTrack {
             size: 0,
 
-            min_size_master: 0,
-            max_size_master: Px::max_value(),
+            min_size: 0,
+            max_size: Px::max_value(),
             fr_size: 1.0
         }
     }
@@ -238,7 +238,7 @@ impl<T> TrackVec<T> {
     /// Take a range and get a slice of columns corresponding to that range. Returns `None` if the
     /// range specifies columns that don't exist.
     pub fn col_range<R>(&self, range: R) -> Option<&[T]>
-            where R: Into<DyRange>
+            where R: Into<TrRange>
     {
         let range = range.into();
         let range_usize = range.start.unwrap_or(0) as usize
@@ -254,7 +254,7 @@ impl<T> TrackVec<T> {
     /// Take a range and get a slice of rows corresponding to that range. Returns `None` if the
     /// range specifies rows that don't exist.
     pub fn row_range<R>(&self, range: R) -> Option<&[T]>
-            where R: Into<DyRange>
+            where R: Into<TrRange>
     {
         let range = range.into();
         let range_usize = (range.start.unwrap_or(0) + self.num_cols) as usize
@@ -270,7 +270,7 @@ impl<T> TrackVec<T> {
     /// Take a range and get a mutable slice of columns corresponding to that range. Returns `None` if the
     /// range specifies columns that don't exist.
     pub fn col_range_mut<R>(&mut self, range: R) -> Option<&mut [T]>
-            where R: Into<DyRange>
+            where R: Into<TrRange>
     {
         let range = range.into();
         let range_usize = range.start.unwrap_or(0) as usize
@@ -286,7 +286,7 @@ impl<T> TrackVec<T> {
     /// Take a range and get a mutable slice of rows corresponding to that range. Returns `None` if the
     /// range specifies rows that don't exist.
     pub fn row_range_mut<R>(&mut self, range: R) -> Option<&mut [T]>
-            where R: Into<DyRange>
+            where R: Into<TrRange>
     {
         let range = range.into();
         let range_usize = (range.start.unwrap_or(0) + self.num_cols) as usize
@@ -359,14 +359,14 @@ mod tests {
         fn grid_track_change_size(grid_track: GridTrack, new_size: Px) -> bool {
             let set_size_result = grid_track.clone().change_size(new_size);
 
-            set_size_result == if new_size < grid_track.min_size_master() {
-                if grid_track.min_size_master() < grid_track.size() {
+            set_size_result == if new_size < grid_track.min_size() {
+                if grid_track.min_size() < grid_track.size() {
                     SizeResult::SizeDownscaleClamp
                 } else {
                     SizeResult::NoEffectDown
                 }
-            } else if grid_track.max_size_master() < new_size {
-                if grid_track.size() < grid_track.max_size_master() {
+            } else if grid_track.max_size() < new_size {
+                if grid_track.size() < grid_track.max_size() {
                     SizeResult::SizeUpscaleClamp
                 } else {
                     SizeResult::NoEffectUp
@@ -398,8 +398,8 @@ mod tests {
     impl Arbitrary for GridTrack {
         fn arbitrary<G: Gen>(g: &mut G) -> GridTrack {
             let mut track = GridTrack::default();
-            track.set_min_size_master(g.next_u32());
-            track.set_max_size_master(g.next_u32());
+            track.set_min_size(g.next_u32());
+            track.set_max_size(g.next_u32());
             track.change_size(g.next_u32());
             track.fr_size = g.next_f32();
             track

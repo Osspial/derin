@@ -3,55 +3,55 @@ use geometry::{OriginRect, Rect};
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 
 #[derive(Debug, Clone, Copy)]
-pub struct DyRange {
+pub struct TrRange {
     pub start: Option<Tr>,
     pub end: Option<Tr>
 }
 
-impl DyRange {
-    /// Get the size of the DyRange, using `start_opt` if `self.start` is `None` and `end_opt` if
+impl TrRange {
+    /// Get the size of the TrRange, using `start_opt` if `self.start` is `None` and `end_opt` if
     /// `self.end` is `None`.
     pub fn size(self, start_opt: Tr, end_opt: Tr) -> Tr {
         self.end.unwrap_or(end_opt) - self.start.unwrap_or(start_opt)
     }
 }
 
-impl From<Tr> for DyRange {
-    fn from(n: Tr) -> DyRange {
-        DyRange::from(n..n + 1)
+impl From<Tr> for TrRange {
+    fn from(n: Tr) -> TrRange {
+        TrRange::from(n..n + 1)
     }
 }
 
-impl From<Range<Tr>> for DyRange {
-    fn from(r: Range<Tr>) -> DyRange {
-        DyRange {
+impl From<Range<Tr>> for TrRange {
+    fn from(r: Range<Tr>) -> TrRange {
+        TrRange {
             start: Some(r.start),
             end: Some(r.end)
         }
     }
 }
 
-impl From<RangeFrom<Tr>> for DyRange {
-    fn from(r: RangeFrom<Tr>) -> DyRange {
-        DyRange {
+impl From<RangeFrom<Tr>> for TrRange {
+    fn from(r: RangeFrom<Tr>) -> TrRange {
+        TrRange {
             start: Some(r.start),
             end: None
         }
     }
 }
 
-impl From<RangeFull> for DyRange {
-    fn from(_: RangeFull) -> DyRange {
-        DyRange {
+impl From<RangeFull> for TrRange {
+    fn from(_: RangeFull) -> TrRange {
+        TrRange {
             start: None,
             end: None
         }
     }
 }
 
-impl From<RangeTo<Tr>> for DyRange {
-    fn from(r: RangeTo<Tr>) -> DyRange {
-        DyRange {
+impl From<RangeTo<Tr>> for TrRange {
+    fn from(r: RangeTo<Tr>) -> TrRange {
+        TrRange {
             start: None,
             end: Some(r.end)
         }
@@ -110,7 +110,7 @@ two_axis_type!{
     pub struct GridSize(Tr);
 
     #[derive(Debug, Clone, Copy)]
-    pub struct NodeSpan(Into<DyRange>);
+    pub struct NodeSpan(Into<TrRange>);
 
     #[derive(Default, Debug, Clone, Copy)]
     pub struct PlaceInCell(Place);
@@ -190,14 +190,14 @@ impl Default for SizeBounds {
 
 
 #[derive(Default, Debug, Clone, Copy)]
-pub struct WidgetLayoutInfo {
+pub struct WidgetHints {
     pub size_bounds: SizeBounds,
     pub node_span: NodeSpan,
     pub place_in_cell: PlaceInCell
 }
 
 #[derive(Default, Debug, Clone, Copy)]
-pub struct TrackLayoutInfo {
+pub struct TrackHints {
     pub min_size: Px,
     pub max_size: Px,
     pub fr_size: Fr

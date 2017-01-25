@@ -1,7 +1,7 @@
 pub use dle::hints::*;
 
 /// An iterator adapter that turns `LayoutHint`s into specific `NodeSpan`es
-pub trait GridLayout: Iterator<Item = WidgetLayoutInfo> {
+pub trait GridLayout: Iterator<Item = WidgetHints> {
     fn grid_size(&self) -> GridSize;
 }
 
@@ -23,14 +23,14 @@ impl GridLayout for SingleNodeLayout {
 }
 
 impl Iterator for SingleNodeLayout {
-    type Item = WidgetLayoutInfo;
+    type Item = WidgetHints;
 
-    fn next(&mut self) -> Option<WidgetLayoutInfo> {
+    fn next(&mut self) -> Option<WidgetHints> {
         match self.consumed {
             true => None,
             false => {
                 self.consumed = true;
-                Some(WidgetLayoutInfo {
+                Some(WidgetHints {
                     size_bounds: SizeBounds::default(),
                     node_span: NodeSpan::new(0, 0),
                     place_in_cell: PlaceInCell::default()
@@ -55,9 +55,9 @@ impl GridLayout for EmptyNodeLayout {
 }
 
 impl Iterator for EmptyNodeLayout {
-    type Item = WidgetLayoutInfo;
+    type Item = WidgetHints;
 
-    fn next(&mut self) -> Option<WidgetLayoutInfo> {None}
+    fn next(&mut self) -> Option<WidgetHints> {None}
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         (0, Some(0))
@@ -87,11 +87,11 @@ impl GridLayout for VerticalLayout {
 }
 
 impl Iterator for VerticalLayout {
-    type Item = WidgetLayoutInfo;
+    type Item = WidgetHints;
 
-    fn next(&mut self) -> Option<WidgetLayoutInfo> {
+    fn next(&mut self) -> Option<WidgetHints> {
         if self.cur < self.len {
-            let slot = WidgetLayoutInfo {
+            let slot = WidgetHints {
                 size_bounds: SizeBounds::default(),
                 node_span: NodeSpan::new(0..1, self.cur..self.cur+1),
                 place_in_cell: PlaceInCell::default()

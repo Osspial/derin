@@ -1,7 +1,7 @@
 extern crate derin;
 
 use derin::ui::*;
-use derin::ui::layout::{WidgetLayoutInfo, NodeSpan, GridLayout};
+use derin::ui::layout::{WidgetHints, NodeSpan, GridLayout};
 use derin::ui::intrinsics::*;
 use derin::native::{Window, WindowConfig};
 
@@ -67,26 +67,26 @@ impl GridLayout for BPLayout {
 }
 
 impl Iterator for BPLayout {
-    type Item = WidgetLayoutInfo;
+    type Item = WidgetHints;
 
-    fn next(&mut self) -> Option<WidgetLayoutInfo> {
+    fn next(&mut self) -> Option<WidgetHints> {
         self.index += 1;
         match self.index {
-            1 => Some(WidgetLayoutInfo {
+            1 => Some(WidgetHints {
                 node_span: NodeSpan::new(0..2, 0),
-                ..WidgetLayoutInfo::default()
+                ..WidgetHints::default()
             }),
-            2 => Some(WidgetLayoutInfo {
+            2 => Some(WidgetHints {
                 node_span: NodeSpan::new(0, 1),
-                ..WidgetLayoutInfo::default()
+                ..WidgetHints::default()
             }),
-            3 => Some(WidgetLayoutInfo {
+            3 => Some(WidgetHints {
                 node_span: NodeSpan::new(1, 1),
-                ..WidgetLayoutInfo::default()
+                ..WidgetHints::default()
             }),
-            4 => Some(WidgetLayoutInfo {
+            4 => Some(WidgetHints {
                 node_span: NodeSpan::new(2, ..),
-                ..WidgetLayoutInfo::default()
+                ..WidgetHints::default()
             }),
             _ => None
         }

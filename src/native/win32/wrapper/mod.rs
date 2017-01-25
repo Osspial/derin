@@ -16,7 +16,7 @@ use winapi::basetsd::*;
 
 use super::WindowReceiver;
 use dle::{LayoutEngine, UpdateQueue, LayoutUpdate, Container, ContainerRef, Widget, WidgetData};
-use dle::hints::{SizeBounds, WidgetLayoutInfo};
+use dle::hints::{SizeBounds, WidgetHints};
 use dle::geometry::{Rect, OffsetRect, OriginRect};
 use ui::layout::GridSize;
 
@@ -61,12 +61,12 @@ impl WindowNode {
         }
     }
 
-    pub fn set_layout_info(&self, wli: WidgetLayoutInfo) {
+    pub fn set_widget_hints(&self, wli: WidgetHints) {
         unsafe {
             user32::SendMessageW(
                 self.hwnd(),
-                DM_SETLAYOUTINFO,
-                &wli as *const WidgetLayoutInfo as WPARAM,
+                DM_SETWIDGETHINTS,
+                &wli as *const WidgetHints as WPARAM,
                 0
             );
         }
@@ -490,7 +490,7 @@ const DM_DESTROYWINDOW: UINT = WM_APP + 0;
 const DM_NEWTEXTBUTTON: UINT = WM_APP + 1;
 const DM_NEWLAYOUTGROUP: UINT = WM_APP + 2;
 
-const DM_SETLAYOUTINFO: UINT = WM_APP + 4;
+const DM_SETWIDGETHINTS: UINT = WM_APP + 4;
 /// Remove the child window specified in `wparam`.
 const DM_REMOVECHILD: UINT = WM_APP + 5;
 /// Queue up updates for the child window, with a pointer to an slice of `LayoutUpdate` enums in the
@@ -893,11 +893,11 @@ unsafe fn common_proc(hwnd: HWND, msg: UINT,
             0
         }
 
-        DM_SETLAYOUTINFO => {
-            let layout_info = *(wparam as *const WidgetLayoutInfo);
+        DM_SETWIDGETHINTS => {
+            let layout_info = *(wparam as *const WidgetHints);
 
             if let Some(parent_hwnd) = WindowWrapperRef(hwnd).get_parent() {
-                let update = LayoutUpdate::WidgetLayoutInfo(hwnd, layout_info);
+                let update = LayoutUpdate::WidgetHints(hwnd, layout_info);
 
                 user32::SendMessageW(
                     parent_hwnd.0,
