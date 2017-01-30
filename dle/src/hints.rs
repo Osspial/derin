@@ -196,9 +196,19 @@ pub struct WidgetHints {
     pub place_in_cell: PlaceInCell
 }
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct TrackHints {
     pub min_size: Px,
     pub max_size: Px,
     pub fr_size: Fr
+}
+
+impl Default for TrackHints {
+    fn default() -> TrackHints {
+        TrackHints {
+            min_size: 0,
+            max_size: Px::max_value(),
+            fr_size: 1.0
+        }
+    }
 }

@@ -59,6 +59,7 @@ pub trait Container
     fn get_widget_iter_mut(&mut self) -> <&Self as ContainerRef>::WDIterMut;
 }
 
+/// Hack to emulate ATCs while ATCs aren't actually implemented in Rust.
 pub trait ContainerRef<'a> {
     type Widget: Widget + 'a;
     type WDIter: Iterator<Item = &'a WidgetData<Self::Widget>>;
@@ -193,22 +194,22 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                 use self::LayoutUpdate::*;
 
                 match update {
-                    RowMinSize(tr, px) => engine.grid.get_row_mut(tr).unwrap().set_min_size(px),
-                    RowMaxSize(tr, px) => engine.grid.get_row_mut(tr).unwrap().set_max_size(px),
+                    RowMinSize(tr, px) => engine.grid.get_row_mut(tr).unwrap().set_min_size(px).unwrap_or(()),
+                    RowMaxSize(tr, px) => engine.grid.get_row_mut(tr).unwrap().set_max_size(px).unwrap_or(()),
                     RowFracSize(tr, fr) => engine.grid.get_row_mut(tr).unwrap().fr_size = fr,
                     RowHints(tr, tli) => {
                         let row = engine.grid.get_row_mut(tr).unwrap();
-                        row.set_min_size(tli.min_size);
-                        row.set_max_size(tli.max_size);
+                        row.set_min_size(tli.min_size).ok();
+                        row.set_max_size(tli.max_size).ok();
                         row.fr_size = tli.fr_size;
                     },
-                    ColMinSize(tr, px) => engine.grid.get_col_mut(tr).unwrap().set_min_size(px),
-                    ColMaxSize(tr, px) => engine.grid.get_col_mut(tr).unwrap().set_max_size(px),
+                    ColMinSize(tr, px) => engine.grid.get_col_mut(tr).unwrap().set_min_size(px).unwrap_or(()),
+                    ColMaxSize(tr, px) => engine.grid.get_col_mut(tr).unwrap().set_max_size(px).unwrap_or(()),
                     ColFracSize(tr, fr) => engine.grid.get_col_mut(tr).unwrap().fr_size = fr,
                     ColHints(tr, tli) => {
                         let col = engine.grid.get_col_mut(tr).unwrap();
-                        col.set_min_size(tli.min_size);
-                        col.set_max_size(tli.max_size);
+                        col.set_min_size(tli.min_size).ok();
+                        col.set_max_size(tli.max_size).ok();
                         col.fr_size = tli.fr_size;
                     },
 
@@ -242,20 +243,30 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                 max: OriginRect::min()
             };
 
+            let mut frac_min_size = OriginRect::min();
+
+            let mut rigid_min_size = OriginRect::min();
+
             // Next, we perform an iteration over the tracks, subtracting from the free space if the track is
             // rigid.
             macro_rules! first_track_pass {
                 ($axis:ident, $push_track:ident, $track_range_mut:ident, $free_size:expr, $fr_total:expr) => {
                     for (index, track) in engine.grid.$track_range_mut(..).unwrap().iter_mut().enumerate() {
-                        engine.actual_size_bounds.min.lowright.$axis += track.min_size();
-
                         if track.fr_size <= 0.0 {
-                            track.shrink_size();
-                            $free_size -= track.size();
+                            track.reset_shrink();
+                            rigid_min_size.lowright.$axis += track.min_size();
+                            // To make sure that the maximum size isn't below the minimum needed for this track,
+                            // increase the engine maximum size by the rigid track minimum size.
+                            engine.actual_size_bounds.max.lowright.$axis =
+                                engine.actual_size_bounds.max.lowright.$axis.saturating_add(track.min_size());
+                            $free_size = $free_size.saturating_sub(track.size());
                         } else {
+                            // The engine maximum size isn't expanded in a rigid track because the track won't
+                            // expand when the rectangle of the engine is expanded.
                             engine.actual_size_bounds.max.lowright.$axis =
                                 engine.actual_size_bounds.max.lowright.$axis.saturating_add(track.max_size());
-                            track.expand_size();
+                            track.reset_expand();
+                            frac_min_size.lowright.$axis += track.min_size();
                             $fr_total += track.fr_size;
                             frac_tracks.$push_track(index as Tr);
                         }
@@ -266,10 +277,16 @@ impl<K: Clone + Copy> UpdateQueue<K> {
             first_track_pass!(x, push_col, col_range_mut, free_width, fr_total_width);
             first_track_pass!(y, push_row, row_range_mut, free_height, fr_total_height);
 
-            engine.actual_size_bounds.min =
-                engine.desired_size_bounds.bound_rect(engine.actual_size_bounds.min).converge();
+
             engine.actual_size_bounds.max =
                 engine.desired_size_bounds.bound_rect(engine.actual_size_bounds.max).converge();
+
+            engine.actual_size_bounds.min = OriginRect::new(
+                frac_min_size.width() + rigid_min_size.width(),
+                frac_min_size.height() + rigid_min_size.height()
+            );
+            engine.actual_size_bounds.min =
+                engine.desired_size_bounds.bound_rect(engine.actual_size_bounds.min).converge();
 
             engine.actual_size = engine.actual_size_bounds.bound_rect(engine.desired_size).converge();
 
@@ -327,11 +344,11 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                         'frac: loop {
                             let mut frac_index = 0;
-                            let mut px_expander = FrDivider::new(frac_tracks.$num_tracks_method(), $free_size, $fr_total);
+                            let mut fr_divider = FrDivider::new(frac_tracks.$num_tracks_method(), $free_size, $fr_total);
                             while let Some(track_index) = frac_tracks.$get_track(frac_index).map(|t| *t as Tr) {
                                 let track = engine.grid.$get_track_mut(track_index).unwrap();
 
-                                let new_size = px_expander.divvy(track.fr_size);
+                                let new_size = fr_divider.divvy(track.fr_size);
 
                                 match track.change_size(new_size) {
                                     // If the resize occured without issues, increment frac_index and go on to the next track.
@@ -371,9 +388,12 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                     macro_rules! widget_scale {
                         ($axis:ident, $size:ident, $track_range:ident, $track_range_mut:ident, $free_size:expr, $fr_axis:expr) => {{
-                            let mut min_size_debt = widget_size_bounds.min.$size();
+                            // The total fractional size of the tracks in the widget
                             let mut fr_widget = 0.0;
-                            let mut axis_size = 0;
+                            let mut fr_expand: Px = 0;
+                            // The total pixel size of the tracks in the widget
+                            let mut px_widget = 0;
+                            let mut min_size_debt = widget_size_bounds.min.$size();
 
                             // If the widget has been flagged as unsolvable, check to see that is was marked as unsolvable
                             // during the current call to `pop_engine`. If it wasn't, then tentatively mark it as solvable.
@@ -384,147 +404,95 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                             }
 
                             for (index, track) in engine.grid.$track_range(layout_info.node_span.$axis).expect("Node span larger than grid").iter().enumerate() {
-                                min_size_debt = min_size_debt.saturating_sub(track.size());
-                                axis_size += track.size();
+                                px_widget += track.size();
+                                min_size_debt = min_size_debt.saturating_sub(track.min_size());
 
-                                if track.fr_size == 0.0 ||
-                                   track.size() < track.min_size() ||
-                                   track.size() > track.max_size()
-                                {
+                                if track.fr_size == 0.0 {
                                     rigid_tracks_widget.push(index as Tr);
                                 } else {
                                     fr_widget += track.fr_size;
+                                    fr_expand = fr_expand.saturating_add(track.max_size() - track.min_size());
                                     frac_tracks_widget.push(index as Tr);
                                 }
                             }
 
-                            // Calculate the minimum size the layout engine can be to contain the widget, and expand the
-                            // engine minimum size to match that.
-                            let min_size_axis = (widget_size_bounds.min.$size() as Fr * $fr_axis / fr_widget).ceil() as Px;
-                            engine.actual_size_bounds.min.lowright.$axis = cmp::max(
-                                min_size_axis,
-                                engine.actual_size_bounds.min.$size()
-                            );
+                            if !solvable.$axis.is_unsolvable_with(self.unsolvable_id) {
+                                let mut grid_changed = false;
 
-                            // If the minimum size hasn't been met without expansion and the widget hasn't been marked as
-                            // unsolvable during this update, expand the rigid tracks to meet the minimum.
-                            if 0 < min_size_debt && !solvable.$axis.is_unsolvable_with(self.unsolvable_id) {
-                                while 0 < min_size_debt && 0 < rigid_tracks_widget.len() {
-                                    // The size that each widget individually needs to expand.
-                                    let size_expand = min_size_debt / rigid_tracks_widget.len() as Px;
+                                while 0 < rigid_tracks_widget.len() {
+                                    let rigid_expand = min_size_debt / rigid_tracks_widget.len() as Px;
                                     let mut expand_rem = min_size_debt % rigid_tracks_widget.len() as Px;
 
                                     let mut rigid_index = 0;
                                     while let Some(track_index) = rigid_tracks_widget.get(rigid_index).cloned() {
                                         let track = &mut engine.grid.$track_range_mut(layout_info.node_span.$axis).unwrap()[track_index as usize];
+                                        let expansion = rigid_expand + (expand_rem != 0) as Px;
 
-                                        let old_size = track.size();
-                                        let expansion = size_expand + (expand_rem != 0) as Px;
-                                        match track.change_size(old_size + expansion) {
-                                            // If the size was upscaled with no issues, just subtract the expansion from `min_size_debt`.
-                                            SizeResult::SizeUpscale => rigid_index += 1,
+                                        if track.min_size() + expansion <= track.max_size() {
+                                            min_size_debt = min_size_debt.saturating_sub(expansion);
+                                            let new_size = track.min_size() + expansion;
 
-                                            SizeResult::NoEffectEq        |
-                                            SizeResult::NoEffectUp        |
-                                            SizeResult::SizeUpscaleClamp => {rigid_tracks_widget.remove(rigid_index);},
+                                            if let Err(expanded) = track.expand_widget_min_size(new_size) {
+                                                engine.actual_size_bounds.max.lowright.$axis =
+                                                    engine.actual_size_bounds.max.$size().saturating_add(expanded);
+                                                engine.actual_size.lowright.$axis += expanded;
 
-                                            SizeResult::NoEffectDown        |
-                                            SizeResult::SizeDownscale       |
-                                            SizeResult::SizeDownscaleClamp => unreachable!()
+                                                $free_size = $free_size.saturating_sub(expanded);
+                                                rigid_min_size.lowright.$axis += expanded;
+
+                                                grid_changed = true;
+                                            }
+                                            rigid_index += 1;
+
+                                        } else {
+                                            rigid_tracks_widget.remove(rigid_index);
+                                            min_size_debt = min_size_debt.saturating_sub(track.max_size() - track.min_size());
+
+                                            let track_max_size = track.max_size();
+                                            if let Err(expanded) = track.expand_widget_min_size(track_max_size) {
+                                                engine.actual_size_bounds.max.lowright.$axis =
+                                                    engine.actual_size_bounds.max.$size().saturating_add(expanded);
+                                                engine.actual_size.lowright.$axis += expanded;
+
+                                                $free_size = $free_size.saturating_sub(expanded);
+                                                rigid_min_size.lowright.$axis += track.max_size() - track.min_size();
+
+                                                grid_changed = true;
+                                            }
+
+                                            // we don't continue because TODO PUT WHY
                                         }
-                                        let expanded_size = track.size() - old_size;
-                                        engine.actual_size_bounds.min.lowright.$axis += expanded_size;
-                                        engine.actual_size_bounds.max.lowright.$axis += expanded_size;
-                                        min_size_debt = min_size_debt.saturating_sub(expansion);
 
                                         expand_rem = expand_rem.saturating_sub(1);
                                     }
+
+                                    if 0 == min_size_debt {break}
                                 }
 
-                                // If, after all the rigid tracks have been expanded to their maximum size the minimum size *still*
-                                // hasn't been met, expand the entire container by the necessary amount to get the fractional tracks
-                                // up to size.
+                                frac_min_size.lowright.$axis = cmp::max(
+                                    (widget_size_bounds.min.$size() as Fr * $fr_axis / fr_widget).ceil() as Px,
+                                    frac_min_size.$size()
+                                );
+
+                                min_size_debt = min_size_debt.saturating_sub(fr_expand);
+
                                 if 0 < min_size_debt {
-                                    let frac_expand = min_size_debt;
-                                    let desired_size = axis_size + frac_expand;
+                                    solvable.$axis = SolveAxis::Unsolvable(self.unsolvable_id);
+                                }
 
-                                    // Check that the fractional tracks can actually be expanded by `frac_expand` amount. Note that this
-                                    // does not actually expand the fractional tracks - it only checks that they can get to the full size.
-                                    // Expansion is deferred to the main rescaling loop in the `track_constraints!` macro.
-                                    let mut frac_expand_debt = frac_expand;
-                                    while 0 < frac_tracks_widget.len() {
-                                        let mut need_repass = false;
-
-                                        let mut index = 0;
-                                        let mut px_expander = FrDivider::new(frac_tracks_widget.len() as Tr, desired_size, fr_widget);
-                                        while let Some(track_index) = frac_tracks_widget.get(index).cloned() {
-                                            let mut track = engine.grid.$track_range(layout_info.node_span.$axis).unwrap()[track_index as usize].clone();
-
-                                            let old_size = track.size();
-                                            let new_size = px_expander.divvy(track.fr_size);
-
-                                            match track.change_size(new_size) {
-                                                SizeResult::SizeUpscale => {
-                                                    frac_expand_debt = frac_expand_debt.saturating_sub(track.size() - old_size);
-                                                    index += 1;
-                                                },
-                                                SizeResult::SizeUpscaleClamp => {
-                                                    frac_expand_debt = frac_expand_debt.saturating_sub(track.size() - old_size);
-                                                    fr_widget -= track.fr_size;
-                                                    frac_tracks_widget.remove(index);
-                                                    need_repass = true;
-                                                },
-                                                SizeResult::NoEffectEq  |
-                                                SizeResult::NoEffectUp => {
-                                                    fr_widget -= track.fr_size;
-                                                    frac_tracks_widget.remove(index);
-                                                    need_repass = true;
-                                                },
-                                                SizeResult::NoEffectDown        |
-                                                SizeResult::SizeDownscale       |
-                                                SizeResult::SizeDownscaleClamp => panic!("Unexpected fractional size downscale")
-                                            }
-                                        }
-
-                                        if !need_repass {break}
-                                    }
-
-                                    // If, after all of the fractional tracks have been maxed out there *still* isn't enough room, the
-                                    // constraints cannot be solved. Flag the widget as unsolvable and move on.
-                                    //
-                                    // I don't have the free width expansion inside of an else clause here, becaue expanding the tracks
-                                    // as much as possible should hopefully minimize visual bugs.
-                                    if 0 < frac_expand_debt {
-                                        solvable.$axis = SolveAxis::Unsolvable(self.unsolvable_id);
-                                    }
-
-                                    let frac_proportion = $fr_axis / fr_widget;
-                                    let size_expand = (frac_expand as f32 * frac_proportion).ceil() as Px;
-                                    $free_size += size_expand;
-
-                                    let new_engine_rect = {
-                                        let mut ner = engine.actual_size;
-                                        ner.lowright.$axis += size_expand;
-                                        ner
-                                    };
-                                    match engine.actual_size_bounds.bound_rect(new_engine_rect) {
-                                        Ok(r) => engine.actual_size = r,
-                                        Err(r) => {
-                                            engine.actual_size = r;
-                                            solvable.$axis = SolveAxis::Unsolvable(self.unsolvable_id);
-                                        }
-                                    }
+                                engine.actual_size_bounds.min.lowright.$axis = frac_min_size.$size() + rigid_min_size.$size();
+                                if engine.actual_size.$size() < engine.actual_size_bounds.min.$size() {
+                                    grid_changed = true;
+                                    engine.actual_size.lowright.$axis = engine.actual_size_bounds.min.$size();
                                 }
 
                                 rigid_tracks_widget.clear();
                                 frac_tracks_widget.clear();
-                                continue 'update;
+
+                                if grid_changed {continue 'update}
                             }
 
-                            rigid_tracks_widget.clear();
-                            frac_tracks_widget.clear();
-
-                            axis_size
+                            px_widget
                         }}
                     }
 

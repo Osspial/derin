@@ -23,6 +23,8 @@ pub struct GridTrack {
     size: Px,
     /// Track-level minimum size. If the child minimum size is less than this, this is used instead.
     min_size: Px,
+    /// The minimum size of the track, accounting for the widgets contained inside of the track.
+    widget_min_size: Px,
     /// Track-level maximum size. If this is less than the minimum size, minimum size takes priority
     /// and overrides this.
     max_size: Px,
@@ -35,22 +37,25 @@ impl GridTrack {
         self.size
     }
 
-    /// Get the track-level minimum size of this grid track in pixels.
+    /// Get the minimum size of this grid track in pixels.
     pub fn min_size(&self) -> Px {
-        self.min_size
+        cmp::max(self.min_size, self.widget_min_size)
     }
 
+    /// Get the maximum size of this grid track in pixels.
     pub fn max_size(&self) -> Px {
         // If the maximum size is less than the minimum size, which is technically allowed to happen but
         // doesn't logically make sense, clamp the maximum size to the minimum size.
         cmp::max(self.max_size, self.min_size)
     }
 
-    pub fn shrink_size(&mut self) {
-        self.size = self.min_size();
+    /// Reset the widget minimum size and track size to the track minimum size.
+    pub fn reset_shrink(&mut self) {
+        self.size = self.min_size;
+        self.widget_min_size = self.min_size;
     }
 
-    pub fn expand_size(&mut self) {
+    pub fn reset_expand(&mut self) {
         self.size = self.max_size();
     }
 
@@ -80,16 +85,39 @@ impl GridTrack {
         }
     }
 
-    /// Sets track-level minimum size.
-    pub fn set_min_size(&mut self, min_size: Px) {
+    /// Sets track-level minimum size. Returns `Ok(())` if the track size is unchanged, and `Err(size_expand)`
+    /// if the track size was increased.
+    pub fn set_min_size(&mut self, min_size: Px) -> Result<(), Px> {
         self.min_size = min_size;
-        self.size = cmp::max(self.size, self.min_size());
+        self.expand_widget_min_size(min_size)
     }
 
-    /// Sets track-level maximum size.
-    pub fn set_max_size(&mut self, max_size: Px) {
+    /// Expand the widget minimum size of the track. Returns `Ok(())` if the track size is unchanged, and
+    /// `Err(size_expand)` if the track size was increased.
+    pub fn expand_widget_min_size(&mut self, widget_min_size: Px) -> Result<(), Px> {
+        self.widget_min_size = cmp::max(self.widget_min_size, widget_min_size);
+
+        if self.min_size() <= self.size {
+            Ok(())
+        } else {
+            let old_size = self.size;
+            self.size = self.min_size();
+            Err(self.size - old_size)
+        }
+    }
+
+    /// Sets track-level maximum size. Returns `Ok(())` if the track size is unchanged, and
+    /// `Err(size_shrinkage)` if the track size was decreased. Note that `size_shrinkage` is expressed
+    /// as a positive number, even though the size of the track may have decreased.
+    pub fn set_max_size(&mut self, max_size: Px) -> Result<(), Px> {
         self.max_size = max_size;
-        self.size = cmp::min(self.size, self.max_size());
+        if self.max_size() >= self.size {
+            Ok(())
+        } else {
+            let old_size = self.size;
+            self.size = self.max_size();
+            Err(old_size - self.size)
+        }
     }
 }
 
@@ -99,6 +127,7 @@ impl Default for GridTrack {
             size: 0,
 
             min_size: 0,
+            widget_min_size: 0,
             max_size: Px::max_value(),
             fr_size: 1.0
         }
