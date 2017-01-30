@@ -1,11 +1,15 @@
 extern crate derin;
+#[macro_use]
+extern crate lazy_static;
 
 use derin::ui::*;
-use derin::ui::layout::{WidgetHints, NodeSpan, GridLayout};
+use derin::ui::layout::{WidgetHints, NodeSpan, GridLayout, GridSize, TrackHints};
 use derin::ui::intrinsics::*;
 use derin::native::{Window, WindowConfig};
 
-use derin::ui::layout::GridSize;
+use std::slice::Iter as SliceIter;
+use std::iter;
+use std::iter::{Cloned, Repeat};
 
 struct BasicParent {
     button0: TextButton,
@@ -56,40 +60,59 @@ impl<NP> ParentNode<NP> for BasicParent
 }
 
 #[derive(Default)]
-struct BPLayout {
-    index: usize
-}
+struct BPLayout;
 
 impl GridLayout for BPLayout {
+    type WidgetHintsIter = Cloned<SliceIter<'static, WidgetHints>>;
+    type ColHintsIter = Cloned<SliceIter<'static, TrackHints>>;
+    type RowHintsIter = Repeat<TrackHints>;
+
     fn grid_size(&self) -> GridSize {
         GridSize::new(3, 2)
     }
-}
 
-impl Iterator for BPLayout {
-    type Item = WidgetHints;
-
-    fn next(&mut self) -> Option<WidgetHints> {
-        self.index += 1;
-        match self.index {
-            1 => Some(WidgetHints {
-                node_span: NodeSpan::new(0..2, 0),
-                ..WidgetHints::default()
-            }),
-            2 => Some(WidgetHints {
-                node_span: NodeSpan::new(0, 1),
-                ..WidgetHints::default()
-            }),
-            3 => Some(WidgetHints {
-                node_span: NodeSpan::new(1, 1),
-                ..WidgetHints::default()
-            }),
-            4 => Some(WidgetHints {
-                node_span: NodeSpan::new(2, ..),
-                ..WidgetHints::default()
-            }),
-            _ => None
+    fn widget_hints(&self) -> Cloned<SliceIter<'static, WidgetHints>> {
+        lazy_static!{
+            static ref WIDGET_HINTS: [WidgetHints; 4] = [
+                WidgetHints {
+                    node_span: NodeSpan::new(0..2, 0),
+                    ..WidgetHints::default()
+                },
+                WidgetHints {
+                    node_span: NodeSpan::new(0, 1),
+                    ..WidgetHints::default()
+                },
+                WidgetHints {
+                    node_span: NodeSpan::new(1, 1),
+                    ..WidgetHints::default()
+                },
+                WidgetHints {
+                    node_span: NodeSpan::new(2, ..),
+                    ..WidgetHints::default()
+                }
+            ];
         }
+
+        WIDGET_HINTS.iter().cloned()
+    }
+
+    fn col_hints(&self) -> Cloned<SliceIter<'static, TrackHints>> {
+        lazy_static!{
+            static ref COL_HINTS: [TrackHints; 3] = [
+                TrackHints::default(),
+                TrackHints::default(),
+                TrackHints {
+                    min_size: 0,
+                    fr_size: 0.0,
+                    ..TrackHints::default()
+                }
+            ];
+        }
+
+        COL_HINTS.iter().cloned()
+    }
+    fn row_hints(&self) -> Repeat<TrackHints> {
+        iter::repeat(TrackHints::default())
     }
 }
 

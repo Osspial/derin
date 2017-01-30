@@ -19,6 +19,8 @@ use ui::{Node, NodeProcessor, NodeProcessorAT, ParentNode};
 use ui::intrinsics::TextButton;
 use ui::layout::{GridLayout, EmptyNodeLayout, SingleNodeLayout};
 
+use dle::Tr;
+
 
 type WindowReceiver = Receiver<NativeResult<WindowNode>>;
 
@@ -98,12 +100,12 @@ impl<N: Node> Window<N> {
         }
 
         if self.node_tree_root.window.is_some() {
-            NodeTraverser {
+            NodeTraverser::<SingleNodeLayout> {
                 node_branch: &mut self.node_tree_root,
                 receiver: &self.window_receiver,
                 child_index: 0,
 
-                children_layout: SingleNodeLayout::new(),
+                child_widget_hints: SingleNodeLayout.widget_hints(),
                 queue_opened: false
             }.add_child("root", &mut self.root)
         } else {
@@ -144,7 +146,7 @@ struct NodeTraverser<'a, L: GridLayout> {
     /// children get added, this gets incremented.
     child_index: usize,
 
-    children_layout: L,
+    child_widget_hints: L::WidgetHintsIter,
     queue_opened: bool
 }
 
@@ -157,7 +159,7 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
             receiver: self.receiver,
             child_index: 0,
 
-            children_layout: layout,
+            child_widget_hints: layout.widget_hints(),
             queue_opened: false
         }
     }
@@ -186,7 +188,7 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                         .open_update_queue();
         }
 
-        if let Some(layout_info) = self.children_layout.next() {
+        if let Some(layout_info) = self.child_widget_hints.next() {
             // If the desired node branch is at the current child index, get that and run the contents of the
             // `if` statement. Otherwise, search the entire children vector for the desired node and run the
             // `if` statement if that's found. If both of those fail, insert a new node branch and run the
@@ -271,11 +273,22 @@ impl<'a, N, L> NodeProcessor<N> for NodeTraverser<'a, L>
 {
     default fn add_child(&mut self, name: &'static str, node: &mut N) -> NativeResult<()> {
         let child_layout = <N as ParentNode<NodeTraverser<EmptyNodeLayout>>>::child_layout(node);
+        let child_grid_size = child_layout.grid_size();
+        let col_hints = child_layout.col_hints().take(child_grid_size.x as usize);
+        let row_hints = child_layout.row_hints().take(child_grid_size.y as usize);
 
         self.process_child_node(name, node, child_layout,
             |node, traverser| {
                 if let Some(WindowNode::LayoutGroup(ref lg)) = traverser.node_branch.window {
-                    lg.set_grid_size(traverser.children_layout.grid_size());
+                    lg.set_grid_size(child_grid_size);
+
+                    lg.set_row_hints(0, ::dle::hints::TrackHints::default());
+                    for (col, hint) in col_hints.enumerate() {
+                        lg.set_col_hints(col as Tr, hint);
+                    }
+                    for (row, hint) in row_hints.enumerate() {
+                        lg.set_row_hints(row as Tr, hint);
+                    }
                 } else {unreachable!()}
                 node.children(traverser)
             })

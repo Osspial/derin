@@ -15,8 +15,8 @@ use winapi::commctrl::*;
 use winapi::basetsd::*;
 
 use super::WindowReceiver;
-use dle::{LayoutEngine, UpdateQueue, LayoutUpdate, Container, ContainerRef, Widget, WidgetData};
-use dle::hints::{SizeBounds, WidgetHints};
+use dle::{Tr, LayoutEngine, UpdateQueue, LayoutUpdate, Container, ContainerRef, Widget, WidgetData};
+use dle::hints::{SizeBounds, WidgetHints, TrackHints};
 use dle::geometry::{Rect, OffsetRect, OriginRect};
 use ui::layout::GridSize;
 
@@ -269,6 +269,30 @@ impl LayoutGroup {
     pub fn set_grid_size(&self, grid_size: GridSize) {
         unsafe {
             let update: LayoutUpdate<HWND> = LayoutUpdate::GridSize(grid_size);
+            user32::SendMessageW(
+                (self.0).0,
+                DM_QUEUECHILDUPDATES,
+                &update as *const _ as WPARAM,
+                1
+            );
+        }
+    }
+
+    pub fn set_col_hints(&self, col: Tr, col_hints: TrackHints) {
+        unsafe {
+            let update: LayoutUpdate<HWND> = LayoutUpdate::ColHints(col, col_hints);
+            user32::SendMessageW(
+                (self.0).0,
+                DM_QUEUECHILDUPDATES,
+                &update as *const _ as WPARAM,
+                1
+            );
+        }
+    }
+
+    pub fn set_row_hints(&self, row: Tr, row_hints: TrackHints) {
+        unsafe {
+            let update: LayoutUpdate<HWND> = LayoutUpdate::RowHints(row, row_hints);
             user32::SendMessageW(
                 (self.0).0,
                 DM_QUEUECHILDUPDATES,
