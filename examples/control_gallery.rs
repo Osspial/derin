@@ -117,9 +117,9 @@ impl GridLayout for BPLayout {
 }
 
 fn main() {
-    let mut window = Window::new(BasicParent::new(), WindowConfig::new()).unwrap();
+    let mut window = Window::new(BasicParent::new(), &WindowConfig::new()).unwrap();
 
     loop {
-        window.process().unwrap();
+        window.process();
     }
 }

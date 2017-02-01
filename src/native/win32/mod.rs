@@ -1,14 +1,11 @@
 mod wrapper;
 
-use self::wrapper::{WindowNode, CallbackData, RawEvent};
+use self::wrapper::{WindowNode, CallbackData};
 
 use user32;
 
 use std::ptr;
 use std::mem;
-use std::sync::mpsc;
-use std::sync::mpsc::Receiver;
-use std::thread;
 
 use boolinator::Boolinator;
 
@@ -22,94 +19,51 @@ use ui::layout::{GridLayout, EmptyNodeLayout, SingleNodeLayout};
 use dle::Tr;
 
 
-type WindowReceiver = Receiver<NativeResult<WindowNode>>;
-
 pub struct Window<N: Node> {
     root: N,
-    node_tree_root: NodeTreeBranch,
-
-    window_receiver: WindowReceiver,
-    event_receiver: Receiver<RawEvent>
+    node_tree_root: NodeTreeBranch
 }
 
 impl<N: Node> Window<N> {
-    pub fn new(root: N, config: WindowConfig) -> NativeResult<Window<N>> {
-        // Channel for the handle to the window
-        let (window_sender, window_receiver) = mpsc::channel();
-        let (event_sender, event_receiver) = mpsc::channel();
+    pub fn new(root: N, config: &WindowConfig) -> NativeResult<Window<N>> {
+        unsafe {
+            self::wrapper::enable_visual_styles();
 
-        unsafe{ self::wrapper::enable_visual_styles() };
+            let cd = CallbackData::new();
 
-        // Spawn a child thread in which UI windows are created. Messages are sent to this thread via the
-        // `win32` `SendMessageW` function, and window handles and actions are sent back to the main thread
-        // via Rust's MPSC channels.
-        thread::spawn(move || {
-            unsafe {
-                let cd = CallbackData::new(window_sender.clone(), event_sender);
+            let wrapper_window = WindowNode::new_toplevel(config, cd)?;
 
-                // Create a wrapper toplevel window. If the creation succeeds, send back the window. Otherwise, send
-                // back the error it created and terminate this thread.
-                let wrapper_window = WindowNode::new_toplevel(&config, cd);
-                match wrapper_window {
-                    Ok(wr) => {
-                        window_sender.send(Ok(wr)).unwrap();
-                    }
-
-                    Err(e) => {
-                        window_sender.send(Err(e)).unwrap();
-                        panic!("Window creation error; see sent result for details");
+            Ok(
+                Window {
+                    root: root,
+                    // The node that contains the top-level node and all other nodes, including root.
+                    node_tree_root: NodeTreeBranch {
+                        state_id: 0,
+                        name: "toplevel",
+                        window: Some(wrapper_window),
+                        children: Vec::with_capacity(1)
                     }
                 }
-
-                // Win32 message loop
-                let mut msg = mem::uninitialized();
-                while user32::GetMessageW(&mut msg, ptr::null_mut(), 0, 0) > 0 {
-                    user32::TranslateMessage(&msg);
-                    user32::DispatchMessageW(&msg);
-                }
-            }
-        });
-
-        // Receive the top-level window from the child thread. We know that we're going to get SOMEthing at
-        // the very least, so we can unwrap the `recv()` call. However, we might receive an error in which
-        // case that gets propagated.
-        let wrapper_window = window_receiver.recv().unwrap()?;
-
-        Ok(
-            Window {
-                root: root,
-                // The node that contains the top-level node and all other nodes, including root.
-                node_tree_root: NodeTreeBranch {
-                    state_id: 0,
-                    name: "toplevel",
-                    window: Some(wrapper_window),
-                    children: Vec::with_capacity(1)
-                },
-
-                window_receiver: window_receiver,
-                event_receiver: event_receiver
-            }
-        )
+            )
+        }
     }
 
-    pub fn process(&mut self) -> NativeResult<()> {
-        while let Ok(event) = self.event_receiver.try_recv() {
-            match event {
-                _ => ()
+    pub fn process(&mut self) {
+        NodeTraverser::<SingleNodeLayout> {
+            node_branch: &mut self.node_tree_root,
+            child_index: 0,
+
+            child_widget_hints: SingleNodeLayout.widget_hints(),
+            queue_opened: false
+        }.add_child("root", &mut self.root).ok();
+
+        unsafe {
+            // Win32 message loop
+            let mut msg = mem::uninitialized();
+            while user32::GetMessageW(&mut msg, ptr::null_mut(), 0, 0) > 0 {
+                user32::TranslateMessage(&msg);
+                user32::DispatchMessageW(&msg);
             }
-        }
-
-        if self.node_tree_root.window.is_some() {
-            NodeTraverser::<SingleNodeLayout> {
-                node_branch: &mut self.node_tree_root,
-                receiver: &self.window_receiver,
-                child_index: 0,
-
-                child_widget_hints: SingleNodeLayout.widget_hints(),
-                queue_opened: false
-            }.add_child("root", &mut self.root)
-        } else {
-            Ok(())
         }
     }
 }
@@ -124,11 +78,11 @@ struct NodeTreeBranch {
 
 /// Trait for converting `Node`s into `NodeTreeBranch`es.
 trait IntoNTB: Node {
-    fn into_ntb(&self, name: &'static str, parent: &WindowNode, receiver: &WindowReceiver) -> NativeResult<NodeTreeBranch>;
+    fn into_ntb(&self, name: &'static str, parent: &WindowNode) -> NativeResult<NodeTreeBranch>;
 }
 
 impl<N: Node> IntoNTB for N {
-    default fn into_ntb(&self, name: &'static str, _: &WindowNode, _: &WindowReceiver) -> NativeResult<NodeTreeBranch> {
+    default fn into_ntb(&self, name: &'static str, _: &WindowNode) -> NativeResult<NodeTreeBranch> {
         Ok(NodeTreeBranch {
             state_id: self.state_id(),
             name: name,
@@ -141,7 +95,6 @@ impl<N: Node> IntoNTB for N {
 struct NodeTraverser<'a, L: GridLayout> {
     /// The branch that this instance of NodeTraverser is currently processing
     node_branch: &'a mut NodeTreeBranch,
-    receiver: &'a WindowReceiver,
     /// The index in the child vector to first look at when searching for a child. As new
     /// children get added, this gets incremented.
     child_index: usize,
@@ -156,7 +109,6 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
 
         NodeTraverser {
             node_branch: nb,
-            receiver: self.receiver,
             child_index: 0,
 
             child_widget_hints: layout.widget_hints(),
@@ -217,8 +169,7 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                     self.child_index,
                     node.into_ntb(
                         name,
-                        self.node_branch.window.as_ref().expect("Attempted to create child window without parent"),
-                        self.receiver
+                        self.node_branch.window.as_ref().expect("Attempted to create child window without parent")
                     )?
                 );
                 let child_index = self.child_index;
@@ -299,11 +250,11 @@ impl<N> IntoNTB for N where
     for<'b, 'c> N: ParentNode<NodeTraverser<'b, <N as ParentNode<NodeTraverser<'c, EmptyNodeLayout>>>::Layout>> +
                    ParentNode<NodeTraverser<'c, EmptyNodeLayout>>
 {
-    default fn into_ntb(&self, name: &'static str, parent: &WindowNode, receiver: &WindowReceiver) -> NativeResult<NodeTreeBranch> {
+    default fn into_ntb(&self, name: &'static str, parent: &WindowNode) -> NativeResult<NodeTreeBranch> {
         Ok(NodeTreeBranch {
             state_id: self.state_id(),
             name: name,
-            window: Some(parent.new_layout_group(receiver)?),
+            window: Some(parent.new_layout_group()?),
             children: Vec::new()
         })
     }
@@ -324,11 +275,11 @@ impl<'a, S, L> NodeProcessor<TextButton<S>> for NodeTraverser<'a, L>
 }
 
 impl<'a, S: AsRef<str>> IntoNTB for TextButton<S> {
-    fn into_ntb(&self, name: &'static str, parent: &WindowNode, receiver: &WindowReceiver) -> NativeResult<NodeTreeBranch> {
+    fn into_ntb(&self, name: &'static str, parent: &WindowNode) -> NativeResult<NodeTreeBranch> {
         Ok(NodeTreeBranch {
             state_id: self.state_id(),
             name: name,
-            window: Some(parent.new_text_button(receiver)?),
+            window: Some(parent.new_text_button()?),
             children: Vec::new()
         })
     }

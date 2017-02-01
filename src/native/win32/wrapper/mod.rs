@@ -14,7 +14,6 @@ use winapi::winuser::*;
 use winapi::commctrl::*;
 use winapi::basetsd::*;
 
-use super::WindowReceiver;
 use dle::{Tr, LayoutEngine, UpdateQueue, LayoutUpdate, Container, ContainerRef, Widget, WidgetData};
 use dle::hints::{SizeBounds, WidgetHints, TrackHints};
 use dle::geometry::{Rect, OffsetRect, OriginRect};
@@ -29,9 +28,8 @@ use std::slice;
 use std::cmp;
 use std::ops::Drop;
 use std::ffi::OsStr;
-use std::iter::{once};
-use std::sync::mpsc::{Sender};
-use std::os::raw::{c_int};
+use std::iter::once;
+use std::os::raw::c_int;
 use std::os::windows::ffi::OsStrExt;
 use std::ops::Deref;
 use std::rc::Rc;
@@ -148,7 +146,6 @@ impl WindowNode {
             kernel32::GetModuleHandleW(ptr::null()),
             ptr::null_mut()
         );
-        assert_ne!(window_handle, ptr::null_mut());
 
         // Create the toplevel node data node, and initialize the subclass.
         let node_data = Box::new(NodeData::new(window_handle, TOPLEVEL_SUBCLASS, Rc::new(callback_data)));
@@ -213,29 +210,28 @@ impl WindowNode {
         Ok(WindowNode::Toplevel(Toplevel(WindowWrapper(window_handle))))
     }
 
-    pub fn new_layout_group(&self, receiver: &WindowReceiver) -> NativeResult<WindowNode> {
+    pub fn new_layout_group(&self) -> NativeResult<WindowNode> {
         unsafe {
-            user32::PostMessageW(
+            let mut node = mem::uninitialized();
+            user32::SendMessageW(
                 self.hwnd(),
                 DM_NEWLAYOUTGROUP,
-                0, 0
+                &mut node as *mut _ as WPARAM, 0
             );
-            receiver.recv()
-                .expect("Unexpected close of window channel")
+            node
         }
     }
 
     /// Create a new zero-sized text button with no contents.
-    pub fn new_text_button(&self, receiver: &WindowReceiver) -> NativeResult<WindowNode> {
+    pub fn new_text_button(&self) -> NativeResult<WindowNode> {
         unsafe {
-            user32::PostMessageW(
+            let mut node = mem::uninitialized();
+            user32::SendMessageW(
                 self.hwnd(),
                 DM_NEWTEXTBUTTON,
-                0,
-                0
+                &mut node as *mut _ as WPARAM, 0
             );
-            receiver.recv()
-                .expect("Unexpected close of window channel")
+            node
         }
     }
 
@@ -418,7 +414,7 @@ fn ucs2_str<'a, S: ?Sized + AsRef<OsStr>>(s: &'a S) -> impl 'a + Iterator<Item=u
 
 lazy_static!{
     static ref BLANK_WINDOW_CLASS: Ucs2String = unsafe{
-        let class_name: Ucs2String = ucs2_str("Root Window Class").collect();
+        let class_name: Ucs2String = ucs2_str("Blank Window Class").collect();
 
         let window_class = WNDCLASSEXW {
             cbSize: mem::size_of::<WNDCLASSEXW>() as UINT,
@@ -441,21 +437,13 @@ lazy_static!{
     static ref BUTTON_CLASS: Ucs2String = ucs2_str("BUTTON").collect();
 }
 
-pub enum RawEvent {
-    CloseClicked
-}
-
 pub struct CallbackData {
-    window_sender: Sender<NativeResult<WindowNode>>,
-    event_sender: Sender<RawEvent>,
     update_queue: RefCell<UpdateQueue<HWND>>
 }
 
 impl CallbackData {
-    pub fn new(window_sender: Sender<NativeResult<WindowNode>>, event_sender: Sender<RawEvent>) -> CallbackData {
+    pub fn new() -> CallbackData {
         CallbackData {
-            window_sender: window_sender,
-            event_sender: event_sender,
             update_queue: RefCell::new(UpdateQueue::new())
         }
     }
@@ -509,9 +497,13 @@ const BUTTON_SUBCLASS: UINT_PTR = 2;
 const DM_DESTROYWINDOW: UINT = WM_APP + 0;
 /// Create a title-less push button.
 ///
-/// # Callback parameters
-/// * `wparam`: Parent `HWND` handle
+/// # Callback Parameters
+/// * `wparam`: `*mut NativeResult<WindowNode>`
 const DM_NEWTEXTBUTTON: UINT = WM_APP + 1;
+/// Create an empty layout group.
+///
+/// # Callback Parameters
+/// * `wparam`: `*mut NativeResult<WindowNode>`
 const DM_NEWLAYOUTGROUP: UINT = WM_APP + 2;
 
 const DM_SETWIDGETHINTS: UINT = WM_APP + 4;
@@ -562,7 +554,7 @@ unsafe extern "system"
 
     match msg {
         WM_CLOSE => {
-            nd.callback_data.event_sender.send(RawEvent::CloseClicked).ok();
+            // nd.callback_data.event_sender.send(RawEvent::CloseClicked).ok();
             0
         },
 
@@ -808,6 +800,7 @@ unsafe fn parent_proc(hwnd: HWND, msg: UINT,
         }
 
         DM_NEWTEXTBUTTON => {
+            let node_data_ref = wparam as *mut NativeResult<WindowNode>;
             let button_hwnd = user32::CreateWindowExW(
                 0,
                 BUTTON_CLASS.as_ptr(),
@@ -824,20 +817,20 @@ unsafe fn parent_proc(hwnd: HWND, msg: UINT,
             let mut update_queue = nd.callback_data.update_queue.borrow_mut();
             update_queue.insert_widget(button_hwnd, node_data, &mut nd.child_layout);
 
-            nd.callback_data.window_sender.send(
+            *node_data_ref =
                 (button_hwnd != ptr::null_mut()).as_result(
                     WindowNode::TextButton(TextButton {
                         wrapper: WindowWrapper(button_hwnd),
                         text: Ucs2String::new()
                     }),
                     NativeError::OsError(format!("{}", io::Error::last_os_error()))
-                )
-            ).ok();
+                );
 
             0
         },
 
         DM_NEWLAYOUTGROUP => {
+            let node_data_ref = wparam as *mut NativeResult<WindowNode>;
             let group_hwnd = user32::CreateWindowExW(
                 0,
                 BLANK_WINDOW_CLASS.as_ptr(),
@@ -854,12 +847,12 @@ unsafe fn parent_proc(hwnd: HWND, msg: UINT,
             let mut update_queue = nd.callback_data.update_queue.borrow_mut();
             update_queue.insert_widget(group_hwnd, node_data, &mut nd.child_layout);
 
-            nd.callback_data.window_sender.send(
+            *node_data_ref =
                 (group_hwnd != ptr::null_mut()).as_result(
                     WindowNode::LayoutGroup(LayoutGroup(WindowWrapper(group_hwnd))),
                     NativeError::OsError(format!("{}", io::Error::last_os_error()))
-                )
-            ).ok();
+                );
+
             0
         }
         _ => common_proc(hwnd, msg, wparam, lparam, nd)
