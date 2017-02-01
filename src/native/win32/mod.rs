@@ -165,10 +165,10 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
     }
 
     /// Process a child node, where that child node has no children.
-    fn process_child_node_nochildren<N, PF>(&mut self, name: &'static str, node: &mut N, proc_func: PF)
+    fn process_child_node_nochildren<N, PF>(&mut self, name: &'static str, node: &N, proc_func: PF)
             -> NativeResult<()>
             where N: Node,
-                  PF: FnOnce(&mut N, NodeTraverser<EmptyNodeLayout>) -> NativeResult<()>
+                  PF: FnOnce(&N, NodeTraverser<EmptyNodeLayout>) -> NativeResult<()>
     {
         self.process_child_node(name, node, EmptyNodeLayout, proc_func)
     }
@@ -176,11 +176,11 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
     /// Take a name, a node, and a function to run upon updating the node and either add the node to the
     /// node tree (which runs the function as well) or determine whether or not to run the update function
     /// and run it if necessary.
-    fn process_child_node<N, CL, PF>(&mut self, name: &'static str, node: &mut N, child_layout: CL, proc_func: PF)
+    fn process_child_node<N, CL, PF>(&mut self, name: &'static str, node: &N, child_layout: CL, proc_func: PF)
             -> NativeResult<()>
             where N: Node,
                   CL: GridLayout,
-                  PF: FnOnce(&mut N, NodeTraverser<CL>) -> NativeResult<()>
+                  PF: FnOnce(&N, NodeTraverser<CL>) -> NativeResult<()>
     {
         if !self.queue_opened {
             self.queue_opened = true;
@@ -249,7 +249,7 @@ impl<'a, L: GridLayout> Drop for NodeTraverser<'a, L> {
 }
 
 impl<'a, N: Node, L: GridLayout> NodeProcessor<N> for NodeTraverser<'a, L> {
-    default fn add_child(&mut self, name: &'static str, node: &mut N) -> NativeResult<()> {
+    default fn add_child(&mut self, name: &'static str, node: &N) -> NativeResult<()> {
         // We have no information about what's in the child node, so we can't really do anything.
         // It still needs to get added to the tree though.
         self.process_child_node_nochildren(name, node, |_, _| Ok(()))
@@ -271,7 +271,7 @@ impl<'a, N, L> NodeProcessor<N> for NodeTraverser<'a, L>
                 // and the second one allowing us to access the Layout associated type without causing the type
                 // system to recurse forever. That second one is used to get the layout used for the actual ParentNode.
 {
-    default fn add_child(&mut self, name: &'static str, node: &mut N) -> NativeResult<()> {
+    default fn add_child(&mut self, name: &'static str, node: &N) -> NativeResult<()> {
         let child_layout = <N as ParentNode<NodeTraverser<EmptyNodeLayout>>>::child_layout(node);
         let child_grid_size = child_layout.grid_size();
         let col_hints = child_layout.col_hints().take(child_grid_size.x as usize);
@@ -312,7 +312,7 @@ impl<N> IntoNTB for N where
 impl<'a, S, L> NodeProcessor<TextButton<S>> for NodeTraverser<'a, L>
         where S: AsRef<str>,
               L: GridLayout {
-    fn add_child(&mut self, name: &'static str, node: &mut TextButton<S>) -> NativeResult<()> {
+    fn add_child(&mut self, name: &'static str, node: &TextButton<S>) -> NativeResult<()> {
         self.process_child_node_nochildren(name, node, |node, traverser| {
             if let Some(WindowNode::TextButton(ref mut b)) = traverser.node_branch.window {
                 b.set_text(node.as_ref());

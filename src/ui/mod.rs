@@ -26,7 +26,7 @@ pub enum MouseButton {
 /// specialization isn't stable, limiting this library to nightly, but the increases in
 /// implementation ergonomics and flexability are well worth it.
 pub trait NodeProcessor<N: Node>: Sized + NodeProcessorAT {
-    fn add_child(&mut self, name: &'static str, node: &mut N) -> Result<(), Self::Error>;
+    fn add_child(&mut self, name: &'static str, node: &N) -> Result<(), Self::Error>;
 }
 
 pub trait NodeProcessorAT: Sized {
@@ -47,12 +47,12 @@ pub trait ParentNode<NP>: Node
         where NP: NodeProcessorAT {
     type Layout: GridLayout;
 
-    fn children(&mut self, NP) -> Result<(), NP::Error>;
+    fn children(&self, NP) -> Result<(), NP::Error>;
     fn child_layout(&self) -> Self::Layout;
 }
 
 pub trait Control: Node {
     type Action;
 
-    fn on_mouse_event(&mut self, MouseEvent) -> Option<Self::Action> {None}
+    fn on_mouse_event(&self, MouseEvent) -> Option<Self::Action> {None}
 }

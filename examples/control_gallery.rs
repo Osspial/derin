@@ -46,11 +46,11 @@ impl<NP> ParentNode<NP> for BasicParent
         where NP: NodeProcessor<TextButton> {
     type Layout = BPLayout;
 
-    fn children(&mut self, mut np: NP) -> Result<(), NP::Error> {
-        np.add_child("button0", &mut self.button0)?;
-        np.add_child("button1", &mut self.button1)?;
-        np.add_child("button2", &mut self.button2)?;
-        np.add_child("button3", &mut self.button3)?;
+    fn children(&self, mut np: NP) -> Result<(), NP::Error> {
+        np.add_child("button0", &self.button0)?;
+        np.add_child("button1", &self.button1)?;
+        np.add_child("button2", &self.button2)?;
+        np.add_child("button3", &self.button3)?;
         Ok(())
     }
 
