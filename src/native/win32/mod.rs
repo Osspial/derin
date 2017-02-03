@@ -69,7 +69,7 @@ impl<N: Node> Window<N> {
                 node_branch: &mut self.node_tree_root,
                 child_index: 0,
 
-                child_widget_hints: SingleNodeLayout.widget_hints(),
+                child_widget_hints: SingleNodeLayout::default().widget_hints(),
                 queue_opened: false
             }.add_child(ChildId::Num(0), &mut self.root);
 

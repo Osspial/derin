@@ -15,8 +15,8 @@ pub trait GridLayout {
     fn row_hints(&self) -> Self::RowHintsIter;
 }
 
-#[derive(Default, Clone)]
-pub struct SingleNodeLayout;
+#[derive(Clone, Copy)]
+pub struct SingleNodeLayout(pub WidgetHints);
 
 impl GridLayout for SingleNodeLayout {
     type WidgetHintsIter = Once<WidgetHints>;
@@ -28,17 +28,23 @@ impl GridLayout for SingleNodeLayout {
     }
 
     fn widget_hints(&self) -> Once<WidgetHints> {
-        iter::once(WidgetHints {
-            node_span: NodeSpan::new(0, 0),
-            ..WidgetHints::default()
-        })
+        iter::once(self.0)
     }
 
     fn col_hints(&self) -> Once<TrackHints> {iter::once(TrackHints::default())}
     fn row_hints(&self) -> Once<TrackHints> {iter::once(TrackHints::default())}
 }
 
-#[derive(Default, Clone)]
+impl Default for SingleNodeLayout {
+    fn default() -> SingleNodeLayout {
+        SingleNodeLayout(WidgetHints {
+            node_span: NodeSpan::new(0, 0),
+            ..WidgetHints::default()
+        })
+    }
+}
+
+#[derive(Default, Clone, Copy)]
 pub struct EmptyNodeLayout;
 
 impl GridLayout for EmptyNodeLayout {
