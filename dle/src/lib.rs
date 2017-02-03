@@ -406,16 +406,18 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                     }
                                 }
 
-                                for (index, track) in engine.grid.$track_range(layout_info.node_span.$axis).expect("Node span larger than grid").iter().enumerate() {
-                                    px_widget += track.size();
-                                    min_size_debt = min_size_debt.saturating_sub(track.min_size());
+                                if let Some(track_slice) = engine.grid.$track_range(layout_info.node_span.$axis) {
+                                    for (index, track) in track_slice.iter().enumerate() {
+                                        px_widget += track.size();
+                                        min_size_debt = min_size_debt.saturating_sub(track.min_size());
 
-                                    if track.fr_size == 0.0 {
-                                        rigid_tracks_widget.push(index as Tr);
-                                    } else {
-                                        fr_widget += track.fr_size;
-                                        fr_expand = fr_expand.saturating_add(track.max_size() - track.min_size());
-                                        frac_tracks_widget.push(index as Tr);
+                                        if track.fr_size == 0.0 {
+                                            rigid_tracks_widget.push(index as Tr);
+                                        } else {
+                                            fr_widget += track.fr_size;
+                                            fr_expand = fr_expand.saturating_add(track.max_size() - track.min_size());
+                                            frac_tracks_widget.push(index as Tr);
+                                        }
                                     }
                                 }
 
