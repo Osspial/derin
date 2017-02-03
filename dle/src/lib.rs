@@ -9,7 +9,7 @@ pub mod hints;
 mod grid;
 
 use geometry::{Rect, OriginRect, OffsetRect};
-use hints::{NodeSpan, PlaceInCell, Place, GridSize, SizeBounds, WidgetHints, TrackHints};
+use hints::{NodeSpan, PlaceInCell, Place, GridSize, SizeBounds, WidgetHints, TrackHints, Margins};
 use grid::{TrackVec, SizeResult};
 
 use std::cmp;
@@ -384,9 +384,22 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                     if 0 < layout_info.node_span.x.size(0, 1) &&
                        0 < layout_info.node_span.y.size(0, 1)
                     {
-                        let widget_size_bounds = SizeBounds {
+                        // The widget size bounds without the margin
+                        let widget_size_bounds_nomargin = SizeBounds {
                             min: abs_size_bounds.bound_rect(layout_info.size_bounds.min).converge(),
                             max: abs_size_bounds.bound_rect(layout_info.size_bounds.max).converge()
+                        };
+                        // The widget size bounds, including the margin
+                        let widget_size_bounds = {
+                            let mut wsb = widget_size_bounds_nomargin;
+                            let margins_x = layout_info.margins.left + layout_info.margins.right;
+                            let margins_y = layout_info.margins.top + layout_info.margins.bottom;
+
+                            wsb.min.lowright.x += margins_x;
+                            wsb.max.lowright.x = wsb.max.lowright.x.saturating_add(margins_x);
+                            wsb.min.lowright.y += margins_y;
+                            wsb.max.lowright.y = wsb.max.lowright.y.saturating_add(margins_y);
+                            wsb
                         };
 
                         macro_rules! widget_scale {
@@ -518,7 +531,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                         let outer_rect = widget_origin_rect.offset(offset);
                         let cell_hinter = CellHinter::new(outer_rect, layout_info.place_in_cell);
 
-                        if let Ok(widget_rect) = cell_hinter.hint_with_bounds(widget_size_bounds) {
+                        if let Ok(widget_rect) = cell_hinter.hint(widget_size_bounds_nomargin, layout_info.margins) {
                             widget.set_rect(widget_rect);
                         }
                     }
@@ -682,9 +695,12 @@ impl CellHinter {
         }
     }
 
-    pub fn hint_with_bounds(&self, bounds: SizeBounds) -> Result<OffsetRect, HintError> {
-        if bounds.min.width() > self.outer_rect.width() ||
-           bounds.min.height() > self.outer_rect.height()
+    pub fn hint(&self, bounds: SizeBounds, margins: Margins) -> Result<OffsetRect, HintError> {
+        let margins_x = margins.left + margins.right;
+        let margins_y = margins.top + margins.bottom;
+
+        if bounds.min.width() + margins_x > self.outer_rect.width() ||
+           bounds.min.height() + margins_y > self.outer_rect.height()
         {
             return Err(HintError::ORTooSmall)
         }
@@ -692,11 +708,11 @@ impl CellHinter {
         let mut inner_rect = OffsetRect::default();
 
         macro_rules! place_on_axis {
-            ($axis:ident $size:ident) => {
+            ($axis:ident, $size:ident, $front_margin:expr, $back_margin:expr) => {
                 match self.place_in_or.$axis {
                     Place::Stretch => {
-                        inner_rect.topleft.$axis = self.outer_rect.topleft.$axis;
-                        inner_rect.lowright.$axis = self.outer_rect.lowright.$axis;
+                        inner_rect.topleft.$axis = self.outer_rect.topleft.$axis + $front_margin;
+                        inner_rect.lowright.$axis = self.outer_rect.lowright.$axis - $back_margin;
 
                         if inner_rect.$size() > bounds.max.$size() {
                             let size_diff = inner_rect.$size() - bounds.max.$size();
@@ -706,12 +722,12 @@ impl CellHinter {
                         }
                     },
                     Place::Start => {
-                        inner_rect.topleft.$axis = self.outer_rect.topleft.$axis;
-                        inner_rect.lowright.$axis = self.outer_rect.topleft.$axis + bounds.min.$size();
+                        inner_rect.topleft.$axis = self.outer_rect.topleft.$axis + $front_margin + $front_margin;
+                        inner_rect.lowright.$axis = self.outer_rect.topleft.$axis + bounds.min.$size() + $front_margin;
                     },
                     Place::End => {
-                        inner_rect.lowright.$axis = self.outer_rect.lowright.$axis;
-                        inner_rect.topleft.$axis = self.outer_rect.lowright.$axis - bounds.min.$size();
+                        inner_rect.lowright.$axis = self.outer_rect.lowright.$axis - $back_margin;
+                        inner_rect.topleft.$axis = self.outer_rect.lowright.$axis - bounds.min.$size() - $back_margin;
                     },
                     Place::Center => {
                         let center = (self.outer_rect.topleft.$axis + self.outer_rect.lowright.$axis) / 2;
@@ -724,13 +740,20 @@ impl CellHinter {
                             inner_rect.topleft.$axis += size_diff / 2 + size_diff % 2;
                             inner_rect.lowright.$axis -= size_diff / 2;
                         }
+
+                        let front_margin_shift = $front_margin.saturating_sub(inner_rect.topleft.$axis - self.outer_rect.topleft.$axis);
+                        let back_margin_shift = $back_margin.saturating_sub(self.outer_rect.lowright.$axis - inner_rect.lowright.$axis);
+                        inner_rect.topleft.$axis += front_margin_shift;
+                        inner_rect.lowright.$axis += front_margin_shift;
+                        inner_rect.topleft.$axis -= back_margin_shift;
+                        inner_rect.lowright.$axis -= back_margin_shift;
                     }
                 }
             }
         }
 
-        place_on_axis!(x width);
-        place_on_axis!(y height);
+        place_on_axis!(x, width, margins.left, margins.right);
+        place_on_axis!(y, height, margins.top, margins.bottom);
 
         Ok(inner_rect)
     }

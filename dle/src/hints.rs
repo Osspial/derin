@@ -188,12 +188,43 @@ impl Default for SizeBounds {
     }
 }
 
+#[derive(Default, Debug, Clone, Copy)]
+pub struct Margins {
+    pub top: Px,
+    pub bottom: Px,
+    pub left: Px,
+    pub right: Px
+}
+
+impl Margins {
+    pub fn new(top: Px, bottom: Px, left: Px, right: Px) -> Margins {
+        Margins {
+            top: top,
+            bottom: bottom,
+            left: left,
+            right: right
+        }
+    }
+}
+
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct WidgetHints {
     pub size_bounds: SizeBounds,
     pub node_span: NodeSpan,
-    pub place_in_cell: PlaceInCell
+    pub place_in_cell: PlaceInCell,
+    pub margins: Margins
+}
+
+impl WidgetHints {
+    pub fn new(size_bounds: SizeBounds, node_span: NodeSpan, place_in_cell: PlaceInCell, margins: Margins) -> WidgetHints {
+        WidgetHints {
+            size_bounds: size_bounds,
+            node_span: node_span,
+            place_in_cell: place_in_cell,
+            margins: margins
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

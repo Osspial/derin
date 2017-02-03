@@ -113,9 +113,8 @@ impl Iterator for VLWidgetHintsIter {
     fn next(&mut self) -> Option<WidgetHints> {
         if self.cur < self.len {
             let slot = WidgetHints {
-                size_bounds: SizeBounds::default(),
                 node_span: NodeSpan::new(0..1, self.cur..self.cur+1),
-                place_in_cell: PlaceInCell::default()
+                ..WidgetHints::default()
             };
             self.cur += 1;
             Some(slot)
