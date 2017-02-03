@@ -17,6 +17,7 @@ use winapi::basetsd::*;
 use dle::{Tr, LayoutEngine, UpdateQueue, LayoutUpdate, Container, ContainerRef, Widget, WidgetData};
 use dle::hints::{SizeBounds, WidgetHints, TrackHints};
 use dle::geometry::{Rect, OffsetRect, OriginRect};
+use ui::{Control, MouseButton, MouseEvent};
 use ui::layout::GridSize;
 
 use self::mcvec::MCVec;
@@ -33,7 +34,8 @@ use std::os::raw::c_int;
 use std::os::windows::ffi::OsStrExt;
 use std::ops::Deref;
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::marker::PhantomData;
 
 use smallvec::SmallVec;
 use boolinator::Boolinator;
@@ -44,13 +46,13 @@ use native::{WindowConfig, NativeResult, NativeError};
 pub type SmallUcs2String = SmallVec<[u16; 128]>;
 pub type Ucs2String = Vec<u16>;
 
-pub enum WindowNode {
+pub enum WindowNode<A> {
     Toplevel(Toplevel),
     LayoutGroup(LayoutGroup),
-    TextButton(TextButton)
+    TextButton(TextButton<A>)
 }
 
-impl WindowNode {
+impl<A> WindowNode<A> {
     fn hwnd(&self) -> HWND {
         match *self {
             WindowNode::Toplevel(ref tl) => (tl.0).0,
@@ -72,7 +74,7 @@ impl WindowNode {
 
     /// Create a new toplevel window. This is unsafe because it must be called on the correct thread in
     /// order to have the win32 message pump get the messages for this window.
-    pub unsafe fn new_toplevel(config: &WindowConfig, callback_data: CallbackData) -> NativeResult<WindowNode> {
+    pub unsafe fn new_toplevel(config: &WindowConfig, callback_data: CallbackData<A>) -> NativeResult<WindowNode<A>> {
         let (style, style_ex) = {
             use native::InitialState::*;
 
@@ -148,7 +150,7 @@ impl WindowNode {
         );
 
         // Create the toplevel node data node, and initialize the subclass.
-        let node_data = Box::new(NodeData::new(window_handle, TOPLEVEL_SUBCLASS, Rc::new(callback_data)));
+        let node_data: Box<NodeData<A>> = Box::new(NodeData::new(window_handle, TOPLEVEL_SUBCLASS, Rc::new(callback_data)));
         node_data.update_callback_ptr_location();
         mem::forget(node_data);
 
@@ -210,7 +212,7 @@ impl WindowNode {
         Ok(WindowNode::Toplevel(Toplevel(WindowWrapper(window_handle))))
     }
 
-    pub fn new_layout_group(&self) -> NativeResult<WindowNode> {
+    pub fn new_layout_group(&self) -> NativeResult<WindowNode<A>> {
         unsafe {
             let mut node = mem::uninitialized();
             user32::SendMessageW(
@@ -223,7 +225,7 @@ impl WindowNode {
     }
 
     /// Create a new zero-sized text button with no contents.
-    pub fn new_text_button(&self) -> NativeResult<WindowNode> {
+    pub fn new_text_button(&self) -> NativeResult<WindowNode<A>> {
         unsafe {
             let mut node = mem::uninitialized();
             user32::SendMessageW(
@@ -260,6 +262,22 @@ impl WindowNode {
 
 pub struct Toplevel( WindowWrapper );
 pub struct LayoutGroup( WindowWrapper );
+
+pub struct TextButton<A> {
+    wrapper: WindowWrapper,
+    text: Ucs2String,
+    __action: PhantomData<A>
+}
+
+impl Toplevel {
+    pub unsafe fn set_action_ptr<A>(&self, ptr: *mut Option<A>) {
+        user32::SendMessageW(
+            (self.0).0,
+            DM_SETACTIONPTR,
+            ptr as WPARAM, 0
+        );
+    }
+}
 
 impl LayoutGroup {
     pub fn set_grid_size(&self, grid_size: GridSize) {
@@ -299,15 +317,10 @@ impl LayoutGroup {
     }
 }
 
-pub struct TextButton {
-    wrapper: WindowWrapper,
-    text: Ucs2String
-}
+unsafe impl<A> Send for TextButton<A> {}
+unsafe impl<A> Sync for TextButton<A> {}
 
-unsafe impl Send for TextButton {}
-unsafe impl Sync for TextButton {}
-
-impl TextButton {
+impl<A> TextButton<A> {
     pub fn set_text(&mut self, text: &str) {
         self.text.clear();
         self.text.extend(ucs2_str(text));
@@ -329,6 +342,14 @@ impl TextButton {
             );
             OriginRect::new(ideal_size.cx as u32, ideal_size.cy as u32)
         }
+    }
+
+    pub unsafe fn set_control_ptr(&self, cptr: *const Control<Action = A>) {
+        user32::SendMessageW(
+            self.wrapper.0,
+            DM_SETCONTROLPTR,
+            &cptr as *const _ as WPARAM, 0
+        );
     }
 }
 
@@ -437,51 +458,57 @@ lazy_static!{
     static ref BUTTON_CLASS: Ucs2String = ucs2_str("BUTTON").collect();
 }
 
-pub struct CallbackData {
+pub struct CallbackData<A> {
+    action_ptr: Cell<*mut Option<A>>,
     update_queue: RefCell<UpdateQueue<HWND>>
 }
 
-impl CallbackData {
-    pub fn new() -> CallbackData {
+impl<A> CallbackData<A> {
+    pub fn new() -> CallbackData<A> {
         CallbackData {
+            action_ptr: Cell::new(ptr::null_mut()),
             update_queue: RefCell::new(UpdateQueue::new())
         }
     }
 }
 
-struct NodeData {
+struct NodeData<A> {
     hwnd: HWND,
     subclass: UINT_PTR,
-    callback_data: Rc<CallbackData>,
-    child_layout: LayoutEngine<NodeVec>
+    callback_data: Rc<CallbackData<A>>,
+    child_layout: LayoutEngine<NodeVec<A>>,
+    control_ptr: Option<*const Control<Action = A>>,
+    extra_data: u32
 }
 
-impl NodeData {
-    fn new(hwnd: HWND, subclass: UINT_PTR, callback_data: Rc<CallbackData>) -> NodeData {
+impl<A> NodeData<A> {
+    fn new(hwnd: HWND, subclass: UINT_PTR, callback_data: Rc<CallbackData<A>>) -> NodeData<A> {
         NodeData {
             hwnd: hwnd,
             subclass: subclass,
             callback_data: callback_data,
             child_layout: LayoutEngine::new(NodeVec::new(
                 NodeData::widget_data_ucpl
-            ))
+            )),
+            control_ptr: None,
+            extra_data: 0
         }
     }
 
-    fn widget_data_ucpl(wd: &mut WidgetData<NodeData>) {
+    fn widget_data_ucpl(wd: &mut WidgetData<NodeData<A>>) {
         wd.widget.update_callback_ptr_location();
     }
 
     fn update_callback_ptr_location(&self) {
         let callback: SUBCLASSPROC = match self.subclass {
-            LAYOUTGROUP_SUBCLASS => Some(parent_callback),
-            BUTTON_SUBCLASS      => Some(pushbutton_callback),
-            TOPLEVEL_SUBCLASS    => Some(toplevel_callback),
+            LAYOUTGROUP_SUBCLASS => Some(parent_callback::<A>),
+            BUTTON_SUBCLASS      => Some(pushbutton_callback::<A>),
+            TOPLEVEL_SUBCLASS    => Some(toplevel_callback::<A>),
             _                    => panic!("Invalid subclass")
         };
         unsafe {
             comctl32::SetWindowSubclass(self.hwnd, callback, self.subclass,
-                                        self as *const NodeData as DWORD_PTR);
+                                        self as *const NodeData<A> as DWORD_PTR);
         }
     }
 }
@@ -533,24 +560,29 @@ const DM_OPENUPDATEQUEUE: UINT = WM_APP + 7;
 const DM_FLUSHUPDATEQUEUE: UINT = WM_APP + 8;
 /// Resize the window rect, with the new rect encoded in the `wparam` and `lparam` parameters.
 const DM_RECT: UINT = WM_APP + 9;
+const DM_SETACTIONPTR: UINT = WM_APP + 10;
+const DM_SETCONTROLPTR: UINT = WM_APP + 11;
+
+const BUTTON_RELEASED: u32 = 0;
+const BUTTON_PRESSED: u32 = 1;
 
 
 
 unsafe extern "system"
-    fn parent_callback(hwnd: HWND, msg: UINT,
+    fn parent_callback<A>(hwnd: HWND, msg: UINT,
                        wparam: WPARAM, lparam: LPARAM,
                        _: UINT_PTR, nd: DWORD_PTR) -> LRESULT
 {
-    let nd = &mut *(nd as *mut NodeData);
+    let nd = &mut *(nd as *mut NodeData<A>);
     parent_proc(hwnd, msg, wparam, lparam, nd)
 }
 
 unsafe extern "system"
-    fn toplevel_callback(hwnd: HWND, msg: UINT,
+    fn toplevel_callback<A>(hwnd: HWND, msg: UINT,
                          wparam: WPARAM, lparam: LPARAM,
                          _: UINT_PTR, nd: DWORD_PTR) -> LRESULT
 {
-    let nd = &mut *(nd as *mut NodeData);
+    let nd = &mut *(nd as *mut NodeData<A>);
 
     match msg {
         WM_CLOSE => {
@@ -615,24 +647,69 @@ unsafe extern "system"
             ret
         }
 
+        DM_SETACTIONPTR => {
+            nd.callback_data.action_ptr.set(wparam as *mut Option<A>);
+            0
+        }
+
         _ => parent_proc(hwnd, msg, wparam, lparam, nd)
     }
 }
 
 unsafe extern "system"
-    fn pushbutton_callback(hwnd: HWND, msg: UINT,
+    fn pushbutton_callback<A>(hwnd: HWND, msg: UINT,
                            wparam: WPARAM, lparam: LPARAM,
                            _: UINT_PTR, nd: DWORD_PTR) -> LRESULT
 {
-    let nd = &mut *(nd as *mut NodeData);
+    let nd = &mut *(nd as *mut NodeData<A>);
     match msg {
+        WM_LBUTTONDOWN |
+        WM_MBUTTONDOWN |
+        WM_RBUTTONDOWN |
+        WM_XBUTTONDOWN => {
+            nd.extra_data = BUTTON_PRESSED;
+            comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
+        }
+
+        WM_NCLBUTTONUP |
+        WM_NCMBUTTONUP |
+        WM_NCRBUTTONUP |
+        WM_NCXBUTTONUP => {
+            nd.extra_data = BUTTON_RELEASED;
+            comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
+        }
+
+        WM_LBUTTONUP |
+        WM_MBUTTONUP |
+        WM_RBUTTONUP |
+        WM_XBUTTONUP => {
+            if nd.extra_data == BUTTON_PRESSED {
+                if let Some(cptr) = nd.control_ptr {
+                    let aptr = nd.callback_data.action_ptr.get();
+                    let button = match msg {
+                        WM_LBUTTONUP => MouseButton::Left,
+                        WM_RBUTTONUP => MouseButton::Right,
+                        WM_MBUTTONUP => MouseButton::Middle,
+                        WM_XBUTTONUP => MouseButton::Other(hiword(wparam as LPARAM) as u8),
+                        _            => unreachable!()
+                    };
+
+                    if aptr != ptr::null_mut() {
+                        *aptr = (&*cptr).on_mouse_event(MouseEvent::Clicked(button));
+                    }
+                }
+            }
+            nd.extra_data = BUTTON_RELEASED;
+            comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
+        }
+
         WM_SETTEXT => {
             let ret = comctl32::DefSubclassProc(hwnd, msg, wparam, lparam);
 
             let window = WindowWrapperRef(hwnd);
 
             let size_bounds = SizeBounds {
-                min: TextButton::get_ideal_rect_raw(hwnd),
+                min: TextButton::<A>::get_ideal_rect_raw(hwnd),
                 max: OriginRect::max()
             };
 
@@ -646,9 +723,9 @@ unsafe extern "system"
 }
 
 /// Handles resizing children and creating children for all parent windows.
-unsafe fn parent_proc(hwnd: HWND, msg: UINT,
+unsafe fn parent_proc<A>(hwnd: HWND, msg: UINT,
                       wparam: WPARAM, lparam: LPARAM,
-                      nd: &mut NodeData) -> LRESULT
+                      nd: &mut NodeData<A>) -> LRESULT
 {
     match msg {
         WM_GETMINMAXINFO => {
@@ -800,7 +877,7 @@ unsafe fn parent_proc(hwnd: HWND, msg: UINT,
         }
 
         DM_NEWTEXTBUTTON => {
-            let node_data_ref = wparam as *mut NativeResult<WindowNode>;
+            let node_data_ref = wparam as *mut NativeResult<WindowNode<A>>;
             let button_hwnd = user32::CreateWindowExW(
                 0,
                 BUTTON_CLASS.as_ptr(),
@@ -821,7 +898,8 @@ unsafe fn parent_proc(hwnd: HWND, msg: UINT,
                 (button_hwnd != ptr::null_mut()).as_result(
                     WindowNode::TextButton(TextButton {
                         wrapper: WindowWrapper(button_hwnd),
-                        text: Ucs2String::new()
+                        text: Ucs2String::new(),
+                        __action: PhantomData
                     }),
                     NativeError::OsError(format!("{}", io::Error::last_os_error()))
                 );
@@ -830,7 +908,7 @@ unsafe fn parent_proc(hwnd: HWND, msg: UINT,
         },
 
         DM_NEWLAYOUTGROUP => {
-            let node_data_ref = wparam as *mut NativeResult<WindowNode>;
+            let node_data_ref = wparam as *mut NativeResult<WindowNode<A>>;
             let group_hwnd = user32::CreateWindowExW(
                 0,
                 BLANK_WINDOW_CLASS.as_ptr(),
@@ -859,9 +937,9 @@ unsafe fn parent_proc(hwnd: HWND, msg: UINT,
     }
 }
 
-unsafe fn common_proc(hwnd: HWND, msg: UINT,
+unsafe fn common_proc<A>(hwnd: HWND, msg: UINT,
                       wparam: WPARAM, lparam: LPARAM,
-                      _: &mut NodeData) -> LRESULT
+                      nd: &mut NodeData<A>) -> LRESULT
 {
     match msg {
         WM_NCDESTROY => {
@@ -927,34 +1005,39 @@ unsafe fn common_proc(hwnd: HWND, msg: UINT,
             0
         }
 
+        DM_SETCONTROLPTR => {
+            nd.control_ptr = Some(*(wparam as *const *const Control<Action = A>));
+            0
+        }
+
         _ => comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
     }
 }
 
-type NodeVec = MCVec<WidgetData<NodeData>, fn(&mut WidgetData<NodeData>)>;
+type NodeVec<A> = MCVec<WidgetData<NodeData<A>>, fn(&mut WidgetData<NodeData<A>>)>;
 
-impl NodeVec {
+impl<A> NodeVec<A> {
     fn binary_search_hwnd(&self, hwnd: HWND) -> Result<usize, usize> {
         self.binary_search_by(|probe| (probe.widget.hwnd as usize).cmp(&(hwnd as usize)))
     }
 }
 
-impl Container for NodeVec {
-    type Widget = NodeData;
+impl<A> Container for NodeVec<A> {
+    type Widget = NodeData<A>;
     type Key = HWND;
 
-    fn get_widget(&self, key: HWND) -> Option<&WidgetData<NodeData>> {
+    fn get_widget(&self, key: HWND) -> Option<&WidgetData<NodeData<A>>> {
         self.binary_search_hwnd(key).ok().map(|index| unsafe{ self.get_unchecked(index) })
     }
 
-    fn get_widget_mut(&mut self, key: HWND) -> Option<&mut WidgetData<NodeData>> {
+    fn get_widget_mut(&mut self, key: HWND) -> Option<&mut WidgetData<NodeData<A>>> {
         match self.binary_search_hwnd(key) {
             Ok(index) => unsafe{ Some(self.get_unchecked_mut(index)) },
             Err(_)     => None
         }
     }
 
-    fn insert_widget(&mut self, key: HWND, widget: NodeData) -> Option<NodeData> {
+    fn insert_widget(&mut self, key: HWND, widget: NodeData<A>) -> Option<NodeData<A>> {
         match self.binary_search_hwnd(key) {
             // If the key already exists in the vector, swap in the new widget and return the old
             // widget.
@@ -963,29 +1046,29 @@ impl Container for NodeVec {
         }
     }
 
-    fn remove_widget(&mut self, key: HWND) -> Option<NodeData> {
+    fn remove_widget(&mut self, key: HWND) -> Option<NodeData<A>> {
         match self.binary_search_hwnd(key) {
             Ok(index) => Some(self.remove(index).widget),
             Err(_) => None
         }
     }
 
-    fn get_widget_iter(&self) -> slice::Iter<WidgetData<NodeData>> {
+    fn get_widget_iter(&self) -> slice::Iter<WidgetData<NodeData<A>>> {
         self.iter()
     }
 
-    fn get_widget_iter_mut(&mut self) -> slice::IterMut<WidgetData<NodeData>> {
+    fn get_widget_iter_mut(&mut self) -> slice::IterMut<WidgetData<NodeData<A>>> {
         self.iter_mut()
     }
 }
 
-impl<'a> ContainerRef<'a> for &'a NodeVec {
-    type Widget = NodeData;
-    type WDIter = slice::Iter<'a, WidgetData<NodeData>>;
-    type WDIterMut = slice::IterMut<'a, WidgetData<NodeData>>;
+impl<'a, A> ContainerRef<'a> for &'a NodeVec<A> {
+    type Widget = NodeData<A>;
+    type WDIter = slice::Iter<'a, WidgetData<NodeData<A>>>;
+    type WDIterMut = slice::IterMut<'a, WidgetData<NodeData<A>>>;
 }
 
-impl Widget for NodeData {
+impl<A> Widget for NodeData<A> {
     fn set_rect(&mut self, rect: OffsetRect) {
         WindowWrapper(self.hwnd).set_inner_rect(rect);
     }

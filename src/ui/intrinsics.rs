@@ -1,21 +1,35 @@
-use super::Node;
+use super::{Node, Control};
 use rand::{Rng, thread_rng};
 
-pub struct TextButton<S: AsRef<str> = String> {
-    text: S,
+pub struct TextButton<I>
+        where I: 'static + AsRef<str> + Control
+{
+    inner: I,
     state_id: u16
 }
 
-impl<S: AsRef<str>> TextButton<S> {
-    pub fn new(text: S) -> TextButton<S> {
+impl<I> TextButton<I>
+        where I: 'static + AsRef<str> + Control
+{
+    pub fn new(inner: I) -> TextButton<I> {
         TextButton {
-            text: text,
+            inner: inner,
             state_id: 0
         }
     }
 
-    pub fn unwrap(self) -> S {
-        self.text
+    pub fn inner(this: &Self) -> &I {
+        &this.inner
+    }
+
+    pub fn inner_mut(this: &mut Self) -> &mut I {
+        this.refresh_state_id();
+
+        &mut this.inner
+    }
+
+    pub fn unwrap(this: Self) -> I {
+        this.inner
     }
 
     fn refresh_state_id(&mut self) {
@@ -23,37 +37,28 @@ impl<S: AsRef<str>> TextButton<S> {
     }
 }
 
-impl<S: AsRef<str>> AsRef<str> for TextButton<S> {
-    fn as_ref(&self) -> &str {
-        self.text.as_ref()
+impl<I> AsRef<I> for TextButton<I>
+        where I: 'static + AsRef<str> + Control
+{
+    fn as_ref(&self) -> &I {
+        TextButton::inner(self)
     }
 }
 
-impl<S: AsRef<str>> AsMut<str> for TextButton<S>
-        where S: AsMut<str> {
-    fn as_mut(&mut self) -> &mut str {
-        self.refresh_state_id();
-
-        self.text.as_mut()
+impl<I> AsMut<I> for TextButton<I>
+        where I: 'static + AsRef<str> + Control
+{
+    fn as_mut(&mut self) -> &mut I {
+        TextButton::inner_mut(self)
     }
 }
 
-impl AsRef<String> for TextButton<String> {
-    fn as_ref(&self) -> &String {
-        &self.text
-    }
-}
+impl<I> Node for TextButton<I>
+        where I: 'static + AsRef<str> + Control
+{
+    type Action = I::Action;
 
-impl AsMut<String> for TextButton<String> {
-    fn as_mut(&mut self) -> &mut String {
-        self.refresh_state_id();
-
-        &mut self.text
-    }
-}
-
-impl<S: AsRef<str>> Node for TextButton<S> {
-    fn type_name() -> &'static str {
+    fn type_name(&self) -> &'static str {
         "TextButton"
     }
 

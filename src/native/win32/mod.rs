@@ -12,7 +12,7 @@ use boolinator::Boolinator;
 use native::{NativeResult, NativeError};
 use native::WindowConfig;
 
-use ui::{Node, NodeProcessor, NodeProcessorAT, ParentNode};
+use ui::{Node, Control, NodeProcessor, NodeProcessorAT, ParentNode};
 use ui::intrinsics::TextButton;
 use ui::layout::{GridLayout, EmptyNodeLayout, SingleNodeLayout};
 
@@ -21,7 +21,9 @@ use dle::Tr;
 
 pub struct Window<N: Node> {
     root: N,
-    node_tree_root: NodeTreeBranch
+    node_tree_root: NodeTreeBranch<N::Action>,
+    action: Option<N::Action>,
+    self_ptr: *const Window<N>
 }
 
 impl<N: Node> Window<N> {
@@ -42,47 +44,81 @@ impl<N: Node> Window<N> {
                         name: "toplevel",
                         window: Some(wrapper_window),
                         children: Vec::with_capacity(1)
-                    }
+                    },
+                    action: None,
+                    self_ptr: ptr::null()
                 }
             )
         }
     }
 
-    pub fn process(&mut self) {
-        NodeTraverser::<SingleNodeLayout> {
-            node_branch: &mut self.node_tree_root,
-            child_index: 0,
-
-            child_widget_hints: SingleNodeLayout.widget_hints(),
-            queue_opened: false
-        }.add_child("root", &mut self.root).ok();
-
+    pub fn wait_actions(&mut self) -> NativeResult<WaitActionsIter<N>>
+            where for<'a> N: ParentNode<NodeTraverser<'a, SingleNodeLayout, <N as Node>::Action>> {
         unsafe {
-            // Win32 message loop
-            let mut msg = mem::uninitialized();
-            while user32::GetMessageW(&mut msg, ptr::null_mut(), 0, 0) > 0 {
-                user32::TranslateMessage(&msg);
-                user32::DispatchMessageW(&msg);
+            let mut force_child_updates = false;
+            if self.self_ptr != self {
+                if let Some(WindowNode::Toplevel(ref tl)) = self.node_tree_root.window {
+                    tl.set_action_ptr(&mut self.action);
+                }
+                force_child_updates = true;
+            }
+            self.self_ptr = self;
+
+            let res = NodeTraverser::<SingleNodeLayout, N::Action> {
+                force_child_updates: force_child_updates,
+                node_branch: &mut self.node_tree_root,
+                child_index: 0,
+
+                child_widget_hints: SingleNodeLayout.widget_hints(),
+                queue_opened: false
+            }.add_child("root", &mut self.root);
+
+            if res.is_ok() {
+                Ok(WaitActionsIter{ window: self })
+            } else {
+                Err(res.unwrap_err())
             }
         }
     }
 }
 
+pub struct WaitActionsIter<'a, N: 'a + Node> {
+    window: &'a mut Window<N>
+}
+
+impl<'a, N: Node> Iterator for WaitActionsIter<'a, N> {
+    type Item = N::Action;
+
+    fn next(&mut self) -> Option<N::Action> {
+        unsafe {
+            // Win32 message loop
+            let mut msg = mem::uninitialized();
+            while self.window.action.is_none() && user32::GetMessageW(&mut msg, ptr::null_mut(), 0, 0) > 0 {
+                user32::TranslateMessage(&msg);
+                user32::DispatchMessageW(&msg);
+            }
+
+            self.window.action.take()
+        }
+    }
+}
+
+
 /// A node in the tree that represents the nodes of the UI tree!
-struct NodeTreeBranch {
+struct NodeTreeBranch<A> {
     state_id: u16,
     name: &'static str,
-    window: Option<WindowNode>,
-    children: Vec<NodeTreeBranch>
+    window: Option<WindowNode<A>>,
+    children: Vec<NodeTreeBranch<A>>
 }
 
 /// Trait for converting `Node`s into `NodeTreeBranch`es.
 trait IntoNTB: Node {
-    fn into_ntb(&self, name: &'static str, parent: &WindowNode) -> NativeResult<NodeTreeBranch>;
+    fn into_ntb(&self, name: &'static str, parent: &WindowNode<Self::Action>) -> NativeResult<NodeTreeBranch<Self::Action>>;
 }
 
 impl<N: Node> IntoNTB for N {
-    default fn into_ntb(&self, name: &'static str, _: &WindowNode) -> NativeResult<NodeTreeBranch> {
+    default fn into_ntb(&self, name: &'static str, _: &WindowNode<Self::Action>) -> NativeResult<NodeTreeBranch<Self::Action>> {
         Ok(NodeTreeBranch {
             state_id: self.state_id(),
             name: name,
@@ -92,24 +128,27 @@ impl<N: Node> IntoNTB for N {
     }
 }
 
-struct NodeTraverser<'a, L: GridLayout> {
+#[doc(hidden)]
+pub struct NodeTraverser<'a, L: GridLayout, A: 'a> {
     /// The branch that this instance of NodeTraverser is currently processing
-    node_branch: &'a mut NodeTreeBranch,
+    node_branch: &'a mut NodeTreeBranch<A>,
     /// The index in the child vector to first look at when searching for a child. As new
     /// children get added, this gets incremented.
     child_index: usize,
+    force_child_updates: bool,
 
     child_widget_hints: L::WidgetHintsIter,
     queue_opened: bool
 }
 
-impl<'a, L: GridLayout> NodeTraverser<'a, L> {
-    fn take<CL: GridLayout>(&mut self, child_index: usize, layout: CL) -> NodeTraverser<CL> {
+impl<'a, L: GridLayout, A> NodeTraverser<'a, L, A> {
+    fn take<CL: GridLayout>(&mut self, child_index: usize, layout: CL) -> NodeTraverser<CL, A> {
         let nb = &mut self.node_branch.children[child_index];
 
         NodeTraverser {
             node_branch: nb,
             child_index: 0,
+            force_child_updates: self.force_child_updates,
 
             child_widget_hints: layout.widget_hints(),
             queue_opened: false
@@ -119,8 +158,8 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
     /// Process a child node, where that child node has no children.
     fn process_child_node_nochildren<N, PF>(&mut self, name: &'static str, node: &N, proc_func: PF)
             -> NativeResult<()>
-            where N: Node,
-                  PF: FnOnce(&N, NodeTraverser<EmptyNodeLayout>) -> NativeResult<()>
+            where N: Node<Action = A>,
+                  PF: FnOnce(&N, NodeTraverser<EmptyNodeLayout, A>) -> NativeResult<()>
     {
         self.process_child_node(name, node, EmptyNodeLayout, proc_func)
     }
@@ -130,9 +169,9 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
     /// and run it if necessary.
     fn process_child_node<N, CL, PF>(&mut self, name: &'static str, node: &N, child_layout: CL, proc_func: PF)
             -> NativeResult<()>
-            where N: Node,
+            where N: Node<Action = A>,
                   CL: GridLayout,
-                  PF: FnOnce(&N, NodeTraverser<CL>) -> NativeResult<()>
+                  PF: FnOnce(&N, NodeTraverser<CL, A>) -> NativeResult<()>
     {
         if !self.queue_opened {
             self.queue_opened = true;
@@ -156,7 +195,7 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
                 // Compare the newly-generated state id and the cached state id. If there is a mismatch, update the
                 // cached id and run the processing function.
                 let new_state_id = node.state_id();
-                if self.node_branch.children[i].state_id != new_state_id {
+                if self.force_child_updates || self.node_branch.children[i].state_id != new_state_id {
                     if let Some(ref window) = self.node_branch.children[i].window {
                         window.set_widget_hints(layout_info);
                     }
@@ -190,7 +229,7 @@ impl<'a, L: GridLayout> NodeTraverser<'a, L> {
     }
 }
 
-impl<'a, L: GridLayout> Drop for NodeTraverser<'a, L> {
+impl<'a, L: GridLayout, A> Drop for NodeTraverser<'a, L, A> {
     fn drop(&mut self) {
         if self.queue_opened {
             self.node_branch.window.as_ref().unwrap()
@@ -199,31 +238,27 @@ impl<'a, L: GridLayout> Drop for NodeTraverser<'a, L> {
     }
 }
 
-impl<'a, N: Node, L: GridLayout> NodeProcessor<N> for NodeTraverser<'a, L> {
-    default fn add_child(&mut self, name: &'static str, node: &N) -> NativeResult<()> {
+impl<'a, N, L, A> NodeProcessor<N> for NodeTraverser<'a, L, A>
+        where N: Node<Action = A>, L: GridLayout
+{
+    default unsafe fn add_child(&mut self, name: &'static str, node: &N) -> NativeResult<()> {
         // We have no information about what's in the child node, so we can't really do anything.
         // It still needs to get added to the tree though.
         self.process_child_node_nochildren(name, node, |_, _| Ok(()))
     }
 }
 
-impl<'a, L: GridLayout> NodeProcessorAT for NodeTraverser<'a, L> {
+impl<'a, L: GridLayout, A> NodeProcessorAT for NodeTraverser<'a, L, A> {
     type Error = NativeError;
 }
 
-impl<'a, N, L> NodeProcessor<N> for NodeTraverser<'a, L>
+impl<'a, N, L> NodeProcessor<N> for NodeTraverser<'a, L, N::Action>
         where L: GridLayout,
-  for<'b, 'c> N: ParentNode<NodeTraverser<'b, <N as ParentNode<NodeTraverser<'c, EmptyNodeLayout>>>::Layout>> +
-                 ParentNode<NodeTraverser<'c, EmptyNodeLayout>>
-                // ...yup, that's one ugly-ass type annotation. The reason we're doing this is because we assume
-                // that ParentNode is generic over all types that implement NodeProcessor, NodeTraverser being one
-                // of them. Because we can't just HKT our way into saying that, we provide two annotations: the
-                // first saying that N is a ParentNode for a NodeTraverser which has the layout of the ParentNode,
-                // and the second one allowing us to access the Layout associated type without causing the type
-                // system to recurse forever. That second one is used to get the layout used for the actual ParentNode.
+  for<'b, 'c> N: ParentNode<NodeTraverser<'b, <N as ParentNode<NodeTraverser<'c, EmptyNodeLayout, <N as Node>::Action>>>::Layout, <N as Node>::Action>> +
+                 ParentNode<NodeTraverser<'c, EmptyNodeLayout, <N as Node>::Action>>
 {
-    default fn add_child(&mut self, name: &'static str, node: &N) -> NativeResult<()> {
-        let child_layout = <N as ParentNode<NodeTraverser<EmptyNodeLayout>>>::child_layout(node);
+    default unsafe fn add_child(&mut self, name: &'static str, node: &N) -> NativeResult<()> {
+        let child_layout = <N as ParentNode<NodeTraverser<EmptyNodeLayout, N::Action>>>::child_layout(node);
         let child_grid_size = child_layout.grid_size();
         let col_hints = child_layout.col_hints().take(child_grid_size.x as usize);
         let row_hints = child_layout.row_hints().take(child_grid_size.y as usize);
@@ -247,10 +282,10 @@ impl<'a, N, L> NodeProcessor<N> for NodeTraverser<'a, L>
 }
 
 impl<N> IntoNTB for N where
-    for<'b, 'c> N: ParentNode<NodeTraverser<'b, <N as ParentNode<NodeTraverser<'c, EmptyNodeLayout>>>::Layout>> +
-                   ParentNode<NodeTraverser<'c, EmptyNodeLayout>>
+    for<'b, 'c> N: ParentNode<NodeTraverser<'b, <N as ParentNode<NodeTraverser<'c, EmptyNodeLayout, <N as Node>::Action>>>::Layout, <N as Node>::Action>> +
+                   ParentNode<NodeTraverser<'c, EmptyNodeLayout, <N as Node>::Action>>
 {
-    default fn into_ntb(&self, name: &'static str, parent: &WindowNode) -> NativeResult<NodeTreeBranch> {
+    default fn into_ntb(&self, name: &'static str, parent: &WindowNode<N::Action>) -> NativeResult<NodeTreeBranch<N::Action>> {
         Ok(NodeTreeBranch {
             state_id: self.state_id(),
             name: name,
@@ -260,13 +295,14 @@ impl<N> IntoNTB for N where
     }
 }
 
-impl<'a, S, L> NodeProcessor<TextButton<S>> for NodeTraverser<'a, L>
-        where S: AsRef<str>,
+impl<'a, I, L> NodeProcessor<TextButton<I>> for NodeTraverser<'a, L, I::Action>
+        where I: AsRef<str> + Control,
               L: GridLayout {
-    fn add_child(&mut self, name: &'static str, node: &TextButton<S>) -> NativeResult<()> {
+    unsafe fn add_child(&mut self, name: &'static str, node: &TextButton<I>) -> NativeResult<()> {
         self.process_child_node_nochildren(name, node, |node, traverser| {
             if let Some(WindowNode::TextButton(ref mut b)) = traverser.node_branch.window {
-                b.set_text(node.as_ref());
+                b.set_control_ptr(TextButton::inner(node));
+                b.set_text(TextButton::inner(node).as_ref());
 
                 Ok(())
             } else {panic!("Mismatched WindowNode in TextButton. Please report code that caused this in derin repository.")}
@@ -274,8 +310,8 @@ impl<'a, S, L> NodeProcessor<TextButton<S>> for NodeTraverser<'a, L>
     }
 }
 
-impl<'a, S: AsRef<str>> IntoNTB for TextButton<S> {
-    fn into_ntb(&self, name: &'static str, parent: &WindowNode) -> NativeResult<NodeTreeBranch> {
+impl<'a, I: 'static + AsRef<str> + Control> IntoNTB for TextButton<I> {
+    fn into_ntb(&self, name: &'static str, parent: &WindowNode<I::Action>) -> NativeResult<NodeTreeBranch<I::Action>> {
         Ok(NodeTreeBranch {
             state_id: self.state_id(),
             name: name,

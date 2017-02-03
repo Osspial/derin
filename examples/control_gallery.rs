@@ -11,26 +11,45 @@ use std::slice::Iter as SliceIter;
 use std::iter;
 use std::iter::{Cloned, Repeat};
 
+struct BButton(&'static str);
+
+impl AsRef<str> for BButton {
+    fn as_ref(&self) -> &str {
+        self.0
+    }
+}
+
+impl Control for BButton {
+    type Action = u32;
+
+    fn on_mouse_event(&self, _: MouseEvent) -> Option<u32> {
+        println!("{}", self.0);
+        None
+    }
+}
+
 struct BasicParent {
-    button0: TextButton,
-    button1: TextButton,
-    button2: TextButton,
-    button3: TextButton
+    button0: TextButton<BButton>,
+    button1: TextButton<BButton>,
+    button2: TextButton<BButton>,
+    button3: TextButton<BButton>
 }
 
 impl BasicParent {
     fn new() -> BasicParent {
         BasicParent {
-            button0: TextButton::new("Hello World!".to_string()),
-            button1: TextButton::new("Hello Again!".to_string()),
-            button2: TextButton::new("Hello for a third time!".to_string()),
-            button3: TextButton::new("More Hellos".to_string())
+            button0: TextButton::new(BButton("Hello World!")),
+            button1: TextButton::new(BButton("Hello Again!")),
+            button2: TextButton::new(BButton("Hello for a third time!")),
+            button3: TextButton::new(BButton("More Hellos"))
         }
     }
 }
 
 impl Node for BasicParent {
-    fn type_name() -> &'static str {
+    type Action = u32;
+
+    fn type_name(&self) -> &'static str {
         "BasicParent"
     }
 
@@ -43,15 +62,17 @@ impl Node for BasicParent {
 }
 
 impl<NP> ParentNode<NP> for BasicParent
-        where NP: NodeProcessor<TextButton> {
+        where NP: NodeProcessor<TextButton<BButton>> {
     type Layout = BPLayout;
 
     fn children(&self, mut np: NP) -> Result<(), NP::Error> {
-        np.add_child("button0", &self.button0)?;
-        np.add_child("button1", &self.button1)?;
-        np.add_child("button2", &self.button2)?;
-        np.add_child("button3", &self.button3)?;
-        Ok(())
+        unsafe {
+            np.add_child("button0", &self.button0)?;
+            np.add_child("button1", &self.button1)?;
+            np.add_child("button2", &self.button2)?;
+            np.add_child("button3", &self.button3)?;
+            Ok(())
+        }
     }
 
     fn child_layout(&self) -> BPLayout {
@@ -120,6 +141,6 @@ fn main() {
     let mut window = Window::new(BasicParent::new(), &WindowConfig::new()).unwrap();
 
     loop {
-        window.process();
+        for a in window.wait_actions().unwrap() {println!("{:?}", a);}
     }
 }

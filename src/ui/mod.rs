@@ -6,7 +6,7 @@ pub use dle::geometry;
 use self::layout::GridLayout;
 
 pub enum MouseEvent {
-    Click(MouseButton),
+    Clicked(MouseButton),
     Scroll(f32, f32)
 }
 
@@ -26,15 +26,22 @@ pub enum MouseButton {
 /// specialization isn't stable, limiting this library to nightly, but the increases in
 /// implementation ergonomics and flexability are well worth it.
 pub trait NodeProcessor<N: Node>: Sized + NodeProcessorAT {
-    fn add_child(&mut self, name: &'static str, node: &N) -> Result<(), Self::Error>;
+    /// Add a child to the node processor.
+    ///
+    /// Unsafe, because it cannot guarantee that `node` is truely immutable (due to `Cell`, `RefCell`,
+    /// etc.). Derin does not support interior mutability, and mutating a node through interior
+    /// mutability while it is being processed for events is undefined behavior.
+    unsafe fn add_child(&mut self, name: &'static str, node: &N) -> Result<(), Self::Error>;
 }
 
 pub trait NodeProcessorAT: Sized {
     type Error;
 }
 
-pub trait Node: Sized {
-    fn type_name() -> &'static str;
+pub trait Node {
+    type Action;
+
+    fn type_name(&self) -> &'static str;
     /// An identifier for the current state. Calling this function provides only one guarantee: that
     /// if `node_a != node_b`, `state_id(node_a) != state_id(node_b)`.
     fn state_id(&self) -> u16;
@@ -51,7 +58,7 @@ pub trait ParentNode<NP>: Node
     fn child_layout(&self) -> Self::Layout;
 }
 
-pub trait Control: Node {
+pub trait Control {
     type Action;
 
     fn on_mouse_event(&self, MouseEvent) -> Option<Self::Action> {None}
