@@ -12,7 +12,7 @@ use boolinator::Boolinator;
 use native::{NativeResult, NativeError};
 use native::WindowConfig;
 
-use ui::{Node, Control, NodeProcessor, NodeProcessorAT, ParentNode};
+use ui::{ChildId, Node, Control, NodeProcessor, NodeProcessorAT, ParentNode};
 use ui::intrinsics::TextButton;
 use ui::layout::{GridLayout, EmptyNodeLayout, SingleNodeLayout};
 
@@ -20,7 +20,7 @@ use dle::Tr;
 
 
 pub struct Window<N: Node> {
-    root: N,
+    pub root: N,
     node_tree_root: NodeTreeBranch<N::Action>,
     action: Option<N::Action>,
     self_ptr: *const Window<N>
@@ -41,7 +41,7 @@ impl<N: Node> Window<N> {
                     // The node that contains the top-level node and all other nodes, including root.
                     node_tree_root: NodeTreeBranch {
                         state_id: 0,
-                        name: "toplevel",
+                        child_id: ChildId::Num(0),
                         window: Some(wrapper_window),
                         children: Vec::with_capacity(1)
                     },
@@ -71,7 +71,7 @@ impl<N: Node> Window<N> {
 
                 child_widget_hints: SingleNodeLayout.widget_hints(),
                 queue_opened: false
-            }.add_child("root", &mut self.root);
+            }.add_child(ChildId::Num(0), &mut self.root);
 
             if res.is_ok() {
                 Ok(WaitActionsIter{ window: self })
@@ -107,21 +107,21 @@ impl<'a, N: Node> Iterator for WaitActionsIter<'a, N> {
 /// A node in the tree that represents the nodes of the UI tree!
 struct NodeTreeBranch<A> {
     state_id: u16,
-    name: &'static str,
+    child_id: ChildId,
     window: Option<WindowNode<A>>,
     children: Vec<NodeTreeBranch<A>>
 }
 
 /// Trait for converting `Node`s into `NodeTreeBranch`es.
 trait IntoNTB: Node {
-    fn into_ntb(&self, name: &'static str, parent: &WindowNode<Self::Action>) -> NativeResult<NodeTreeBranch<Self::Action>>;
+    fn into_ntb(&self, child_id: ChildId, parent: &WindowNode<Self::Action>) -> NativeResult<NodeTreeBranch<Self::Action>>;
 }
 
 impl<N: Node> IntoNTB for N {
-    default fn into_ntb(&self, name: &'static str, _: &WindowNode<Self::Action>) -> NativeResult<NodeTreeBranch<Self::Action>> {
+    default fn into_ntb(&self, child_id: ChildId, _: &WindowNode<Self::Action>) -> NativeResult<NodeTreeBranch<Self::Action>> {
         Ok(NodeTreeBranch {
             state_id: self.state_id(),
-            name: name,
+            child_id: child_id,
             window: None,
             children: Vec::new()
         })
@@ -156,18 +156,18 @@ impl<'a, L: GridLayout, A> NodeTraverser<'a, L, A> {
     }
 
     /// Process a child node, where that child node has no children.
-    fn process_child_node_nochildren<N, PF>(&mut self, name: &'static str, node: &N, proc_func: PF)
+    fn process_child_node_nochildren<N, PF>(&mut self, child_id: ChildId, node: &N, proc_func: PF)
             -> NativeResult<()>
             where N: Node<Action = A>,
                   PF: FnOnce(&N, NodeTraverser<EmptyNodeLayout, A>) -> NativeResult<()>
     {
-        self.process_child_node(name, node, EmptyNodeLayout, proc_func)
+        self.process_child_node(child_id, node, EmptyNodeLayout, proc_func)
     }
 
     /// Take a name, a node, and a function to run upon updating the node and either add the node to the
     /// node tree (which runs the function as well) or determine whether or not to run the update function
     /// and run it if necessary.
-    fn process_child_node<N, CL, PF>(&mut self, name: &'static str, node: &N, child_layout: CL, proc_func: PF)
+    fn process_child_node<N, CL, PF>(&mut self, child_id: ChildId, node: &N, child_layout: CL, proc_func: PF)
             -> NativeResult<()>
             where N: Node<Action = A>,
                   CL: GridLayout,
@@ -185,10 +185,10 @@ impl<'a, L: GridLayout, A> NodeTraverser<'a, L, A> {
             // `if` statement if that's found. If both of those fail, insert a new node branch and run the
             // necessary processing function.
             if let Some(i) = self.node_branch.children.get(self.child_index)
-                                 .and_then(|branch| (branch.name == name).as_some(self.child_index))
+                                 .and_then(|branch| (branch.child_id == child_id).as_some(self.child_index))
                                  .or(self.node_branch.children
                                         .iter().enumerate()
-                                        .filter_map(|(i, branch)| (branch.name == name).as_some(i))
+                                        .filter_map(|(i, branch)| (branch.child_id == child_id).as_some(i))
                                         .next()) {
                 self.child_index = i + 1;
 
@@ -207,7 +207,7 @@ impl<'a, L: GridLayout, A> NodeTraverser<'a, L, A> {
                 self.node_branch.children.insert(
                     self.child_index,
                     node.into_ntb(
-                        name,
+                        child_id,
                         self.node_branch.window.as_ref().expect("Attempted to create child window without parent")
                     )?
                 );
@@ -241,10 +241,10 @@ impl<'a, L: GridLayout, A> Drop for NodeTraverser<'a, L, A> {
 impl<'a, N, L, A> NodeProcessor<N> for NodeTraverser<'a, L, A>
         where N: Node<Action = A>, L: GridLayout
 {
-    default unsafe fn add_child(&mut self, name: &'static str, node: &N) -> NativeResult<()> {
+    default unsafe fn add_child(&mut self, child_id: ChildId, node: &N) -> NativeResult<()> {
         // We have no information about what's in the child node, so we can't really do anything.
         // It still needs to get added to the tree though.
-        self.process_child_node_nochildren(name, node, |_, _| Ok(()))
+        self.process_child_node_nochildren(child_id, node, |_, _| Ok(()))
     }
 }
 
@@ -257,13 +257,13 @@ impl<'a, N, L> NodeProcessor<N> for NodeTraverser<'a, L, N::Action>
   for<'b, 'c> N: ParentNode<NodeTraverser<'b, <N as ParentNode<NodeTraverser<'c, EmptyNodeLayout, <N as Node>::Action>>>::Layout, <N as Node>::Action>> +
                  ParentNode<NodeTraverser<'c, EmptyNodeLayout, <N as Node>::Action>>
 {
-    default unsafe fn add_child(&mut self, name: &'static str, node: &N) -> NativeResult<()> {
+    default unsafe fn add_child(&mut self, child_id: ChildId, node: &N) -> NativeResult<()> {
         let child_layout = <N as ParentNode<NodeTraverser<EmptyNodeLayout, N::Action>>>::child_layout(node);
         let child_grid_size = child_layout.grid_size();
         let col_hints = child_layout.col_hints().take(child_grid_size.x as usize);
         let row_hints = child_layout.row_hints().take(child_grid_size.y as usize);
 
-        self.process_child_node(name, node, child_layout,
+        self.process_child_node(child_id, node, child_layout,
             |node, traverser| {
                 if let Some(WindowNode::LayoutGroup(ref lg)) = traverser.node_branch.window {
                     lg.set_grid_size(child_grid_size);
@@ -285,10 +285,10 @@ impl<N> IntoNTB for N where
     for<'b, 'c> N: ParentNode<NodeTraverser<'b, <N as ParentNode<NodeTraverser<'c, EmptyNodeLayout, <N as Node>::Action>>>::Layout, <N as Node>::Action>> +
                    ParentNode<NodeTraverser<'c, EmptyNodeLayout, <N as Node>::Action>>
 {
-    default fn into_ntb(&self, name: &'static str, parent: &WindowNode<N::Action>) -> NativeResult<NodeTreeBranch<N::Action>> {
+    default fn into_ntb(&self, child_id: ChildId, parent: &WindowNode<N::Action>) -> NativeResult<NodeTreeBranch<N::Action>> {
         Ok(NodeTreeBranch {
             state_id: self.state_id(),
-            name: name,
+            child_id: child_id,
             window: Some(parent.new_layout_group()?),
             children: Vec::new()
         })
@@ -298,8 +298,8 @@ impl<N> IntoNTB for N where
 impl<'a, I, L> NodeProcessor<TextButton<I>> for NodeTraverser<'a, L, I::Action>
         where I: AsRef<str> + Control,
               L: GridLayout {
-    unsafe fn add_child(&mut self, name: &'static str, node: &TextButton<I>) -> NativeResult<()> {
-        self.process_child_node_nochildren(name, node, |node, traverser| {
+    unsafe fn add_child(&mut self, child_id: ChildId, node: &TextButton<I>) -> NativeResult<()> {
+        self.process_child_node_nochildren(child_id, node, |node, traverser| {
             if let Some(WindowNode::TextButton(ref mut b)) = traverser.node_branch.window {
                 b.set_control_ptr(TextButton::inner(node));
                 b.set_text(TextButton::inner(node).as_ref());
@@ -311,10 +311,10 @@ impl<'a, I, L> NodeProcessor<TextButton<I>> for NodeTraverser<'a, L, I::Action>
 }
 
 impl<'a, I: 'static + AsRef<str> + Control> IntoNTB for TextButton<I> {
-    fn into_ntb(&self, name: &'static str, parent: &WindowNode<I::Action>) -> NativeResult<NodeTreeBranch<I::Action>> {
+    fn into_ntb(&self, child_id: ChildId, parent: &WindowNode<I::Action>) -> NativeResult<NodeTreeBranch<I::Action>> {
         Ok(NodeTreeBranch {
             state_id: self.state_id(),
-            name: name,
+            child_id: child_id,
             window: Some(parent.new_text_button()?),
             children: Vec::new()
         })

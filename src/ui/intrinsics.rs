@@ -14,7 +14,7 @@ impl<I> TextButton<I>
     pub fn new(inner: I) -> TextButton<I> {
         TextButton {
             inner: inner,
-            state_id: 0
+            state_id: thread_rng().gen_range(1, u16::max_value())
         }
     }
 

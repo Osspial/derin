@@ -17,6 +17,12 @@ pub enum MouseButton {
     Other(u8)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ChildId {
+    Str(&'static str),
+    Num(u32)
+}
+
 /// The trait implemented for a type that processes nodes. This trait definition might seem a bit
 /// strange to you on first glance, as `N` is in the trait definition and not the `add_child`
 /// function. The reason for this is specialization. By having `N` outside of `add_child`,
@@ -31,7 +37,7 @@ pub trait NodeProcessor<N: Node>: Sized + NodeProcessorAT {
     /// Unsafe, because it cannot guarantee that `node` is truely immutable (due to `Cell`, `RefCell`,
     /// etc.). Derin does not support interior mutability, and mutating a node through interior
     /// mutability while it is being processed for events is undefined behavior.
-    unsafe fn add_child(&mut self, name: &'static str, node: &N) -> Result<(), Self::Error>;
+    unsafe fn add_child(&mut self, ChildId, node: &N) -> Result<(), Self::Error>;
 }
 
 pub trait NodeProcessorAT: Sized {
