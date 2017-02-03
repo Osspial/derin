@@ -565,6 +565,7 @@ const DM_SETCONTROLPTR: UINT = WM_APP + 11;
 
 const BUTTON_RELEASED: u32 = 0;
 const BUTTON_PRESSED: u32 = 1;
+const BUTTON_DOUBLE_PRESSED: u32 = 2;
 
 
 
@@ -671,11 +672,11 @@ unsafe extern "system"
             comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
         }
 
-        WM_NCLBUTTONUP |
-        WM_NCMBUTTONUP |
-        WM_NCRBUTTONUP |
-        WM_NCXBUTTONUP => {
-            nd.extra_data = BUTTON_RELEASED;
+        WM_LBUTTONDBLCLK |
+        WM_MBUTTONDBLCLK |
+        WM_RBUTTONDBLCLK |
+        WM_XBUTTONDBLCLK => {
+            nd.extra_data = BUTTON_DOUBLE_PRESSED;
             comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
         }
 
@@ -683,19 +684,33 @@ unsafe extern "system"
         WM_MBUTTONUP |
         WM_RBUTTONUP |
         WM_XBUTTONUP => {
-            if nd.extra_data == BUTTON_PRESSED {
-                if let Some(cptr) = nd.control_ptr {
-                    let aptr = nd.callback_data.action_ptr.get();
-                    let button = match msg {
-                        WM_LBUTTONUP => MouseButton::Left,
-                        WM_RBUTTONUP => MouseButton::Right,
-                        WM_MBUTTONUP => MouseButton::Middle,
-                        WM_XBUTTONUP => MouseButton::Other(hiword(wparam as LPARAM) as u8),
-                        _            => unreachable!()
-                    };
+            if nd.extra_data == BUTTON_PRESSED || nd.extra_data == BUTTON_DOUBLE_PRESSED {
+                let (click_x, click_y) = (loword(lparam) as i16 as c_int, hiword(lparam) as i16 as c_int);
+                let mut client_rect: RECT = mem::zeroed();
+                user32::GetClientRect(hwnd, &mut client_rect);
 
-                    if aptr != ptr::null_mut() {
-                        *aptr = (&*cptr).on_mouse_event(MouseEvent::Clicked(button));
+                if client_rect.left <= click_x && click_x <= client_rect.right &&
+                   client_rect.top <= click_y && click_y <= client_rect.bottom
+                {
+                    if let Some(cptr) = nd.control_ptr {
+                        let aptr = nd.callback_data.action_ptr.get();
+                        let button = match msg {
+                            WM_LBUTTONUP => MouseButton::Left,
+                            WM_RBUTTONUP => MouseButton::Right,
+                            WM_MBUTTONUP => MouseButton::Middle,
+                            WM_XBUTTONUP => MouseButton::Other(hiword(wparam as LPARAM) as u8),
+                            _            => unreachable!()
+                        };
+
+                        if aptr != ptr::null_mut() {
+                            let event = match nd.extra_data {
+                                BUTTON_PRESSED => MouseEvent::Clicked(button),
+                                BUTTON_DOUBLE_PRESSED => MouseEvent::DoubleClicked(button),
+                                _ => unreachable!()
+                            };
+
+                            *aptr = (&*cptr).on_mouse_event(event);
+                        }
                     }
                 }
             }

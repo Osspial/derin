@@ -7,6 +7,7 @@ use self::layout::GridLayout;
 
 pub enum MouseEvent {
     Clicked(MouseButton),
+    DoubleClicked(MouseButton),
     Scroll(f32, f32)
 }
 
