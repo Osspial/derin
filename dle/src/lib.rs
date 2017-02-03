@@ -381,140 +381,144 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                 track_constraints!(get_row, get_row_mut, push_row, num_rows, remove_row, free_height, fr_total_height);
 
                 for &mut WidgetData{ref mut widget, layout_info, abs_size_bounds, ref mut solvable} in engine.container.get_widget_iter_mut() {
-                    let widget_size_bounds = SizeBounds {
-                        min: abs_size_bounds.bound_rect(layout_info.size_bounds.min).converge(),
-                        max: abs_size_bounds.bound_rect(layout_info.size_bounds.max).converge()
-                    };
+                    if 0 < layout_info.node_span.x.size(0, 1) &&
+                       0 < layout_info.node_span.y.size(0, 1)
+                    {
+                        let widget_size_bounds = SizeBounds {
+                            min: abs_size_bounds.bound_rect(layout_info.size_bounds.min).converge(),
+                            max: abs_size_bounds.bound_rect(layout_info.size_bounds.max).converge()
+                        };
 
-                    macro_rules! widget_scale {
-                        ($axis:ident, $size:ident, $track_range:ident, $track_range_mut:ident, $free_size:expr, $fr_axis:expr) => {{
-                            // The total fractional size of the tracks in the widget
-                            let mut fr_widget = 0.0;
-                            let mut fr_expand: Px = 0;
-                            // The total pixel size of the tracks in the widget
-                            let mut px_widget = 0;
-                            let mut min_size_debt = widget_size_bounds.min.$size();
+                        macro_rules! widget_scale {
+                            ($axis:ident, $size:ident, $track_range:ident, $track_range_mut:ident, $free_size:expr, $fr_axis:expr) => {{
+                                // The total fractional size of the tracks in the widget
+                                let mut fr_widget = 0.0;
+                                let mut fr_expand: Px = 0;
+                                // The total pixel size of the tracks in the widget
+                                let mut px_widget = 0;
+                                let mut min_size_debt = widget_size_bounds.min.$size();
 
-                            // If the widget has been flagged as unsolvable, check to see that is was marked as unsolvable
-                            // during the current call to `pop_engine`. If it wasn't, then tentatively mark it as solvable.
-                            if let SolveAxis::Unsolvable(unsolvable_id) = solvable.$axis {
-                                if unsolvable_id != self.unsolvable_id {
-                                    solvable.$axis = SolveAxis::Solvable;
+                                // If the widget has been flagged as unsolvable, check to see that is was marked as unsolvable
+                                // during the current call to `pop_engine`. If it wasn't, then tentatively mark it as solvable.
+                                if let SolveAxis::Unsolvable(unsolvable_id) = solvable.$axis {
+                                    if unsolvable_id != self.unsolvable_id {
+                                        solvable.$axis = SolveAxis::Solvable;
+                                    }
                                 }
-                            }
 
-                            for (index, track) in engine.grid.$track_range(layout_info.node_span.$axis).expect("Node span larger than grid").iter().enumerate() {
-                                px_widget += track.size();
-                                min_size_debt = min_size_debt.saturating_sub(track.min_size());
+                                for (index, track) in engine.grid.$track_range(layout_info.node_span.$axis).expect("Node span larger than grid").iter().enumerate() {
+                                    px_widget += track.size();
+                                    min_size_debt = min_size_debt.saturating_sub(track.min_size());
 
-                                if track.fr_size == 0.0 {
-                                    rigid_tracks_widget.push(index as Tr);
-                                } else {
-                                    fr_widget += track.fr_size;
-                                    fr_expand = fr_expand.saturating_add(track.max_size() - track.min_size());
-                                    frac_tracks_widget.push(index as Tr);
+                                    if track.fr_size == 0.0 {
+                                        rigid_tracks_widget.push(index as Tr);
+                                    } else {
+                                        fr_widget += track.fr_size;
+                                        fr_expand = fr_expand.saturating_add(track.max_size() - track.min_size());
+                                        frac_tracks_widget.push(index as Tr);
+                                    }
                                 }
-                            }
 
-                            if !solvable.$axis.is_unsolvable_with(self.unsolvable_id) {
-                                let mut grid_changed = false;
+                                if !solvable.$axis.is_unsolvable_with(self.unsolvable_id) {
+                                    let mut grid_changed = false;
 
-                                while 0 < rigid_tracks_widget.len() {
-                                    let rigid_expand = min_size_debt / rigid_tracks_widget.len() as Px;
-                                    let mut expand_rem = min_size_debt % rigid_tracks_widget.len() as Px;
+                                    while 0 < rigid_tracks_widget.len() {
+                                        let rigid_expand = min_size_debt / rigid_tracks_widget.len() as Px;
+                                        let mut expand_rem = min_size_debt % rigid_tracks_widget.len() as Px;
 
-                                    let mut rigid_index = 0;
-                                    while let Some(track_index) = rigid_tracks_widget.get(rigid_index).cloned() {
-                                        let track = &mut engine.grid.$track_range_mut(layout_info.node_span.$axis).unwrap()[track_index as usize];
-                                        let expansion = rigid_expand + (expand_rem != 0) as Px;
+                                        let mut rigid_index = 0;
+                                        while let Some(track_index) = rigid_tracks_widget.get(rigid_index).cloned() {
+                                            let track = &mut engine.grid.$track_range_mut(layout_info.node_span.$axis).unwrap()[track_index as usize];
+                                            let expansion = rigid_expand + (expand_rem != 0) as Px;
 
-                                        if track.min_size() + expansion <= track.max_size() {
-                                            min_size_debt = min_size_debt.saturating_sub(expansion);
-                                            let new_size = track.min_size() + expansion;
+                                            if track.min_size() + expansion <= track.max_size() {
+                                                min_size_debt = min_size_debt.saturating_sub(expansion);
+                                                let new_size = track.min_size() + expansion;
 
-                                            if let Err(expanded) = track.expand_widget_min_size(new_size) {
-                                                engine.actual_size_bounds.max.lowright.$axis =
-                                                    engine.actual_size_bounds.max.$size().saturating_add(expanded);
-                                                engine.actual_size.lowright.$axis += expanded;
+                                                if let Err(expanded) = track.expand_widget_min_size(new_size) {
+                                                    engine.actual_size_bounds.max.lowright.$axis =
+                                                        engine.actual_size_bounds.max.$size().saturating_add(expanded);
+                                                    engine.actual_size.lowright.$axis += expanded;
 
-                                                $free_size = $free_size.saturating_sub(expanded);
-                                                rigid_min_size.lowright.$axis += expanded;
+                                                    $free_size = $free_size.saturating_sub(expanded);
+                                                    rigid_min_size.lowright.$axis += expanded;
 
-                                                grid_changed = true;
+                                                    grid_changed = true;
+                                                }
+                                                rigid_index += 1;
+
+                                            } else {
+                                                rigid_tracks_widget.remove(rigid_index);
+                                                min_size_debt = min_size_debt.saturating_sub(track.max_size() - track.min_size());
+
+                                                let track_max_size = track.max_size();
+                                                if let Err(expanded) = track.expand_widget_min_size(track_max_size) {
+                                                    engine.actual_size_bounds.max.lowright.$axis =
+                                                        engine.actual_size_bounds.max.$size().saturating_add(expanded);
+                                                    engine.actual_size.lowright.$axis += expanded;
+
+                                                    $free_size = $free_size.saturating_sub(expanded);
+                                                    rigid_min_size.lowright.$axis += track.max_size() - track.min_size();
+
+                                                    grid_changed = true;
+                                                }
+
+                                                // we don't continue because TODO PUT WHY
                                             }
-                                            rigid_index += 1;
 
-                                        } else {
-                                            rigid_tracks_widget.remove(rigid_index);
-                                            min_size_debt = min_size_debt.saturating_sub(track.max_size() - track.min_size());
-
-                                            let track_max_size = track.max_size();
-                                            if let Err(expanded) = track.expand_widget_min_size(track_max_size) {
-                                                engine.actual_size_bounds.max.lowright.$axis =
-                                                    engine.actual_size_bounds.max.$size().saturating_add(expanded);
-                                                engine.actual_size.lowright.$axis += expanded;
-
-                                                $free_size = $free_size.saturating_sub(expanded);
-                                                rigid_min_size.lowright.$axis += track.max_size() - track.min_size();
-
-                                                grid_changed = true;
-                                            }
-
-                                            // we don't continue because TODO PUT WHY
+                                            expand_rem = expand_rem.saturating_sub(1);
                                         }
 
-                                        expand_rem = expand_rem.saturating_sub(1);
+                                        if 0 == min_size_debt {break}
                                     }
 
-                                    if 0 == min_size_debt {break}
+                                    frac_min_size.lowright.$axis = cmp::max(
+                                        (widget_size_bounds.min.$size() as Fr * $fr_axis / fr_widget).ceil() as Px,
+                                        frac_min_size.$size()
+                                    );
+
+                                    min_size_debt = min_size_debt.saturating_sub(fr_expand);
+
+                                    if 0 < min_size_debt {
+                                        solvable.$axis = SolveAxis::Unsolvable(self.unsolvable_id);
+                                    }
+
+                                    engine.actual_size_bounds.min.lowright.$axis = frac_min_size.$size() + rigid_min_size.$size();
+                                    if engine.actual_size.$size() < engine.actual_size_bounds.min.$size() {
+                                        grid_changed = true;
+                                        engine.actual_size.lowright.$axis = engine.actual_size_bounds.min.$size();
+                                    }
+
+                                    rigid_tracks_widget.clear();
+                                    frac_tracks_widget.clear();
+
+                                    if grid_changed {continue 'update}
                                 }
 
-                                frac_min_size.lowright.$axis = cmp::max(
-                                    (widget_size_bounds.min.$size() as Fr * $fr_axis / fr_widget).ceil() as Px,
-                                    frac_min_size.$size()
-                                );
+                                px_widget
+                            }}
+                        }
 
-                                min_size_debt = min_size_debt.saturating_sub(fr_expand);
+                        // The widget_scale macro isn't guaranteed to return, but if it does it returns the axis size
+                        // if it does. If it doesn't, the rest of this body is skipped and we go back to the beginning
+                        // of the `update` loop.
+                        let size_x = widget_scale!(x, width, col_range, col_range_mut, free_width, fr_total_width);
+                        let size_y = widget_scale!(y, height, row_range, row_range_mut, free_height, fr_total_height);
 
-                                if 0 < min_size_debt {
-                                    solvable.$axis = SolveAxis::Unsolvable(self.unsolvable_id);
-                                }
+                        // Perform cell hinting and set
+                        let widget_origin_rect = OriginRect::new(size_x, size_y);
 
-                                engine.actual_size_bounds.min.lowright.$axis = frac_min_size.$size() + rigid_min_size.$size();
-                                if engine.actual_size.$size() < engine.actual_size_bounds.min.$size() {
-                                    grid_changed = true;
-                                    engine.actual_size.lowright.$axis = engine.actual_size_bounds.min.$size();
-                                }
+                        let offset = engine.grid.get_cell_offset(
+                            layout_info.node_span.x.start.unwrap_or(0),
+                            layout_info.node_span.y.start.unwrap_or(0)
+                        ).unwrap();
 
-                                rigid_tracks_widget.clear();
-                                frac_tracks_widget.clear();
+                        let outer_rect = widget_origin_rect.offset(offset);
+                        let cell_hinter = CellHinter::new(outer_rect, layout_info.place_in_cell);
 
-                                if grid_changed {continue 'update}
-                            }
-
-                            px_widget
-                        }}
-                    }
-
-                    // The widget_scale macro isn't guaranteed to return, but if it does it returns the axis size
-                    // if it does. If it doesn't, the rest of this body is skipped and we go back to the beginning
-                    // of the `update` loop.
-                    let size_x = widget_scale!(x, width, col_range, col_range_mut, free_width, fr_total_width);
-                    let size_y = widget_scale!(y, height, row_range, row_range_mut, free_height, fr_total_height);
-
-                    // Perform cell hinting and set
-                    let widget_origin_rect = OriginRect::new(size_x, size_y);
-
-                    let offset = engine.grid.get_cell_offset(
-                        layout_info.node_span.x.start.unwrap_or(0),
-                        layout_info.node_span.y.start.unwrap_or(0)
-                    ).unwrap();
-
-                    let outer_rect = widget_origin_rect.offset(offset);
-                    let cell_hinter = CellHinter::new(outer_rect, layout_info.place_in_cell);
-
-                    if let Ok(widget_rect) = cell_hinter.hint_with_bounds(widget_size_bounds) {
-                        widget.set_rect(widget_rect);
+                        if let Ok(widget_rect) = cell_hinter.hint_with_bounds(widget_size_bounds) {
+                            widget.set_rect(widget_rect);
+                        }
                     }
                 }
 
