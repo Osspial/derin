@@ -46,18 +46,20 @@ pub trait NodeProcessorAT: Sized {
 }
 
 pub trait Node {
-    type Action;
-
     fn type_name(&self) -> &'static str;
     /// An identifier for the current state. Calling this function provides only one guarantee: that
     /// if `node_a != node_b`, `state_id(node_a) != state_id(node_b)`.
     fn state_id(&self) -> u16;
 }
 
+pub trait ActionNode: Node {
+    type Action;
+}
+
 /// A node that can have other children as nodes. Unless you have a **VERY** good reason to, this
 /// should be `derive`d and not manually implemented, as the current system is set up to allow us
 /// to emulate higher-kinded types within the current limitations of the type system.
-pub trait ParentNode<NP>: Node
+pub trait ParentNode<NP>: ActionNode
         where NP: NodeProcessorAT {
     type Layout: GridLayout;
 
@@ -70,3 +72,10 @@ pub trait Control {
 
     fn on_mouse_event(&self, MouseEvent) -> Option<Self::Action> {None}
 }
+
+
+impl<N: Node> NodeProcessor<N> for () {
+    unsafe fn add_child(&mut self, _: ChildId, _: &N) -> Result<(), ()> {Ok(())}
+}
+
+impl NodeProcessorAT for () {type Error = ();}

@@ -49,7 +49,8 @@ pub type Ucs2String = Vec<u16>;
 pub enum WindowNode<A> {
     Toplevel(Toplevel),
     LayoutGroup(LayoutGroup),
-    TextButton(TextButton<A>)
+    TextButton(TextButton<A>),
+    TextLabel(TextLabel)
 }
 
 impl<A> WindowNode<A> {
@@ -57,7 +58,8 @@ impl<A> WindowNode<A> {
         match *self {
             WindowNode::Toplevel(ref tl) => (tl.0).0,
             WindowNode::LayoutGroup(ref lg) => (lg.0).0,
-            WindowNode::TextButton(ref tb) => tb.wrapper.0
+            WindowNode::TextButton(ref tb) => tb.wrapper.0,
+            WindowNode::TextLabel(ref tl) => tl.wrapper.0
         }
     }
 
@@ -237,6 +239,18 @@ impl<A> WindowNode<A> {
         }
     }
 
+    pub fn new_text_label(&self) -> NativeResult<WindowNode<A>> {
+        unsafe {
+            let mut node = mem::uninitialized();
+            user32::SendMessageW(
+                self.hwnd(),
+                DM_NEWTEXTLABEL,
+                &mut node as *mut _ as WPARAM, 0
+            );
+            node
+        }
+    }
+
     pub fn open_update_queue(&self) {
         let hwnd = self.hwnd();
 
@@ -267,6 +281,11 @@ pub struct TextButton<A> {
     wrapper: WindowWrapper,
     text: Ucs2String,
     __action: PhantomData<A>
+}
+
+pub struct TextLabel {
+    wrapper: WindowWrapper,
+    text: Ucs2String
 }
 
 impl Toplevel {
@@ -350,6 +369,14 @@ impl<A> TextButton<A> {
             DM_SETCONTROLPTR,
             &cptr as *const _ as WPARAM, 0
         );
+    }
+}
+
+impl TextLabel {
+    pub fn set_text(&mut self, text: &str) {
+        self.text.clear();
+        self.text.extend(ucs2_str(text));
+        unsafe{ self.wrapper.set_title(&self.text) };
     }
 }
 
@@ -456,6 +483,7 @@ lazy_static!{
         class_name
     };
     static ref BUTTON_CLASS: Ucs2String = ucs2_str("BUTTON").collect();
+    static ref STATIC_CLASS: Ucs2String = ucs2_str("STATIC").collect();
 }
 
 pub struct CallbackData<A> {
@@ -504,6 +532,7 @@ impl<A> NodeData<A> {
             LAYOUTGROUP_SUBCLASS => Some(parent_callback::<A>),
             BUTTON_SUBCLASS      => Some(pushbutton_callback::<A>),
             TOPLEVEL_SUBCLASS    => Some(toplevel_callback::<A>),
+            TEXTLABEL_SUBCLASS   => Some(textlabel_callback::<A>),
             _                    => panic!("Invalid subclass")
         };
         unsafe {
@@ -517,6 +546,7 @@ impl<A> NodeData<A> {
 const TOPLEVEL_SUBCLASS: UINT_PTR = 0;
 const LAYOUTGROUP_SUBCLASS: UINT_PTR = 1;
 const BUTTON_SUBCLASS: UINT_PTR = 2;
+const TEXTLABEL_SUBCLASS: UINT_PTR = 3;
 
 // A bunch of different derin messages for creating controls and such. These are all handled by the
 // toplevel window, as the child controls each have their own callback specified by windows.
@@ -532,6 +562,11 @@ const DM_NEWTEXTBUTTON: UINT = WM_APP + 1;
 /// # Callback Parameters
 /// * `wparam`: `*mut NativeResult<WindowNode>`
 const DM_NEWLAYOUTGROUP: UINT = WM_APP + 2;
+/// Create an empty text button.
+///
+/// # Callback Parameters
+/// * `wparam`: `*mut NativeResult<WindowNode>`
+const DM_NEWTEXTLABEL: UINT = WM_APP + 3;
 
 const DM_SETWIDGETHINTS: UINT = WM_APP + 4;
 /// Remove the child window specified in `wparam`.
@@ -571,8 +606,8 @@ const BUTTON_DOUBLE_PRESSED: u32 = 2;
 
 unsafe extern "system"
     fn parent_callback<A>(hwnd: HWND, msg: UINT,
-                       wparam: WPARAM, lparam: LPARAM,
-                       _: UINT_PTR, nd: DWORD_PTR) -> LRESULT
+                          wparam: WPARAM, lparam: LPARAM,
+                          _: UINT_PTR, nd: DWORD_PTR) -> LRESULT
 {
     let nd = &mut *(nd as *mut NodeData<A>);
     parent_proc(hwnd, msg, wparam, lparam, nd)
@@ -580,8 +615,8 @@ unsafe extern "system"
 
 unsafe extern "system"
     fn toplevel_callback<A>(hwnd: HWND, msg: UINT,
-                         wparam: WPARAM, lparam: LPARAM,
-                         _: UINT_PTR, nd: DWORD_PTR) -> LRESULT
+                            wparam: WPARAM, lparam: LPARAM,
+                            _: UINT_PTR, nd: DWORD_PTR) -> LRESULT
 {
     let nd = &mut *(nd as *mut NodeData<A>);
 
@@ -659,8 +694,8 @@ unsafe extern "system"
 
 unsafe extern "system"
     fn pushbutton_callback<A>(hwnd: HWND, msg: UINT,
-                           wparam: WPARAM, lparam: LPARAM,
-                           _: UINT_PTR, nd: DWORD_PTR) -> LRESULT
+                              wparam: WPARAM, lparam: LPARAM,
+                              _: UINT_PTR, nd: DWORD_PTR) -> LRESULT
 {
     let nd = &mut *(nd as *mut NodeData<A>);
     match msg {
@@ -737,10 +772,50 @@ unsafe extern "system"
     }
 }
 
+unsafe extern "system"
+    fn textlabel_callback<A>(hwnd: HWND, msg: UINT,
+                          wparam: WPARAM, lparam: LPARAM,
+                          _: UINT_PTR, nd: DWORD_PTR) -> LRESULT
+{
+    let nd = &mut *(nd as *mut NodeData<A>);
+
+    match msg {
+        WM_SETTEXT => {
+            let mut label_rect = RECT {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0
+            };
+
+            let hdc = user32::GetDC(hwnd);
+            user32::DrawTextW(
+                hdc,
+                lparam as LPCWSTR,
+                -1,
+                &mut label_rect,
+                DT_CALCRECT
+            );
+            user32::ReleaseDC(hwnd, hdc);
+
+            let size_bounds = SizeBounds {
+                min: OriginRect::new(label_rect.right as u32, label_rect.bottom as u32),
+                max: OriginRect::max()
+            };
+
+            WindowWrapperRef(hwnd).update_size_bounds(size_bounds);
+
+            comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
+        }
+        _ => common_proc(hwnd, msg, wparam, lparam, nd)
+    }
+}
+
+
 /// Handles resizing children and creating children for all parent windows.
 unsafe fn parent_proc<A>(hwnd: HWND, msg: UINT,
-                      wparam: WPARAM, lparam: LPARAM,
-                      nd: &mut NodeData<A>) -> LRESULT
+                         wparam: WPARAM, lparam: LPARAM,
+                         nd: &mut NodeData<A>) -> LRESULT
 {
     match msg {
         WM_GETMINMAXINFO => {
@@ -948,13 +1023,43 @@ unsafe fn parent_proc<A>(hwnd: HWND, msg: UINT,
 
             0
         }
+
+        DM_NEWTEXTLABEL => {
+            let node_data_ref = wparam as *mut NativeResult<WindowNode<A>>;
+            let label_hwnd = user32::CreateWindowExW(
+                0,
+                STATIC_CLASS.as_ptr(),
+                ptr::null(),
+                WS_VISIBLE | WS_CLIPCHILDREN | WS_CHILD,
+                0, 0, 0, 0,
+                hwnd,
+                ptr::null_mut(),
+                kernel32::GetModuleHandleW(ptr::null()),
+                ptr::null_mut()
+            );
+
+            let node_data = NodeData::new(label_hwnd, TEXTLABEL_SUBCLASS, nd.callback_data.clone());
+            let mut update_queue = nd.callback_data.update_queue.borrow_mut();
+            update_queue.insert_widget(label_hwnd, node_data, &mut nd.child_layout);
+
+            *node_data_ref =
+                (label_hwnd != ptr::null_mut()).as_result(
+                    WindowNode::TextLabel(TextLabel {
+                        wrapper: WindowWrapper(label_hwnd),
+                        text: Ucs2String::new()
+                    }),
+                    NativeError::OsError(format!("{}", io::Error::last_os_error()))
+                );
+
+            0
+        }
         _ => common_proc(hwnd, msg, wparam, lparam, nd)
     }
 }
 
 unsafe fn common_proc<A>(hwnd: HWND, msg: UINT,
-                      wparam: WPARAM, lparam: LPARAM,
-                      nd: &mut NodeData<A>) -> LRESULT
+                         wparam: WPARAM, lparam: LPARAM,
+                         nd: &mut NodeData<A>) -> LRESULT
 {
     match msg {
         WM_NCDESTROY => {

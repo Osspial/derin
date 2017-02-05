@@ -22,6 +22,7 @@ impl Control for AddButton {
 }
 
 struct BasicParent {
+    label: TextLabel<&'static str>,
     button0: TextButton<AddButton>,
     button_vec: Vec<TextButton<AddButton>>
 }
@@ -29,6 +30,7 @@ struct BasicParent {
 impl BasicParent {
     fn new() -> BasicParent {
         BasicParent {
+            label: TextLabel::new("A Label"),
             button0: TextButton::new(AddButton("Add Button")),
             button_vec: Vec::new()
         }
@@ -36,14 +38,12 @@ impl BasicParent {
 }
 
 impl Node for BasicParent {
-    type Action = ();
-
     fn type_name(&self) -> &'static str {
         "BasicParent"
     }
 
     fn state_id(&self) -> u16 {
-        let mut state_id = self.button0.state_id();
+        let mut state_id = self.label.state_id() ^ self.button0.state_id();
         for button in &self.button_vec {
             state_id ^= button.state_id();
         }
@@ -51,22 +51,28 @@ impl Node for BasicParent {
     }
 }
 
+impl ActionNode for BasicParent {
+    type Action = ();
+}
+
 impl<NP> ParentNode<NP> for BasicParent
-        where NP: NodeProcessor<TextButton<AddButton>> {
+        where NP: NodeProcessor<TextButton<AddButton>> +
+                  NodeProcessor<TextLabel<&'static str>> {
     type Layout = VerticalLayout;
 
     fn children(&self, mut np: NP) -> Result<(), NP::Error> {
         unsafe {
+            np.add_child(ChildId::Str("label"), &self.label)?;
             np.add_child(ChildId::Str("button0"), &self.button0)?;
             for (i, button) in self.button_vec.iter().enumerate() {
-                np.add_child(ChildId::Num(i as u32), &button)?;
+                np.add_child(ChildId::Num(i as u32), button)?;
             }
             Ok(())
         }
     }
 
     fn child_layout(&self) -> VerticalLayout {
-        VerticalLayout::new(self.button_vec.len() as u32 + 1)
+        VerticalLayout::new(self.button_vec.len() as u32 + 2)
     }
 }
 
