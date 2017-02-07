@@ -250,23 +250,23 @@ impl<K: Clone + Copy> UpdateQueue<K> {
             // Next, we perform an iteration over the tracks, subtracting from the free space if the track is
             // rigid.
             macro_rules! first_track_pass {
-                ($axis:ident, $push_track:ident, $track_range_mut:ident, $free_size:expr, $fr_total:expr) => {
+                ($rect_size:ident, $push_track:ident, $track_range_mut:ident, $free_size:expr, $fr_total:expr) => {
                     for (index, track) in engine.grid.$track_range_mut(..).unwrap().iter_mut().enumerate() {
                         if track.fr_size <= 0.0 {
                             track.reset_shrink();
-                            rigid_min_size.lowright.$axis += track.min_size();
+                            rigid_min_size.$rect_size += track.min_size();
                             // To make sure that the maximum size isn't below the minimum needed for this track,
                             // increase the engine maximum size by the rigid track minimum size.
-                            engine.actual_size_bounds.max.lowright.$axis =
-                                engine.actual_size_bounds.max.lowright.$axis.saturating_add(track.min_size());
+                            engine.actual_size_bounds.max.$rect_size =
+                                engine.actual_size_bounds.max.$rect_size.saturating_add(track.min_size());
                             $free_size = $free_size.saturating_sub(track.size());
                         } else {
                             // The engine maximum size isn't expanded in a rigid track because the track won't
                             // expand when the rectangle of the engine is expanded.
-                            engine.actual_size_bounds.max.lowright.$axis =
-                                engine.actual_size_bounds.max.lowright.$axis.saturating_add(track.max_size());
+                            engine.actual_size_bounds.max.$rect_size =
+                                engine.actual_size_bounds.max.$rect_size.saturating_add(track.max_size());
                             track.reset_expand();
-                            frac_min_size.lowright.$axis += track.min_size();
+                            frac_min_size.$rect_size += track.min_size();
                             $fr_total += track.fr_size;
                             frac_tracks.$push_track(index as Tr);
                         }
@@ -274,8 +274,8 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                 }
             }
 
-            first_track_pass!(x, push_col, col_range_mut, free_width, fr_total_width);
-            first_track_pass!(y, push_row, row_range_mut, free_height, fr_total_height);
+            first_track_pass!(width, push_col, col_range_mut, free_width, fr_total_width);
+            first_track_pass!(height, push_row, row_range_mut, free_height, fr_total_height);
 
 
             engine.actual_size_bounds.max =
@@ -395,10 +395,10 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                             let margins_x = layout_info.margins.left + layout_info.margins.right;
                             let margins_y = layout_info.margins.top + layout_info.margins.bottom;
 
-                            wsb.min.lowright.x += margins_x;
-                            wsb.max.lowright.x = wsb.max.lowright.x.saturating_add(margins_x);
-                            wsb.min.lowright.y += margins_y;
-                            wsb.max.lowright.y = wsb.max.lowright.y.saturating_add(margins_y);
+                            wsb.min.width += margins_x;
+                            wsb.max.width = wsb.max.width.saturating_add(margins_x);
+                            wsb.min.height += margins_y;
+                            wsb.max.height = wsb.max.height.saturating_add(margins_y);
                             wsb
                         };
 
@@ -451,12 +451,12 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                                 let new_size = track.min_size() + expansion;
 
                                                 if let Err(expanded) = track.expand_widget_min_size(new_size) {
-                                                    engine.actual_size_bounds.max.lowright.$axis =
+                                                    engine.actual_size_bounds.max.$size =
                                                         engine.actual_size_bounds.max.$size().saturating_add(expanded);
-                                                    engine.actual_size.lowright.$axis += expanded;
+                                                    engine.actual_size.$size += expanded;
 
                                                     $free_size = $free_size.saturating_sub(expanded);
-                                                    rigid_min_size.lowright.$axis += expanded;
+                                                    rigid_min_size.$size += expanded;
 
                                                     grid_changed = true;
                                                 }
@@ -468,12 +468,12 @@ impl<K: Clone + Copy> UpdateQueue<K> {
 
                                                 let track_max_size = track.max_size();
                                                 if let Err(expanded) = track.expand_widget_min_size(track_max_size) {
-                                                    engine.actual_size_bounds.max.lowright.$axis =
+                                                    engine.actual_size_bounds.max.$size =
                                                         engine.actual_size_bounds.max.$size().saturating_add(expanded);
-                                                    engine.actual_size.lowright.$axis += expanded;
+                                                    engine.actual_size.$size += expanded;
 
                                                     $free_size = $free_size.saturating_sub(expanded);
-                                                    rigid_min_size.lowright.$axis += track.max_size() - track.min_size();
+                                                    rigid_min_size.$size += track.max_size() - track.min_size();
 
                                                     grid_changed = true;
                                                 }
@@ -487,7 +487,7 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                         if 0 == min_size_debt {break}
                                     }
 
-                                    frac_min_size.lowright.$axis = cmp::max(
+                                    frac_min_size.$size = cmp::max(
                                         (widget_size_bounds.min.$size() as Fr * $fr_axis / fr_widget).ceil() as Px,
                                         frac_min_size.$size()
                                     );
@@ -498,10 +498,10 @@ impl<K: Clone + Copy> UpdateQueue<K> {
                                         solvable.$axis = SolveAxis::Unsolvable(self.unsolvable_id);
                                     }
 
-                                    engine.actual_size_bounds.min.lowright.$axis = frac_min_size.$size() + rigid_min_size.$size();
+                                    engine.actual_size_bounds.min.$size = frac_min_size.$size() + rigid_min_size.$size();
                                     if engine.actual_size.$size() < engine.actual_size_bounds.min.$size() {
                                         grid_changed = true;
-                                        engine.actual_size.lowright.$axis = engine.actual_size_bounds.min.$size();
+                                        engine.actual_size.$size = engine.actual_size_bounds.min.$size();
                                     }
 
                                     rigid_tracks_widget.clear();

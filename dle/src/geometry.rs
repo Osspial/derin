@@ -41,10 +41,24 @@ impl AddAssign for Point {
     }
 }
 
-pub trait Rect {
-    fn width(self) -> Px;
-    fn height(self) -> Px;
-    fn offset(self, offset: Point) -> OffsetRect;
+pub trait Rect: From<OriginRect> + From<OffsetRect> + Copy {
+    fn topleft(self) -> Point;
+    fn lowright(self) -> Point;
+
+    fn width(self) -> Px {
+        self.lowright().x - self.topleft().x
+    }
+
+    fn height(self) -> Px {
+        self.lowright().y - self.topleft().y
+    }
+
+    fn offset(self, offset: Point) -> OffsetRect {
+        OffsetRect {
+            topleft: self.topleft() + offset,
+            lowright: self.lowright() + offset
+        }
+    }
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,18 +77,14 @@ impl OffsetRect {
 }
 
 impl Rect for OffsetRect {
-    fn width(self) -> Px {
-        self.lowright.x - self.topleft.x
+    #[inline]
+    fn topleft(self) -> Point {
+        self.topleft
     }
 
-    fn height(self) -> Px {
-        self.lowright.y - self.topleft.y
-    }
-
-    fn offset(mut self, offset: Point) -> OffsetRect {
-        self.topleft += offset;
-        self.lowright += offset;
-        self
+    #[inline]
+    fn lowright(self) -> Point {
+        self.lowright
     }
 }
 
@@ -97,57 +107,57 @@ impl From<OriginRect> for OffsetRect {
     fn from(ogr: OriginRect) -> OffsetRect {
         OffsetRect {
             topleft: Point::new(0, 0),
-            lowright: ogr.lowright
+            lowright: ogr.lowright()
         }
     }
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OriginRect {
-    pub lowright: Point
+    pub width: Px,
+    pub height: Px
 }
 
 impl OriginRect {
-    pub fn new(lr_x: Px, lr_y: Px) -> OriginRect {
+    pub fn new(width: Px, height: Px) -> OriginRect {
         OriginRect {
-            lowright: Point::new(lr_x, lr_y)
+            width: width,
+            height: height
         }
     }
 
     pub fn min() -> OriginRect {
         OriginRect {
-            lowright: Point::min()
+            width: 0,
+            height: 0
         }
     }
 
     pub fn max() -> OriginRect {
         OriginRect {
-            lowright: Point::max()
+            width: Px::max_value(),
+            height: Px::max_value()
         }
     }
 }
 
 impl Rect for OriginRect {
-    fn width(self) -> Px {
-        self.lowright.x
+    #[inline]
+    fn topleft(self) -> Point {
+        Point::new(0, 0)
     }
 
-    fn height(self) -> Px {
-        self.lowright.y
-    }
-
-    fn offset(self, offset: Point) -> OffsetRect {
-        OffsetRect {
-            topleft: offset,
-            lowright: self.lowright + offset
-        }
+    #[inline]
+    fn lowright(self) -> Point {
+        Point::new(self.width, self.height)
     }
 }
 
 impl From<OffsetRect> for OriginRect {
     fn from(rect: OffsetRect) -> OriginRect {
         OriginRect {
-            lowright: Point::new(rect.width(), rect.height())
+            width: rect.width(),
+            height: rect.height()
         }
     }
 }

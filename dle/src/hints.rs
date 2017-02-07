@@ -156,18 +156,18 @@ impl SizeBounds {
         let mut size_bounded = false;
 
         if desired_size.width() < self.min.width() {
-            desired_size.lowright.x = self.min.width();
+            desired_size.width = self.min.width();
             size_bounded = true;
         } else if desired_size.width() > self.max.width() {
-            desired_size.lowright.x = self.max.width();
+            desired_size.width = self.max.width();
             size_bounded = true;
         }
 
         if desired_size.height() < self.min.height() {
-            desired_size.lowright.y = self.min.height();
+            desired_size.height = self.min.height();
             size_bounded = true;
         } else if desired_size.height() > self.max.height() {
-            desired_size.lowright.y = self.max.height();
+            desired_size.height = self.max.height();
             size_bounded = true;
         }
 
