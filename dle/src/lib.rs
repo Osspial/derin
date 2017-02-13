@@ -3,20 +3,19 @@
 #[cfg(test)]
 #[cfg_attr(test, macro_use)]
 extern crate quickcheck;
+extern crate dct;
 
-pub mod geometry;
 pub mod hints;
 mod grid;
 
-use geometry::{Rect, OriginRect, OffsetRect};
-use hints::{NodeSpan, PlaceInCell, Place, GridSize, SizeBounds, WidgetHints, TrackHints, Margins};
+use dct::geometry::{Px, Rect, OriginRect, OffsetRect, SizeBounds, Margins};
+use hints::{NodeSpan, PlaceInCell, Place, GridSize, WidgetHints, TrackHints};
 use grid::{TrackVec, SizeResult};
 
 use std::cmp;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub type Tr = u32;
-pub type Px = u32;
 pub type Fr = f32;
 
 #[derive(Default, Debug, Clone)]

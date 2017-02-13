@@ -6,6 +6,7 @@ extern crate boolinator;
 extern crate lazy_static;
 extern crate smallvec;
 extern crate dle;
+extern crate dct;
 
 #[cfg(test)]
 #[cfg_attr(test, macro_use)]
@@ -21,6 +22,12 @@ extern crate dwmapi;
 extern crate winapi;
 #[cfg(target_os="windows")]
 extern crate comctl32;
+
+#[cfg(target_os="windows")]
+extern crate dww;
+#[cfg(target_os="windows")]
+#[cfg_attr(target_os="windows", macro_use)]
+extern crate dww_macros;
 
 pub mod native;
 pub mod ui;

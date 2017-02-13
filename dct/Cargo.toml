@@ -1,10 +1,6 @@
 [package]
-name = "dle"
+name = "dct"
 version = "0.1.0"
 authors = ["Osspial <osspial@gmail.com>"]
 
 [dependencies]
-dct = {path = "../dct"}
-
-[dev-dependencies]
-quickcheck = "0.4"

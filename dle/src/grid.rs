@@ -1,5 +1,5 @@
-use super::{Tr, Px, Fr};
-use geometry::Point;
+use {Tr, Fr};
+use dct::geometry::{Px, Point};
 use hints::{GridSize, TrRange};
 
 use std::cmp;

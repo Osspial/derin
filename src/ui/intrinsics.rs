@@ -1,64 +1,152 @@
-use super::{Node, ActionNode, Control};
+use super::{Node, NodeProcessorAT, Parent, ActionNode, Control};
 use std::ops::{Deref, DerefMut};
 use rand::{Rng, thread_rng};
 
-pub struct TextButton<I>
-        where I: 'static + AsRef<str> + Control
-{
-    inner: I,
-    state_id: u16
-}
+macro_rules! intrinsics {
+    () => {};
+    (pub struct $name:ident<$inner_ty:ident $(: $($constraint:path)|+ )*, P: NodeProcessorAT> {
+        $inner_name:ident: _,
+        data: P::$processor_data:ident
+    }
 
-impl<I> TextButton<I>
-        where I: 'static + AsRef<str> + Control
-{
-    pub fn new(inner: I) -> TextButton<I> {
-        TextButton {
-            inner: inner,
-            state_id: refresh_state_id(0)
+    impl $name_impl:ident {
+        pub fn $get_inner:ident(this: &Self) -> &_;
+        pub fn $get_inner_mut:ident(this: &mut Self) -> &mut _;
+    }
+
+    $($rest:tt)*) =>
+    {
+        pub struct $name<$inner_ty, P>
+                where $inner_ty $(: $($constraint + )+)*,
+                      P: NodeProcessorAT
+        {
+            $inner_name: $inner_ty,
+            state_id: u16,
+            data: P::$processor_data
         }
-    }
 
-    pub fn inner(this: &Self) -> &I {
-        &this.inner
-    }
+        impl<$inner_ty, P> $name_impl<$inner_ty, P>
+                where $inner_ty $(: $($constraint + )+)*,
+                      P: NodeProcessorAT
+        {
+            pub fn new($inner_name: $inner_ty) -> Self {
+                $name {
+                    $inner_name: $inner_name,
+                    state_id: refresh_state_id(0),
+                    data: P::$processor_data::default()
+                }
+            }
 
-    pub fn inner_mut(this: &mut Self) -> &mut I {
-        this.state_id = refresh_state_id(this.state_id);
+            pub fn $get_inner(this: &Self) -> &$inner_ty {
+                &this.$inner_name
+            }
 
-        &mut this.inner
-    }
+            pub fn $get_inner_mut(this: &mut Self) -> &mut $inner_ty {
+                this.state_id = refresh_state_id(this.state_id);
 
-    pub fn unwrap(this: Self) -> I {
-        this.inner
-    }
-}
+                &mut this.$inner_name
+            }
 
-pub struct TextLabel<S: AsRef<str>> {
-    text: S,
-    state_id: u16
-}
-
-impl<S: AsRef<str>> TextLabel<S> {
-    pub fn new(text: S) -> TextLabel<S> {
-        TextLabel {
-            text: text,
-            state_id: refresh_state_id(0)
+            pub fn unwrap(this: Self) -> $inner_ty {
+                this.$inner_name
+            }
         }
+
+        impl<$inner_ty, P> AsRef<$inner_ty> for $name_impl<$inner_ty, P>
+                where $inner_ty $(: $($constraint + )+)*,
+                      P: NodeProcessorAT
+        {
+            fn as_ref(&self) -> &$inner_ty {
+                $name_impl::$get_inner(self)
+            }
+        }
+
+        impl<$inner_ty, P> AsMut<$inner_ty> for $name_impl<$inner_ty, P>
+                where $inner_ty $(: $($constraint + )+)*,
+                      P: NodeProcessorAT
+        {
+            fn as_mut(&mut self) -> &mut $inner_ty {
+                $name_impl::$get_inner_mut(self)
+            }
+        }
+
+        impl<$inner_ty, P> Deref for $name_impl<$inner_ty, P>
+                where $inner_ty $(: $($constraint + )+)*,
+                      P: NodeProcessorAT
+        {
+            type Target = $inner_ty;
+            fn deref(&self) -> &$inner_ty {
+                $name_impl::$get_inner(self)
+            }
+        }
+
+        impl<$inner_ty, P> DerefMut for $name_impl<$inner_ty, P>
+                where $inner_ty $(: $($constraint + )+)*,
+                      P: NodeProcessorAT
+        {
+            fn deref_mut(&mut self) -> &mut $inner_ty {
+                $name_impl::$get_inner_mut(self)
+            }
+        }
+
+        impl<$inner_ty, P> Node for $name_impl<$inner_ty, P>
+                where $inner_ty $(: $($constraint + )+)*,
+                      P: NodeProcessorAT
+        {
+            type Data = P::$processor_data;
+
+            fn type_name(&self) -> &'static str {
+                stringify!($name)
+            }
+
+            fn state_id(&self) -> u16 {
+                self.state_id
+            }
+
+            fn data(&self) -> &P::$processor_data {
+                &self.data
+            }
+
+            fn data_mut(&mut self) -> &mut P::$processor_data {
+                &mut self.data
+            }
+        }
+
+        intrinsics!{$($rest)*}
+    };
+}
+
+intrinsics!{
+    pub struct TextButton<I: AsRef<str> | Control, P: NodeProcessorAT> {
+        inner: _,
+        data: P::TextButtonData
     }
 
-    pub fn text(this: &Self) -> &S {
-        &this.text
+    impl TextButton {
+        pub fn inner(this: &Self) -> &_;
+        pub fn inner_mut(this: &mut Self) -> &mut _;
     }
 
-    pub fn text_mut(this: &mut Self) -> &mut S {
-        this.state_id = refresh_state_id(this.state_id);
 
-        &mut this.text
+    pub struct TextLabel<S: AsRef<str>, P: NodeProcessorAT> {
+        inner: _,
+        data: P::TextLabelData
     }
 
-    pub fn unwrap(this: Self) -> S {
-        this.text
+    impl TextLabel {
+        pub fn text(this: &Self) -> &_;
+        pub fn text_mut(this: &mut Self) -> &mut _;
+    }
+
+
+    pub struct WidgetGroup<I: Parent<P>, P: NodeProcessorAT> {
+        inner: _,
+        data: P::WidgetGroupData
+    }
+
+    impl WidgetGroup {
+        pub fn inner(this: &Self) -> &_;
+        pub fn inner_mut(this: &mut Self) -> &mut _;
     }
 }
 
@@ -67,88 +155,16 @@ fn refresh_state_id(state_id: u16) -> u16 {
 }
 
 
-impl<I> AsRef<I> for TextButton<I>
-        where I: 'static + AsRef<str> + Control
-{
-    fn as_ref(&self) -> &I {
-        TextButton::inner(self)
-    }
-}
-
-impl<I> AsMut<I> for TextButton<I>
-        where I: 'static + AsRef<str> + Control
-{
-    fn as_mut(&mut self) -> &mut I {
-        TextButton::inner_mut(self)
-    }
-}
-
-impl<I> Deref for TextButton<I>
-        where I: 'static + AsRef<str> + Control
-{
-    type Target = I;
-    fn deref(&self) -> &I {
-        TextButton::inner(self)
-    }
-}
-
-impl<I> DerefMut for TextButton<I>
-        where I: 'static + AsRef<str> + Control
-{
-    fn deref_mut(&mut self) -> &mut I {
-        TextButton::inner_mut(self)
-    }
-}
-
-impl<I> Node for TextButton<I>
-        where I: 'static + AsRef<str> + Control
-{
-    fn type_name(&self) -> &'static str {
-        "TextButton"
-    }
-
-    fn state_id(&self) -> u16 {
-        self.state_id
-    }
-}
-
-impl<I> ActionNode for TextButton<I>
-        where I: 'static + AsRef<str> + Control
+impl<I, P> ActionNode for TextButton<I, P>
+        where I: AsRef<str> + Control,
+              P: NodeProcessorAT
 {
     type Action = I::Action;
 }
 
-impl<S: AsRef<str>> AsRef<S> for TextLabel<S> {
-    fn as_ref(&self) -> &S {
-        TextLabel::text(self)
-    }
-}
-
-impl<S: AsRef<str>> AsMut<S> for TextLabel<S> {
-    fn as_mut(&mut self) -> &mut S {
-        TextLabel::text_mut(self)
-    }
-}
-
-impl<S: AsRef<str>> Deref for TextLabel<S> {
-    type Target = S;
-    fn deref(&self) -> &S {
-        TextLabel::text(self)
-    }
-}
-
-impl<S: AsRef<str>> DerefMut for TextLabel<S> {
-    fn deref_mut(&mut self) -> &mut S {
-        TextLabel::text_mut(self)
-    }
-}
-
-impl<S: AsRef<str>> Node for TextLabel<S> {
-    fn type_name(&self) -> &'static str {
-        "TextLabel"
-    }
-
-    fn state_id(&self) -> u16 {
-        self.state_id
-    }
+impl<I, P> ActionNode for WidgetGroup<I, P>
+        where I: Parent<P>,
+              P: NodeProcessorAT
+{
+    type Action = I::ChildAction;
 }
