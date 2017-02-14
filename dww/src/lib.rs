@@ -50,10 +50,9 @@ pub enum Bm<'a> {
 
 
 pub trait Subclass<W: Window>: 'static {
-    type ClassData;
     type UserMsg: UserMsg;
 
-    fn subclass_proc(&mut Self::ClassData, &ProcWindowRef<W>, Msg<Self::UserMsg>) -> i64;
+    fn subclass_proc(&mut self, &ProcWindowRef<W>, Msg<Self::UserMsg>) -> i64;
     fn subclass_id() -> u64 {
         use std::any::TypeId;
         use std::hash::{Hash, Hasher};
@@ -222,12 +221,12 @@ pub struct OverlapWrapper<W: Window>( W );
 
 pub struct SubclassWrapper<W: Window, S: Subclass<W>> {
     window: W,
-    subclass_data: Box<RefCell<S::ClassData>>
+    subclass_data: Box<RefCell<S>>
 }
 
 pub struct UnsafeSubclassWrapper<W: Window, S: Subclass<W>> {
     window: W,
-    subclass_data: RefCell<S::ClassData>
+    subclass_data: RefCell<S>
 }
 
 pub struct ProcWindowRef<W: Window> {
@@ -453,7 +452,7 @@ impl<W: Window> IconWindow for OverlapWrapper<W> where W: IconWindow {
 
 // SubclassWrapper impls
 impl<W: Window, S: Subclass<W>> SubclassWrapper<W, S> {
-    pub fn new(window: W, subclass_data: S::ClassData) -> SubclassWrapper<W, S> {
+    pub fn new(window: W, subclass_data: S) -> SubclassWrapper<W, S> {
         let subclass_data = Box::new(RefCell::new(subclass_data));
         unsafe{ comctl32::SetWindowSubclass(
             window.hwnd(),
@@ -483,7 +482,7 @@ impl<W: Window, S: Subclass<W>> IconWindow for SubclassWrapper<W, S> where W: Ic
 
 // UnsafeSubclassWrapper impls
 impl<W: Window, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
-    pub unsafe fn new(window: W, subclass_data: S::ClassData) -> UnsafeSubclassWrapper<W, S> {
+    pub unsafe fn new(window: W, subclass_data: S) -> UnsafeSubclassWrapper<W, S> {
         UnsafeSubclassWrapper {
             window: window,
             subclass_data: RefCell::new(subclass_data)
@@ -632,7 +631,7 @@ unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
                                        (hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM,
                                         _: UINT_PTR, subclass_data: DWORD_PTR) -> LRESULT
 {
-    let subclass_data = &*(subclass_data as *const RefCell<S::ClassData>);
+    let subclass_data = &*(subclass_data as *const RefCell<S>);
     let mut sd = subclass_data.borrow_mut();
 
     /// Partially applied function to run S::subclass_proc with a message. This is a macro because
