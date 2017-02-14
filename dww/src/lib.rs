@@ -106,7 +106,7 @@ pub struct WindowBuilder<'a> {
 
 impl<'a> WindowBuilder<'a> {
     pub fn build_blank(self) -> Result<BlankWindow> {
-        let window_handle = self.build_with_class(&BLANK_WINDOW_CLASS);
+        let window_handle = self.build(WS_CLIPCHILDREN, 0, &BLANK_WINDOW_CLASS);
 
         if window_handle != ptr::null_mut() {
             Ok(BlankWindow(window_handle))
@@ -115,7 +115,27 @@ impl<'a> WindowBuilder<'a> {
         }
     }
 
-    fn build_with_class(self, class: &Ucs2Str) -> HWND {
+    pub fn build_push_button(self) -> Result<PushButtonWindow> {
+        let window_handle = self.build(BS_PUSHBUTTON, 0, &BUTTON_CLASS);
+
+        if window_handle != ptr::null_mut() {
+            Ok(PushButtonWindow(window_handle))
+        } else {
+            Err(Error::last_os_error())
+        }
+    }
+
+    pub fn build_label(self) -> Result<LabelWindow> {
+        let window_handle = self.build(0, 0, &STATIC_CLASS);
+
+        if window_handle != ptr::null_mut() {
+            Ok(LabelWindow(window_handle))
+        } else {
+            Err(Error::last_os_error())
+        }
+    }
+
+    fn build(self, style: DWORD, style_ex: DWORD, class: &Ucs2Str) -> HWND {
         UCS2_CONVERTER.with_string(self.window_title, |window_title| unsafe {
             let pos = self.pos.unwrap_or((CW_USEDEFAULT, CW_USEDEFAULT));
             let size = match self.size {
@@ -135,10 +155,10 @@ impl<'a> WindowBuilder<'a> {
             };
 
             let window_handle = user32::CreateWindowExW(
-                0,
+                style_ex,
                 class.as_ptr(),
                 window_title.as_ptr(),
-                0,
+                style,
                 pos.0, pos.1,
                 size.0, size.1,
                 ptr::null_mut(),
@@ -156,19 +176,41 @@ impl<'a> WindowBuilder<'a> {
     }
 }
 
-pub struct BlankWindow( HWND );
 
+pub struct BlankWindow( HWND );
 impl Window for BlankWindow {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.0}
 }
-
 impl Drop for BlankWindow {
     fn drop(&mut self) {
         unsafe{ user32::DestroyWindow(self.0) };
     }
 }
 
+pub struct PushButtonWindow( HWND );
+impl Window for PushButtonWindow {
+    #[inline]
+    unsafe fn hwnd(&self) -> HWND {self.0}
+}
+impl Button for PushButtonWindow {}
+impl Drop for PushButtonWindow {
+    fn drop(&mut self) {
+        unsafe{ user32::DestroyWindow(self.0) };
+    }
+}
+
+pub struct LabelWindow( HWND );
+impl Window for LabelWindow {
+    #[inline]
+    unsafe fn hwnd(&self) -> HWND {self.0}
+}
+impl Button for LabelWindow {}
+impl Drop for LabelWindow {
+    fn drop(&mut self) {
+        unsafe{ user32::DestroyWindow(self.0) };
+    }
+}
 
 
 pub struct IconWrapper<I: AsRef<WindowIcon>, W: Window> {
@@ -235,11 +277,27 @@ pub trait Window: Sized {
     }
 
     unsafe fn set_style(&self, style: DWORD) {
-        user32::SetWindowLongW(self.hwnd(), -16, style as LONG);
+        user32::SetWindowLongW(self.hwnd(), GWL_STYLE, style as LONG);
     }
 
     unsafe fn set_style_ex(&self, style_ex: DWORD) {
-        user32::SetWindowLongW(self.hwnd(), -20, style_ex as LONG);
+        user32::SetWindowLongW(self.hwnd(), GWL_EXSTYLE, style_ex as LONG);
+    }
+
+    fn stash_long(&self, long: LONG) {
+        unsafe{ user32::SetWindowLongW(self.hwnd(), GWL_USERDATA, long) };
+    }
+
+    fn retrieve_long(&self) -> LONG {
+        unsafe{ user32::GetWindowLongW(self.hwnd(), GWL_USERDATA) }
+    }
+
+    fn enable(&self) {
+        unsafe{ user32::EnableWindow(self.hwnd(), TRUE) };
+    }
+
+    fn disable(&self) {
+        unsafe{ user32::EnableWindow(self.hwnd(), FALSE) };
     }
 
     fn orphan(&self) {
@@ -334,8 +392,11 @@ pub trait IconWindow: Window {
     fn set_icon(&mut self, icon: Self::I) {
         unsafe {
             let icon_ref = icon.as_ref();
-            user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_BIG as WPARAM, icon_ref.big.as_ref().map(|icon| icon.0).unwrap_or(ptr::null_mut()) as LPARAM);
-            user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_SMALL as WPARAM, icon_ref.small.as_ref().map(|icon| icon.0).unwrap_or(ptr::null_mut()) as LPARAM);
+            let big_icon = icon_ref.big.as_ref().map(|icon| icon.0).unwrap_or(ptr::null_mut());
+            let small_icon = icon_ref.small.as_ref().map(|icon| icon.0).unwrap_or(ptr::null_mut());
+
+            user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_BIG as WPARAM, big_icon as LPARAM);
+            user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_SMALL as WPARAM, small_icon as LPARAM);
         }
         *self.icon_mut() = icon;
     }
@@ -345,8 +406,16 @@ pub trait Parent: Window {
     fn add_child<W: Window>(&self, child: W) {
         unsafe {
             user32::SetParent(child.hwnd(), self.hwnd());
-            child.set_style(child.get_style() | WS_CHILD);
+            child.set_style(child.get_style() | WS_CHILD | WS_CLIPSIBLINGS);
         }
+    }
+}
+
+pub trait Button: Window {
+    fn get_ideal_size(&self) -> OriginRect {
+        let mut size = SIZE{ cx: 0, cy: 0 };
+        unsafe{ user32::SendMessageW(self.hwnd(), BCM_GETIDEALSIZE, 0, &mut size as *mut SIZE as LPARAM) };
+        OriginRect::new(size.cx as Px, size.cy as Px)
     }
 }
 
@@ -359,6 +428,7 @@ impl<I: AsRef<WindowIcon>, W: Window> Window for IconWrapper<I, W> {
 }
 impl<I: AsRef<WindowIcon>, W: Window> Overlapped for IconWrapper<I, W> {}
 impl<I: AsRef<WindowIcon>, W: Window> Parent for IconWrapper<I, W> where W: Parent {}
+impl<I: AsRef<WindowIcon>, W: Window> Button for IconWrapper<I, W> where W: Button {}
 impl<I: AsRef<WindowIcon>, W: Window> IconWindow for IconWrapper<I, W> {
     type I = I;
     #[inline]
@@ -373,6 +443,7 @@ impl<W: Window> Window for OverlapWrapper<W> {
 }
 impl<W: Window> Overlapped for OverlapWrapper<W> {}
 impl<W: Window> Parent for OverlapWrapper<W> where W: Parent {}
+impl<W: Window> Button for OverlapWrapper<W> where W: Button {}
 impl<W: Window> IconWindow for OverlapWrapper<W> where W: IconWindow {
     type I = <W as IconWindow>::I;
     #[inline]
@@ -402,6 +473,7 @@ impl<W: Window, S: Subclass<W>> Window for SubclassWrapper<W, S> {
 }
 impl<W: Window, S: Subclass<W>> Overlapped for SubclassWrapper<W, S> where W: Overlapped {}
 impl<W: Window, S: Subclass<W>> Parent for SubclassWrapper<W, S> where W: Parent {}
+impl<W: Window, S: Subclass<W>> Button for SubclassWrapper<W, S> where W: Button {}
 impl<W: Window, S: Subclass<W>> IconWindow for SubclassWrapper<W, S> where W: IconWindow {
     type I = <W as IconWindow>::I;
     #[inline]
@@ -433,6 +505,7 @@ impl<W: Window, S: Subclass<W>> Window for UnsafeSubclassWrapper<W, S> {
 }
 impl<W: Window, S: Subclass<W>> Overlapped for UnsafeSubclassWrapper<W, S> where W: Overlapped {}
 impl<W: Window, S: Subclass<W>> Parent for UnsafeSubclassWrapper<W, S> where W: Parent {}
+impl<W: Window, S: Subclass<W>> Button for UnsafeSubclassWrapper<W, S> where W: Button {}
 impl<W: Window, S: Subclass<W>> IconWindow for UnsafeSubclassWrapper<W, S> where W: IconWindow {
     type I = <W as IconWindow>::I;
     #[inline]
@@ -464,6 +537,8 @@ impl<W: Window> Window for ProcWindowRef<W> {
 }
 impl<W: Window> Overlapped for ProcWindowRef<W> where W: Overlapped {}
 impl<W: Window> Parent for ProcWindowRef<W> where W: Parent {}
+impl<W: Window> Button for ProcWindowRef<W> where W: Button {}
+
 
 
 // ParentRef impls
