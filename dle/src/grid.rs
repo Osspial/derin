@@ -1,6 +1,6 @@
-use {Tr, Fr};
+use Tr;
 use dct::geometry::{Px, Point};
-use hints::{GridSize, TrRange};
+use hints::{GridSize, TrRange, TrackHints};
 
 use std::cmp;
 use std::fmt::{Debug, Formatter, Error};
@@ -16,19 +16,13 @@ pub enum SizeResult {
     SizeDownscaleClamp
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct GridTrack {
     /// The size of this grid track in pixels. For columns, this is the width; for rows, the height.
     /// This must be greater than `min_size` and less than `max_size`.
     size: Px,
-    /// Track-level minimum size. If the child minimum size is less than this, this is used instead.
-    min_size: Px,
-    /// The minimum size of the track, accounting for the widgets contained inside of the track.
     widget_min_size: Px,
-    /// Track-level maximum size. If this is less than the minimum size, minimum size takes priority
-    /// and overrides this.
-    max_size: Px,
-    pub fr_size: Fr
+    hints: TrackHints
 }
 
 impl GridTrack {
@@ -39,20 +33,20 @@ impl GridTrack {
 
     /// Get the minimum size of this grid track in pixels.
     pub fn min_size(&self) -> Px {
-        cmp::max(self.min_size, self.widget_min_size)
+        cmp::max(self.hints.min_size, self.widget_min_size)
     }
 
     /// Get the maximum size of this grid track in pixels.
     pub fn max_size(&self) -> Px {
         // If the maximum size is less than the minimum size, which is technically allowed to happen but
         // doesn't logically make sense, clamp the maximum size to the minimum size.
-        cmp::max(self.max_size, self.min_size)
+        cmp::max(self.hints.max_size, self.hints.min_size)
     }
 
     /// Reset the widget minimum size and track size to the track minimum size.
     pub fn reset_shrink(&mut self) {
-        self.size = self.min_size;
-        self.widget_min_size = self.min_size;
+        self.size = self.hints.min_size;
+        self.widget_min_size = self.hints.min_size;
     }
 
     pub fn reset_expand(&mut self) {
@@ -85,13 +79,6 @@ impl GridTrack {
         }
     }
 
-    /// Sets track-level minimum size. Returns `Ok(())` if the track size is unchanged, and `Err(size_expand)`
-    /// if the track size was increased.
-    pub fn set_min_size(&mut self, min_size: Px) -> Result<(), Px> {
-        self.min_size = min_size;
-        self.expand_widget_min_size(min_size)
-    }
-
     /// Expand the widget minimum size of the track. Returns `Ok(())` if the track size is unchanged, and
     /// `Err(size_expand)` if the track size was increased.
     pub fn expand_widget_min_size(&mut self, widget_min_size: Px) -> Result<(), Px> {
@@ -106,30 +93,24 @@ impl GridTrack {
         }
     }
 
-    /// Sets track-level maximum size. Returns `Ok(())` if the track size is unchanged, and
-    /// `Err(size_shrinkage)` if the track size was decreased. Note that `size_shrinkage` is expressed
-    /// as a positive number, even though the size of the track may have decreased.
-    pub fn set_max_size(&mut self, max_size: Px) -> Result<(), Px> {
-        self.max_size = max_size;
+    #[inline]
+    pub fn hints(&self) -> TrackHints {
+        self.hints
+    }
+
+    /// Set the hints for the track. If the track size is outside the bounds of the new
+    /// minimum or maximum sizes, bound the size to that range and return an error with the change
+    /// in grid size. Note that this doesn't change the track size based on `fr_size` - a full grid
+    /// update is needed to do that.
+    pub fn set_hints(&mut self, hints: TrackHints) -> Result<(), i32> {
+        self.hints = hints;
+        self.expand_widget_min_size(hints.min_size).map_err(|px| px as i32)?;
         if self.max_size() >= self.size {
             Ok(())
         } else {
             let old_size = self.size;
             self.size = self.max_size();
-            Err(old_size - self.size)
-        }
-    }
-}
-
-impl Default for GridTrack {
-    fn default() -> GridTrack {
-        GridTrack {
-            size: 0,
-
-            min_size: 0,
-            widget_min_size: 0,
-            max_size: Px::max_value(),
-            fr_size: 1.0
+            Err(self.size as i32 - old_size as i32)
         }
     }
 }
@@ -334,6 +315,10 @@ impl<T> TrackVec<T> {
 
     pub fn num_rows(&self) -> Tr {
         self.num_rows
+    }
+
+    pub fn grid_size(&self) -> GridSize {
+        GridSize::new(self.num_cols, self.num_rows)
     }
 }
 

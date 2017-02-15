@@ -157,10 +157,16 @@ impl WidgetHints {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TrackHints {
+    /// Track-level minimum size. If the child minimum size is less than this, this is used instead.
     pub min_size: Px,
+    /// Track-level maximum size. If this is less than the minimum size, minimum size takes priority
+    /// and overrides this.
     pub max_size: Px,
+    /// The proportion of free space this track takes up. This value represents a portion of the total
+    /// "fractional space" available in the column or row - the layout engine attempts to set the pixel
+    /// value to `total_free_space * fr_size / total_fr_size`.
     pub fr_size: Fr
 }
 
