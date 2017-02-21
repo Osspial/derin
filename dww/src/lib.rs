@@ -239,6 +239,9 @@ pub struct ProcWindowRef<W: Window> {
 
 #[derive(Clone, Copy)]
 pub struct ParentRef( HWND );
+#[derive(Clone, Copy)]
+pub struct WindowRef( HWND );
+impl Window for WindowRef {unsafe fn hwnd(&self) -> HWND {self.0}}
 
 
 
@@ -261,10 +264,27 @@ pub trait Window: Sized {
     }
 
 
+    fn window_ref(&self) -> WindowRef {
+        WindowRef( unsafe{self.hwnd()} )
+    }
+
     fn set_title(&self, title: &str) {
         UCS2_CONVERTER.with_string(title, |title_ucs2|
             unsafe{ user32::SetWindowTextW(self.hwnd(), title_ucs2.as_ptr()) }
         );
+    }
+
+    fn set_rect(&self, rect: OffsetRect) {
+        let adjusted_rect = adjust_window_rect(rect, self.get_style(), self.get_style_ex());
+        unsafe{user32::SetWindowPos(
+            self.hwnd(),
+            ptr::null_mut(),
+            adjusted_rect.topleft.x as c_int,
+            adjusted_rect.topleft.y as c_int,
+            adjusted_rect.width() as c_int,
+            adjusted_rect.height() as c_int,
+            SWP_NOOWNERZORDER | SWP_NOZORDER
+        )};
     }
 
     fn get_style(&self) -> DWORD {
