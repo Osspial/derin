@@ -37,7 +37,7 @@ pub enum Wm<'a> {
     Close,
     Size(OriginRect),
     MouseDown(MouseButton, Point),
-    MouseDoubleClick(MouseButton, Point),
+    MouseDoubleDown(MouseButton, Point),
     MouseUp(MouseButton, Point),
     SetText(&'a Ucs2Str),
     GetSizeBounds(&'a mut SizeBounds)
@@ -670,7 +670,7 @@ unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
                     _ => unreachable!()
                 };
 
-                run_subclass_proc!(Msg::Wm(Wm::MouseDoubleClick(button, Point::new(loword(lparam) as Px, hiword(lparam) as Px))))
+                run_subclass_proc!(Msg::Wm(Wm::MouseDoubleDown(button, Point::new(loword(lparam) as Px, hiword(lparam) as Px))))
             }
             WM_LBUTTONUP  |
             WM_MBUTTONUP  |

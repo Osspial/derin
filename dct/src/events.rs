@@ -1,7 +1,6 @@
 pub enum MouseEvent {
     Clicked(MouseButton),
-    DoubleClicked(MouseButton),
-    Scroll(f32, f32)
+    DoubleClicked(MouseButton)
 }
 
 pub enum MouseButton {
