@@ -12,36 +12,38 @@ pub enum ChildId {
     Num(u32)
 }
 
-pub trait NodeProcessor<N: Node>: Sized + NodeProcessorAT {
-    /// Add a child to the node processor.
-    ///
-    /// Unsafe, because it cannot guarantee that `node` is truely immutable (due to `Cell`, `RefCell`,
-    /// etc.). Derin does not support interior mutability, and mutating a node through interior
-    /// mutability while it is being processed for events is undefined behavior.
-    unsafe fn add_child(&mut self, ChildId, node: &N) -> Result<(), Self::Error>;
-}
-
 pub trait NodeProcessorAT: Sized {
     type Error;
-
-    type TextButtonData: Default;
-    type TextLabelData: Default;
-    type WidgetGroupData: Default;
 }
 
-pub trait Node {
-    type Data;
+pub trait NodeProcessor<N: Node<Self::WidgetDataWrapper>>: NodeProcessorAT {
+    type WidgetDataWrapper: WidgetDataWrapper<N::Inner>;
+
+    /// Add a child to the node processor.
+    fn add_child<'a>(&'a mut self, ChildId, node: &'a N) -> Result<(), Self::Error>
+            where N: Parent<Self>;
+}
+
+pub trait Node<W: WidgetDataWrapper<Self::Inner>> {
+    type Inner;
 
     fn type_name(&self) -> &'static str;
     /// An identifier for the current state. Calling this function provides only one guarantee: that
     /// if `node_a != node_b`, `state_id(node_a) != state_id(node_b)`.
     fn state_id(&self) -> u16;
 
-    fn data(&self) -> &Self::Data;
-    fn data_mut(&mut self) -> &mut Self::Data;
+    fn data(&self) -> &W;
+    fn data_mut(&mut self) -> &mut W;
 }
 
-pub trait ActionNode: Node {
+pub trait WidgetDataWrapper<I> {
+    fn from_widget_data(I) -> Self;
+    fn inner(&self) -> &I;
+    fn inner_mut(&mut self) -> &mut I;
+    fn unwrap(self) -> I;
+}
+
+pub trait ActionNode<W: WidgetDataWrapper<Self::Inner>>: Node<W> {
     type Action;
 }
 
@@ -59,17 +61,4 @@ pub trait Control {
     type Action;
 
     fn on_mouse_event(&self, MouseEvent) -> Option<Self::Action> {None}
-}
-
-
-impl<N: Node> NodeProcessor<N> for () {
-    unsafe fn add_child(&mut self, _: ChildId, _: &N) -> Result<(), ()> {Ok(())}
-}
-
-impl NodeProcessorAT for () {
-    type Error = ();
-
-    type TextButtonData = ();
-    type TextLabelData = ();
-    type WidgetGroupData = ();
 }
