@@ -473,17 +473,18 @@ impl<W: Window> IconWindow for OverlapWrapper<W> where W: IconWindow {
 // SubclassWrapper impls
 impl<W: Window, S: Subclass<W>> SubclassWrapper<W, S> {
     pub fn new(window: W, subclass_data: S) -> SubclassWrapper<W, S> {
-        let subclass_data = Box::new(RefCell::new(subclass_data));
+        let wrapper = SubclassWrapper {
+            window: window,
+            subclass_data: Box::new(RefCell::new(subclass_data))
+        };
+
         unsafe{ comctl32::SetWindowSubclass(
-            window.hwnd(),
+            wrapper.window.hwnd(),
             Some(subclass_proc::<W, S>),
             S::subclass_id(),
-            subclass_data.as_ptr() as *const _ as DWORD_PTR
+            wrapper.subclass_data.as_ptr() as *const _ as DWORD_PTR
         ) };
-        SubclassWrapper {
-            window: window,
-            subclass_data: subclass_data
-        }
+        wrapper
     }
 }
 impl<W: Window, S: Subclass<W>> Window for SubclassWrapper<W, S> {
