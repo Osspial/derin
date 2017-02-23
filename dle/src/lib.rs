@@ -16,7 +16,7 @@ pub type Tr = u32;
 pub type Fr = f32;
 
 #[derive(Default, Debug, Clone)]
-pub struct WidgetData<W: Widget> {
+pub struct WidgetData<W> {
     pub widget: W,
     pub layout_info: WidgetHints,
     /// The "absolute" size bounds, defined by the widget and not the user, beyond which there may be
@@ -25,7 +25,7 @@ pub struct WidgetData<W: Widget> {
     solvable: Solvable
 }
 
-impl<W: Widget> WidgetData<W> {
+impl<W> WidgetData<W> {
     pub fn new(widget: W) -> WidgetData<W> {
         WidgetData {
             widget: widget,
@@ -34,25 +34,29 @@ impl<W: Widget> WidgetData<W> {
             solvable: Solvable::default()
         }
     }
+
+    pub fn swap_widget<X>(&self, new_widget: X) -> WidgetData<X> {
+        WidgetData {
+            widget: new_widget,
+            layout_info: self.layout_info,
+            abs_size_bounds: self.abs_size_bounds,
+            solvable: self.solvable
+        }
+    }
 }
 
 pub trait Widget {
     fn set_rect(&mut self, rect: OffsetRect);
 }
 
-pub trait Container
-        where for<'a> &'a Self: ContainerRef<'a, Widget = Self::Widget> {
+pub trait Container {
     type Widget: Widget;
 
-    fn get_widget_iter(&self) -> <&Self as ContainerRef>::WDIter;
-    fn get_widget_iter_mut(&mut self) -> <&Self as ContainerRef>::WDIterMut;
-}
-
-/// Hack to emulate ATCs while ATCs aren't actually implemented in Rust.
-pub trait ContainerRef<'a> {
-    type Widget: Widget + 'a;
-    type WDIter: Iterator<Item = &'a WidgetData<Self::Widget>>;
-    type WDIterMut: Iterator<Item = &'a mut WidgetData<Self::Widget>>;
+    /// Iterate over each widget in the container, returning early if the return value of F is false.
+    /// `for_each_widget` returns the return value of the final call to `f` - i.e. returns false if
+    /// the iterator was halted, and true otherwise.
+    fn for_each_widget<'a, F>(&'a mut self, f: F) -> bool
+            where F: FnMut(&'a mut WidgetData<Self::Widget>) -> bool;
 }
 
 
@@ -85,8 +89,7 @@ impl LayoutUpdater {
     /// size is less than the minimum size. In that case, minimum size overrides maximum size, as doing
     /// otherwise could cause rendering issues. </sup>
     pub fn update_engine<C>(&mut self, engine: &mut LayoutEngine<C>) -> Result<(), OriginRect>
-            where C: Container,
-                  for<'a> &'a C: ContainerRef<'a, Widget = C::Widget>
+            where C: Container
     {
         let mut frac_tracks = &mut self.frac_tracks;
         let mut potential_frac_tracks = &mut self.potential_frac_tracks;
@@ -94,16 +97,25 @@ impl LayoutUpdater {
         let mut rigid_tracks_widget = &mut self.rigid_tracks_widget;
         let mut frac_tracks_widget = &mut self.frac_tracks_widget;
 
+        let &mut LayoutEngine {
+            ref mut container,
+            ref mut grid,
+            desired_size,
+            ref mut actual_size,
+            desired_size_bounds,
+            ref mut actual_size_bounds
+        } = engine;
+
         // We start out by setting the free space to its maximum possible value.
-        let mut free_width = engine.desired_size.width();
+        let mut free_width = desired_size.width();
         let mut fr_total_width = 0.0;
-        let mut free_height = engine.desired_size.height();
+        let mut free_height = desired_size.height();
         let mut fr_total_height = 0.0;
 
-        let old_engine_size = engine.actual_size;
+        let old_engine_size = *actual_size;
 
         // Reset the actual size bounds to zero.
-        engine.actual_size_bounds = SizeBounds {
+        *actual_size_bounds = SizeBounds {
             min: OriginRect::min(),
             max: OriginRect::min()
         };
@@ -116,21 +128,21 @@ impl LayoutUpdater {
         // rigid.
         macro_rules! first_track_pass {
             ($rect_size:ident, $push_track:ident, $track_range_mut:ident, $free_size:expr, $fr_total:expr) => {
-                for (index, track) in engine.grid.$track_range_mut(..).unwrap().iter_mut().enumerate() {
+                for (index, track) in grid.$track_range_mut(..).unwrap().iter_mut().enumerate() {
                     let track_fr_size = track.hints().fr_size;
                     if track_fr_size <= 0.0 {
                         track.reset_shrink();
                         rigid_min_size.$rect_size += track.min_size();
                         // To make sure that the maximum size isn't below the minimum needed for this track,
                         // increase the engine maximum size by the rigid track minimum size.
-                        engine.actual_size_bounds.max.$rect_size =
-                            engine.actual_size_bounds.max.$rect_size.saturating_add(track.min_size());
+                        actual_size_bounds.max.$rect_size =
+                            actual_size_bounds.max.$rect_size.saturating_add(track.min_size());
                         $free_size = $free_size.saturating_sub(track.size());
                     } else {
                         // The engine maximum size isn't expanded in a rigid track because the track won't
                         // expand when the rectangle of the engine is expanded.
-                        engine.actual_size_bounds.max.$rect_size =
-                            engine.actual_size_bounds.max.$rect_size.saturating_add(track.max_size());
+                        actual_size_bounds.max.$rect_size =
+                            actual_size_bounds.max.$rect_size.saturating_add(track.max_size());
                         track.reset_expand();
                         frac_min_size.$rect_size += track.min_size();
                         $fr_total += track_fr_size;
@@ -144,17 +156,17 @@ impl LayoutUpdater {
         first_track_pass!(height, push_row, row_range_mut, free_height, fr_total_height);
 
 
-        engine.actual_size_bounds.max =
-            engine.desired_size_bounds.bound_rect(engine.actual_size_bounds.max).converge();
+        actual_size_bounds.max =
+            desired_size_bounds.bound_rect(actual_size_bounds.max).converge();
 
-        engine.actual_size_bounds.min = OriginRect::new(
+        actual_size_bounds.min = OriginRect::new(
             frac_min_size.width() + rigid_min_size.width(),
             frac_min_size.height() + rigid_min_size.height()
         );
-        engine.actual_size_bounds.min =
-            engine.desired_size_bounds.bound_rect(engine.actual_size_bounds.min).converge();
+        actual_size_bounds.min =
+            desired_size_bounds.bound_rect(actual_size_bounds.min).converge();
 
-        engine.actual_size = engine.actual_size_bounds.bound_rect(engine.desired_size).converge();
+        *actual_size = actual_size_bounds.bound_rect(desired_size).converge();
 
         'update: loop {
             /// Macro for solving the track constraints independent of axis. Because each axis is
@@ -169,7 +181,7 @@ impl LayoutUpdater {
 
                     let mut pft_index = 0;
                     while let Some(track_index) = potential_frac_tracks.$get_track(pft_index).cloned() {
-                        let track = engine.grid.$get_track(track_index).unwrap();
+                        let track = grid.$get_track(track_index).unwrap();
                         let track_fr_size = track.hints().fr_size;
                         let mut track_copy = track.clone();
 
@@ -213,7 +225,7 @@ impl LayoutUpdater {
                         let mut frac_index = 0;
                         let mut fr_divider = FrDivider::new(frac_tracks.$num_tracks_method(), $free_size, $fr_total);
                         while let Some(track_index) = frac_tracks.$get_track(frac_index).map(|t| *t as Tr) {
-                            let track = engine.grid.$get_track_mut(track_index).unwrap();
+                            let track = grid.$get_track_mut(track_index).unwrap();
                             let track_fr_size = track.hints().fr_size;
 
                             let new_size = fr_divider.divvy(track_fr_size);
@@ -248,7 +260,8 @@ impl LayoutUpdater {
             track_constraints!(get_col, get_col_mut, push_col, num_cols, remove_col, free_width, fr_total_width);
             track_constraints!(get_row, get_row_mut, push_row, num_rows, remove_row, free_height, fr_total_height);
 
-            for &mut WidgetData{ref mut widget, layout_info, abs_size_bounds, ref mut solvable} in engine.container.get_widget_iter_mut() {
+            let cur_unsolvable_id = self.unsolvable_id;
+            container.for_each_widget(|&mut WidgetData{ref mut widget, layout_info, abs_size_bounds, ref mut solvable}| {
                 if 0 < layout_info.node_span.x.size(0, 1) &&
                    0 < layout_info.node_span.y.size(0, 1)
                 {
@@ -282,12 +295,12 @@ impl LayoutUpdater {
                             // If the widget has been flagged as unsolvable, check to see that is was marked as unsolvable
                             // during the current call to `pop_engine`. If it wasn't, then tentatively mark it as solvable.
                             if let SolveAxis::Unsolvable(unsolvable_id) = solvable.$axis {
-                                if unsolvable_id != self.unsolvable_id {
+                                if unsolvable_id != cur_unsolvable_id {
                                     solvable.$axis = SolveAxis::Solvable;
                                 }
                             }
 
-                            if let Some(track_slice) = engine.grid.$track_range(layout_info.node_span.$axis) {
+                            if let Some(track_slice) = grid.$track_range(layout_info.node_span.$axis) {
                                 for (index, track) in track_slice.iter().enumerate() {
                                     let track_fr_size = track.hints().fr_size;
                                     px_widget += track.size();
@@ -303,7 +316,7 @@ impl LayoutUpdater {
                                 }
                             }
 
-                            if !solvable.$axis.is_unsolvable_with(self.unsolvable_id) {
+                            if !solvable.$axis.is_unsolvable_with(cur_unsolvable_id) {
                                 let mut grid_changed = false;
 
                                 while 0 < rigid_tracks_widget.len() {
@@ -312,7 +325,7 @@ impl LayoutUpdater {
 
                                     let mut rigid_index = 0;
                                     while let Some(track_index) = rigid_tracks_widget.get(rigid_index).cloned() {
-                                        let track = &mut engine.grid.$track_range_mut(layout_info.node_span.$axis).unwrap()[track_index as usize];
+                                        let track = &mut grid.$track_range_mut(layout_info.node_span.$axis).unwrap()[track_index as usize];
                                         let expansion = rigid_expand + (expand_rem != 0) as Px;
 
                                         if track.min_size() + expansion <= track.max_size() {
@@ -320,9 +333,9 @@ impl LayoutUpdater {
                                             let new_size = track.min_size() + expansion;
 
                                             if let Err(expanded) = track.expand_widget_min_size(new_size) {
-                                                engine.actual_size_bounds.max.$size =
-                                                    engine.actual_size_bounds.max.$size().saturating_add(expanded);
-                                                engine.actual_size.$size += expanded;
+                                                actual_size_bounds.max.$size =
+                                                    actual_size_bounds.max.$size().saturating_add(expanded);
+                                                actual_size.$size += expanded;
 
                                                 $free_size = $free_size.saturating_sub(expanded);
                                                 rigid_min_size.$size += expanded;
@@ -337,9 +350,9 @@ impl LayoutUpdater {
 
                                             let track_max_size = track.max_size();
                                             if let Err(expanded) = track.expand_widget_min_size(track_max_size) {
-                                                engine.actual_size_bounds.max.$size =
-                                                    engine.actual_size_bounds.max.$size().saturating_add(expanded);
-                                                engine.actual_size.$size += expanded;
+                                                actual_size_bounds.max.$size =
+                                                    actual_size_bounds.max.$size().saturating_add(expanded);
+                                                actual_size.$size += expanded;
 
                                                 $free_size = $free_size.saturating_sub(expanded);
                                                 rigid_min_size.$size += track.max_size() - track.min_size();
@@ -364,19 +377,19 @@ impl LayoutUpdater {
                                 min_size_debt = min_size_debt.saturating_sub(fr_expand);
 
                                 if 0 < min_size_debt {
-                                    solvable.$axis = SolveAxis::Unsolvable(self.unsolvable_id);
+                                    solvable.$axis = SolveAxis::Unsolvable(cur_unsolvable_id);
                                 }
 
-                                engine.actual_size_bounds.min.$size = frac_min_size.$size() + rigid_min_size.$size();
-                                if engine.actual_size.$size() < engine.actual_size_bounds.min.$size() {
+                                actual_size_bounds.min.$size = frac_min_size.$size() + rigid_min_size.$size();
+                                if actual_size.$size() < actual_size_bounds.min.$size() {
                                     grid_changed = true;
-                                    engine.actual_size.$size = engine.actual_size_bounds.min.$size();
+                                    actual_size.$size = actual_size_bounds.min.$size();
                                 }
 
                                 rigid_tracks_widget.clear();
                                 frac_tracks_widget.clear();
 
-                                if grid_changed {continue 'update}
+                                if grid_changed {return false}
                             }
 
                             px_widget
@@ -392,7 +405,7 @@ impl LayoutUpdater {
                     // Perform cell hinting and set
                     let widget_origin_rect = OriginRect::new(size_x, size_y);
 
-                    let offset = engine.grid.get_cell_offset(
+                    let offset = grid.get_cell_offset(
                         layout_info.node_span.x.start.unwrap_or(0),
                         layout_info.node_span.y.start.unwrap_or(0)
                     ).unwrap();
@@ -404,7 +417,9 @@ impl LayoutUpdater {
                         widget.set_rect(widget_rect);
                     }
                 }
-            }
+
+                true
+            });
 
             break 'update;
         }
@@ -415,17 +430,15 @@ impl LayoutUpdater {
         rigid_tracks_widget.clear();
         frac_tracks_widget.clear();
 
-        if engine.actual_size != old_engine_size {
-            Err(engine.actual_size)
+        if *actual_size != old_engine_size {
+            Err(*actual_size)
         } else {
             Ok(())
         }
     }
 }
 
-pub struct LayoutEngine<C: Container>
-        where for<'a> &'a C: ContainerRef<'a, Widget = C::Widget>
-{
+pub struct LayoutEngine<C: Container> {
     container: C,
     grid: TrackVec,
     /// The pixel size of the layout engine, as requested by the programmer.
@@ -439,9 +452,7 @@ pub struct LayoutEngine<C: Container>
     actual_size_bounds: SizeBounds
 }
 
-impl<C: Container> LayoutEngine<C>
-        where for<'a> &'a C: ContainerRef<'a, Widget = C::Widget>
-{
+impl<C: Container> LayoutEngine<C> {
     pub fn new(container: C) -> LayoutEngine<C> {
         LayoutEngine {
             container: container,
