@@ -88,7 +88,7 @@ impl LayoutUpdater {
     /// <sup>\* The only situation where some constraints may end up violated would be when the maximum
     /// size is less than the minimum size. In that case, minimum size overrides maximum size, as doing
     /// otherwise could cause rendering issues. </sup>
-    pub fn update_engine<C>(&mut self, engine: &mut LayoutEngine<C>) -> Result<(), OriginRect>
+    pub fn update_engine<C>(&mut self, container: &mut C, engine: &mut LayoutEngine) -> Result<(), OriginRect>
             where C: Container
     {
         let mut frac_tracks = &mut self.frac_tracks;
@@ -98,7 +98,6 @@ impl LayoutUpdater {
         let mut frac_tracks_widget = &mut self.frac_tracks_widget;
 
         let &mut LayoutEngine {
-            ref mut container,
             ref mut grid,
             desired_size,
             ref mut actual_size,
@@ -438,8 +437,7 @@ impl LayoutUpdater {
     }
 }
 
-pub struct LayoutEngine<C: Container> {
-    container: C,
+pub struct LayoutEngine {
     grid: TrackVec,
     /// The pixel size of the layout engine, as requested by the programmer.
     pub desired_size: OriginRect,
@@ -452,10 +450,9 @@ pub struct LayoutEngine<C: Container> {
     actual_size_bounds: SizeBounds
 }
 
-impl<C: Container> LayoutEngine<C> {
-    pub fn new(container: C) -> LayoutEngine<C> {
+impl LayoutEngine {
+    pub fn new() -> LayoutEngine {
         LayoutEngine {
-            container: container,
             grid: TrackVec::new(),
             desired_size: OriginRect::min(),
             actual_size: OriginRect::min(),
