@@ -192,7 +192,7 @@ impl Window for PushButtonWindow {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.0}
 }
-impl Button for PushButtonWindow {}
+impl ButtonWindow for PushButtonWindow {}
 impl Drop for PushButtonWindow {
     fn drop(&mut self) {
         unsafe{ user32::DestroyWindow(self.0) };
@@ -204,7 +204,6 @@ impl Window for LabelWindow {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.0}
 }
-impl Button for LabelWindow {}
 impl Drop for LabelWindow {
     fn drop(&mut self) {
         unsafe{ user32::DestroyWindow(self.0) };
@@ -346,7 +345,7 @@ pub trait Window: Sized {
     }
 }
 
-pub trait Overlapped: Window {
+pub trait OverlappedWindow: Window {
     /// Set all of the overlapped window properties (i.e. all the other functions in this struct)
     /// to either true or false.
     fn overlapped(&self, overlapped: bool) {
@@ -421,7 +420,7 @@ pub trait IconWindow: Window {
     }
 }
 
-pub trait Parent: Window {
+pub trait ParentWindow: Window {
     fn add_child<W: Window>(&self, child: W) {
         unsafe {
             user32::SetParent(child.hwnd(), self.hwnd());
@@ -430,7 +429,7 @@ pub trait Parent: Window {
     }
 }
 
-pub trait Button: Window {
+pub trait ButtonWindow: Window {
     fn get_ideal_size(&self) -> OriginRect {
         let mut size = SIZE{ cx: 0, cy: 0 };
         unsafe{ user32::SendMessageW(self.hwnd(), BCM_GETIDEALSIZE, 0, &mut size as *mut SIZE as LPARAM) };
@@ -445,9 +444,9 @@ impl<I: AsRef<WindowIcon>, W: Window> Window for IconWrapper<I, W> {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.window.hwnd()}
 }
-impl<I: AsRef<WindowIcon>, W: Window> Overlapped for IconWrapper<I, W> {}
-impl<I: AsRef<WindowIcon>, W: Window> Parent for IconWrapper<I, W> where W: Parent {}
-impl<I: AsRef<WindowIcon>, W: Window> Button for IconWrapper<I, W> where W: Button {}
+impl<I: AsRef<WindowIcon>, W: Window> OverlappedWindow for IconWrapper<I, W> {}
+impl<I: AsRef<WindowIcon>, W: Window> ParentWindow for IconWrapper<I, W> where W: ParentWindow {}
+impl<I: AsRef<WindowIcon>, W: Window> ButtonWindow for IconWrapper<I, W> where W: ButtonWindow {}
 impl<I: AsRef<WindowIcon>, W: Window> IconWindow for IconWrapper<I, W> {
     type I = I;
     #[inline]
@@ -460,9 +459,9 @@ impl<W: Window> Window for OverlapWrapper<W> {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.0.hwnd()}
 }
-impl<W: Window> Overlapped for OverlapWrapper<W> {}
-impl<W: Window> Parent for OverlapWrapper<W> where W: Parent {}
-impl<W: Window> Button for OverlapWrapper<W> where W: Button {}
+impl<W: Window> OverlappedWindow for OverlapWrapper<W> {}
+impl<W: Window> ParentWindow for OverlapWrapper<W> where W: ParentWindow {}
+impl<W: Window> ButtonWindow for OverlapWrapper<W> where W: ButtonWindow {}
 impl<W: Window> IconWindow for OverlapWrapper<W> where W: IconWindow {
     type I = <W as IconWindow>::I;
     #[inline]
@@ -491,9 +490,9 @@ impl<W: Window, S: Subclass<W>> Window for SubclassWrapper<W, S> {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.window.hwnd()}
 }
-impl<W: Window, S: Subclass<W>> Overlapped for SubclassWrapper<W, S> where W: Overlapped {}
-impl<W: Window, S: Subclass<W>> Parent for SubclassWrapper<W, S> where W: Parent {}
-impl<W: Window, S: Subclass<W>> Button for SubclassWrapper<W, S> where W: Button {}
+impl<W: Window, S: Subclass<W>> OverlappedWindow for SubclassWrapper<W, S> where W: OverlappedWindow {}
+impl<W: Window, S: Subclass<W>> ParentWindow for SubclassWrapper<W, S> where W: ParentWindow {}
+impl<W: Window, S: Subclass<W>> ButtonWindow for SubclassWrapper<W, S> where W: ButtonWindow {}
 impl<W: Window, S: Subclass<W>> IconWindow for SubclassWrapper<W, S> where W: IconWindow {
     type I = <W as IconWindow>::I;
     #[inline]
@@ -523,9 +522,9 @@ impl<W: Window, S: Subclass<W>> Window for UnsafeSubclassWrapper<W, S> {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.window.hwnd()}
 }
-impl<W: Window, S: Subclass<W>> Overlapped for UnsafeSubclassWrapper<W, S> where W: Overlapped {}
-impl<W: Window, S: Subclass<W>> Parent for UnsafeSubclassWrapper<W, S> where W: Parent {}
-impl<W: Window, S: Subclass<W>> Button for UnsafeSubclassWrapper<W, S> where W: Button {}
+impl<W: Window, S: Subclass<W>> OverlappedWindow for UnsafeSubclassWrapper<W, S> where W: OverlappedWindow {}
+impl<W: Window, S: Subclass<W>> ParentWindow for UnsafeSubclassWrapper<W, S> where W: ParentWindow {}
+impl<W: Window, S: Subclass<W>> ButtonWindow for UnsafeSubclassWrapper<W, S> where W: ButtonWindow {}
 impl<W: Window, S: Subclass<W>> IconWindow for UnsafeSubclassWrapper<W, S> where W: IconWindow {
     type I = <W as IconWindow>::I;
     #[inline]
@@ -555,9 +554,9 @@ impl<W: Window> Window for ProcWindowRef<W> {
         self.hwnd
     }
 }
-impl<W: Window> Overlapped for ProcWindowRef<W> where W: Overlapped {}
-impl<W: Window> Parent for ProcWindowRef<W> where W: Parent {}
-impl<W: Window> Button for ProcWindowRef<W> where W: Button {}
+impl<W: Window> OverlappedWindow for ProcWindowRef<W> where W: OverlappedWindow {}
+impl<W: Window> ParentWindow for ProcWindowRef<W> where W: ParentWindow {}
+impl<W: Window> ButtonWindow for ProcWindowRef<W> where W: ButtonWindow {}
 
 
 
@@ -568,7 +567,7 @@ impl Window for ParentRef {
         self.0
     }
 }
-impl Parent for ParentRef {}
+impl ParentWindow for ParentRef {}
 
 
 pub fn adjust_window_rect<R: Rect>(rect: R, style: DWORD, style_ex: DWORD) -> R {
