@@ -104,31 +104,31 @@ pub struct WindowBuilder<'a> {
 }
 
 impl<'a> WindowBuilder<'a> {
-    pub fn build_blank(self) -> Result<BlankWindow> {
+    pub fn build_blank(self) -> Result<BlankBase> {
         let window_handle = self.build(WS_CLIPCHILDREN, 0, &BLANK_WINDOW_CLASS);
 
         if window_handle != ptr::null_mut() {
-            Ok(BlankWindow(window_handle))
+            Ok(BlankBase(window_handle))
         } else {
             Err(Error::last_os_error())
         }
     }
 
-    pub fn build_push_button(self) -> Result<PushButtonWindow> {
+    pub fn build_push_button(self) -> Result<PushButtonBase> {
         let window_handle = self.build(BS_PUSHBUTTON, 0, &BUTTON_CLASS);
 
         if window_handle != ptr::null_mut() {
-            Ok(PushButtonWindow(window_handle))
+            Ok(PushButtonBase(window_handle))
         } else {
             Err(Error::last_os_error())
         }
     }
 
-    pub fn build_label(self) -> Result<LabelWindow> {
+    pub fn build_text_label(self) -> Result<TextLabelBase> {
         let window_handle = self.build(0, 0, &STATIC_CLASS);
 
         if window_handle != ptr::null_mut() {
-            Ok(LabelWindow(window_handle))
+            Ok(TextLabelBase(window_handle))
         } else {
             Err(Error::last_os_error())
         }
@@ -176,35 +176,35 @@ impl<'a> WindowBuilder<'a> {
 }
 
 
-pub struct BlankWindow( HWND );
-impl Window for BlankWindow {
+pub struct BlankBase( HWND );
+impl Window for BlankBase {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.0}
 }
-impl Drop for BlankWindow {
+impl Drop for BlankBase {
     fn drop(&mut self) {
         unsafe{ user32::DestroyWindow(self.0) };
     }
 }
 
-pub struct PushButtonWindow( HWND );
-impl Window for PushButtonWindow {
+pub struct PushButtonBase( HWND );
+impl Window for PushButtonBase {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.0}
 }
-impl ButtonWindow for PushButtonWindow {}
-impl Drop for PushButtonWindow {
+impl ButtonWindow for PushButtonBase {}
+impl Drop for PushButtonBase {
     fn drop(&mut self) {
         unsafe{ user32::DestroyWindow(self.0) };
     }
 }
 
-pub struct LabelWindow( HWND );
-impl Window for LabelWindow {
+pub struct TextLabelBase( HWND );
+impl Window for TextLabelBase {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.0}
 }
-impl Drop for LabelWindow {
+impl Drop for TextLabelBase {
     fn drop(&mut self) {
         unsafe{ user32::DestroyWindow(self.0) };
     }
@@ -274,7 +274,7 @@ pub trait Window: Sized {
     }
 
     fn set_rect(&self, rect: OffsetRect) {
-        let adjusted_rect = adjust_window_rect(rect, self.get_style(), self.get_style_ex());
+        let adjusted_rect = self.adjust_window_rect(rect);
         unsafe{user32::SetWindowPos(
             self.hwnd(),
             ptr::null_mut(),
@@ -284,6 +284,24 @@ pub trait Window: Sized {
             adjusted_rect.height() as c_int,
             SWP_NOOWNERZORDER | SWP_NOZORDER
         )};
+    }
+
+    fn adjust_window_rect<R: Rect>(&self, rect: R) -> R {
+        let mut winapi_rect = RECT {
+            right: cmp::min(rect.lowright().x, (LONG::max_value() - 64) as Px) as LONG,
+            bottom: cmp::min(rect.lowright().y, (LONG::max_value() - 64) as Px) as LONG,
+            left: rect.topleft().x as LONG,
+            top: rect.topleft().y as LONG
+        };
+
+        unsafe {user32::AdjustWindowRectEx(
+            &mut winapi_rect,
+            self.get_style(),
+            0,
+            self.get_style_ex()
+        )};
+
+        R::from(OffsetRect::new(winapi_rect.left as Px, winapi_rect.top as Px, winapi_rect.right as Px, winapi_rect.bottom as Px))
     }
 
     fn get_style(&self) -> DWORD {
@@ -570,23 +588,23 @@ impl Window for ParentRef {
 impl ParentWindow for ParentRef {}
 
 
-pub fn adjust_window_rect<R: Rect>(rect: R, style: DWORD, style_ex: DWORD) -> R {
-    let mut winapi_rect = RECT {
-        right: cmp::min(rect.lowright().x, (LONG::max_value() - 64) as Px) as LONG,
-        bottom: cmp::min(rect.lowright().y, (LONG::max_value() - 64) as Px) as LONG,
-        left: rect.topleft().x as LONG,
-        top: rect.topleft().y as LONG
-    };
+// pub fn adjust_window_rect<R: Rect>(rect: R, style: DWORD, style_ex: DWORD) -> R {
+//     let mut winapi_rect = RECT {
+//         right: cmp::min(rect.lowright().x, (LONG::max_value() - 64) as Px) as LONG,
+//         bottom: cmp::min(rect.lowright().y, (LONG::max_value() - 64) as Px) as LONG,
+//         left: rect.topleft().x as LONG,
+//         top: rect.topleft().y as LONG
+//     };
 
-    unsafe {user32::AdjustWindowRectEx(
-        &mut winapi_rect,
-        style,
-        0,
-        style_ex
-    )};
+//     unsafe {user32::AdjustWindowRectEx(
+//         &mut winapi_rect,
+//         style,
+//         0,
+//         style_ex
+//     )};
 
-    R::from(OffsetRect::new(winapi_rect.left as Px, winapi_rect.top as Px, winapi_rect.right as Px, winapi_rect.bottom as Px))
-}
+//     R::from(OffsetRect::new(winapi_rect.left as Px, winapi_rect.top as Px, winapi_rect.right as Px, winapi_rect.bottom as Px))
+// }
 
 pub struct Icon( HICON );
 
