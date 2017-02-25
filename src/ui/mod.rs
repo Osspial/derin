@@ -16,12 +16,18 @@ pub trait NodeProcessorAT: Sized {
     type Error;
 }
 
-pub trait NodeProcessor<N: Node<Self::WidgetDataWrapper>>: NodeProcessorAT {
-    type WidgetDataWrapper: WidgetDataWrapper<N::Inner>;
-
+pub trait NodeProcessor<W, N>: NodeProcessorAT
+        where W: WidgetDataWrapper<N::Inner>, N: Node<W>
+{
     /// Add a child to the node processor.
     fn add_child<'a>(&'a mut self, ChildId, node: &'a N) -> Result<(), Self::Error>
             where N: Parent<Self>;
+}
+
+pub trait WrapperNodeProcessor<N>: NodeProcessor<<Self as WrapperNodeProcessor<N>>::WidgetDataWrapper, N>
+        where N: Node<Self::WidgetDataWrapper>
+{
+    type WidgetDataWrapper: WidgetDataWrapper<N::Inner>;
 }
 
 pub trait Node<W: WidgetDataWrapper<Self::Inner>> {

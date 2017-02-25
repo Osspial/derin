@@ -1,4 +1,4 @@
-use super::{Node, NodeProcessor, WidgetDataWrapper, NodeProcessorAT, Parent, ActionNode, Control};
+use super::{Node, WrapperNodeProcessor, WidgetDataWrapper, NodeProcessorAT, Parent, ActionNode, Control};
 use std::ops::{Deref, DerefMut};
 use rand::{Rng, thread_rng};
 
@@ -15,7 +15,7 @@ macro_rules! intrinsics {
     {
         pub struct $name<$inner_ty, P>
                 where $inner_ty $(: $($constraint + )+)*,
-                      P: NodeProcessorAT + NodeProcessor<$name<$inner_ty, P>>,
+                      P: NodeProcessorAT + WrapperNodeProcessor<$name<$inner_ty, P>>,
                       P::WidgetDataWrapper: WidgetDataWrapper<$inner_ty>
         {
             data: P::WidgetDataWrapper,
@@ -24,7 +24,7 @@ macro_rules! intrinsics {
 
         impl<$inner_ty, P> $name_impl<$inner_ty, P>
                 where $inner_ty $(: $($constraint + )+)*,
-                      P: NodeProcessorAT + NodeProcessor<$name<$inner_ty, P>>,
+                      P: NodeProcessorAT + WrapperNodeProcessor<$name<$inner_ty, P>>,
                       P::WidgetDataWrapper: WidgetDataWrapper<$inner_ty>
         {
             pub fn new(widget_data: $inner_ty) -> Self {
@@ -51,7 +51,7 @@ macro_rules! intrinsics {
 
         impl<$inner_ty, P> AsRef<$inner_ty> for $name_impl<$inner_ty, P>
                 where $inner_ty $(: $($constraint + )+)*,
-                      P: NodeProcessorAT + NodeProcessor<$name<$inner_ty, P>>,
+                      P: NodeProcessorAT + WrapperNodeProcessor<$name<$inner_ty, P>>,
                       P::WidgetDataWrapper: WidgetDataWrapper<$inner_ty>
         {
             fn as_ref(&self) -> &$inner_ty {
@@ -61,7 +61,7 @@ macro_rules! intrinsics {
 
         impl<$inner_ty, P> AsMut<$inner_ty> for $name_impl<$inner_ty, P>
                 where $inner_ty $(: $($constraint + )+)*,
-                      P: NodeProcessorAT + NodeProcessor<$name<$inner_ty, P>>,
+                      P: NodeProcessorAT + WrapperNodeProcessor<$name<$inner_ty, P>>,
                       P::WidgetDataWrapper: WidgetDataWrapper<$inner_ty>
         {
             fn as_mut(&mut self) -> &mut $inner_ty {
@@ -71,7 +71,7 @@ macro_rules! intrinsics {
 
         impl<$inner_ty, P> Deref for $name_impl<$inner_ty, P>
                 where $inner_ty $(: $($constraint + )+)*,
-                      P: NodeProcessorAT + NodeProcessor<$name<$inner_ty, P>>,
+                      P: NodeProcessorAT + WrapperNodeProcessor<$name<$inner_ty, P>>,
                       P::WidgetDataWrapper: WidgetDataWrapper<$inner_ty>
         {
             type Target = $inner_ty;
@@ -82,7 +82,7 @@ macro_rules! intrinsics {
 
         impl<$inner_ty, P> DerefMut for $name_impl<$inner_ty, P>
                 where $inner_ty $(: $($constraint + )+)*,
-                      P: NodeProcessorAT + NodeProcessor<$name<$inner_ty, P>>,
+                      P: NodeProcessorAT + WrapperNodeProcessor<$name<$inner_ty, P>>,
                       P::WidgetDataWrapper: WidgetDataWrapper<$inner_ty>
         {
             fn deref_mut(&mut self) -> &mut $inner_ty {
@@ -92,7 +92,7 @@ macro_rules! intrinsics {
 
         impl<$inner_ty, P> Node<P::WidgetDataWrapper> for $name_impl<$inner_ty, P>
                 where $inner_ty $(: $($constraint + )+)*,
-                      P: NodeProcessorAT + NodeProcessor<$name<$inner_ty, P>>,
+                      P: NodeProcessorAT + WrapperNodeProcessor<$name<$inner_ty, P>>,
                       P::WidgetDataWrapper: WidgetDataWrapper<$inner_ty>
         {
             type Inner = $inner_ty;
@@ -150,7 +150,7 @@ fn refresh_state_id(state_id: u16) -> u16 {
 
 impl<I, P> ActionNode<P::WidgetDataWrapper> for TextButton<I, P>
         where I: AsRef<str> + Control,
-              P: NodeProcessorAT + NodeProcessor<TextButton<I, P>>,
+              P: NodeProcessorAT + WrapperNodeProcessor<TextButton<I, P>>,
               P::WidgetDataWrapper: WidgetDataWrapper<I>
 {
     type Action = I::Action;
@@ -158,7 +158,7 @@ impl<I, P> ActionNode<P::WidgetDataWrapper> for TextButton<I, P>
 
 impl<I, P> ActionNode<P::WidgetDataWrapper> for WidgetGroup<I, P>
         where I: Parent<P>,
-              P: NodeProcessorAT + NodeProcessor<WidgetGroup<I, P>>,
+              P: NodeProcessorAT + WrapperNodeProcessor<WidgetGroup<I, P>>,
               P::WidgetDataWrapper: WidgetDataWrapper<I>
 {
     type Action = I::ChildAction;
