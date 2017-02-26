@@ -99,7 +99,7 @@ pub struct WindowIcon {
 pub struct WindowBuilder<'a> {
     pub pos: Option<(i32, i32)>,
     pub size: Option<OriginRect>,
-    pub window_title: &'a str,
+    pub window_text: &'a str,
     pub show_window: bool
 }
 
@@ -135,7 +135,7 @@ impl<'a> WindowBuilder<'a> {
     }
 
     fn build(self, style: DWORD, style_ex: DWORD, class: &Ucs2Str) -> HWND {
-        UCS2_CONVERTER.with_string(self.window_title, |window_title| unsafe {
+        UCS2_CONVERTER.with_string(self.window_text, |window_text| unsafe {
             let pos = self.pos.unwrap_or((CW_USEDEFAULT, CW_USEDEFAULT));
             let size = match self.size {
                 Some(s) => {
@@ -156,7 +156,7 @@ impl<'a> WindowBuilder<'a> {
             let window_handle = user32::CreateWindowExW(
                 style_ex,
                 class.as_ptr(),
-                window_title.as_ptr(),
+                window_text.as_ptr(),
                 style,
                 pos.0, pos.1,
                 size.0, size.1,
@@ -220,12 +220,12 @@ pub struct OverlapWrapper<W: Window>( W );
 
 pub struct SubclassWrapper<W: Window, S: Subclass<W>> {
     window: W,
-    subclass_data: Box<RefCell<S>>
+    pub subclass_data: Box<RefCell<S>>
 }
 
 pub struct UnsafeSubclassWrapper<W: Window, S: Subclass<W>> {
     window: W,
-    subclass_data: RefCell<S>
+    pub subclass_data: RefCell<S>
 }
 
 pub struct ProcWindowRef<W: Window> {
@@ -267,7 +267,7 @@ pub trait Window: Sized {
         WindowRef( unsafe{self.hwnd()} )
     }
 
-    fn set_title(&self, title: &str) {
+    fn set_text(&self, title: &str) {
         UCS2_CONVERTER.with_string(title, |title_ucs2|
             unsafe{ user32::SetWindowTextW(self.hwnd(), title_ucs2.as_ptr()) }
         );
@@ -455,6 +455,39 @@ pub trait ButtonWindow: Window {
     }
 }
 
+pub trait TextLabelWindow: Window {
+    fn min_unclipped_rect(&self) -> OriginRect {
+        let text_len = unsafe{ user32::GetWindowTextLengthW(self.hwnd()) };
+        UCS2_CONVERTER.with_ucs2_buffer(text_len as usize, |text_buf| {
+            unsafe{ user32::GetWindowTextW(self.hwnd(), text_buf.as_mut_ptr(), text_len) };
+            self.min_unclipped_rect_raw(text_buf)
+        })
+    }
+
+    fn min_unclipped_rect_raw(&self, text: &Ucs2Str) -> OriginRect {
+        unsafe {
+            let mut label_rect = RECT {
+                left: 0,
+                top: 0,
+                right: 0,
+                bottom: 0
+            };
+
+            let hdc = user32::GetDC(self.hwnd());
+            user32::DrawTextW(
+                hdc,
+                text.as_ptr(),
+                -1,
+                &mut label_rect,
+                DT_CALCRECT
+            );
+            user32::ReleaseDC(self.hwnd(), hdc);
+
+            OriginRect::new(label_rect.right as u32, label_rect.bottom as u32)
+        }
+    }
+}
+
 
 
 // IconWindow impls
@@ -465,6 +498,7 @@ impl<I: AsRef<WindowIcon>, W: Window> Window for IconWrapper<I, W> {
 impl<I: AsRef<WindowIcon>, W: Window> OverlappedWindow for IconWrapper<I, W> {}
 impl<I: AsRef<WindowIcon>, W: Window> ParentWindow for IconWrapper<I, W> where W: ParentWindow {}
 impl<I: AsRef<WindowIcon>, W: Window> ButtonWindow for IconWrapper<I, W> where W: ButtonWindow {}
+impl<I: AsRef<WindowIcon>, W: Window> TextLabelWindow for IconWrapper<I, W> where W: TextLabelWindow {}
 impl<I: AsRef<WindowIcon>, W: Window> IconWindow for IconWrapper<I, W> {
     type I = I;
     #[inline]
@@ -480,6 +514,7 @@ impl<W: Window> Window for OverlapWrapper<W> {
 impl<W: Window> OverlappedWindow for OverlapWrapper<W> {}
 impl<W: Window> ParentWindow for OverlapWrapper<W> where W: ParentWindow {}
 impl<W: Window> ButtonWindow for OverlapWrapper<W> where W: ButtonWindow {}
+impl<W: Window> TextLabelWindow for OverlapWrapper<W> where W: TextLabelWindow {}
 impl<W: Window> IconWindow for OverlapWrapper<W> where W: IconWindow {
     type I = <W as IconWindow>::I;
     #[inline]
@@ -511,6 +546,7 @@ impl<W: Window, S: Subclass<W>> Window for SubclassWrapper<W, S> {
 impl<W: Window, S: Subclass<W>> OverlappedWindow for SubclassWrapper<W, S> where W: OverlappedWindow {}
 impl<W: Window, S: Subclass<W>> ParentWindow for SubclassWrapper<W, S> where W: ParentWindow {}
 impl<W: Window, S: Subclass<W>> ButtonWindow for SubclassWrapper<W, S> where W: ButtonWindow {}
+impl<W: Window, S: Subclass<W>> TextLabelWindow for SubclassWrapper<W, S> where W: TextLabelWindow {}
 impl<W: Window, S: Subclass<W>> IconWindow for SubclassWrapper<W, S> where W: IconWindow {
     type I = <W as IconWindow>::I;
     #[inline]
@@ -543,6 +579,7 @@ impl<W: Window, S: Subclass<W>> Window for UnsafeSubclassWrapper<W, S> {
 impl<W: Window, S: Subclass<W>> OverlappedWindow for UnsafeSubclassWrapper<W, S> where W: OverlappedWindow {}
 impl<W: Window, S: Subclass<W>> ParentWindow for UnsafeSubclassWrapper<W, S> where W: ParentWindow {}
 impl<W: Window, S: Subclass<W>> ButtonWindow for UnsafeSubclassWrapper<W, S> where W: ButtonWindow {}
+impl<W: Window, S: Subclass<W>> TextLabelWindow for UnsafeSubclassWrapper<W, S> where W: TextLabelWindow {}
 impl<W: Window, S: Subclass<W>> IconWindow for UnsafeSubclassWrapper<W, S> where W: IconWindow {
     type I = <W as IconWindow>::I;
     #[inline]
@@ -575,6 +612,7 @@ impl<W: Window> Window for ProcWindowRef<W> {
 impl<W: Window> OverlappedWindow for ProcWindowRef<W> where W: OverlappedWindow {}
 impl<W: Window> ParentWindow for ProcWindowRef<W> where W: ParentWindow {}
 impl<W: Window> ButtonWindow for ProcWindowRef<W> where W: ButtonWindow {}
+impl<W: Window> TextLabelWindow for ProcWindowRef<W> where W: TextLabelWindow {}
 
 
 
@@ -783,12 +821,26 @@ mod ucs2 {
                 ret
             })
         }
+
+        fn with_ucs2_buffer<F, R>(&'static self, len: usize, f: F) -> R
+                where F: FnOnce(&mut Ucs2Str) -> R
+        {
+            self.with(|converter| {
+                let mut converter = converter.borrow_mut();
+                converter.str_buf.resize(len, 0);
+                let ret = f(&mut converter.str_buf[..]);
+                converter.str_buf.clear();
+                ret
+            })
+        }
     }
 
     pub trait WithString {
         fn with_string<S, F, R>(&'static self, S, F) -> R
                 where S: AsRef<OsStr>,
                       F: FnOnce(&Ucs2Str) -> R;
+        fn with_ucs2_buffer<F, R>(&'static self, len: usize, F) -> R
+                where F: FnOnce(&mut Ucs2Str) -> R;
     }
 
     #[derive(Default)]
