@@ -15,33 +15,17 @@ use std::cmp;
 pub type Tr = u32;
 pub type Fr = f32;
 
-#[derive(Default, Debug, Clone)]
-pub struct WidgetData<W> {
-    pub widget: W,
-    pub layout_info: WidgetHints,
+#[derive(Default, Debug, Clone, Copy)]
+pub struct WidgetData {
+    pub widget_hints: WidgetHints,
     /// The "absolute" size bounds, defined by the widget and not the user, beyond which there may be
     /// rendering errors with the widget.
-    pub abs_size_bounds: SizeBounds,
-    solvable: Solvable
+    pub abs_size_bounds: SizeBounds
 }
 
-impl<W> WidgetData<W> {
-    pub fn new(widget: W) -> WidgetData<W> {
-        WidgetData {
-            widget: widget,
-            layout_info: WidgetHints::default(),
-            abs_size_bounds: SizeBounds::default(),
-            solvable: Solvable::default()
-        }
-    }
-
-    pub fn swap_widget<X>(&self, new_widget: X) -> WidgetData<X> {
-        WidgetData {
-            widget: new_widget,
-            layout_info: self.layout_info,
-            abs_size_bounds: self.abs_size_bounds,
-            solvable: self.solvable
-        }
+impl WidgetData {
+    pub fn new() -> WidgetData {
+        WidgetData::default()
     }
 }
 
@@ -50,13 +34,13 @@ pub trait Widget {
 }
 
 pub trait Container {
-    type Widget: Widget;
+    type Widget: Widget + ?Sized;
 
     /// Iterate over each widget in the container, returning early if the return value of F is false.
     /// `for_each_widget` returns the return value of the final call to `f` - i.e. returns false if
     /// the iterator was halted, and true otherwise.
-    fn for_each_widget<'a, F>(&'a mut self, f: F) -> bool
-            where F: FnMut(&'a mut WidgetData<Self::Widget>) -> bool;
+    fn for_each_widget<F>(&mut self, f: F) -> bool
+            where F: FnMut(&mut Self::Widget, WidgetData) -> bool;
 }
 
 
@@ -66,15 +50,12 @@ pub struct LayoutUpdater {
     potential_frac_tracks: TrackVec<Tr>,
     rigid_tracks_widget: Vec<Tr>,
     frac_tracks_widget: Vec<Tr>,
-    unsolvable_id: u64
+    solvable_widgets: Vec<Solvable>
 }
 
 impl LayoutUpdater {
     pub fn new() -> LayoutUpdater {
-        LayoutUpdater {
-            unsolvable_id: 0,
-            ..LayoutUpdater::default()
-        }
+        LayoutUpdater::default()
     }
 
     /// This method is the heart and soul of the derin layout engine, and is easily the most complex
@@ -91,11 +72,13 @@ impl LayoutUpdater {
     pub fn update_engine<C>(&mut self, container: &mut C, engine: &mut LayoutEngine) -> Result<(), OriginRect>
             where C: Container
     {
-        let mut frac_tracks = &mut self.frac_tracks;
-        let mut potential_frac_tracks = &mut self.potential_frac_tracks;
-
-        let mut rigid_tracks_widget = &mut self.rigid_tracks_widget;
-        let mut frac_tracks_widget = &mut self.frac_tracks_widget;
+        let &mut LayoutUpdater {
+            ref mut frac_tracks,
+            ref mut potential_frac_tracks,
+            ref mut rigid_tracks_widget,
+            ref mut frac_tracks_widget,
+            ref mut solvable_widgets
+        } = self;
 
         let &mut LayoutEngine {
             ref mut grid,
@@ -259,21 +242,31 @@ impl LayoutUpdater {
             track_constraints!(get_col, get_col_mut, push_col, num_cols, remove_col, free_width, fr_total_width);
             track_constraints!(get_row, get_row_mut, push_row, num_rows, remove_row, free_height, fr_total_height);
 
-            let cur_unsolvable_id = self.unsolvable_id;
-            container.for_each_widget(|&mut WidgetData{ref mut widget, layout_info, abs_size_bounds, ref mut solvable}| {
-                if 0 < layout_info.node_span.x.size(0, 1) &&
-                   0 < layout_info.node_span.y.size(0, 1)
+            let mut solvable_index_iter = 0..;
+            container.for_each_widget(|widget, WidgetData{widget_hints, abs_size_bounds}| {
+                if 0 < widget_hints.node_span.x.size(0, 1) &&
+                   0 < widget_hints.node_span.y.size(0, 1)
                 {
+                    let solvable = {
+                        let index = solvable_index_iter.next().unwrap();
+                        if solvable_widgets.get(index).is_some() {
+                            &mut solvable_widgets[index]
+                        } else {
+                            solvable_widgets.push(Solvable::default());
+                            solvable_widgets.last_mut().unwrap()
+                        }
+                    };
+
                     // The widget size bounds without the margin
                     let widget_size_bounds_nomargin = SizeBounds {
-                        min: abs_size_bounds.bound_rect(layout_info.size_bounds.min).converge(),
-                        max: abs_size_bounds.bound_rect(layout_info.size_bounds.max).converge()
+                        min: abs_size_bounds.bound_rect(widget_hints.size_bounds.min).converge(),
+                        max: abs_size_bounds.bound_rect(widget_hints.size_bounds.max).converge()
                     };
                     // The widget size bounds, including the margin
                     let widget_size_bounds = {
                         let mut wsb = widget_size_bounds_nomargin;
-                        let margins_x = layout_info.margins.left + layout_info.margins.right;
-                        let margins_y = layout_info.margins.top + layout_info.margins.bottom;
+                        let margins_x = widget_hints.margins.left + widget_hints.margins.right;
+                        let margins_y = widget_hints.margins.top + widget_hints.margins.bottom;
 
                         wsb.min.width += margins_x;
                         wsb.max.width = wsb.max.width.saturating_add(margins_x);
@@ -291,15 +284,7 @@ impl LayoutUpdater {
                             let mut px_widget = 0;
                             let mut min_size_debt = widget_size_bounds.min.$size();
 
-                            // If the widget has been flagged as unsolvable, check to see that is was marked as unsolvable
-                            // during the current call to `pop_engine`. If it wasn't, then tentatively mark it as solvable.
-                            if let SolveAxis::Unsolvable(unsolvable_id) = solvable.$axis {
-                                if unsolvable_id != cur_unsolvable_id {
-                                    solvable.$axis = SolveAxis::Solvable;
-                                }
-                            }
-
-                            if let Some(track_slice) = grid.$track_range(layout_info.node_span.$axis) {
+                            if let Some(track_slice) = grid.$track_range(widget_hints.node_span.$axis) {
                                 for (index, track) in track_slice.iter().enumerate() {
                                     let track_fr_size = track.hints().fr_size;
                                     px_widget += track.size();
@@ -315,7 +300,7 @@ impl LayoutUpdater {
                                 }
                             }
 
-                            if !solvable.$axis.is_unsolvable_with(cur_unsolvable_id) {
+                            if solvable.$axis == SolveAxis::Solvable {
                                 let mut grid_changed = false;
 
                                 while 0 < rigid_tracks_widget.len() {
@@ -324,7 +309,7 @@ impl LayoutUpdater {
 
                                     let mut rigid_index = 0;
                                     while let Some(track_index) = rigid_tracks_widget.get(rigid_index).cloned() {
-                                        let track = &mut grid.$track_range_mut(layout_info.node_span.$axis).unwrap()[track_index as usize];
+                                        let track = &mut grid.$track_range_mut(widget_hints.node_span.$axis).unwrap()[track_index as usize];
                                         let expansion = rigid_expand + (expand_rem != 0) as Px;
 
                                         if track.min_size() + expansion <= track.max_size() {
@@ -376,7 +361,7 @@ impl LayoutUpdater {
                                 min_size_debt = min_size_debt.saturating_sub(fr_expand);
 
                                 if 0 < min_size_debt {
-                                    solvable.$axis = SolveAxis::Unsolvable(cur_unsolvable_id);
+                                    solvable.$axis = SolveAxis::Unsolvable;
                                 }
 
                                 actual_size_bounds.min.$size = frac_min_size.$size() + rigid_min_size.$size();
@@ -405,14 +390,14 @@ impl LayoutUpdater {
                     let widget_origin_rect = OriginRect::new(size_x, size_y);
 
                     let offset = grid.get_cell_offset(
-                        layout_info.node_span.x.start.unwrap_or(0),
-                        layout_info.node_span.y.start.unwrap_or(0)
+                        widget_hints.node_span.x.start.unwrap_or(0),
+                        widget_hints.node_span.y.start.unwrap_or(0)
                     ).unwrap();
 
                     let outer_rect = widget_origin_rect.offset(offset);
-                    let cell_hinter = CellHinter::new(outer_rect, layout_info.place_in_cell);
+                    let cell_hinter = CellHinter::new(outer_rect, widget_hints.place_in_cell);
 
-                    if let Ok(widget_rect) = cell_hinter.hint(widget_size_bounds_nomargin, layout_info.margins) {
+                    if let Ok(widget_rect) = cell_hinter.hint(widget_size_bounds_nomargin, widget_hints.margins) {
                         widget.set_rect(widget_rect);
                     }
                 }
@@ -423,11 +408,11 @@ impl LayoutUpdater {
             break 'update;
         }
 
-        self.unsolvable_id.wrapping_add(1);
         frac_tracks.clear();
         potential_frac_tracks.clear();
         rigid_tracks_widget.clear();
         frac_tracks_widget.clear();
+        solvable_widgets.clear();
 
         if *actual_size != old_engine_size {
             Err(*actual_size)
@@ -547,18 +532,7 @@ struct Solvable {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SolveAxis {
     Solvable,
-    Unsolvable(u64)
-}
-
-impl SolveAxis {
-    fn is_unsolvable_with(self, unsolvable_id: u64) -> bool {
-        if let SolveAxis::Unsolvable(id) = self {
-            if id == unsolvable_id {
-                return true;
-            }
-        }
-        false
-    }
+    Unsolvable
 }
 
 impl Default for SolveAxis {
