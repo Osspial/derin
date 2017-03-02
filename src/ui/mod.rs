@@ -17,20 +17,20 @@ pub trait NodeProcessorAT: Sized {
 }
 
 pub trait NodeProcessor<W, N>: NodeProcessorAT
-        where W: WidgetDataWrapper<N::Inner>, N: Node<W>
+        where W: NodeDataWrapper<N::Inner>, N: Node<W>
 {
     /// Add a child to the node processor.
-    fn add_child<'a>(&'a mut self, ChildId, node: &'a N) -> Result<(), Self::Error>
+    fn add_child<'a>(&'a mut self, ChildId, node: &'a mut N) -> Result<(), Self::Error>
             where N: Parent<Self>;
 }
 
-pub trait WrapperNodeProcessor<N>: NodeProcessor<<Self as WrapperNodeProcessor<N>>::WidgetDataWrapper, N>
-        where N: Node<Self::WidgetDataWrapper>
+pub trait WrapperNodeProcessor<N>: NodeProcessor<<Self as WrapperNodeProcessor<N>>::NodeDataWrapper, N>
+        where N: Node<Self::NodeDataWrapper>
 {
-    type WidgetDataWrapper: WidgetDataWrapper<N::Inner>;
+    type NodeDataWrapper: NodeDataWrapper<N::Inner>;
 }
 
-pub trait Node<W: WidgetDataWrapper<Self::Inner>> {
+pub trait Node<W: NodeDataWrapper<Self::Inner>> {
     type Inner;
 
     fn type_name(&self) -> &'static str;
@@ -42,14 +42,14 @@ pub trait Node<W: WidgetDataWrapper<Self::Inner>> {
     fn data_mut(&mut self) -> &mut W;
 }
 
-pub trait WidgetDataWrapper<I> {
+pub trait NodeDataWrapper<I> {
     fn from_widget_data(I) -> Self;
     fn inner(&self) -> &I;
     fn inner_mut(&mut self) -> &mut I;
     fn unwrap(self) -> I;
 }
 
-pub trait ActionNode<W: WidgetDataWrapper<Self::Inner>>: Node<W> {
+pub trait ActionNode<W: NodeDataWrapper<Self::Inner>>: Node<W> {
     type Action;
 }
 
@@ -59,7 +59,7 @@ pub trait Parent<NP>
     type ChildAction;
     type ChildLayout: GridLayout;
 
-    fn children(&self, NP) -> Result<(), NP::Error>;
+    fn children(&mut self, NP) -> Result<(), NP::Error>;
     fn child_layout(&self) -> Self::ChildLayout;
 }
 
@@ -67,4 +67,14 @@ pub trait Control {
     type Action;
 
     fn on_mouse_event(&self, MouseEvent) -> Option<Self::Action> {None}
+}
+
+impl<W, N> NodeProcessor<W, N> for ()
+        where W: NodeDataWrapper<N::Inner>, N: Node<W>
+{
+    fn add_child<'a>(&'a mut self, _: ChildId, _: &'a mut N) -> Result<(), ()> {Ok(())}
+}
+
+impl NodeProcessorAT for () {
+    type Error = ();
 }
