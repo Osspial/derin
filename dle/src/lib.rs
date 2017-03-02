@@ -34,8 +34,6 @@ pub trait Widget {
 }
 
 pub trait Container {
-    type Widget: Widget + ?Sized;
-
     fn update_widget_rects(&mut self, WidgetConstraintSolver);
 }
 
@@ -224,6 +222,7 @@ impl LayoutUpdater {
 
             container.update_widget_rects(WidgetConstraintSolver {
                 solvable_index: 0,
+                aborted: false,
                 engine: engine,
                 updater: self,
                 free_width: &mut free_width,
@@ -309,12 +308,15 @@ impl LayoutEngine {
 }
 
 pub enum SolveError {
+    /// The widget's constraints lead to it being unsolvable.
     WidgetUnsolvable,
+    /// Some sort of change in the grid has occured that requires the rect loop to abort.
     Abort
 }
 
 pub struct WidgetConstraintSolver<'a> {
     solvable_index: usize,
+    aborted: bool,
     engine: &'a mut LayoutEngine,
     updater: &'a mut LayoutUpdater,
 
@@ -328,6 +330,10 @@ pub struct WidgetConstraintSolver<'a> {
 
 impl<'a> WidgetConstraintSolver<'a> {
     pub fn solve_widget_constraints(&mut self, WidgetData{widget_hints, abs_size_bounds}: WidgetData) -> Result<OffsetRect, SolveError> {
+        if self.aborted {
+            return Err(SolveError::Abort);
+        }
+
         if 0 < widget_hints.node_span.x.size(0, 1) &&
            0 < widget_hints.node_span.y.size(0, 1)
         {
