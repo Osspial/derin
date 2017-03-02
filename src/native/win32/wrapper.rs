@@ -11,7 +11,7 @@ use std::marker::PhantomData;
 use super::NodeTraverser;
 
 pub struct TextButtonWindow<I>(UnsafeSubclassWrapper<PushButtonBase, TextButtonSubclass<I>>)
-        where I: 'static + AsRef<str> + Control;
+        where I: AsRef<str> + Control;
 
 enum ButtonState {
     Released,
@@ -19,7 +19,7 @@ enum ButtonState {
     DoublePressed
 }
 
-pub struct TextButtonSubclass<I: 'static + AsRef<str> + Control> {
+pub struct TextButtonSubclass<I: AsRef<str> + Control> {
     widget: I,
     widget_data: WidgetData,
     button_state: ButtonState
@@ -27,7 +27,7 @@ pub struct TextButtonSubclass<I: 'static + AsRef<str> + Control> {
 
 impl<B, I> Subclass<B> for TextButtonSubclass<I>
         where B: ButtonWindow,
-              I: 'static + AsRef<str> + Control
+              I: AsRef<str> + Control
 {
     type UserMsg = ();
     fn subclass_proc(&mut self, window: &ProcWindowRef<B>, msg: Msg<()>) -> i64 {
@@ -57,7 +57,7 @@ impl<B, I> Subclass<B> for TextButtonSubclass<I>
 
 pub type ParentSubclassWindow<I> = UnsafeSubclassWrapper<BlankBase, ParentSubclass<I>>;
 
-pub struct ParentSubclass<I: 'static + Parent<()>> {
+pub struct ParentSubclass<I: Parent<()>> {
     widget: I,
     widget_data: WidgetData,
     layout_engine: LayoutEngine
@@ -65,7 +65,7 @@ pub struct ParentSubclass<I: 'static + Parent<()>> {
 
 impl<P, I> Subclass<P> for ParentSubclass<I>
         where P: ParentWindow,
-              I: 'static + Parent<()>
+              I: Parent<()>
 {
     type UserMsg = ();
     fn subclass_proc(&mut self, window: &ProcWindowRef<P>, msg: Msg<()>) -> i64 {

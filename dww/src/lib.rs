@@ -49,20 +49,15 @@ pub enum Bm<'a> {
 
 
 
-pub trait Subclass<W: Window>: 'static {
+/// A trait representing a subclass on a window. Note that, if multiple subclasses are applied,
+/// only the outermost subclass is used.
+pub trait Subclass<W: Window> {
     type UserMsg: UserMsg;
 
     fn subclass_proc(&mut self, &ProcWindowRef<W>, Msg<Self::UserMsg>) -> i64;
-    fn subclass_id() -> u64 {
-        use std::any::TypeId;
-        use std::hash::{Hash, Hasher};
-        use std::collections::hash_map::DefaultHasher;
-
-        let mut hasher = DefaultHasher::new();
-        TypeId::of::<Self>().hash(&mut hasher);
-        hasher.finish()
-    }
 }
+
+const SUBCLASS_ID: UINT_PTR = 0;
 
 lazy_static!{
     static ref BLANK_WINDOW_CLASS: Ucs2String = unsafe {
@@ -220,12 +215,12 @@ pub struct OverlapWrapper<W: Window>( W );
 
 pub struct SubclassWrapper<W: Window, S: Subclass<W>> {
     window: W,
-    pub subclass_data: Box<RefCell<S>>
+    subclass_data: Box<RefCell<S>>
 }
 
 pub struct UnsafeSubclassWrapper<W: Window, S: Subclass<W>> {
     window: W,
-    pub subclass_data: RefCell<S>
+    subclass_data: RefCell<S>
 }
 
 pub struct ProcWindowRef<W: Window> {
@@ -533,10 +528,14 @@ impl<W: Window, S: Subclass<W>> SubclassWrapper<W, S> {
         unsafe{ comctl32::SetWindowSubclass(
             wrapper.window.hwnd(),
             Some(subclass_proc::<W, S>),
-            S::subclass_id(),
+            SUBCLASS_ID,
             wrapper.subclass_data.as_ptr() as *const _ as DWORD_PTR
         ) };
         wrapper
+    }
+
+    pub fn subclass_data(&self) -> &RefCell<S> {
+        &self.subclass_data
     }
 }
 impl<W: Window, S: Subclass<W>> Window for SubclassWrapper<W, S> {
@@ -563,11 +562,15 @@ impl<W: Window, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
         }
     }
 
+    pub fn subclass_data(&self) -> &RefCell<S> {
+        &self.subclass_data
+    }
+
     pub fn update_subclass_ptr(&self) {
         unsafe{ comctl32::SetWindowSubclass(
             self.window.hwnd(),
             Some(subclass_proc::<W, S>),
-            S::subclass_id(),
+            SUBCLASS_ID,
             &self.subclass_data as *const _ as DWORD_PTR
         ) };
     }
