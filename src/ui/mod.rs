@@ -43,7 +43,7 @@ pub trait Node<W: NodeDataWrapper<Self::Inner>> {
 }
 
 pub trait NodeDataWrapper<I> {
-    fn from_widget_data(I) -> Self;
+    fn from_node_data(I) -> Self;
     fn inner(&self) -> &I;
     fn inner_mut(&mut self) -> &mut I;
     fn unwrap(self) -> I;

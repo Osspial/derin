@@ -6,12 +6,84 @@ use dle::hints::WidgetHints;
 use dct::events::{MouseEvent, MouseButton};
 use dct::geometry::OffsetRect;
 
+use std::cell::{Cell, RefCell};
 use std::marker::PhantomData;
 
 use super::NodeTraverser;
 
-pub struct TextButtonWindow<I>(UnsafeSubclassWrapper<PushButtonBase, TextButtonSubclass<I>>)
+pub struct TextButtonNodeData<I>( UnsafeSubclassWrapper<PushButtonBase, TextButtonSubclass<I>> )
         where I: AsRef<str> + Control;
+
+pub struct WidgetGroupNodeData<I>( UnsafeSubclassWrapper<BlankBase, WidgetGroupSubclass<I>> )
+        where I: Parent<()>;
+
+pub struct TextLabelNodeData<S>( UnsafeSubclassWrapper<TextLabelBase, TextLabelSubclass<S>> )
+        where S: AsRef<str>;
+
+impl<I: AsRef<str> + Control> WidgetDataContainer for TextButtonNodeData<I> {
+    #[inline]
+    fn get_widget_data(&self) -> WidgetData {
+        self.0.subclass_data.mutable_data.borrow().widget_data
+    }
+}
+
+impl<I: Parent<()>> WidgetDataContainer for WidgetGroupNodeData<I> {
+    #[inline]
+    fn get_widget_data(&self) -> WidgetData {
+        self.0.subclass_data.widget_data
+    }
+}
+
+impl<S: AsRef<str>> WidgetDataContainer for TextLabelNodeData<S> {
+    #[inline]
+    fn get_widget_data(&self) -> WidgetData {
+        self.0.subclass_data.widget_data.get()
+    }
+}
+
+impl<I: AsRef<str> + Control> NodeDataWrapper<I> for TextButtonNodeData<I> {
+    fn from_node_data(node_data: I) -> TextButtonNodeData<I> {
+        let button_window = WindowBuilder::default().build_push_button();
+        let subclass = TextButtonSubclass::new(node_data);
+
+        let wrapper = unsafe{ UnsafeSubclassWrapper::new(button_window, subclass) };
+        TextButtonNodeData(wrapper)
+    }
+
+    fn inner(&self) -> &I {&self.0.subclass_data.node_data}
+    fn inner_mut(&mut self) -> &mut I {&mut self.0.subclass_data.node_data}
+    fn unwrap(self) -> I {self.0.subclass_data.node_data}
+}
+
+impl<I: Parent<()>> NodeDataWrapper<I> for WidgetGroupNodeData<I> {
+    fn from_node_data(node_data: I) -> WidgetGroupNodeData<I> {
+        let blank_window = WindowBuilder::default().build_blank();
+        let subclass = WidgetGroupSubclass::new(node_data);
+
+        let wrapper = unsafe{ UnsafeSubclassWrapper::new(blank_window, subclass) };
+        WidgetGroupNodeData(wrapper)
+    }
+
+    fn inner(&self) -> &I {&self.0.subclass_data.node_data}
+    fn inner_mut(&mut self) -> &mut I {&mut self.0.subclass_data.node_data}
+    fn unwrap(self) -> I {self.0.subclass_data.node_data}
+}
+
+impl<S: AsRef<str>> NodeDataWrapper<S> for TextLabelNodeData<S> {
+    fn from_node_data(text: S) -> TextLabelNodeData<S> {
+        let label_window = WindowBuilder::default().build_text_label();
+        let subclass = TextLabelSubclass::new(text);
+
+        let wrapper = unsafe{ UnsafeSubclassWrapper::new(label_window, subclass) };
+        TextLabelNodeData(wrapper)
+    }
+
+    fn inner(&self) -> &S {&self.0.subclass_data.text}
+    fn inner_mut(&mut self) -> &mut S {&mut self.0.subclass_data.text}
+    fn unwrap(self) -> S {self.0.subclass_data.text}
+}
+
+
 
 enum ButtonState {
     Released,
@@ -19,10 +91,32 @@ enum ButtonState {
     DoublePressed
 }
 
-pub struct TextButtonSubclass<I: AsRef<str> + Control> {
-    widget: I,
+impl Default for ButtonState {
+    #[inline]
+    fn default() -> ButtonState {
+        ButtonState::Released
+    }
+}
+
+struct TextButtonSubclass<I: AsRef<str> + Control> {
+    node_data: I,
+    mutable_data: RefCell<TBSMut>
+}
+
+#[derive(Default)]
+struct TBSMut {
     widget_data: WidgetData,
     button_state: ButtonState
+}
+
+impl<I: AsRef<str> + Control> TextButtonSubclass<I> {
+    #[inline]
+    fn new(node_data: I) -> TextButtonSubclass<I> {
+        TextButtonSubclass {
+            node_data: node_data,
+            mutable_data: RefCell::new(TBSMut::default())
+        }
+    }
 }
 
 impl<B, I> Subclass<B> for TextButtonSubclass<I>
@@ -30,23 +124,24 @@ impl<B, I> Subclass<B> for TextButtonSubclass<I>
               I: AsRef<str> + Control
 {
     type UserMsg = ();
-    fn subclass_proc(&mut self, window: &ProcWindowRef<B>, msg: Msg<()>) -> i64 {
+    fn subclass_proc(&self, window: &ProcWindowRef<B>, msg: Msg<()>) -> i64 {
         let ret = window.default_window_proc();
+        let mut mutable_data = self.mutable_data.borrow_mut();
 
         match msg {
             Msg::Wm(wm) => match wm {
-                Wm::MouseDown(_, _) => self.button_state = ButtonState::Pressed,
-                Wm::MouseDoubleDown(_, _) => self.button_state = ButtonState::DoublePressed,
+                Wm::MouseDown(_, _) => mutable_data.button_state = ButtonState::Pressed,
+                Wm::MouseDoubleDown(_, _) => mutable_data.button_state = ButtonState::DoublePressed,
                 Wm::MouseUp(button, point) => {
-                    let action = match self.button_state {
-                        ButtonState::Pressed       => self.widget.on_mouse_event(MouseEvent::Clicked(button)),
-                        ButtonState::DoublePressed => self.widget.on_mouse_event(MouseEvent::DoubleClicked(button)),
+                    let action = match mutable_data.button_state {
+                        ButtonState::Pressed       => self.node_data.on_mouse_event(MouseEvent::Clicked(button)),
+                        ButtonState::DoublePressed => self.node_data.on_mouse_event(MouseEvent::DoubleClicked(button)),
                         ButtonState::Released      => None
                     };
 
-                    self.button_state = ButtonState::Released;
+                    mutable_data.button_state = ButtonState::Released;
                 },
-                Wm::SetText(_) => self.widget_data.abs_size_bounds.min = window.get_ideal_size(),
+                Wm::SetText(_) => mutable_data.widget_data.abs_size_bounds.min = window.get_ideal_size(),
                 _ => ()
             },
             _ => ()
@@ -55,20 +150,30 @@ impl<B, I> Subclass<B> for TextButtonSubclass<I>
     }
 }
 
-pub type ParentSubclassWindow<I> = UnsafeSubclassWrapper<BlankBase, ParentSubclass<I>>;
 
-pub struct ParentSubclass<I: Parent<()>> {
-    widget: I,
+struct WidgetGroupSubclass<I: Parent<()>> {
+    node_data: I,
     widget_data: WidgetData,
     layout_engine: LayoutEngine
 }
 
-impl<P, I> Subclass<P> for ParentSubclass<I>
+impl<I: Parent<()>> WidgetGroupSubclass<I> {
+    #[inline]
+    fn new(node_data: I) -> WidgetGroupSubclass<I> {
+        WidgetGroupSubclass {
+            node_data: node_data,
+            widget_data: WidgetData::default(),
+            layout_engine: LayoutEngine::new()
+        }
+    }
+}
+
+impl<P, I> Subclass<P> for WidgetGroupSubclass<I>
         where P: ParentWindow,
               I: Parent<()>
 {
     type UserMsg = ();
-    fn subclass_proc(&mut self, window: &ProcWindowRef<P>, msg: Msg<()>) -> i64 {
+    fn subclass_proc(&self, window: &ProcWindowRef<P>, msg: Msg<()>) -> i64 {
         if let Msg::Wm(Wm::GetSizeBounds(size_bounds)) = msg {
             *size_bounds = self.layout_engine.actual_size_bounds();
             0
@@ -77,6 +182,38 @@ impl<P, I> Subclass<P> for ParentSubclass<I>
         }
     }
 }
+
+
+struct TextLabelSubclass<S: AsRef<str>> {
+    text: S,
+    widget_data: Cell<WidgetData>
+}
+
+impl<S: AsRef<str>> TextLabelSubclass<S> {
+    #[inline]
+    fn new(text: S) -> TextLabelSubclass<S> {
+        TextLabelSubclass {
+            text: text,
+            widget_data: Cell::default()
+        }
+    }
+}
+
+impl<W, S> Subclass<W> for TextLabelSubclass<S>
+        where W: TextLabelWindow,
+              S: AsRef<str>
+{
+    type UserMsg = ();
+    fn subclass_proc(&self, window: &ProcWindowRef<W>, msg: Msg<()>) -> i64 {
+        if let Msg::Wm(Wm::SetText(new_text)) = msg {
+            let mut widget_data = self.widget_data.get();
+            widget_data.abs_size_bounds.min = unsafe{ window.min_unclipped_rect_raw(new_text) };
+            self.widget_data.set(widget_data);
+        }
+        window.default_window_proc()
+    }
+}
+
 
 
 /// Newtype wrapper around parents to allow them to implement `Container` trait

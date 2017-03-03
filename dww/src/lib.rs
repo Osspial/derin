@@ -23,7 +23,6 @@ use std::{ptr, mem, cmp, str};
 use std::marker::PhantomData;
 use std::path::Path;
 use std::io::{Result, Error};
-use std::cell::RefCell;
 
 use self::ucs2::{WithString, Ucs2String, Ucs2Str, ucs2_str, ucs2_str_from_ptr, UCS2_CONVERTER};
 
@@ -54,7 +53,7 @@ pub enum Bm<'a> {
 pub trait Subclass<W: Window> {
     type UserMsg: UserMsg;
 
-    fn subclass_proc(&mut self, &ProcWindowRef<W>, Msg<Self::UserMsg>) -> i64;
+    fn subclass_proc(&self, &ProcWindowRef<W>, Msg<Self::UserMsg>) -> i64;
 }
 
 const SUBCLASS_ID: UINT_PTR = 0;
@@ -99,34 +98,22 @@ pub struct WindowBuilder<'a> {
 }
 
 impl<'a> WindowBuilder<'a> {
-    pub fn build_blank(self) -> Result<BlankBase> {
+    pub fn build_blank(self) -> BlankBase {
         let window_handle = self.build(WS_CLIPCHILDREN, 0, &BLANK_WINDOW_CLASS);
-
-        if window_handle != ptr::null_mut() {
-            Ok(BlankBase(window_handle))
-        } else {
-            Err(Error::last_os_error())
-        }
+        assert_ne!(window_handle, ptr::null_mut());
+        BlankBase(window_handle)
     }
 
-    pub fn build_push_button(self) -> Result<PushButtonBase> {
+    pub fn build_push_button(self) -> PushButtonBase {
         let window_handle = self.build(BS_PUSHBUTTON, 0, &BUTTON_CLASS);
-
-        if window_handle != ptr::null_mut() {
-            Ok(PushButtonBase(window_handle))
-        } else {
-            Err(Error::last_os_error())
-        }
+        assert_ne!(window_handle, ptr::null_mut());
+        PushButtonBase(window_handle)
     }
 
-    pub fn build_text_label(self) -> Result<TextLabelBase> {
+    pub fn build_text_label(self) -> TextLabelBase {
         let window_handle = self.build(0, 0, &STATIC_CLASS);
-
-        if window_handle != ptr::null_mut() {
-            Ok(TextLabelBase(window_handle))
-        } else {
-            Err(Error::last_os_error())
-        }
+        assert_ne!(window_handle, ptr::null_mut());
+        TextLabelBase(window_handle)
     }
 
     fn build(self, style: DWORD, style_ex: DWORD, class: &Ucs2Str) -> HWND {
@@ -170,12 +157,25 @@ impl<'a> WindowBuilder<'a> {
     }
 }
 
+impl<'a> Default for WindowBuilder<'a> {
+    #[inline]
+    fn default() -> WindowBuilder<'a> {
+        WindowBuilder {
+            pos: None,
+            size: None,
+            window_text: "",
+            show_window: true
+        }
+    }
+}
+
 
 pub struct BlankBase( HWND );
 impl Window for BlankBase {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.0}
 }
+impl ParentWindow for BlankBase {}
 impl Drop for BlankBase {
     fn drop(&mut self) {
         unsafe{ user32::DestroyWindow(self.0) };
@@ -199,6 +199,7 @@ impl Window for TextLabelBase {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.0}
 }
+impl TextLabelWindow for TextLabelBase {}
 impl Drop for TextLabelBase {
     fn drop(&mut self) {
         unsafe{ user32::DestroyWindow(self.0) };
@@ -215,12 +216,12 @@ pub struct OverlapWrapper<W: Window>( W );
 
 pub struct SubclassWrapper<W: Window, S: Subclass<W>> {
     window: W,
-    subclass_data: Box<RefCell<S>>
+    pub subclass_data: Box<S>
 }
 
 pub struct UnsafeSubclassWrapper<W: Window, S: Subclass<W>> {
     window: W,
-    subclass_data: RefCell<S>
+    pub subclass_data: S
 }
 
 pub struct ProcWindowRef<W: Window> {
@@ -453,33 +454,31 @@ pub trait ButtonWindow: Window {
 pub trait TextLabelWindow: Window {
     fn min_unclipped_rect(&self) -> OriginRect {
         let text_len = unsafe{ user32::GetWindowTextLengthW(self.hwnd()) };
-        UCS2_CONVERTER.with_ucs2_buffer(text_len as usize, |text_buf| {
-            unsafe{ user32::GetWindowTextW(self.hwnd(), text_buf.as_mut_ptr(), text_len) };
+        UCS2_CONVERTER.with_ucs2_buffer(text_len as usize, |text_buf| unsafe {
+            user32::GetWindowTextW(self.hwnd(), text_buf.as_mut_ptr(), text_len);
             self.min_unclipped_rect_raw(text_buf)
         })
     }
 
-    fn min_unclipped_rect_raw(&self, text: &Ucs2Str) -> OriginRect {
-        unsafe {
-            let mut label_rect = RECT {
-                left: 0,
-                top: 0,
-                right: 0,
-                bottom: 0
-            };
+    unsafe fn min_unclipped_rect_raw(&self, text: &Ucs2Str) -> OriginRect {
+        let mut label_rect = RECT {
+            left: 0,
+            top: 0,
+            right: 0,
+            bottom: 0
+        };
 
-            let hdc = user32::GetDC(self.hwnd());
-            user32::DrawTextW(
-                hdc,
-                text.as_ptr(),
-                -1,
-                &mut label_rect,
-                DT_CALCRECT
-            );
-            user32::ReleaseDC(self.hwnd(), hdc);
+        let hdc = user32::GetDC(self.hwnd());
+        user32::DrawTextW(
+            hdc,
+            text.as_ptr(),
+            -1,
+            &mut label_rect,
+            DT_CALCRECT
+        );
+        user32::ReleaseDC(self.hwnd(), hdc);
 
-            OriginRect::new(label_rect.right as u32, label_rect.bottom as u32)
-        }
+        OriginRect::new(label_rect.right as u32, label_rect.bottom as u32)
     }
 }
 
@@ -522,20 +521,16 @@ impl<W: Window, S: Subclass<W>> SubclassWrapper<W, S> {
     pub fn new(window: W, subclass_data: S) -> SubclassWrapper<W, S> {
         let wrapper = SubclassWrapper {
             window: window,
-            subclass_data: Box::new(RefCell::new(subclass_data))
+            subclass_data: Box::new(subclass_data)
         };
 
         unsafe{ comctl32::SetWindowSubclass(
             wrapper.window.hwnd(),
             Some(subclass_proc::<W, S>),
             SUBCLASS_ID,
-            wrapper.subclass_data.as_ptr() as *const _ as DWORD_PTR
+            &*wrapper.subclass_data as *const S as DWORD_PTR
         ) };
         wrapper
-    }
-
-    pub fn subclass_data(&self) -> &RefCell<S> {
-        &self.subclass_data
     }
 }
 impl<W: Window, S: Subclass<W>> Window for SubclassWrapper<W, S> {
@@ -558,21 +553,17 @@ impl<W: Window, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
     pub unsafe fn new(window: W, subclass_data: S) -> UnsafeSubclassWrapper<W, S> {
         UnsafeSubclassWrapper {
             window: window,
-            subclass_data: RefCell::new(subclass_data)
+            subclass_data: subclass_data
         }
     }
 
-    pub fn subclass_data(&self) -> &RefCell<S> {
-        &self.subclass_data
-    }
-
-    pub fn update_subclass_ptr(&self) {
-        unsafe{ comctl32::SetWindowSubclass(
+    pub unsafe fn update_subclass_ptr(&self) {
+        comctl32::SetWindowSubclass(
             self.window.hwnd(),
             Some(subclass_proc::<W, S>),
             SUBCLASS_ID,
-            &self.subclass_data as *const _ as DWORD_PTR
-        ) };
+            &self.subclass_data as *const S as DWORD_PTR
+        );
     }
 }
 impl<W: Window, S: Subclass<W>> Window for UnsafeSubclassWrapper<W, S> {
@@ -710,13 +701,12 @@ unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
                                        (hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM,
                                         _: UINT_PTR, subclass_data: DWORD_PTR) -> LRESULT
 {
-    let subclass_data = &*(subclass_data as *const RefCell<S>);
-    let mut sd = subclass_data.borrow_mut();
+    let subclass_data = &*(subclass_data as *const S);
 
     /// Partially applied function to run S::subclass_proc with a message. This is a macro because
     /// using a closure resulted in lifetime errors.
     macro_rules! run_subclass_proc {
-        ($message:expr) => {{S::subclass_proc(&mut *sd, &ProcWindowRef::new(hwnd, msg, wparam, lparam), $message) as LRESULT}}
+        ($message:expr) => {{S::subclass_proc(subclass_data, &ProcWindowRef::new(hwnd, msg, wparam, lparam), $message) as LRESULT}}
     }
 
     if WM_APP <= msg && msg <= 0xBFFF {

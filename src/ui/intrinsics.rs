@@ -29,7 +29,7 @@ macro_rules! intrinsics {
         {
             pub fn new(widget_data: $inner_ty) -> Self {
                 $name {
-                    data: P::NodeDataWrapper::from_widget_data(widget_data),
+                    data: P::NodeDataWrapper::from_node_data(widget_data),
                     state_id: refresh_state_id(0),
                 }
             }
