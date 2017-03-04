@@ -7,80 +7,118 @@ use dct::events::{MouseEvent, MouseButton};
 use dct::geometry::OffsetRect;
 
 use std::cell::{Cell, RefCell};
-use std::marker::PhantomData;
 
-use super::NodeTraverser;
+macro_rules! node_data {
+    (
+        pub struct $name:ident<$inner_ty:ident>( $field_ty:ty )
+                $(where $($where_ty:ty: $($constraint:path)|+),+)*;
 
-pub struct TextButtonNodeData<I>( UnsafeSubclassWrapper<PushButtonBase, TextButtonSubclass<I>> )
-        where I: AsRef<str> + Control;
+        impl {
+            expr widget_data($widget_data_in:ident) = $widget_data:expr;
+            expr node_data($node_data_in:ident) = $node_data:expr;
 
-pub struct WidgetGroupNodeData<I>( UnsafeSubclassWrapper<BlankBase, WidgetGroupSubclass<I>> )
-        where I: Parent<()>;
+            fn from_node_data($fnd_in:ident: _) -> Self $from_node_data:block
+        }
 
-pub struct TextLabelNodeData<S>( UnsafeSubclassWrapper<TextLabelBase, TextLabelSubclass<S>> )
-        where S: AsRef<str>;
+        $($rest:tt)*
+    ) => {
+        pub struct $name<$inner_ty>( $field_ty )
+                $(where $($where_ty: $($constraint +)+),+)*;
 
-impl<I: AsRef<str> + Control> WidgetDataContainer for TextButtonNodeData<I> {
-    #[inline]
-    fn get_widget_data(&self) -> WidgetData {
-        self.0.subclass_data.mutable_data.borrow().widget_data
+        impl<$inner_ty> $name<$inner_ty>
+                $(where $($where_ty: $($constraint +)+),+)*
+        {
+            #[doc(hidden)]
+            #[inline]
+            pub unsafe fn update_subclass_ptr(&self) {
+                self.0.update_subclass_ptr();
+            }
+        }
+
+        impl<$inner_ty> WidgetDataContainer for $name<$inner_ty>
+                $(where $($where_ty: $($constraint +)+),+)*
+        {
+            #[inline]
+            fn get_widget_data(&self) -> WidgetData {
+                let $widget_data_in = self;
+                $widget_data
+            }
+        }
+
+        impl<$inner_ty> NodeDataWrapper<$inner_ty> for $name<$inner_ty>
+                $(where $($where_ty: $($constraint +)+),+)*
+        {
+            fn from_node_data($fnd_in: $inner_ty) -> $name<$inner_ty> $from_node_data
+
+            fn inner(&self) -> &$inner_ty {let $node_data_in = self; &$node_data}
+            fn inner_mut(&mut self) -> &mut $inner_ty {let $node_data_in = self; &mut $node_data}
+            fn unwrap(self) -> $inner_ty {let $node_data_in = self; $node_data}
+        }
+
+        node_data!{$($rest)*}
+    };
+
+    () => ();
+}
+
+node_data!{
+    pub struct TextButtonNodeData<I>( UnsafeSubclassWrapper<PushButtonBase, TextButtonSubclass<I>> )
+            where I: AsRef<str> | Control;
+
+    impl {
+        expr widget_data(this) = this.0.subclass_data.mutable_data.borrow().widget_data;
+        expr node_data(this) = this.0.subclass_data.node_data;
+
+        fn from_node_data(node_data: _) -> Self {
+            let button_window = WindowBuilder::default().build_push_button();
+            let subclass = TextButtonSubclass::new(node_data);
+
+            let wrapper = unsafe{ UnsafeSubclassWrapper::new(button_window, subclass) };
+            TextButtonNodeData(wrapper)
+        }
+    }
+
+    pub struct WidgetGroupNodeData<I>( UnsafeSubclassWrapper<BlankBase, WidgetGroupSubclass<I>> )
+            where I: Parent<()>;
+
+    impl {
+        expr widget_data(this) = this.0.subclass_data.widget_data;
+        expr node_data(this) = this.0.subclass_data.node_data;
+
+        fn from_node_data(node_data: _) -> Self {
+            let blank_window = WindowBuilder::default().build_blank();
+            let subclass = WidgetGroupSubclass::new(node_data);
+
+            let wrapper = unsafe{ UnsafeSubclassWrapper::new(blank_window, subclass) };
+            WidgetGroupNodeData(wrapper)
+        }
+    }
+
+    pub struct TextLabelNodeData<S>( UnsafeSubclassWrapper<TextLabelBase, TextLabelSubclass<S>> )
+            where S: AsRef<str>;
+
+    impl {
+        expr widget_data(this) = this.0.subclass_data.widget_data.get();
+        expr node_data(this) = this.0.subclass_data.text;
+
+        fn from_node_data(text: _) -> Self {
+            let label_window = WindowBuilder::default().build_text_label();
+            let subclass = TextLabelSubclass::new(text);
+
+            let wrapper = unsafe{ UnsafeSubclassWrapper::new(label_window, subclass) };
+            TextLabelNodeData(wrapper)
+        }
     }
 }
 
-impl<I: Parent<()>> WidgetDataContainer for WidgetGroupNodeData<I> {
-    #[inline]
-    fn get_widget_data(&self) -> WidgetData {
-        self.0.subclass_data.widget_data
-    }
-}
-
-impl<S: AsRef<str>> WidgetDataContainer for TextLabelNodeData<S> {
-    #[inline]
-    fn get_widget_data(&self) -> WidgetData {
-        self.0.subclass_data.widget_data.get()
-    }
-}
-
-impl<I: AsRef<str> + Control> NodeDataWrapper<I> for TextButtonNodeData<I> {
-    fn from_node_data(node_data: I) -> TextButtonNodeData<I> {
-        let button_window = WindowBuilder::default().build_push_button();
-        let subclass = TextButtonSubclass::new(node_data);
-
-        let wrapper = unsafe{ UnsafeSubclassWrapper::new(button_window, subclass) };
-        TextButtonNodeData(wrapper)
+impl<I: Parent<()>> WidgetGroupNodeData<I> {
+    pub fn layout_engine(&self) -> &LayoutEngine {
+        &self.0.subclass_data.layout_engine
     }
 
-    fn inner(&self) -> &I {&self.0.subclass_data.node_data}
-    fn inner_mut(&mut self) -> &mut I {&mut self.0.subclass_data.node_data}
-    fn unwrap(self) -> I {self.0.subclass_data.node_data}
-}
-
-impl<I: Parent<()>> NodeDataWrapper<I> for WidgetGroupNodeData<I> {
-    fn from_node_data(node_data: I) -> WidgetGroupNodeData<I> {
-        let blank_window = WindowBuilder::default().build_blank();
-        let subclass = WidgetGroupSubclass::new(node_data);
-
-        let wrapper = unsafe{ UnsafeSubclassWrapper::new(blank_window, subclass) };
-        WidgetGroupNodeData(wrapper)
+    pub fn layout_engine_mut(&mut self) -> &mut LayoutEngine {
+        &mut self.0.subclass_data.layout_engine
     }
-
-    fn inner(&self) -> &I {&self.0.subclass_data.node_data}
-    fn inner_mut(&mut self) -> &mut I {&mut self.0.subclass_data.node_data}
-    fn unwrap(self) -> I {self.0.subclass_data.node_data}
-}
-
-impl<S: AsRef<str>> NodeDataWrapper<S> for TextLabelNodeData<S> {
-    fn from_node_data(text: S) -> TextLabelNodeData<S> {
-        let label_window = WindowBuilder::default().build_text_label();
-        let subclass = TextLabelSubclass::new(text);
-
-        let wrapper = unsafe{ UnsafeSubclassWrapper::new(label_window, subclass) };
-        TextLabelNodeData(wrapper)
-    }
-
-    fn inner(&self) -> &S {&self.0.subclass_data.text}
-    fn inner_mut(&mut self) -> &mut S {&mut self.0.subclass_data.text}
-    fn unwrap(self) -> S {self.0.subclass_data.text}
 }
 
 
@@ -132,7 +170,7 @@ impl<B, I> Subclass<B> for TextButtonSubclass<I>
             Msg::Wm(wm) => match wm {
                 Wm::MouseDown(_, _) => mutable_data.button_state = ButtonState::Pressed,
                 Wm::MouseDoubleDown(_, _) => mutable_data.button_state = ButtonState::DoublePressed,
-                Wm::MouseUp(button, point) => {
+                Wm::MouseUp(button, _) => {
                     let action = match mutable_data.button_state {
                         ButtonState::Pressed       => self.node_data.on_mouse_event(MouseEvent::Clicked(button)),
                         ButtonState::DoublePressed => self.node_data.on_mouse_event(MouseEvent::DoubleClicked(button)),
