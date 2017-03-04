@@ -942,6 +942,11 @@ mod tests {
         Slice(&'a [u64])
     }
 
+    #[derive(UserMsg)]
+    enum SingleVarMsg {
+        Bar(u32)
+    }
+
     #[test]
     fn encode_foo() {
         test_encoding(TestMsg::Foo(36));

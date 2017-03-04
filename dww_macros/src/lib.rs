@@ -37,6 +37,7 @@ fn impl_user_msg(&DeriveInput{ref ident, ref generics, ref body, ..}: &DeriveInp
         let conversion_offset_branches = ConversionOffsetIter {
             enum_ident: ident,
             variants: variants.iter(),
+            num_variants: variants.len(),
             discriminant: 0
         };
 
@@ -150,6 +151,7 @@ impl<'a> Iterator for EmptyMatchIter<'a> {
 struct ConversionOffsetIter<'a> {
     enum_ident: &'a Ident,
     variants: SliceIter<'a, Variant>,
+    num_variants: usize,
     discriminant: u16
 }
 
@@ -169,10 +171,20 @@ impl<'a> Iterator for ConversionOffsetIter<'a> {
                     let field_idents_0 = fields.iter().map(|f| f.ident.as_ref().unwrap());
                     let field_idents_1 = fields.iter().map(|f| f.ident.as_ref().unwrap());
                     let field_types = fields.iter().map(|f| &f.ty);
-                    quote!{
-                        #discriminant => unsafe {
-                            let base = Self::empty(#discriminant);
-                            if let &#enum_ident::#var_ident{#(ref #field_idents_0),*} = &base {
+                    if 1 < self.num_variants {
+                        quote!{
+                            #discriminant => unsafe {
+                                let base = Self::empty(#discriminant);
+                                if let &#enum_ident::#var_ident{#(ref #field_idents_0),*} = &base {
+                                    #(converter.push_param::<#field_types>(#field_idents_1 as *const _ as usize - &base as *const _ as usize);)*
+                                }
+                            }
+                        }
+                    } else {
+                        quote!{
+                            #discriminant => unsafe {
+                                let base = Self::empty(#discriminant);
+                                let &#enum_ident::#var_ident{#(ref #field_idents_0),*} = &base;
                                 #(converter.push_param::<#field_types>(#field_idents_1 as *const _ as usize - &base as *const _ as usize);)*
                             }
                         }
@@ -182,10 +194,20 @@ impl<'a> Iterator for ConversionOffsetIter<'a> {
                     let field_idents_0 = (0..fields.len()).map(|n| Ident::new("anon_".to_string() + &n.to_string()));
                     let field_idents_1 = (0..fields.len()).map(|n| Ident::new("anon_".to_string() + &n.to_string()));
                     let field_types = fields.iter().map(|f| &f.ty);
-                    quote!{
-                        #discriminant => unsafe {
-                            let base = Self::empty(#discriminant);
-                            if let &#enum_ident::#var_ident(#(ref #field_idents_0),*) = &base {
+                    if 1 < self.num_variants {
+                        quote!{
+                            #discriminant => unsafe {
+                                let base = Self::empty(#discriminant);
+                                if let &#enum_ident::#var_ident(#(ref #field_idents_0),*) = &base {
+                                    #(converter.push_param::<#field_types>(#field_idents_1 as *const _ as usize - &base as *const _ as usize);)*
+                                }
+                            }
+                        }
+                    } else {
+                        quote!{
+                            #discriminant => unsafe {
+                                let base = Self::empty(#discriminant);
+                                let &#enum_ident::#var_ident(#(ref #field_idents_0),*) = &base;
                                 #(converter.push_param::<#field_types>(#field_idents_1 as *const _ as usize - &base as *const _ as usize);)*
                             }
                         }
