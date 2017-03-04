@@ -533,6 +533,30 @@ impl<W: Window, S: Subclass<W>> SubclassWrapper<W, S> {
         ) };
         wrapper
     }
+
+    /// Send a user message, yielding the value returned by `S::subclass_proc`.
+    pub fn send_user_msg(&self, msg: S::UserMsg) -> i64 {
+        let discriminant = msg.discriminant();
+        let encoded_bytes = user_msg::encode(msg);
+
+        unsafe {
+            let (wparam, lparam): (WPARAM, LPARAM) = mem::transmute(encoded_bytes);
+            user32::SendMessageW(self.hwnd(), discriminant as UINT + WM_APP, wparam, lparam)
+        }
+    }
+
+    /// Post a user message to the message queue associatd with the window.
+    pub fn post_user_msg(&self, msg: S::UserMsg)
+            where S::UserMsg: 'static
+    {
+        let discriminant = msg.discriminant();
+        let encoded_bytes = user_msg::encode(msg);
+
+        unsafe {
+            let (wparam, lparam): (WPARAM, LPARAM) = mem::transmute(encoded_bytes);
+            user32::PostMessageW(self.hwnd(), discriminant as UINT + WM_APP, wparam, lparam);
+        }
+    }
 }
 impl<W: Window, S: Subclass<W>> Window for SubclassWrapper<W, S> {
     #[inline]
@@ -556,6 +580,32 @@ impl<W: Window, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
             window: window,
             subclass_data: subclass_data
         }
+    }
+
+    /// Send a user message, yielding the value returned by `S::subclass_proc`.
+    ///
+    /// Unsafe because it cannot guaruntee that the subclass pointer is pointing to the correct
+    /// location.
+    pub unsafe fn send_user_msg(&self, msg: S::UserMsg) -> i64 {
+        let discriminant = msg.discriminant();
+        let encoded_bytes = user_msg::encode(msg);
+
+        let (wparam, lparam): (WPARAM, LPARAM) = mem::transmute(encoded_bytes);
+        user32::SendMessageW(self.hwnd(), discriminant as UINT + WM_APP, wparam, lparam)
+    }
+
+    /// Post a user message to the message queue associatd with the window.
+    ///
+    /// Unsafe because it cannot guaruntee that the subclass pointer is pointing to the correct
+    /// location.
+    pub unsafe fn post_user_msg(&self, msg: S::UserMsg)
+            where S::UserMsg: 'static
+    {
+        let discriminant = msg.discriminant();
+        let encoded_bytes = user_msg::encode(msg);
+
+        let (wparam, lparam): (WPARAM, LPARAM) = mem::transmute(encoded_bytes);
+        user32::PostMessageW(self.hwnd(), discriminant as UINT + WM_APP, wparam, lparam);
     }
 
     pub unsafe fn update_subclass_ptr(&self) {
@@ -720,11 +770,13 @@ unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
             WM_SIZE  => run_subclass_proc!(Msg::Wm(Wm::Size(OriginRect::new(loword(lparam) as Px, hiword(lparam) as Px)))),
             WM_LBUTTONDOWN  |
             WM_MBUTTONDOWN  |
-            WM_RBUTTONDOWN => {
+            WM_RBUTTONDOWN  |
+            WM_XBUTTONDOWN => {
                 let button = match msg {
                     WM_LBUTTONDOWN => MouseButton::Left,
                     WM_MBUTTONDOWN => MouseButton::Middle,
                     WM_RBUTTONDOWN => MouseButton::Right,
+                    WM_XBUTTONDOWN => MouseButton::Other(hiword(wparam as LPARAM) as u8),
                     _ => unreachable!()
                 };
 
@@ -737,6 +789,7 @@ unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
                     WM_LBUTTONDBLCLK => MouseButton::Left,
                     WM_MBUTTONDBLCLK => MouseButton::Middle,
                     WM_RBUTTONDBLCLK => MouseButton::Right,
+                    WM_XBUTTONDBLCLK => MouseButton::Other(hiword(wparam as LPARAM) as u8),
                     _ => unreachable!()
                 };
 
@@ -749,6 +802,7 @@ unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
                     WM_LBUTTONUP => MouseButton::Left,
                     WM_MBUTTONUP => MouseButton::Middle,
                     WM_RBUTTONUP => MouseButton::Right,
+                    WM_XBUTTONUP => MouseButton::Other(hiword(wparam as LPARAM) as u8),
                     _ => unreachable!()
                 };
 
@@ -769,6 +823,15 @@ unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
                 mmi.ptMinTrackSize.y = size_bounds.min.height as LONG;
                 mmi.ptMaxTrackSize.x = size_bounds.max.width as LONG;
                 mmi.ptMaxTrackSize.y = size_bounds.max.height as LONG;
+                ret
+            }
+
+            BCM_GETIDEALSIZE => {
+                let size_winapi = &mut *(lparam as *mut SIZE);
+                let mut size = OriginRect::new(size_winapi.cx as Px, size_winapi.cy as Px);
+                let ret = run_subclass_proc!(Msg::Bm(Bm::GetIdealSize(&mut size)));
+                size_winapi.cx = size.width as LONG;
+                size_winapi.cy = size.height as LONG;
                 ret
             }
             _ => comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
