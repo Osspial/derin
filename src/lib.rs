@@ -1,5 +1,3 @@
-#![feature(specialization, conservative_impl_trait)]
-
 extern crate rand;
 extern crate dle;
 extern crate dct;

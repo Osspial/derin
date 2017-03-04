@@ -1,4 +1,3 @@
-#![feature(conservative_impl_trait, specialization)]
 extern crate winapi;
 extern crate user32;
 extern crate kernel32;
@@ -852,9 +851,10 @@ fn hiword(lparam: LPARAM) -> WORD {
 mod ucs2 {
     use std::thread::LocalKey;
     use std::ffi::OsStr;
-    use std::os::windows::ffi::OsStrExt;
+    use std::os::windows::ffi::{OsStrExt, EncodeWide};
     use std::cell::RefCell;
     use std::slice;
+    use std::iter::{once, Chain, Once};
 
     use winapi::winnt::WCHAR;
 
@@ -905,9 +905,8 @@ mod ucs2 {
         str_buf: Ucs2String
     }
 
-    pub fn ucs2_str<'a, S: ?Sized + AsRef<OsStr>>(s: &'a S) -> impl 'a + Iterator<Item=u16> {
-        use std::iter::once;
-        s.as_ref().encode_wide().chain(once(0))
+    pub fn ucs2_str<S: ?Sized + AsRef<OsStr>>(s: &S) -> Ucs2Iter {
+        Ucs2Iter(s.as_ref().encode_wide().chain(once(0)))
     }
 
     pub unsafe fn ucs2_str_from_ptr<'a>(p: *const WCHAR) -> &'a Ucs2Str {
@@ -916,6 +915,17 @@ mod ucs2 {
             end = end.offset(1);
         }
         slice::from_raw_parts(p, end as usize - p as usize)
+    }
+
+
+    pub struct Ucs2Iter<'a>(Chain<EncodeWide<'a>, Once<u16>>);
+
+    impl<'a> Iterator for Ucs2Iter<'a> {
+        type Item = u16;
+
+        fn next(&mut self) -> Option<u16> {
+            self.0.next()
+        }
     }
 }
 
