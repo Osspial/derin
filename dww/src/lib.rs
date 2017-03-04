@@ -11,6 +11,7 @@ extern crate dct;
 extern crate dww_macros;
 
 pub mod user_msg;
+pub mod msg_queue;
 
 use user_msg::UserMsg;
 
