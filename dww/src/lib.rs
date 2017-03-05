@@ -90,6 +90,10 @@ pub struct WindowIcon {
     pub small: Option<Icon>
 }
 
+impl AsRef<WindowIcon> for WindowIcon {
+    fn as_ref(&self) -> &WindowIcon {self}
+}
+
 pub struct WindowBuilder<'a> {
     pub pos: Option<(i32, i32)>,
     pub size: Option<OriginRect>,

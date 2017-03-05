@@ -1,12 +1,14 @@
 use ui::{Control, Parent, Node, ChildId, NodeProcessor, NodeProcessorAT, NodeDataWrapper};
 use ui::intrinsics::TextButton;
 use dww::*;
-use dle::{Widget, Container, LayoutEngine, WidgetData, WidgetConstraintSolver, SolveError};
+use dle::{Widget, Container, LayoutEngine, WidgetData, WidgetConstraintSolver, SolveError, LayoutUpdater};
 use dle::hints::WidgetHints;
 use dct::events::{MouseEvent, MouseButton};
-use dct::geometry::OffsetRect;
+use dct::geometry::{Rect, OffsetRect, Point};
 
 use std::cell::{Cell, RefCell};
+
+type ToplevelWindowBase = IconWrapper<WindowIcon, OverlapWrapper<BlankBase>>;
 
 macro_rules! node_data {
     (
@@ -83,7 +85,7 @@ node_data!{
 
     impl {
         expr widget_data(this) = this.0.subclass_data.widget_data;
-        expr node_data(this) = this.0.subclass_data.node_data;
+        expr node_data(this) = this.0.subclass_data.node_data.0;
 
         fn from_node_data(node_data: _) -> Self {
             let blank_window = WindowBuilder::default().build_blank();
@@ -111,7 +113,9 @@ node_data!{
     }
 }
 
-impl<I: Parent<()>> WidgetGroupNodeData<I> {
+impl<I> WidgetGroupNodeData<I>
+        where for<'a> I: Parent<()> + Parent<ConstraintSolverTraverser<'a>>
+{
     pub fn layout_engine(&self) -> &LayoutEngine {
         &self.0.subclass_data.layout_engine
     }
@@ -119,7 +123,13 @@ impl<I: Parent<()>> WidgetGroupNodeData<I> {
     pub fn layout_engine_mut(&mut self) -> &mut LayoutEngine {
         &mut self.0.subclass_data.layout_engine
     }
+
+    pub fn update_engine(&mut self, updater: &mut LayoutUpdater) {
+        updater.update_engine(&mut self.0.subclass_data.node_data, &mut self.0.subclass_data.layout_engine);
+    }
 }
+
+pub type ToplevelWindow = UnsafeSubclassWrapper<ToplevelWindowBase, ToplevelSubclass>;
 
 
 
@@ -190,7 +200,7 @@ impl<B, I> Subclass<B> for TextButtonSubclass<I>
 
 
 struct WidgetGroupSubclass<I: Parent<()>> {
-    node_data: I,
+    node_data: ParentContainer<I>,
     widget_data: WidgetData,
     layout_engine: LayoutEngine
 }
@@ -199,7 +209,7 @@ impl<I: Parent<()>> WidgetGroupSubclass<I> {
     #[inline]
     fn new(node_data: I) -> WidgetGroupSubclass<I> {
         WidgetGroupSubclass {
-            node_data: node_data,
+            node_data: ParentContainer(node_data),
             widget_data: WidgetData::default(),
             layout_engine: LayoutEngine::new()
         }
@@ -252,6 +262,20 @@ impl<W, S> Subclass<W> for TextLabelSubclass<S>
     }
 }
 
+/// A top-level window subclass, with a reference to its child.
+struct ToplevelSubclass(WindowRef);
+
+impl Subclass<ToplevelWindowBase> for ToplevelSubclass {
+    type UserMsg = ();
+    fn subclass_proc(&self, window: &ProcWindowRef<ToplevelWindowBase>, msg: Msg<()>) -> i64 {
+        match msg {
+            Msg::Wm(Wm::GetSizeBounds(size_bounds)) => {*size_bounds = self.0.size_bounds(); 0},
+            Msg::Wm(Wm::Size(rect)) => {self.0.set_rect(OffsetRect::from(rect)); 0},
+            _ => window.default_window_proc()
+        }
+    }
+}
+
 
 
 /// Newtype wrapper around parents to allow them to implement `Container` trait
@@ -283,7 +307,7 @@ impl<I> Container for ParentContainer<I>
     }
 }
 
-struct ConstraintSolverTraverser<'a> {
+pub struct ConstraintSolverTraverser<'a> {
     solver: WidgetConstraintSolver<'a>
 }
 
@@ -304,6 +328,6 @@ impl<'a> NodeProcessorAT for ConstraintSolverTraverser<'a> {
     type Error = ();
 }
 
-trait WidgetDataContainer {
+pub trait WidgetDataContainer {
     fn get_widget_data(&self) -> WidgetData;
 }
