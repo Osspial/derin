@@ -1,6 +1,6 @@
 use std::ops::{Add, AddAssign};
 
-pub type Px = u32;
+pub type Px = u16;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Point {

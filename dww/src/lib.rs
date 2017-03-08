@@ -482,7 +482,7 @@ pub trait TextLabelWindow: Window {
         );
         user32::ReleaseDC(self.hwnd(), hdc);
 
-        OriginRect::new(label_rect.right as u32, label_rect.bottom as u32)
+        OriginRect::new(label_rect.right as Px, label_rect.bottom as Px)
     }
 }
 
