@@ -22,23 +22,12 @@ pub struct WindowConfig {
     /// always appear at the top of the Z order
     pub topmost: bool,
 
-    /// Whether or not the window is a borderless window. Note that this will
-    /// override any specified window decorations.
-    pub borderless: bool,
-    /// Whether or not the window can be resized by dragging on it's edge
     pub resizable: bool,
     /// Whether or not the window can be minimized
     pub maximizable: bool,
     /// Whether or not the window can be maximized
     pub minimizable: bool,
-    /// Whether or not the window appears on the taskbar
-    pub tool_window: bool,
 
-    /// Whether or not the window can be transparent
-    pub transparent: bool,
-
-    /// The initial state of the window
-    pub initial_state: InitialState,
     /// Whether or not to show the window upon creation
     pub show_window: bool,
 
@@ -75,13 +64,6 @@ impl WindowConfig {
         self
     }
 
-
-    #[inline]
-    pub fn borderless(mut self, borderless: bool) -> WindowConfig {
-        self.borderless = borderless;
-        self
-    }
-
     #[inline]
     pub fn resizable(mut self, resizable: bool) -> WindowConfig {
         self.resizable = resizable;
@@ -101,26 +83,6 @@ impl WindowConfig {
     }
 
     #[inline]
-    pub fn tool_window(mut self, tool_window: bool) -> WindowConfig {
-        self.tool_window = tool_window;
-        self
-    }
-
-
-    #[inline]
-    pub fn transparent(mut self, transparent: bool) -> WindowConfig {
-        self.transparent = transparent;
-        self
-    }
-
-
-    #[inline]
-    pub fn initial_state(mut self, initial_state: InitialState) -> WindowConfig {
-        self.initial_state = initial_state;
-        self
-    }
-
-    #[inline]
     pub fn icon(mut self, icon: Option<PathBuf>) -> WindowConfig {
         self.icon = icon;
         self
@@ -135,16 +97,10 @@ impl Default for WindowConfig {
             size: None,
 
             topmost: false,
-
-            borderless: false,
             resizable: true,
             maximizable: true,
             minimizable: true,
-            tool_window: false,
 
-            transparent: false,
-
-            initial_state: InitialState::Windowed,
             show_window: true,
 
             icon: None

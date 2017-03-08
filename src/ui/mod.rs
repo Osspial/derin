@@ -16,30 +16,26 @@ pub trait NodeProcessorAT: Sized {
     type Error;
 }
 
-pub trait NodeProcessor<W, N>: NodeProcessorAT
-        where W: NodeDataWrapper<N::Inner>, N: Node<W>
-{
+pub trait NodeProcessor<N: Node>: NodeProcessorAT {
     /// Add a child to the node processor.
-    fn add_child<'a>(&'a mut self, ChildId, node: &'a mut N) -> Result<(), Self::Error>
-            where N: Parent<Self>;
+    fn add_child<'a>(&'a mut self, ChildId, node: &'a mut N) -> Result<(), Self::Error>;
 }
 
-pub trait WrapperNodeProcessor<N>: NodeProcessor<<Self as WrapperNodeProcessor<N>>::NodeDataWrapper, N>
-        where N: Node<Self::NodeDataWrapper>
+pub trait NodeDataRegistry<N>
+        where N: Node<Wrapper = Self::NodeDataWrapper>
 {
     type NodeDataWrapper: NodeDataWrapper<N::Inner>;
 }
 
-pub trait Node<W: NodeDataWrapper<Self::Inner>> {
+pub trait Node {
+    type Wrapper: NodeDataWrapper<Self::Inner>;
     type Inner;
+    type Action;
 
     fn type_name(&self) -> &'static str;
-    /// An identifier for the current state. Calling this function provides only one guarantee: that
-    /// if `node_a != node_b`, `state_id(node_a) != state_id(node_b)`.
-    fn state_id(&self) -> u16;
 
-    fn data(&self) -> &W;
-    fn data_mut(&mut self) -> &mut W;
+    fn wrapper(&self) -> &Self::Wrapper;
+    fn wrapper_mut(&mut self) -> &mut Self::Wrapper;
 }
 
 pub trait NodeDataWrapper<I> {
@@ -47,10 +43,6 @@ pub trait NodeDataWrapper<I> {
     fn inner(&self) -> &I;
     fn inner_mut(&mut self) -> &mut I;
     fn unwrap(self) -> I;
-}
-
-pub trait ActionNode<W: NodeDataWrapper<Self::Inner>>: Node<W> {
-    type Action;
 }
 
 pub trait Parent<NP>
@@ -69,9 +61,7 @@ pub trait Control {
     fn on_mouse_event(&self, MouseEvent) -> Option<Self::Action> {None}
 }
 
-impl<W, N> NodeProcessor<W, N> for ()
-        where W: NodeDataWrapper<N::Inner>, N: Node<W>
-{
+impl<N: Node> NodeProcessor<N> for () {
     fn add_child<'a>(&'a mut self, _: ChildId, _: &'a mut N) -> Result<(), ()> {Ok(())}
 }
 

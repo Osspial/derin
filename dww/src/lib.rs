@@ -19,7 +19,7 @@ use dct::events::MouseButton;
 
 use winapi::*;
 
-use std::{ptr, mem, cmp, str};
+use std::{ptr, mem, str};
 use std::marker::PhantomData;
 use std::path::Path;
 use std::io::{Result, Error};
@@ -53,7 +53,7 @@ pub enum Bm<'a> {
 pub trait Subclass<W: Window> {
     type UserMsg: UserMsg;
 
-    fn subclass_proc(&self, &ProcWindowRef<W>, Msg<Self::UserMsg>) -> i64;
+    fn subclass_proc(&self, &ProcWindowRef<W, Self>, Msg<Self::UserMsg>) -> i64;
 }
 
 const SUBCLASS_ID: UINT_PTR = 0;
@@ -152,6 +152,8 @@ impl<'a> WindowBuilder<'a> {
                 ptr::null_mut()
             );
 
+            user32::SetWindowLongW(window_handle, GWL_STYLE, 0);
+
             if self.show_window {
                 user32::ShowWindow(window_handle, SW_SHOW);
             }
@@ -220,27 +222,28 @@ pub struct OverlapWrapper<W: Window>( W );
 
 pub struct SubclassWrapper<W: Window, S: Subclass<W>> {
     window: W,
-    pub subclass_data: Box<S>
+    pub data: Box<S>
 }
 
 pub struct UnsafeSubclassWrapper<W: Window, S: Subclass<W>> {
     window: W,
-    pub subclass_data: S
+    pub data: S
 }
 
-pub struct ProcWindowRef<W: Window> {
+pub struct ProcWindowRef<W: Window, S: Subclass<W> + ?Sized> {
     hwnd: HWND,
     msg: UINT,
     wparam: WPARAM,
     lparam: LPARAM,
-    __marker: PhantomData<W>
+    __marker: PhantomData<(W, S)>
 }
 
 #[derive(Clone, Copy)]
 pub struct ParentRef( HWND );
 #[derive(Clone, Copy)]
 pub struct WindowRef( HWND );
-impl Window for WindowRef {unsafe fn hwnd(&self) -> HWND {self.0}}
+#[derive(Clone, Copy)]
+pub struct UnsafeSubclassRef<U: UserMsg>( HWND, PhantomData<U> );
 
 
 
@@ -286,12 +289,29 @@ pub trait Window: Sized {
         )};
     }
 
+    fn bound_to_size_bounds(&self) {
+        unsafe {
+            let mut rect = mem::zeroed();
+            user32::GetWindowRect(self.hwnd(), &mut rect);
+            user32::SetWindowPos(
+                self.hwnd(),
+                ptr::null_mut(),
+                rect.left,
+                rect.top,
+                rect.right - rect.left,
+                rect.bottom - rect.top,
+                SWP_NOOWNERZORDER | SWP_NOZORDER
+            );
+        }
+    }
+
     fn adjust_window_rect<R: Rect>(&self, rect: R) -> R {
+        use std::cmp;
         let mut winapi_rect = RECT {
-            right: cmp::min(rect.lowright().x, (LONG::max_value() - 64) as Px) as LONG,
-            bottom: cmp::min(rect.lowright().y, (LONG::max_value() - 64) as Px) as LONG,
             left: rect.topleft().x as LONG,
-            top: rect.topleft().y as LONG
+            top: rect.topleft().y as LONG,
+            right: rect.lowright().x as LONG,
+            bottom: rect.lowright().y as LONG
         };
 
         unsafe {user32::AdjustWindowRectEx(
@@ -301,7 +321,20 @@ pub trait Window: Sized {
             self.get_style_ex()
         )};
 
-        R::from(OffsetRect::new(winapi_rect.left as Px, winapi_rect.top as Px, winapi_rect.right as Px, winapi_rect.bottom as Px))
+        let x_offset = -cmp::min(winapi_rect.left, Px::min_value() as LONG);
+        let y_offset = -cmp::min(winapi_rect.top, Px::min_value() as LONG);
+
+        winapi_rect.left += x_offset;
+        winapi_rect.right += x_offset;
+        winapi_rect.top += y_offset;
+        winapi_rect.bottom += y_offset;
+
+        // Clamp the values to within the `Px` range bounds
+        winapi_rect.right = cmp::min(Px::max_value() as LONG, winapi_rect.right);
+        winapi_rect.bottom = cmp::min(Px::max_value() as LONG, winapi_rect.bottom);
+
+        R::from(OffsetRect::new(winapi_rect.left as Px, winapi_rect.top as Px,
+                                winapi_rect.right as Px, winapi_rect.bottom as Px))
     }
 
     fn get_style(&self) -> DWORD {
@@ -343,7 +376,7 @@ pub trait Window: Sized {
         }
     }
 
-    fn get_parent(&self) -> Option<ParentRef> {
+    fn get_parent_window(&self) -> Option<ParentRef> {
         let parent_hwnd = unsafe{ user32::GetParent(self.hwnd()) };
         if parent_hwnd == ptr::null_mut() {
             None
@@ -353,7 +386,10 @@ pub trait Window: Sized {
     }
 
     fn size_bounds(&self) -> SizeBounds {
-        let mut mmi: MINMAXINFO = unsafe{ mem::zeroed() };
+        let mut mmi: MINMAXINFO = MINMAXINFO {
+            ptMaxTrackSize: POINT {x: LONG::max_value(), y: LONG::max_value()},
+            ..unsafe{ mem::zeroed() }
+        };
         unsafe{ user32::SendMessageW(self.hwnd(), WM_GETMINMAXINFO, 0, &mut mmi as *mut MINMAXINFO as LPARAM) };
 
         SizeBounds {
@@ -439,7 +475,7 @@ pub trait IconWindow: Window {
 }
 
 pub trait ParentWindow: Window {
-    fn add_child<W: Window>(&self, child: W) {
+    fn add_child_window<W: Window>(&self, child: W) {
         unsafe {
             user32::SetParent(child.hwnd(), self.hwnd());
             child.set_style(child.get_style() | WS_CHILD | WS_CLIPSIBLINGS);
@@ -522,17 +558,17 @@ impl<W: Window> IconWindow for OverlapWrapper<W> where W: IconWindow {
 
 // SubclassWrapper impls
 impl<W: Window, S: Subclass<W>> SubclassWrapper<W, S> {
-    pub fn new(window: W, subclass_data: S) -> SubclassWrapper<W, S> {
+    pub fn new(window: W, data: S) -> SubclassWrapper<W, S> {
         let wrapper = SubclassWrapper {
             window: window,
-            subclass_data: Box::new(subclass_data)
+            data: Box::new(data)
         };
 
         unsafe{ comctl32::SetWindowSubclass(
             wrapper.window.hwnd(),
             Some(subclass_proc::<W, S>),
             SUBCLASS_ID,
-            &*wrapper.subclass_data as *const S as DWORD_PTR
+            &*wrapper.data as *const S as DWORD_PTR
         ) };
         wrapper
     }
@@ -578,10 +614,10 @@ impl<W: Window, S: Subclass<W>> IconWindow for SubclassWrapper<W, S> where W: Ic
 
 // UnsafeSubclassWrapper impls
 impl<W: Window, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
-    pub unsafe fn new(window: W, subclass_data: S) -> UnsafeSubclassWrapper<W, S> {
+    pub unsafe fn new(window: W, data: S) -> UnsafeSubclassWrapper<W, S> {
         UnsafeSubclassWrapper {
             window: window,
-            subclass_data: subclass_data
+            data: data
         }
     }
 
@@ -590,11 +626,7 @@ impl<W: Window, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
     /// Unsafe because it cannot guaruntee that the subclass pointer is pointing to the correct
     /// location.
     pub unsafe fn send_user_msg(&self, msg: S::UserMsg) -> i64 {
-        let discriminant = msg.discriminant();
-        let encoded_bytes = user_msg::encode(msg);
-
-        let (wparam, lparam): (WPARAM, LPARAM) = mem::transmute(encoded_bytes);
-        user32::SendMessageW(self.hwnd(), discriminant as UINT + WM_APP, wparam, lparam)
+        self.unsafe_subclass_ref().send_user_msg(msg)
     }
 
     /// Post a user message to the message queue associatd with the window.
@@ -604,20 +636,22 @@ impl<W: Window, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
     pub unsafe fn post_user_msg(&self, msg: S::UserMsg)
             where S::UserMsg: 'static
     {
-        let discriminant = msg.discriminant();
-        let encoded_bytes = user_msg::encode(msg);
-
-        let (wparam, lparam): (WPARAM, LPARAM) = mem::transmute(encoded_bytes);
-        user32::PostMessageW(self.hwnd(), discriminant as UINT + WM_APP, wparam, lparam);
+        self.unsafe_subclass_ref().post_user_msg(msg)
     }
 
-    pub unsafe fn update_subclass_ptr(&self) {
-        comctl32::SetWindowSubclass(
-            self.window.hwnd(),
-            Some(subclass_proc::<W, S>),
-            SUBCLASS_ID,
-            &self.subclass_data as *const S as DWORD_PTR
-        );
+    pub fn unsafe_subclass_ref(&self) -> UnsafeSubclassRef<S::UserMsg> {
+        unsafe{ UnsafeSubclassRef(self.hwnd(), PhantomData) }
+    }
+
+    pub fn update_subclass_ptr(&self) {
+        unsafe {
+            comctl32::SetWindowSubclass(
+                self.window.hwnd(),
+                Some(subclass_proc::<W, S>),
+                SUBCLASS_ID,
+                &self.data as *const S as DWORD_PTR
+            );
+        }
     }
 }
 impl<W: Window, S: Subclass<W>> Window for UnsafeSubclassWrapper<W, S> {
@@ -636,8 +670,8 @@ impl<W: Window, S: Subclass<W>> IconWindow for UnsafeSubclassWrapper<W, S> where
 
 
 // ProcWindowRef impls
-impl<W: Window> ProcWindowRef<W> {
-    unsafe fn new(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM) -> ProcWindowRef<W> {
+impl<W: Window, S: Subclass<W>> ProcWindowRef<W, S> {
+    unsafe fn new(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM) -> ProcWindowRef<W, S> {
         ProcWindowRef {
             hwnd: hwnd,
             msg: msg,
@@ -647,21 +681,45 @@ impl<W: Window> ProcWindowRef<W> {
         }
     }
 
-    pub fn default_window_proc(&self) -> i64 {
-        unsafe{ comctl32::DefSubclassProc(self.hwnd, self.msg, self.wparam, self.lparam) as i64 }
+    pub fn send_user_msg(&self, msg: S::UserMsg) -> i64 {
+        let discriminant = msg.discriminant();
+        let encoded_bytes = user_msg::encode(msg);
+
+        unsafe {
+            let (wparam, lparam): (WPARAM, LPARAM) = mem::transmute(encoded_bytes);
+            user32::SendMessageW(self.hwnd(), discriminant as UINT + WM_APP, wparam, lparam)
+        }
+    }
+
+    pub fn default_window_proc(&self, msg: &mut Msg<S::UserMsg>) -> i64 {
+        let ret = unsafe{ comctl32::DefSubclassProc(self.hwnd, self.msg, self.wparam, self.lparam) as i64 };
+        match *msg {
+            Msg::Wm(Wm::GetSizeBounds(ref mut size_bounds)) => {
+                assert_eq!(self.msg, WM_GETMINMAXINFO);
+                let mmi = unsafe{ *(self.lparam as *mut MINMAXINFO) };
+                size_bounds.min = OriginRect::new(mmi.ptMinTrackSize.x as Px, mmi.ptMinTrackSize.y as Px);
+                size_bounds.max = OriginRect::new(mmi.ptMaxTrackSize.x as Px, mmi.ptMaxTrackSize.y as Px);
+            },
+            Msg::Bm(Bm::GetIdealSize(ref mut ideal_size)) => {
+                assert_eq!(self.msg, BCM_GETIDEALSIZE);
+                let size = unsafe{ *(self.lparam as *mut SIZE) };
+                **ideal_size = OriginRect::new(size.cx as Px, size.cy as Px);
+            },
+            _ => ()
+        }
+        ret
     }
 }
-impl<W: Window> Window for ProcWindowRef<W> {
+impl<W: Window, S: Subclass<W>> Window for ProcWindowRef<W, S> {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {
         self.hwnd
     }
 }
-impl<W: Window> OverlappedWindow for ProcWindowRef<W> where W: OverlappedWindow {}
-impl<W: Window> ParentWindow for ProcWindowRef<W> where W: ParentWindow {}
-impl<W: Window> ButtonWindow for ProcWindowRef<W> where W: ButtonWindow {}
-impl<W: Window> TextLabelWindow for ProcWindowRef<W> where W: TextLabelWindow {}
-
+impl<W: Window, S: Subclass<W>> OverlappedWindow for ProcWindowRef<W, S> where W: OverlappedWindow {}
+impl<W: Window, S: Subclass<W>> ParentWindow for ProcWindowRef<W, S> where W: ParentWindow {}
+impl<W: Window, S: Subclass<W>> ButtonWindow for ProcWindowRef<W, S> where W: ButtonWindow {}
+impl<W: Window, S: Subclass<W>> TextLabelWindow for ProcWindowRef<W, S> where W: TextLabelWindow {}
 
 
 // ParentRef impls
@@ -674,23 +732,42 @@ impl Window for ParentRef {
 impl ParentWindow for ParentRef {}
 
 
-// pub fn adjust_window_rect<R: Rect>(rect: R, style: DWORD, style_ex: DWORD) -> R {
-//     let mut winapi_rect = RECT {
-//         right: cmp::min(rect.lowright().x, (LONG::max_value() - 64) as Px) as LONG,
-//         bottom: cmp::min(rect.lowright().y, (LONG::max_value() - 64) as Px) as LONG,
-//         left: rect.topleft().x as LONG,
-//         top: rect.topleft().y as LONG
-//     };
+impl Window for WindowRef {
+    unsafe fn hwnd(&self) -> HWND {
+        self.0
+    }
+}
 
-//     unsafe {user32::AdjustWindowRectEx(
-//         &mut winapi_rect,
-//         style,
-//         0,
-//         style_ex
-//     )};
 
-//     R::from(OffsetRect::new(winapi_rect.left as Px, winapi_rect.top as Px, winapi_rect.right as Px, winapi_rect.bottom as Px))
-// }
+
+// UnsafeSubclassRef impls
+impl<U: UserMsg> UnsafeSubclassRef<U> {
+    pub unsafe fn send_user_msg(&self, msg: U) -> i64 {
+        let discriminant = msg.discriminant();
+        let encoded_bytes = user_msg::encode(msg);
+
+        let (wparam, lparam): (WPARAM, LPARAM) = mem::transmute(encoded_bytes);
+        user32::SendMessageW(self.hwnd(), discriminant as UINT + WM_APP, wparam, lparam)
+    }
+
+    pub unsafe fn post_user_msg(&self, msg: U)
+            where U: 'static
+    {
+        let discriminant = msg.discriminant();
+        let encoded_bytes = user_msg::encode(msg);
+
+        let (wparam, lparam): (WPARAM, LPARAM) = mem::transmute(encoded_bytes);
+        user32::PostMessageW(self.hwnd(), discriminant as UINT + WM_APP, wparam, lparam);
+    }
+}
+impl<U: UserMsg> Window for UnsafeSubclassRef<U> {
+    unsafe fn hwnd(&self) -> HWND {
+        self.0
+    }
+}
+
+
+
 
 pub struct Icon( HICON );
 
@@ -720,35 +797,46 @@ impl Drop for Icon {
 /// Enables win32 visual styles in the hackiest of methods. Basically, this steals the application
 /// manifest from `shell32.dll`, which contains the visual styles code, and then enables that
 /// manifest here.
-pub unsafe fn enable_visual_styles() {
-    const ACTCTX_FLAG_ASSEMBLY_DIRECTORY_VALID: DWORD = 0x004;
-    const ACTCTX_FLAG_RESOURCE_NAME_VALID: DWORD = 0x008;
-    const ACTCTX_FLAG_SET_PROCESS_DEFAULT: DWORD = 0x010;
+pub fn enable_visual_styles() {
+    // It's true that this static mut could cause a memory race. However, the only consequence of
+    // that memory race is that this function runs more than once, which won't have any bad impacts
+    // other than perhaps a slight increase in memory usage.
+    static mut ENABLED: bool = false;
 
-    let mut dir = [0u16; MAX_PATH];
-    kernel32::GetSystemDirectoryW(dir.as_mut_ptr(), MAX_PATH as u32);
-    UCS2_CONVERTER.with_string("shell32.dll", |dll_file_name| {
-        let styles_ctx = ACTCTXW {
-            cbSize: mem::size_of::<ACTCTXW>() as u32,
-            dwFlags:
-                ACTCTX_FLAG_ASSEMBLY_DIRECTORY_VALID |
-                ACTCTX_FLAG_RESOURCE_NAME_VALID |
-                ACTCTX_FLAG_SET_PROCESS_DEFAULT,
-            lpSource: dll_file_name.as_ptr(),
-            wProcessorArchitecture: 0,
-            wLangId: 0,
-            lpAssemblyDirectory: dir.as_ptr(),
-            lpResourceName: 124 as LPCWSTR,
-            lpApplicationName: ptr::null_mut(),
-            hModule: ptr::null_mut()
-        };
+    unsafe {
+        if !ENABLED {
+            const ACTCTX_FLAG_ASSEMBLY_DIRECTORY_VALID: DWORD = 0x004;
+            const ACTCTX_FLAG_RESOURCE_NAME_VALID: DWORD = 0x008;
+            const ACTCTX_FLAG_SET_PROCESS_DEFAULT: DWORD = 0x010;
 
-        let mut activation_cookie = 0;
-        kernel32::ActivateActCtx(
-            kernel32::CreateActCtxW(&styles_ctx),
-            &mut activation_cookie
-        );
-    })
+            let mut dir = [0u16; MAX_PATH];
+            kernel32::GetSystemDirectoryW(dir.as_mut_ptr(), MAX_PATH as u32);
+            UCS2_CONVERTER.with_string("shell32.dll", |dll_file_name| {
+                let styles_ctx = ACTCTXW {
+                    cbSize: mem::size_of::<ACTCTXW>() as u32,
+                    dwFlags:
+                        ACTCTX_FLAG_ASSEMBLY_DIRECTORY_VALID |
+                        ACTCTX_FLAG_RESOURCE_NAME_VALID |
+                        ACTCTX_FLAG_SET_PROCESS_DEFAULT,
+                    lpSource: dll_file_name.as_ptr(),
+                    wProcessorArchitecture: 0,
+                    wLangId: 0,
+                    lpAssemblyDirectory: dir.as_ptr(),
+                    lpResourceName: 124 as LPCWSTR,
+                    lpApplicationName: ptr::null_mut(),
+                    hModule: ptr::null_mut()
+                };
+
+                let mut activation_cookie = 0;
+                kernel32::ActivateActCtx(
+                    kernel32::CreateActCtxW(&styles_ctx),
+                    &mut activation_cookie
+                );
+            });
+
+            ENABLED = true;
+        }
+    }
 }
 
 unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
@@ -816,16 +904,19 @@ unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
             }
             WM_GETMINMAXINFO => {
                 let mut mmi = &mut*(lparam as *mut MINMAXINFO);
-                let mut size_bounds = SizeBounds::new(
-                    OriginRect::new(mmi.ptMinTrackSize.x as Px, mmi.ptMinTrackSize.y as Px),
-                    OriginRect::new(mmi.ptMaxTrackSize.x as Px, mmi.ptMaxTrackSize.y as Px)
-                );
+                let mut size_bounds = SizeBounds::default();
 
                 let ret = run_subclass_proc!(Msg::Wm(Wm::GetSizeBounds(&mut size_bounds)));
+
+                let window = WindowRef(hwnd);
+                size_bounds.min = window.adjust_window_rect(size_bounds.min);
+                size_bounds.max = window.adjust_window_rect(size_bounds.max);
+
                 mmi.ptMinTrackSize.x = size_bounds.min.width as LONG;
                 mmi.ptMinTrackSize.y = size_bounds.min.height as LONG;
                 mmi.ptMaxTrackSize.x = size_bounds.max.width as LONG;
                 mmi.ptMaxTrackSize.y = size_bounds.max.height as LONG;
+
                 ret
             }
 
@@ -977,7 +1068,7 @@ mod tests {
         test_encoding(BadMsg::Bar(&1024, &[2048, 10]));
     }
 
-    fn test_encoding<M: UserMsg + Debug + Eq + Copy>(msg: M) {
+    fn test_encoding<U: UserMsg + Debug + Eq + Copy>(msg: M) {
         let discriminant = msg.discriminant();
 
         assert_eq!(msg, unsafe{ user_msg::decode(discriminant, user_msg::encode(msg)) });

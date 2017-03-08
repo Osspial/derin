@@ -1,6 +1,8 @@
-extern crate rand;
+#![feature(specialization)]
+
 extern crate dle;
 extern crate dct;
+extern crate void;
 
 #[cfg(test)]
 #[cfg_attr(test, macro_use)]

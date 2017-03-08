@@ -11,6 +11,7 @@ use hints::{PlaceInCell, Place, GridSize, WidgetHints, TrackHints};
 use grid::{TrackVec, SizeResult};
 
 use std::cmp;
+use std::cell::RefCell;
 
 pub type Tr = u32;
 pub type Fr = f32;
@@ -27,6 +28,13 @@ impl WidgetData {
     pub fn new() -> WidgetData {
         WidgetData::default()
     }
+
+    pub fn combined_size_bounds(self) -> SizeBounds {
+        SizeBounds {
+            min: self.abs_size_bounds.bound_rect(self.widget_hints.size_bounds.min).converge(),
+            max: self.abs_size_bounds.bound_rect(self.widget_hints.size_bounds.max).converge()
+        }
+    }
 }
 
 pub trait Widget {
@@ -38,216 +46,17 @@ pub trait Container {
 }
 
 
+thread_local!{
+    static UPDATER: RefCell<LayoutUpdater> = RefCell::new(LayoutUpdater::default());
+}
+
 #[derive(Default)]
-pub struct LayoutUpdater {
+struct LayoutUpdater {
     frac_tracks: TrackVec<Tr>,
     potential_frac_tracks: TrackVec<Tr>,
     rigid_tracks_widget: Vec<Tr>,
     frac_tracks_widget: Vec<Tr>,
     solvable_widgets: Vec<Solvable>
-}
-
-impl LayoutUpdater {
-    pub fn new() -> LayoutUpdater {
-        LayoutUpdater::default()
-    }
-
-    /// This method is the heart and soul of the derin layout engine, and is easily the most complex
-    /// method it has. This takes a layout engine, iterates over all of the updates performed on that
-    /// engine, and performs constraint solving to ensure that all* of the constraints within the engine
-    /// are solved.
-    ///
-    /// Returns `Ok(())` if the size of the engine was not changed, and `Err(new_rect)` if the size WAS
-    /// changed.
-    ///
-    /// <sup>\* The only situation where some constraints may end up violated would be when the maximum
-    /// size is less than the minimum size. In that case, minimum size overrides maximum size, as doing
-    /// otherwise could cause rendering issues. </sup>
-    pub fn update_engine<C>(&mut self, container: &mut C, engine: &mut LayoutEngine) -> Result<(), OriginRect>
-            where C: Container
-    {
-        // We start out by setting the free space to its maximum possible value.
-        let mut free_width = engine.desired_size.width();
-        let mut fr_total_width = 0.0;
-        let mut free_height = engine.desired_size.height();
-        let mut fr_total_height = 0.0;
-
-        let old_engine_size = engine.actual_size;
-
-        // Reset the actual size bounds to zero.
-        engine.actual_size_bounds = SizeBounds {
-            min: OriginRect::min(),
-            max: OriginRect::min()
-        };
-
-        let mut frac_min_size = OriginRect::min();
-
-        let mut rigid_min_size = OriginRect::min();
-
-        // Next, we perform an iteration over the tracks, subtracting from the free space if the track is
-        // rigid.
-        macro_rules! first_track_pass {
-            ($rect_size:ident, $push_track:ident, $track_range_mut:ident, $free_size:expr, $fr_total:expr) => {
-                for (index, track) in engine.grid.$track_range_mut(..).unwrap().iter_mut().enumerate() {
-                    let track_fr_size = track.hints().fr_size;
-                    if track_fr_size <= 0.0 {
-                        track.reset_shrink();
-                        rigid_min_size.$rect_size += track.min_size();
-                        // To make sure that the maximum size isn't below the minimum needed for this track,
-                        // increase the engine maximum size by the rigid track minimum size.
-                        engine.actual_size_bounds.max.$rect_size =
-                            engine.actual_size_bounds.max.$rect_size.saturating_add(track.min_size());
-                        $free_size = $free_size.saturating_sub(track.size());
-                    } else {
-                        // The engine maximum size isn't expanded in a rigid track because the track won't
-                        // expand when the rectangle of the engine is expanded.
-                        engine.actual_size_bounds.max.$rect_size =
-                            engine.actual_size_bounds.max.$rect_size.saturating_add(track.max_size());
-                        track.reset_expand();
-                        frac_min_size.$rect_size += track.min_size();
-                        $fr_total += track_fr_size;
-                        self.frac_tracks.$push_track(index as Tr);
-                    }
-                }
-            }
-        }
-
-        first_track_pass!(width, push_col, col_range_mut, free_width, fr_total_width);
-        first_track_pass!(height, push_row, row_range_mut, free_height, fr_total_height);
-
-
-        engine.actual_size_bounds.max =
-            engine.desired_size_bounds.bound_rect(engine.actual_size_bounds.max).converge();
-
-        engine.actual_size_bounds.min = OriginRect::new(
-            frac_min_size.width() + rigid_min_size.width(),
-            frac_min_size.height() + rigid_min_size.height()
-        );
-        engine.actual_size_bounds.min =
-            engine.desired_size_bounds.bound_rect(engine.actual_size_bounds.min).converge();
-
-        engine.actual_size = engine.actual_size_bounds.bound_rect(engine.desired_size).converge();
-
-        'update: loop {
-            /// Macro for solving the track constraints independent of axis. Because each axis is
-            /// independent from the other but the computations required for both are basically the same,
-            /// they're placed in a macro to allow DRY.
-            macro_rules! track_constraints {
-                ($get_track:ident, $get_track_mut:ident, $push_track:ident, $num_tracks_method:ident,
-                 $remove_track:ident, $free_size:expr, $fr_total:expr) => {(|| {
-                    //                                                      ^^
-                    // Why is this a closure? Consecutive loops in the same function get a warning
-                    // for label shadowing if they have the same label, and this supresses that.
-
-                    let mut pft_index = 0;
-                    while let Some(track_index) = self.potential_frac_tracks.$get_track(pft_index).cloned() {
-                        let track = engine.grid.$get_track(track_index).unwrap();
-                        let track_fr_size = track.hints().fr_size;
-                        let mut track_copy = track.clone();
-
-                        // While this isn't an *exact* calculation of the new size of the track (due to remainders and whatnot
-                        // as implemented in `FrDivider`), it's a good enough estimate.
-                        let new_size = (($free_size + track.size()) as Fr * track_fr_size / ($fr_total + track_fr_size)) as Px;
-
-                        match track_copy.change_size(new_size) {
-                            // If the track can be freely rescaled, add it back to `frac_tracks` and remove it from
-                            // `potential_frac_tracks`.
-                            SizeResult::SizeUpscale    |
-                            SizeResult::SizeDownscale => {
-                                $free_size += track.size();
-                                $fr_total += track_fr_size;
-                                self.frac_tracks.$push_track(track_index);
-                                self.potential_frac_tracks.$remove_track(pft_index);
-                            }
-
-                            // If the track has been downscaled but clamped, it still isn't a free track. However, it does free
-                            // up some space that can be used by other tracks so add that to the total.
-                            SizeResult::SizeDownscaleClamp => {
-                                $free_size += track.size() - track_copy.size();
-                                pft_index += 1;
-                            },
-
-                            // If the track has been *upscaled* but clamped, it still isn't a free track but it does take up some
-                            // hitherto unoccupied free space.
-                            SizeResult::SizeUpscaleClamp => {
-                                $free_size -= track.size() - track_copy.size();
-                                pft_index += 1;
-                            },
-
-                            // If there's no effect, keep the track on the list and increment `pft_index`.
-                            SizeResult::NoEffectUp    |
-                            SizeResult::NoEffectEq    |
-                            SizeResult::NoEffectDown => pft_index += 1
-                        }
-                    }
-
-                    'frac: loop {
-                        let mut frac_index = 0;
-                        let mut fr_divider = FrDivider::new(self.frac_tracks.$num_tracks_method(), $free_size, $fr_total);
-                        while let Some(track_index) = self.frac_tracks.$get_track(frac_index).map(|t| *t as Tr) {
-                            let track = engine.grid.$get_track_mut(track_index).unwrap();
-                            let track_fr_size = track.hints().fr_size;
-
-                            let new_size = fr_divider.divvy(track_fr_size);
-
-                            match track.change_size(new_size) {
-                                // If the resize occured without issues, increment frac_index and go on to the next track.
-                                SizeResult::SizeUpscale    |
-                                SizeResult::SizeDownscale  |
-                                SizeResult::NoEffectEq    => frac_index += 1,
-
-                                // If changing the track size resulted in the track reaching its minimum size, that track can be
-                                // considered rigid because it cannot shrink any further. Mark it for removal from the fractional
-                                // tracks list, remove it from the fractional totals, then begin the fractional expansion again.
-                                SizeResult::SizeDownscaleClamp |
-                                SizeResult::NoEffectUp         |
-                                SizeResult::SizeUpscaleClamp   |
-                                SizeResult::NoEffectDown      => {
-                                    $free_size -= track.size();
-                                    $fr_total -= track_fr_size;
-                                    self.frac_tracks.$remove_track(frac_index);
-                                    self.potential_frac_tracks.$push_track(track_index as u32);
-                                    continue 'frac;
-                                }
-                            }
-                        }
-
-                        break 'frac;
-                    }
-                })()}
-            }
-
-            track_constraints!(get_col, get_col_mut, push_col, num_cols, remove_col, free_width, fr_total_width);
-            track_constraints!(get_row, get_row_mut, push_row, num_rows, remove_row, free_height, fr_total_height);
-
-            container.update_widget_rects(WidgetConstraintSolver {
-                solvable_index: 0,
-                aborted: false,
-                engine: engine,
-                updater: self,
-                free_width: &mut free_width,
-                free_height: &mut free_height,
-                fr_total_width: &mut fr_total_width,
-                fr_total_height: &mut fr_total_height,
-                rigid_min_size: &mut rigid_min_size,
-                frac_min_size: &mut frac_min_size
-            });
-
-            break 'update;
-        }
-
-        self.frac_tracks.clear();
-        self.potential_frac_tracks.clear();
-        self.rigid_tracks_widget.clear();
-        self.frac_tracks_widget.clear();
-        self.solvable_widgets.clear();
-
-        if engine.actual_size != old_engine_size {
-            Err(engine.actual_size)
-        } else {
-            Ok(())
-        }
-    }
 }
 
 pub struct LayoutEngine {
@@ -304,6 +113,207 @@ impl LayoutEngine {
 
     pub fn actual_size_bounds(&self) -> SizeBounds {
         self.actual_size_bounds
+    }
+
+    /// This method is the heart and soul of the derin layout engine, and is easily the most complex
+    /// method it has. This takes a layout engine, iterates over all of the updates performed on that
+    /// engine, and performs constraint solving to ensure that all* of the constraints within the engine
+    /// are solved.
+    ///
+    /// Returns `Ok(())` if the size of the engine was not changed, and `Err(new_rect)` if the size WAS
+    /// changed.
+    ///
+    /// <sup>\* The only situation where some constraints may end up violated would be when the maximum
+    /// size is less than the minimum size. In that case, minimum size overrides maximum size, as doing
+    /// otherwise could cause rendering issues. </sup>
+    pub fn update_engine<C>(&mut self, container: &mut C) -> Result<(), OriginRect>
+            where C: Container
+    {
+        UPDATER.with(|updater| {
+            let mut updater = updater.borrow_mut();
+
+            // We start out by setting the free space to its maximum possible value.
+            let mut free_width = self.desired_size.width();
+            let mut fr_total_width = 0.0;
+            let mut free_height = self.desired_size.height();
+            let mut fr_total_height = 0.0;
+
+            let old_engine_size = self.actual_size;
+
+            // Reset the actual size bounds to zero.
+            self.actual_size_bounds = SizeBounds {
+                min: OriginRect::min(),
+                max: OriginRect::min()
+            };
+
+            let mut frac_min_size = OriginRect::min();
+
+            let mut rigid_min_size = OriginRect::min();
+
+            // Next, we perform an iteration over the tracks, subtracting from the free space if the track is
+            // rigid.
+            macro_rules! first_track_pass {
+                ($rect_size:ident, $push_track:ident, $track_range_mut:ident, $free_size:expr, $fr_total:expr) => {
+                    for (index, track) in self.grid.$track_range_mut(..).unwrap().iter_mut().enumerate() {
+                        let track_fr_size = track.hints().fr_size;
+                        if track_fr_size <= 0.0 {
+                            track.reset_shrink();
+                            rigid_min_size.$rect_size += track.min_size();
+                            // To make sure that the maximum size isn't below the minimum needed for this track,
+                            // increase the engine maximum size by the rigid track minimum size.
+                            self.actual_size_bounds.max.$rect_size =
+                                self.actual_size_bounds.max.$rect_size.saturating_add(track.min_size());
+                            $free_size = $free_size.saturating_sub(track.size());
+                        } else {
+                            // The engine maximum size isn't expanded in a rigid track because the track won't
+                            // expand when the rectangle of the engine is expanded.
+                            self.actual_size_bounds.max.$rect_size =
+                                self.actual_size_bounds.max.$rect_size.saturating_add(track.max_size());
+                            track.reset_expand();
+                            frac_min_size.$rect_size += track.min_size();
+                            $fr_total += track_fr_size;
+                            updater.frac_tracks.$push_track(index as Tr);
+                        }
+                    }
+                }
+            }
+
+            first_track_pass!(width, push_col, col_range_mut, free_width, fr_total_width);
+            first_track_pass!(height, push_row, row_range_mut, free_height, fr_total_height);
+
+
+            self.actual_size_bounds.max =
+                self.desired_size_bounds.bound_rect(self.actual_size_bounds.max).converge();
+
+            self.actual_size_bounds.min = OriginRect::new(
+                frac_min_size.width() + rigid_min_size.width(),
+                frac_min_size.height() + rigid_min_size.height()
+            );
+            self.actual_size_bounds.min =
+                self.desired_size_bounds.bound_rect(self.actual_size_bounds.min).converge();
+
+            self.actual_size = self.actual_size_bounds.bound_rect(self.desired_size).converge();
+
+            'update: loop {
+                /// Macro for solving the track constraints independent of axis. Because each axis is
+                /// independent from the other but the computations required for both are basically the same,
+                /// they're placed in a macro to allow DRY.
+                macro_rules! track_constraints {
+                    ($get_track:ident, $get_track_mut:ident, $push_track:ident, $num_tracks_method:ident,
+                     $remove_track:ident, $free_size:expr, $fr_total:expr) => {(|| {
+                        //                                                      ^^
+                        // Why is this a closure? Consecutive loops in the same function get a warning
+                        // for label shadowing if they have the same label, and this supresses that.
+
+                        let mut pft_index = 0;
+                        while let Some(track_index) = updater.potential_frac_tracks.$get_track(pft_index).cloned() {
+                            let track = self.grid.$get_track(track_index).unwrap();
+                            let track_fr_size = track.hints().fr_size;
+                            let mut track_copy = track.clone();
+
+                            // While this isn't an *exact* calculation of the new size of the track (due to remainders and whatnot
+                            // as implemented in `FrDivider`), it's a good enough estimate.
+                            let new_size = (($free_size + track.size()) as Fr * track_fr_size / ($fr_total + track_fr_size)) as Px;
+
+                            match track_copy.change_size(new_size) {
+                                // If the track can be freely rescaled, add it back to `frac_tracks` and remove it from
+                                // `potential_frac_tracks`.
+                                SizeResult::SizeUpscale    |
+                                SizeResult::SizeDownscale => {
+                                    $free_size += track.size();
+                                    $fr_total += track_fr_size;
+                                    updater.frac_tracks.$push_track(track_index);
+                                    updater.potential_frac_tracks.$remove_track(pft_index);
+                                }
+
+                                // If the track has been downscaled but clamped, it still isn't a free track. However, it does free
+                                // up some space that can be used by other tracks so add that to the total.
+                                SizeResult::SizeDownscaleClamp => {
+                                    $free_size += track.size() - track_copy.size();
+                                    pft_index += 1;
+                                },
+
+                                // If the track has been *upscaled* but clamped, it still isn't a free track but it does take up some
+                                // hitherto unoccupied free space.
+                                SizeResult::SizeUpscaleClamp => {
+                                    $free_size -= track.size() - track_copy.size();
+                                    pft_index += 1;
+                                },
+
+                                // If there's no effect, keep the track on the list and increment `pft_index`.
+                                SizeResult::NoEffectUp    |
+                                SizeResult::NoEffectEq    |
+                                SizeResult::NoEffectDown => pft_index += 1
+                            }
+                        }
+
+                        'frac: loop {
+                            let mut frac_index = 0;
+                            let mut fr_divider = FrDivider::new(updater.frac_tracks.$num_tracks_method(), $free_size, $fr_total);
+                            while let Some(track_index) = updater.frac_tracks.$get_track(frac_index).map(|t| *t as Tr) {
+                                let track = self.grid.$get_track_mut(track_index).unwrap();
+                                let track_fr_size = track.hints().fr_size;
+
+                                let new_size = fr_divider.divvy(track_fr_size);
+
+                                match track.change_size(new_size) {
+                                    // If the resize occured without issues, increment frac_index and go on to the next track.
+                                    SizeResult::SizeUpscale    |
+                                    SizeResult::SizeDownscale  |
+                                    SizeResult::NoEffectEq    => frac_index += 1,
+
+                                    // If changing the track size resulted in the track reaching its minimum size, that track can be
+                                    // considered rigid because it cannot shrink any further. Mark it for removal from the fractional
+                                    // tracks list, remove it from the fractional totals, then begin the fractional expansion again.
+                                    SizeResult::SizeDownscaleClamp |
+                                    SizeResult::NoEffectUp         |
+                                    SizeResult::SizeUpscaleClamp   |
+                                    SizeResult::NoEffectDown      => {
+                                        $free_size -= track.size();
+                                        $fr_total -= track_fr_size;
+                                        updater.frac_tracks.$remove_track(frac_index);
+                                        updater.potential_frac_tracks.$push_track(track_index as u32);
+                                        continue 'frac;
+                                    }
+                                }
+                            }
+
+                            break 'frac;
+                        }
+                    })()}
+                }
+
+                track_constraints!(get_col, get_col_mut, push_col, num_cols, remove_col, free_width, fr_total_width);
+                track_constraints!(get_row, get_row_mut, push_row, num_rows, remove_row, free_height, fr_total_height);
+
+                container.update_widget_rects(WidgetConstraintSolver {
+                    solvable_index: 0,
+                    aborted: false,
+                    engine: self,
+                    updater: &mut *updater,
+                    free_width: &mut free_width,
+                    free_height: &mut free_height,
+                    fr_total_width: &mut fr_total_width,
+                    fr_total_height: &mut fr_total_height,
+                    rigid_min_size: &mut rigid_min_size,
+                    frac_min_size: &mut frac_min_size
+                });
+
+                break 'update;
+            }
+
+            updater.frac_tracks.clear();
+            updater.potential_frac_tracks.clear();
+            updater.rigid_tracks_widget.clear();
+            updater.frac_tracks_widget.clear();
+            updater.solvable_widgets.clear();
+
+            if self.actual_size != old_engine_size {
+                Err(self.actual_size)
+            } else {
+                Ok(())
+            }
+        })
     }
 }
 

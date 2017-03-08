@@ -1,135 +1,296 @@
+use super::toggle_cell::ToggleCell;
+
 use ui::{Control, Parent, Node, ChildId, NodeProcessor, NodeProcessorAT, NodeDataWrapper};
-use ui::intrinsics::TextButton;
 use dww::*;
-use dle::{Widget, Container, LayoutEngine, WidgetData, WidgetConstraintSolver, SolveError, LayoutUpdater};
-use dle::hints::WidgetHints;
-use dct::events::{MouseEvent, MouseButton};
-use dct::geometry::{Rect, OffsetRect, Point};
+use dle::{Container, LayoutEngine, WidgetData, WidgetConstraintSolver, SolveError};
+use dct::events::{MouseEvent};
+use dct::geometry::{OriginRect, OffsetRect, SizeBounds};
+use void::Void;
 
+use std::mem;
 use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
-type ToplevelWindowBase = IconWrapper<WindowIcon, OverlapWrapper<BlankBase>>;
+type ToplevelWindowBase = OverlapWrapper<BlankBase>;
 
-macro_rules! node_data {
+macro_rules! impl_node_data_wrapper {
+    ($name:ident<$inner_ty:ident>; $(where $($where_ty:ty: $($(for<$($lt:tt),+>)* trait $constraint:path)|+),+)*;) => ();
     (
-        pub struct $name:ident<$inner_ty:ident>( $field_ty:ty )
-                $(where $($where_ty:ty: $($constraint:path)|+),+)*;
+        $name:ident<$inner_ty:ident>;
+        $(where $($where_ty:ty: $($(for<$($lt:tt),+>)* trait $constraint:path)|+),+)*;
+        fn from_node_data($fnd_in:ident: _) -> UnsafeSubclassWrapper<_, _> $from_node_data:block;
+        expr node_data($node_data_in:ident) = $node_data:expr;
+    ) => {
+        impl<$inner_ty> NodeDataWrapper<$inner_ty> for $name<$inner_ty>
+                $(where $($where_ty: $($(for<$($lt),+>)* $constraint +)+),+)*
+        {
+            fn from_node_data($fnd_in: $inner_ty) -> $name<$inner_ty> {
+                enable_visual_styles();
+
+                $name {
+                    subclass: $from_node_data,
+                    needs_update: true
+                }
+            }
+
+            fn inner(&self) -> &$inner_ty {let $node_data_in = &self.subclass; &$node_data}
+            fn inner_mut(&mut self) -> &mut $inner_ty {
+                self.needs_update = true;
+                let $node_data_in = &mut self.subclass;
+                &mut $node_data
+            }
+
+            fn unwrap(self) -> $inner_ty {let $node_data_in = self.subclass; $node_data}
+        }
+    }
+}
+
+macro_rules! subclass_node_data {
+    (
+        pub struct $name:ident<$inner_ty:ident>
+                $(where $($where_ty:ty: $($(for<$($lt:tt),+>)* trait $constraint:path)|+),+)*
+        {
+            subclass: $field_ty:ty,
+            needs_update: bool
+        }
 
         impl {
             expr widget_data($widget_data_in:ident) = $widget_data:expr;
-            expr node_data($node_data_in:ident) = $node_data:expr;
+            $(
+                expr node_data($node_data_in:ident) = $node_data:expr;
+                fn from_node_data($fnd_in:ident: _) -> UnsafeSubclassWrapper<_, _> $from_node_data:block
+            )*
 
-            fn from_node_data($fnd_in:ident: _) -> Self $from_node_data:block
+            fn update_widget($us_in:ident: _ $(, $us_extra:ident: $us_extra_ty:ty)*) $update_widget:block
         }
 
         $($rest:tt)*
     ) => {
-        pub struct $name<$inner_ty>( $field_ty )
-                $(where $($where_ty: $($constraint +)+),+)*;
+        pub struct $name<$inner_ty>
+                $(where $($where_ty: $($(for<$($lt),+>)* $constraint +)+),+)*
+        {
+            subclass: $field_ty,
+            needs_update: bool
+        }
 
         impl<$inner_ty> $name<$inner_ty>
-                $(where $($where_ty: $($constraint +)+),+)*
+                $(where $($where_ty: $($(for<$($lt),+>)* $constraint +)+),+)*
         {
             #[doc(hidden)]
             #[inline]
-            pub unsafe fn update_subclass_ptr(&self) {
-                self.0.update_subclass_ptr();
+            pub fn update_subclass_ptr(&self) {
+                self.subclass.update_subclass_ptr();
+            }
+
+            #[doc(hidden)]
+            pub fn update_widget(&mut self $(, $us_extra: $us_extra_ty)*) {
+                self.needs_update = false;
+                let $us_in = &mut self.subclass;
+                $update_widget
             }
         }
 
-        impl<$inner_ty> WidgetDataContainer for $name<$inner_ty>
-                $(where $($where_ty: $($constraint +)+),+)*
+        impl<$inner_ty> NativeDataWrapper for $name<$inner_ty>
+                $(where $($where_ty: $($(for<$($lt),+>)* $constraint +)+),+)*
         {
             #[inline]
+            fn size_bounds(&self) -> SizeBounds {
+                self.subclass.size_bounds()
+            }
+
+            #[inline]
+            fn set_rect(&self, rect: OffsetRect) {
+                self.subclass.set_rect(rect);
+            }
+
+            #[inline]
             fn get_widget_data(&self) -> WidgetData {
-                let $widget_data_in = self;
+                let $widget_data_in = &self.subclass;
                 $widget_data
+            }
+
+            #[inline]
+            fn window_ref(&self) -> WindowRef {
+                self.subclass.window_ref()
+            }
+
+            #[inline]
+            fn unsafe_subclass_ref(&self) -> UnsafeSubclassRef<DerinMsg> {
+                self.subclass.unsafe_subclass_ref()
+            }
+
+            #[inline]
+            fn needs_update(&self) -> bool {
+                self.needs_update
             }
         }
 
-        impl<$inner_ty> NodeDataWrapper<$inner_ty> for $name<$inner_ty>
-                $(where $($where_ty: $($constraint +)+),+)*
-        {
-            fn from_node_data($fnd_in: $inner_ty) -> $name<$inner_ty> $from_node_data
-
-            fn inner(&self) -> &$inner_ty {let $node_data_in = self; &$node_data}
-            fn inner_mut(&mut self) -> &mut $inner_ty {let $node_data_in = self; &mut $node_data}
-            fn unwrap(self) -> $inner_ty {let $node_data_in = self; $node_data}
+        impl_node_data_wrapper!{
+            $name<$inner_ty>;
+            $(where $($where_ty: $($(for<$($lt),+>)* trait $constraint)|+),+)*;
+            $(
+                fn from_node_data($fnd_in: _) -> UnsafeSubclassWrapper<_, _> $from_node_data;
+                expr node_data($node_data_in) = $node_data;
+            )*
         }
 
-        node_data!{$($rest)*}
+        subclass_node_data!{$($rest)*}
     };
 
     () => ();
 }
 
-node_data!{
-    pub struct TextButtonNodeData<I>( UnsafeSubclassWrapper<PushButtonBase, TextButtonSubclass<I>> )
-            where I: AsRef<str> | Control;
-
+subclass_node_data!{
+    pub struct TextButtonNodeData<I>
+            where I: trait AsRef<str> | trait Control
+    {
+        subclass: UnsafeSubclassWrapper<PushButtonBase, TextButtonSubclass<I>>,
+        needs_update: bool
+    }
     impl {
-        expr widget_data(this) = this.0.subclass_data.mutable_data.borrow().widget_data;
-        expr node_data(this) = this.0.subclass_data.node_data;
+        expr widget_data(subclass) = subclass.data.mutable_data.borrow().widget_data;
+        expr node_data(subclass) = subclass.data.node_data;
 
-        fn from_node_data(node_data: _) -> Self {
+        fn from_node_data(node_data: _) -> UnsafeSubclassWrapper<_, _> {
             let button_window = WindowBuilder::default().build_push_button();
             let subclass = TextButtonSubclass::new(node_data);
 
-            let wrapper = unsafe{ UnsafeSubclassWrapper::new(button_window, subclass) };
-            TextButtonNodeData(wrapper)
+            unsafe{ UnsafeSubclassWrapper::new(button_window, subclass) }
+        }
+        fn update_widget(subclass: _, action_fn: &SharedFn<I::Action>) {
+            subclass.set_text(subclass.data.node_data.as_ref());
+            subclass.data.action_fn = Some(action_fn.clone());
         }
     }
 
-    pub struct WidgetGroupNodeData<I>( UnsafeSubclassWrapper<BlankBase, WidgetGroupSubclass<I>> )
-            where I: Parent<()>;
-
+    pub struct WidgetGroupNodeData<I>
+            where I: trait Parent<()> | for<'a> trait Parent<ConstraintSolverTraverser<'a>>
+    {
+        subclass: UnsafeSubclassWrapper<BlankBase, WidgetGroupSubclass<I>>,
+        needs_update: bool
+    }
     impl {
-        expr widget_data(this) = this.0.subclass_data.widget_data;
-        expr node_data(this) = this.0.subclass_data.node_data.0;
+        expr widget_data(subclass) = subclass.data.widget_data;
+        fn update_widget(subclass: _) {
+            {
+                let mutable_data = subclass.data.mutable_data.get_mut();
+                mutable_data.layout_engine.update_engine(&mut mutable_data.node_data).ok();
+            }
 
-        fn from_node_data(node_data: _) -> Self {
-            let blank_window = WindowBuilder::default().build_blank();
-            let subclass = WidgetGroupSubclass::new(node_data);
-
-            let wrapper = unsafe{ UnsafeSubclassWrapper::new(blank_window, subclass) };
-            WidgetGroupNodeData(wrapper)
+            subclass.data.mutable_data.intern_mode();
         }
     }
 
-    pub struct TextLabelNodeData<S>( UnsafeSubclassWrapper<TextLabelBase, TextLabelSubclass<S>> )
-            where S: AsRef<str>;
-
+    pub struct TextLabelNodeData<S>
+            where S: trait AsRef<str>
+    {
+        subclass: UnsafeSubclassWrapper<TextLabelBase, TextLabelSubclass<S>>,
+        needs_update: bool
+    }
     impl {
-        expr widget_data(this) = this.0.subclass_data.widget_data.get();
-        expr node_data(this) = this.0.subclass_data.text;
+        expr widget_data(subclass) = subclass.data.widget_data.get();
+        expr node_data(subclass) = subclass.data.text;
 
-        fn from_node_data(text: _) -> Self {
+        fn from_node_data(text: _) -> UnsafeSubclassWrapper<_, _> {
             let label_window = WindowBuilder::default().build_text_label();
             let subclass = TextLabelSubclass::new(text);
 
-            let wrapper = unsafe{ UnsafeSubclassWrapper::new(label_window, subclass) };
-            TextLabelNodeData(wrapper)
+            unsafe{ UnsafeSubclassWrapper::new(label_window, subclass) }
+        }
+        fn update_widget(subclass: _) {
+            subclass.set_text(subclass.data.text.as_ref());
         }
     }
 }
 
-impl<I> WidgetGroupNodeData<I>
+impl<I> NodeDataWrapper<I> for WidgetGroupNodeData<I>
         where for<'a> I: Parent<()> + Parent<ConstraintSolverTraverser<'a>>
 {
-    pub fn layout_engine(&self) -> &LayoutEngine {
-        &self.0.subclass_data.layout_engine
+    fn from_node_data(node_data: I) -> Self {
+        let wrapper_window = WindowBuilder::default().build_blank();
+        let subclass = WidgetGroupSubclass::new(node_data);
+
+        WidgetGroupNodeData {
+            subclass: unsafe{ UnsafeSubclassWrapper::new(wrapper_window, subclass) },
+            needs_update: false
+        }
     }
 
-    pub fn layout_engine_mut(&mut self) -> &mut LayoutEngine {
-        &mut self.0.subclass_data.layout_engine
+    fn inner(&self) -> &I {
+        &self.subclass.data.mutable_data.get().node_data.0
     }
 
-    pub fn update_engine(&mut self, updater: &mut LayoutUpdater) {
-        updater.update_engine(&mut self.0.subclass_data.node_data, &mut self.0.subclass_data.layout_engine);
+    fn inner_mut(&mut self) -> &mut I {
+        self.needs_update = true;
+        &mut self.subclass.data.mutable_data.get_mut().node_data.0
+    }
+
+    fn unwrap(self) -> I {
+        self.subclass.data.mutable_data.into_inner().node_data.0
     }
 }
 
-pub type ToplevelWindow = UnsafeSubclassWrapper<ToplevelWindowBase, ToplevelSubclass>;
+impl<I> ParentDataWrapper for WidgetGroupNodeData<I>
+        where for<'a> I: Parent<()> + Parent<ConstraintSolverTraverser<'a>>
+{
+    fn add_child_node<N>(&mut self, child: &N)
+            where N: Node,
+                  N::Wrapper: NativeDataWrapper
+    {
+        self.subclass.add_child_window(child.wrapper().window_ref());
+    }
+}
+
+pub struct ToplevelWindow( UnsafeSubclassWrapper<ToplevelWindowBase, ToplevelSubclass> );
+
+impl ToplevelWindow {
+    pub fn new<N>(window: ToplevelWindowBase, node: &N) -> ToplevelWindow
+            where N: Node,
+                  N::Wrapper: NativeDataWrapper
+    {
+        ToplevelWindow(unsafe{ UnsafeSubclassWrapper::new(window, ToplevelSubclass(node.wrapper().unsafe_subclass_ref())) })
+    }
+
+    pub fn bound_to_size_bounds(&self) {
+        self.0.bound_to_size_bounds()
+    }
+
+    pub unsafe fn update_subclass_ptr(&self) {
+        self.0.update_subclass_ptr()
+    }
+}
+
+impl ParentDataWrapper for ToplevelWindow {
+    fn add_child_node<N>(&mut self, child: &N)
+            where N: Node,
+                  N::Wrapper: NativeDataWrapper
+    {
+        // Orphan the Toplevel's current child window, and replace it with the new child passed in
+        // through the `child` field.
+        self.0.data.0.orphan();
+        self.0.data.0 = child.wrapper().unsafe_subclass_ref();
+
+        self.0.add_child_window(self.0.data.0);
+    }
+}
+
+impl Node for ToplevelWindow {
+    type Wrapper = Self;
+    type Inner = ();
+    type Action = Void;
+
+    fn type_name(&self) -> &'static str {""}
+    fn wrapper(&self) -> &Self {self}
+    fn wrapper_mut(&mut self) -> &mut Self {self}
+}
+
+impl NodeDataWrapper<()> for ToplevelWindow {
+    fn from_node_data(_: ()) -> Self   {panic!("Shouldn't be called")}
+    fn inner(&self) -> &()             {panic!("Shouldn't be called")}
+    fn inner_mut(&mut self) -> &mut () {panic!("Shouldn't be called")}
+    fn unwrap(self) -> ()              {panic!("Shouldn't be called")}
+}
+
 
 
 
@@ -148,6 +309,7 @@ impl Default for ButtonState {
 
 struct TextButtonSubclass<I: AsRef<str> + Control> {
     node_data: I,
+    action_fn: Option<SharedFn<I::Action>>,
     mutable_data: RefCell<TBSMut>
 }
 
@@ -162,6 +324,7 @@ impl<I: AsRef<str> + Control> TextButtonSubclass<I> {
     fn new(node_data: I) -> TextButtonSubclass<I> {
         TextButtonSubclass {
             node_data: node_data,
+            action_fn: None,
             mutable_data: RefCell::new(TBSMut::default())
         }
     }
@@ -171,27 +334,32 @@ impl<B, I> Subclass<B> for TextButtonSubclass<I>
         where B: ButtonWindow,
               I: AsRef<str> + Control
 {
-    type UserMsg = ();
-    fn subclass_proc(&self, window: &ProcWindowRef<B>, msg: Msg<()>) -> i64 {
-        let ret = window.default_window_proc();
-        let mut mutable_data = self.mutable_data.borrow_mut();
+    type UserMsg = DerinMsg;
+    fn subclass_proc(&self, window: &ProcWindowRef<B, Self>, mut msg: Msg<DerinMsg>) -> i64 {
+        let ret = window.default_window_proc(&mut msg);
 
         match msg {
             Msg::Wm(wm) => match wm {
-                Wm::MouseDown(_, _) => mutable_data.button_state = ButtonState::Pressed,
-                Wm::MouseDoubleDown(_, _) => mutable_data.button_state = ButtonState::DoublePressed,
+                Wm::MouseDown(_, _) => self.mutable_data.borrow_mut().button_state = ButtonState::Pressed,
+                Wm::MouseDoubleDown(_, _) => self.mutable_data.borrow_mut().button_state = ButtonState::DoublePressed,
                 Wm::MouseUp(button, _) => {
-                    let action = match mutable_data.button_state {
+                    let mut mutable_data = self.mutable_data.borrow_mut();
+                    let action_opt = match mutable_data.button_state {
                         ButtonState::Pressed       => self.node_data.on_mouse_event(MouseEvent::Clicked(button)),
                         ButtonState::DoublePressed => self.node_data.on_mouse_event(MouseEvent::DoubleClicked(button)),
                         ButtonState::Released      => None
                     };
+                    if let Some(action) = action_opt {
+                        unsafe{ self.action_fn.as_ref().expect("No Action Function").borrow_mut().call_fn(action) };
+                    }
 
                     mutable_data.button_state = ButtonState::Released;
                 },
-                Wm::SetText(_) => mutable_data.widget_data.abs_size_bounds.min = window.get_ideal_size(),
+                Wm::SetText(_) => self.mutable_data.borrow_mut().widget_data.abs_size_bounds.min = window.get_ideal_size(),
+                Wm::GetSizeBounds(size_bounds) => size_bounds.min = window.get_ideal_size(),
                 _ => ()
             },
+            Msg::User(DerinMsg::SetRectPropagate(rect)) => window.set_rect(rect),
             _ => ()
         }
         ret
@@ -200,8 +368,12 @@ impl<B, I> Subclass<B> for TextButtonSubclass<I>
 
 
 struct WidgetGroupSubclass<I: Parent<()>> {
+    mutable_data: ToggleCell<WGSMut<I>>,
+    widget_data: WidgetData
+}
+
+struct WGSMut<I: Parent<()>> {
     node_data: ParentContainer<I>,
-    widget_data: WidgetData,
     layout_engine: LayoutEngine
 }
 
@@ -209,24 +381,39 @@ impl<I: Parent<()>> WidgetGroupSubclass<I> {
     #[inline]
     fn new(node_data: I) -> WidgetGroupSubclass<I> {
         WidgetGroupSubclass {
-            node_data: ParentContainer(node_data),
-            widget_data: WidgetData::default(),
-            layout_engine: LayoutEngine::new()
+            mutable_data: ToggleCell::new(WGSMut {
+                node_data: ParentContainer(node_data),
+                layout_engine: LayoutEngine::new()
+            }),
+            widget_data: WidgetData::new()
         }
     }
 }
 
 impl<P, I> Subclass<P> for WidgetGroupSubclass<I>
         where P: ParentWindow,
-              I: Parent<()>
+      for<'a> I: Parent<()> + Parent<ConstraintSolverTraverser<'a>>
 {
-    type UserMsg = ();
-    fn subclass_proc(&self, window: &ProcWindowRef<P>, msg: Msg<()>) -> i64 {
-        if let Msg::Wm(Wm::GetSizeBounds(size_bounds)) = msg {
-            *size_bounds = self.layout_engine.actual_size_bounds();
-            0
-        } else {
-            window.default_window_proc()
+    type UserMsg = DerinMsg;
+    fn subclass_proc(&self, window: &ProcWindowRef<P, Self>, mut msg: Msg<DerinMsg>) -> i64 {
+        match msg {
+            Msg::Wm(Wm::GetSizeBounds(size_bounds)) => {
+                *size_bounds = self.mutable_data.get().layout_engine.actual_size_bounds();
+                0
+            },
+            Msg::User(DerinMsg::SetRectPropagate(rect)) => {
+                let mut mutable_data = self.mutable_data.borrow_mut();
+                let WGSMut {
+                    ref mut node_data,
+                    ref mut layout_engine
+                } = *mutable_data;
+
+                layout_engine.desired_size = OriginRect::from(rect);
+                layout_engine.update_engine(node_data).ok();
+                window.set_rect(rect);
+                0
+            },
+            _ => window.default_window_proc(&mut msg)
         }
     }
 }
@@ -251,28 +438,89 @@ impl<W, S> Subclass<W> for TextLabelSubclass<S>
         where W: TextLabelWindow,
               S: AsRef<str>
 {
-    type UserMsg = ();
-    fn subclass_proc(&self, window: &ProcWindowRef<W>, msg: Msg<()>) -> i64 {
-        if let Msg::Wm(Wm::SetText(new_text)) = msg {
-            let mut widget_data = self.widget_data.get();
-            widget_data.abs_size_bounds.min = unsafe{ window.min_unclipped_rect_raw(new_text) };
-            self.widget_data.set(widget_data);
+    type UserMsg = DerinMsg;
+    fn subclass_proc(&self, window: &ProcWindowRef<W, Self>, mut msg: Msg<DerinMsg>) -> i64 {
+        let ret = window.default_window_proc(&mut msg);
+        match msg {
+            Msg::Wm(wm) => match wm {
+                Wm::SetText(new_text) => {
+                    let mut widget_data = self.widget_data.get();
+                    widget_data.abs_size_bounds.min = unsafe{ window.min_unclipped_rect_raw(new_text) };
+                    self.widget_data.set(widget_data);
+                },
+                Wm::GetSizeBounds(size_bounds) => *size_bounds = self.widget_data.get().combined_size_bounds(),
+                _ => ()
+            },
+            Msg::User(DerinMsg::SetRectPropagate(rect)) => window.set_rect(rect),
+            _ => ()
         }
-        window.default_window_proc()
+        ret
     }
 }
 
 /// A top-level window subclass, with a reference to its child.
-struct ToplevelSubclass(WindowRef);
+struct ToplevelSubclass(UnsafeSubclassRef<DerinMsg>);
 
 impl Subclass<ToplevelWindowBase> for ToplevelSubclass {
     type UserMsg = ();
-    fn subclass_proc(&self, window: &ProcWindowRef<ToplevelWindowBase>, msg: Msg<()>) -> i64 {
+    fn subclass_proc(&self, window: &ProcWindowRef<ToplevelWindowBase, Self>, mut msg: Msg<()>) -> i64 {
         match msg {
             Msg::Wm(Wm::GetSizeBounds(size_bounds)) => {*size_bounds = self.0.size_bounds(); 0},
-            Msg::Wm(Wm::Size(rect)) => {self.0.set_rect(OffsetRect::from(rect)); 0},
-            _ => window.default_window_proc()
+            Msg::Wm(Wm::Size(rect)) => unsafe{
+                self.0.post_user_msg(DerinMsg::SetRectPropagate(OffsetRect::from(rect)));
+                0
+            },
+            _ => window.default_window_proc(&mut msg)
         }
+    }
+}
+
+pub trait NativeDataWrapper {
+    fn size_bounds(&self) -> SizeBounds;
+    fn set_rect(&self, OffsetRect);
+    fn get_widget_data(&self) -> WidgetData;
+    fn window_ref(&self) -> WindowRef;
+    fn unsafe_subclass_ref(&self) -> UnsafeSubclassRef<DerinMsg>;
+    fn needs_update(&self) -> bool;
+}
+
+pub trait ParentDataWrapper {
+    fn add_child_node<N>(&mut self, &N)
+            where N: Node,
+                  N::Wrapper: NativeDataWrapper;
+}
+
+#[derive(Debug, Clone, Copy, UserMsg)]
+pub enum DerinMsg {
+    SetRectPropagate(OffsetRect)
+}
+
+
+pub type SharedFn<A> = Rc<RefCell<ActionFn<A>>>;
+
+pub struct ActionFn<A> {
+    func: *mut FnMut(A) -> bool,
+    pub continue_loop: bool
+}
+
+impl<A> ActionFn<A> {
+    pub fn new() -> ActionFn<A> {
+        ActionFn {
+            func: unsafe{ mem::zeroed() },
+            continue_loop: false
+        }
+    }
+
+    pub fn set_fn(&mut self, f: &mut FnMut(A) -> bool) {
+        self.func = unsafe{ mem::transmute(f) };
+    }
+
+    pub unsafe fn call_fn(&mut self, action: A) {
+        self.continue_loop = (*self.func)(action);
+    }
+
+    pub fn clear(&mut self) {
+        self.func = unsafe{ mem::zeroed() };
     }
 }
 
@@ -281,21 +529,6 @@ impl Subclass<ToplevelWindowBase> for ToplevelSubclass {
 /// Newtype wrapper around parents to allow them to implement `Container` trait
 struct ParentContainer<I>(I);
 
-impl<I, NP> Parent<NP> for ParentContainer<I>
-        where I: Parent<NP>,
-              NP: NodeProcessorAT
-{
-    type ChildAction = I::ChildAction;
-    type ChildLayout = I::ChildLayout;
-
-    fn children(&mut self, np: NP) -> Result<(), NP::Error> {
-        self.0.children(np)
-    }
-    fn child_layout(&self) -> I::ChildLayout {
-        self.0.child_layout()
-    }
-}
-
 impl<I> Container for ParentContainer<I>
         where for<'a> I: Parent<ConstraintSolverTraverser<'a>>
 {
@@ -303,7 +536,7 @@ impl<I> Container for ParentContainer<I>
         let traverser = ConstraintSolverTraverser {
             solver: solver
         };
-        self.children(traverser).ok();
+        self.0.children(traverser).ok();
     }
 }
 
@@ -311,13 +544,13 @@ pub struct ConstraintSolverTraverser<'a> {
     solver: WidgetConstraintSolver<'a>
 }
 
-impl<'s, W, N> NodeProcessor<W, N> for ConstraintSolverTraverser<'s>
-        where W: NodeDataWrapper<N::Inner> + WidgetDataContainer + Window,
-              N: Node<W>
+impl<'s, N> NodeProcessor<N> for ConstraintSolverTraverser<'s>
+        where N: Node,
+              N::Wrapper: NativeDataWrapper
 {
     fn add_child<'a>(&'a mut self, _: ChildId, node: &'a mut N) -> Result<(), ()> {
-        match self.solver.solve_widget_constraints(node.data().get_widget_data()) {
-            Ok(rect) => {node.data().set_rect(rect); Ok(())},
+        match self.solver.solve_widget_constraints(node.wrapper().get_widget_data()) {
+            Ok(rect) => {node.wrapper().set_rect(rect); Ok(())},
             Err(SolveError::Abort) => Err(()),
             Err(SolveError::WidgetUnsolvable) => Ok(())
         }
@@ -326,8 +559,4 @@ impl<'s, W, N> NodeProcessor<W, N> for ConstraintSolverTraverser<'s>
 
 impl<'a> NodeProcessorAT for ConstraintSolverTraverser<'a> {
     type Error = ();
-}
-
-pub trait WidgetDataContainer {
-    fn get_widget_data(&self) -> WidgetData;
 }
