@@ -51,7 +51,7 @@ pub trait Parent<NP>
     type ChildAction;
     type ChildLayout: GridLayout;
 
-    fn children(&mut self, NP) -> Result<(), NP::Error>;
+    fn children(&mut self, &mut NP) -> Result<(), NP::Error>;
     fn child_layout(&self) -> Self::ChildLayout;
 }
 

@@ -286,9 +286,10 @@ impl LayoutEngine {
                 track_constraints!(get_col, get_col_mut, push_col, num_cols, remove_col, free_width, fr_total_width);
                 track_constraints!(get_row, get_row_mut, push_row, num_rows, remove_row, free_height, fr_total_height);
 
+                let mut aborted = false;
                 container.update_widget_rects(WidgetConstraintSolver {
                     solvable_index: 0,
-                    aborted: false,
+                    aborted: &mut aborted,
                     engine: self,
                     updater: &mut *updater,
                     free_width: &mut free_width,
@@ -298,6 +299,10 @@ impl LayoutEngine {
                     rigid_min_size: &mut rigid_min_size,
                     frac_min_size: &mut frac_min_size
                 });
+
+                if aborted {
+                    continue 'update;
+                }
 
                 break 'update;
             }
@@ -317,6 +322,7 @@ impl LayoutEngine {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SolveError {
     /// The widget's constraints lead to it being unsolvable.
     WidgetUnsolvable,
@@ -326,7 +332,7 @@ pub enum SolveError {
 
 pub struct WidgetConstraintSolver<'a> {
     solvable_index: usize,
-    aborted: bool,
+    aborted: &'a mut bool,
     engine: &'a mut LayoutEngine,
     updater: &'a mut LayoutUpdater,
 
@@ -340,7 +346,7 @@ pub struct WidgetConstraintSolver<'a> {
 
 impl<'a> WidgetConstraintSolver<'a> {
     pub fn solve_widget_constraints(&mut self, WidgetData{widget_hints, abs_size_bounds}: WidgetData) -> Result<OffsetRect, SolveError> {
-        if self.aborted {
+        if *self.aborted {
             return Err(SolveError::Abort);
         }
 
@@ -486,7 +492,10 @@ impl<'a> WidgetConstraintSolver<'a> {
                         rigid_tracks_widget.clear();
                         frac_tracks_widget.clear();
 
-                        if grid_changed {return Err(SolveError::Abort)}
+                        if grid_changed {
+                            *self.aborted = true;
+                            return Err(SolveError::Abort)
+                        }
                     }
 
                     px_widget

@@ -2,7 +2,8 @@ use super::toggle_cell::ToggleCell;
 
 use ui::{Control, Parent, Node, ChildId, NodeProcessor, NodeProcessorAT, NodeDataWrapper};
 use dww::*;
-use dle::{Container, LayoutEngine, WidgetData, WidgetConstraintSolver, SolveError};
+use dle::{Tr, Container, LayoutEngine, WidgetData, WidgetConstraintSolver, SolveError};
+use dle::hints::{WidgetHints, GridSize, TrackHints};
 use dct::events::{MouseEvent};
 use dct::geometry::{OriginRect, OffsetRect, SizeBounds};
 use void::Void;
@@ -14,15 +15,16 @@ use std::rc::Rc;
 type ToplevelWindowBase = OverlapWrapper<BlankBase>;
 
 macro_rules! impl_node_data_wrapper {
-    ($name:ident<$inner_ty:ident>; $(where $($where_ty:ty: $($(for<$($lt:tt),+>)* trait $constraint:path)|+),+)*;) => ();
     (
         $name:ident<$inner_ty:ident>;
         $(where $($where_ty:ty: $($(for<$($lt:tt),+>)* trait $constraint:path)|+),+)*;
+        $(impl where $($impl_where_ty:ty: $($(for<$($impl_lt:tt),+>)* trait $impl_constraint:path)|+),+)*;
         fn from_node_data($fnd_in:ident: _) -> UnsafeSubclassWrapper<_, _> $from_node_data:block;
         expr node_data($node_data_in:ident) = $node_data:expr;
     ) => {
         impl<$inner_ty> NodeDataWrapper<$inner_ty> for $name<$inner_ty>
                 $(where $($where_ty: $($(for<$($lt),+>)* $constraint +)+),+)*
+                $($($impl_where_ty: $($(for<$($impl_lt),+>)* $impl_constraint +)+),+)*
         {
             fn from_node_data($fnd_in: $inner_ty) -> $name<$inner_ty> {
                 enable_visual_styles();
@@ -42,7 +44,8 @@ macro_rules! impl_node_data_wrapper {
 
             fn unwrap(self) -> $inner_ty {let $node_data_in = self.subclass; $node_data}
         }
-    }
+    };
+    ($($t:tt)*) => ();
 }
 
 macro_rules! subclass_node_data {
@@ -54,14 +57,18 @@ macro_rules! subclass_node_data {
             needs_update: bool
         }
 
-        impl {
+        impl $(where $($impl_where_ty:ty: $($(for<$($impl_lt:tt),+>)* trait $impl_constraint:path)|+),+)* {
             expr widget_data($widget_data_in:ident) = $widget_data:expr;
             $(
                 expr node_data($node_data_in:ident) = $node_data:expr;
                 fn from_node_data($fnd_in:ident: _) -> UnsafeSubclassWrapper<_, _> $from_node_data:block
             )*
 
-            fn update_widget($us_in:ident: _ $(, $us_extra:ident: $us_extra_ty:ty)*) $update_widget:block
+            fn update_widget$(<$($uw_gen:ident),+>)*($uw_in:ident: _, $hints:ident: WidgetHints $(, $uw_extra:ident: $uw_extra_ty:ty)*)
+                    $(where $($uw_where_ty:ty: $($(for<$($uw_lt:tt),+>)* trait $uw_constraint:path)|+),+)*
+            {
+                $($update_widget:tt)*
+            }
         }
 
         $($rest:tt)*
@@ -74,7 +81,8 @@ macro_rules! subclass_node_data {
         }
 
         impl<$inner_ty> $name<$inner_ty>
-                $(where $($where_ty: $($(for<$($lt),+>)* $constraint +)+),+)*
+                $(where $($where_ty: $($(for<$($lt),+>)* $constraint +)+,)+)*
+                $($($impl_where_ty: $($(for<$($impl_lt),+>)* $impl_constraint +)+),+)*
         {
             #[doc(hidden)]
             #[inline]
@@ -83,15 +91,18 @@ macro_rules! subclass_node_data {
             }
 
             #[doc(hidden)]
-            pub fn update_widget(&mut self $(, $us_extra: $us_extra_ty)*) {
+            pub fn update_widget$(<$($uw_gen),+>)*(&mut self, $hints: WidgetHints $(, $uw_extra: $uw_extra_ty)*)
+                    $(where $($uw_where_ty: $($(for<$($uw_lt),+>)* $uw_constraint +)+),+)*
+            {
                 self.needs_update = false;
-                let $us_in = &mut self.subclass;
-                $update_widget
+                let $uw_in = &mut self.subclass;
+                $($update_widget)*
             }
         }
 
         impl<$inner_ty> NativeDataWrapper for $name<$inner_ty>
-                $(where $($where_ty: $($(for<$($lt),+>)* $constraint +)+),+)*
+                $(where $($where_ty: $($(for<$($lt),+>)* $constraint +)+,)+)*
+                $($($impl_where_ty: $($(for<$($impl_lt),+>)* $impl_constraint +)+),+)*
         {
             #[inline]
             fn size_bounds(&self) -> SizeBounds {
@@ -128,6 +139,7 @@ macro_rules! subclass_node_data {
         impl_node_data_wrapper!{
             $name<$inner_ty>;
             $(where $($where_ty: $($(for<$($lt),+>)* trait $constraint)|+),+)*;
+            $(impl where $($impl_where_ty:ty: $($(for<$($impl_lt:tt),+>)* trait $impl_constraint:path)|+),+)*;
             $(
                 fn from_node_data($fnd_in: _) -> UnsafeSubclassWrapper<_, _> $from_node_data;
                 expr node_data($node_data_in) = $node_data;
@@ -157,25 +169,39 @@ subclass_node_data!{
 
             unsafe{ UnsafeSubclassWrapper::new(button_window, subclass) }
         }
-        fn update_widget(subclass: _, action_fn: &SharedFn<I::Action>) {
+        fn update_widget(subclass: _, hints: WidgetHints, action_fn: &SharedFn<I::Action>) {
+            subclass.data.mutable_data.get_mut().widget_data.widget_hints = hints;
             subclass.set_text(subclass.data.node_data.as_ref());
             subclass.data.action_fn = Some(action_fn.clone());
         }
     }
 
     pub struct WidgetGroupNodeData<I>
-            where I: trait Parent<()> | for<'a> trait Parent<ConstraintSolverTraverser<'a>>
+            where I: trait Parent<()>
     {
         subclass: UnsafeSubclassWrapper<BlankBase, WidgetGroupSubclass<I>>,
         needs_update: bool
     }
-    impl {
+    impl where I: for<'a> trait Parent<ConstraintSolverTraverser<'a>> {
         expr widget_data(subclass) = subclass.data.widget_data;
-        fn update_widget(subclass: _) {
+        fn update_widget<C, R>(subclass: _, hints: WidgetHints, grid_size: GridSize, col_hints: C, row_hints: R)
+                where C: trait Iterator<Item=TrackHints>,
+                      R: trait Iterator<Item=TrackHints>
+        {
             {
                 let mutable_data = subclass.data.mutable_data.get_mut();
-                mutable_data.layout_engine.update_engine(&mut mutable_data.node_data).ok();
+                let layout_engine = &mut mutable_data.layout_engine;
+
+                layout_engine.set_grid_size(grid_size);
+                for (i, hint) in col_hints.enumerate() {
+                    layout_engine.set_col_hints(i as Tr, hint);
+                }
+                for (i, hint) in row_hints.enumerate() {
+                    layout_engine.set_row_hints(i as Tr, hint);
+                }
+                layout_engine.update_engine(&mut mutable_data.node_data).ok();
             }
+            subclass.data.widget_data.widget_hints = hints;
 
             subclass.data.mutable_data.intern_mode();
         }
@@ -197,14 +223,18 @@ subclass_node_data!{
 
             unsafe{ UnsafeSubclassWrapper::new(label_window, subclass) }
         }
-        fn update_widget(subclass: _) {
+        fn update_widget(subclass: _, hints: WidgetHints) {
             subclass.set_text(subclass.data.text.as_ref());
+            subclass.data.widget_data.set(WidgetData {
+                widget_hints: hints,
+                ..subclass.data.widget_data.get()
+            });
         }
     }
 }
 
 impl<I> NodeDataWrapper<I> for WidgetGroupNodeData<I>
-        where for<'a> I: Parent<()> + Parent<ConstraintSolverTraverser<'a>>
+        where for<'a> I: Parent<()>
 {
     fn from_node_data(node_data: I) -> Self {
         let wrapper_window = WindowBuilder::default().build_blank();
@@ -212,7 +242,7 @@ impl<I> NodeDataWrapper<I> for WidgetGroupNodeData<I>
 
         WidgetGroupNodeData {
             subclass: unsafe{ UnsafeSubclassWrapper::new(wrapper_window, subclass) },
-            needs_update: false
+            needs_update: true
         }
     }
 
@@ -233,13 +263,23 @@ impl<I> NodeDataWrapper<I> for WidgetGroupNodeData<I>
 impl<I> ParentDataWrapper for WidgetGroupNodeData<I>
         where for<'a> I: Parent<()> + Parent<ConstraintSolverTraverser<'a>>
 {
+    type Adder = WidgetGroupAdder;
+    fn get_adder(&self) -> WidgetGroupAdder {
+        WidgetGroupAdder(self.subclass.parent_ref())
+    }
+}
+
+pub struct WidgetGroupAdder(ParentRef);
+
+impl ParentChildAdder for WidgetGroupAdder {
     fn add_child_node<N>(&mut self, child: &N)
             where N: Node,
                   N::Wrapper: NativeDataWrapper
     {
-        self.subclass.add_child_window(child.wrapper().window_ref());
+        self.0.add_child_window(child.wrapper().window_ref());
     }
 }
+
 
 pub struct ToplevelWindow( UnsafeSubclassWrapper<ToplevelWindowBase, ToplevelSubclass> );
 
@@ -255,12 +295,12 @@ impl ToplevelWindow {
         self.0.bound_to_size_bounds()
     }
 
-    pub unsafe fn update_subclass_ptr(&self) {
+    pub fn update_subclass_ptr(&self) {
         self.0.update_subclass_ptr()
     }
 }
 
-impl ParentDataWrapper for ToplevelWindow {
+impl ParentChildAdder for ToplevelWindow {
     fn add_child_node<N>(&mut self, child: &N)
             where N: Node,
                   N::Wrapper: NativeDataWrapper
@@ -392,13 +432,22 @@ impl<I: Parent<()>> WidgetGroupSubclass<I> {
 
 impl<P, I> Subclass<P> for WidgetGroupSubclass<I>
         where P: ParentWindow,
-      for<'a> I: Parent<()> + Parent<ConstraintSolverTraverser<'a>>
+              I: Parent<()>
 {
     type UserMsg = DerinMsg;
+    default fn subclass_proc(&self, _: &ProcWindowRef<P, Self>, _: Msg<DerinMsg>) -> i64 {
+        panic!("Should never be called; just here to hide ConstraintSolverTraverser type from public exposure")
+    }
+}
+
+impl<P, I> Subclass<P> for WidgetGroupSubclass<I>
+        where P: ParentWindow,
+      for<'a> I: Parent<()> + Parent<ConstraintSolverTraverser<'a>>
+{
     fn subclass_proc(&self, window: &ProcWindowRef<P, Self>, mut msg: Msg<DerinMsg>) -> i64 {
         match msg {
             Msg::Wm(Wm::GetSizeBounds(size_bounds)) => {
-                *size_bounds = self.mutable_data.get().layout_engine.actual_size_bounds();
+                *size_bounds = self.mutable_data.borrow_mut().layout_engine.actual_size_bounds();
                 0
             },
             Msg::User(DerinMsg::SetRectPropagate(rect)) => {
@@ -485,6 +534,11 @@ pub trait NativeDataWrapper {
 }
 
 pub trait ParentDataWrapper {
+    type Adder: ParentChildAdder; // ssssSSsssSSsss
+    fn get_adder(&self) -> Self::Adder;
+}
+
+pub trait ParentChildAdder {
     fn add_child_node<N>(&mut self, &N)
             where N: Node,
                   N::Wrapper: NativeDataWrapper;
@@ -507,12 +561,13 @@ impl<A> ActionFn<A> {
     pub fn new() -> ActionFn<A> {
         ActionFn {
             func: unsafe{ mem::zeroed() },
-            continue_loop: false
+            continue_loop: true
         }
     }
 
     pub fn set_fn(&mut self, f: &mut FnMut(A) -> bool) {
         self.func = unsafe{ mem::transmute(f) };
+        self.continue_loop = true;
     }
 
     pub unsafe fn call_fn(&mut self, action: A) {
@@ -533,10 +588,10 @@ impl<I> Container for ParentContainer<I>
         where for<'a> I: Parent<ConstraintSolverTraverser<'a>>
 {
     fn update_widget_rects(&mut self, solver: WidgetConstraintSolver) {
-        let traverser = ConstraintSolverTraverser {
+        let mut traverser = ConstraintSolverTraverser {
             solver: solver
         };
-        self.0.children(traverser).ok();
+        self.0.children(&mut traverser).ok();
     }
 }
 
@@ -549,7 +604,8 @@ impl<'s, N> NodeProcessor<N> for ConstraintSolverTraverser<'s>
               N::Wrapper: NativeDataWrapper
 {
     fn add_child<'a>(&'a mut self, _: ChildId, node: &'a mut N) -> Result<(), ()> {
-        match self.solver.solve_widget_constraints(node.wrapper().get_widget_data()) {
+        let widget_rect_result = self.solver.solve_widget_constraints(node.wrapper().get_widget_data());
+        match widget_rect_result {
             Ok(rect) => {node.wrapper().set_rect(rect); Ok(())},
             Err(SolveError::Abort) => Err(()),
             Err(SolveError::WidgetUnsolvable) => Ok(())

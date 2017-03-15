@@ -1,9 +1,11 @@
 extern crate derin;
+extern crate dct;
 
 use derin::ui::*;
 use derin::ui::layout::VerticalLayout;
 use derin::ui::intrinsics::*;
 use derin::native::{Window, WindowConfig};
+use dct::events::MouseEvent;
 
 struct AddButton(&'static str);
 
@@ -37,38 +39,19 @@ impl BasicParent {
     }
 }
 
-impl Node for BasicParent {
-    fn type_name(&self) -> &'static str {
-        "BasicParent"
-    }
-
-    fn state_id(&self) -> u16 {
-        let mut state_id = self.label.state_id() ^ self.button0.state_id();
-        for button in &self.button_vec {
-            state_id ^= button.state_id();
-        }
-        state_id
-    }
-}
-
-impl ActionNode for BasicParent {
-    type Action = ();
-}
-
-impl<NP> ParentNode<NP> for BasicParent
+impl<NP> Parent<NP> for BasicParent
         where NP: NodeProcessor<TextButton<AddButton>> +
                   NodeProcessor<TextLabel<&'static str>> {
-    type Layout = VerticalLayout;
+    type ChildLayout = VerticalLayout;
+    type ChildAction = ();
 
-    fn children(&self, mut np: NP) -> Result<(), NP::Error> {
-        unsafe {
-            np.add_child(ChildId::Str("label"), &self.label)?;
-            np.add_child(ChildId::Str("button0"), &self.button0)?;
-            for (i, button) in self.button_vec.iter().enumerate() {
-                np.add_child(ChildId::Num(i as u32), button)?;
-            }
-            Ok(())
+    fn children(&mut self, np: &mut NP) -> Result<(), NP::Error> {
+        np.add_child(ChildId::Str("label"), &mut self.label)?;
+        np.add_child(ChildId::Str("button0"), &mut self.button0)?;
+        for (i, button) in self.button_vec.iter_mut().enumerate() {
+            np.add_child(ChildId::Num(i as u32), button)?;
         }
+        Ok(())
     }
 
     fn child_layout(&self) -> VerticalLayout {
@@ -77,10 +60,10 @@ impl<NP> ParentNode<NP> for BasicParent
 }
 
 fn main() {
-    let mut window = Window::new(BasicParent::new(), &WindowConfig::new()).unwrap();
+    let mut window = Window::new(WidgetGroup::new(BasicParent::new()), &WindowConfig::new());
 
     loop {
-        for _ in window.wait_actions().unwrap() {break}
-        window.root.button_vec.push(TextButton::new(AddButton("Add Button")));
+        window.wait_actions(|_| {false}).unwrap();
+        window.root.button_vec.push(TextButton::new(AddButton("Another Button")));
     }
 }

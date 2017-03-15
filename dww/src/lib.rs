@@ -475,6 +475,10 @@ pub trait IconWindow: Window {
 }
 
 pub trait ParentWindow: Window {
+    fn parent_ref(&self) -> ParentRef {
+        ParentRef(unsafe{ self.hwnd() })
+    }
+
     fn add_child_window<W: Window>(&self, child: W) {
         unsafe {
             user32::SetParent(child.hwnd(), self.hwnd());
