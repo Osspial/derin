@@ -164,7 +164,7 @@ subclass_node_data!{
         expr node_data(subclass) = subclass.data.node_data;
 
         fn from_node_data(node_data: _) -> UnsafeSubclassWrapper<_, _> {
-            let button_window = WindowBuilder::default().build_push_button();
+            let button_window = WindowBuilder::default().show_window(false).build_push_button();
             let subclass = TextButtonSubclass::new(node_data);
 
             unsafe{ UnsafeSubclassWrapper::new(button_window, subclass) }
@@ -218,7 +218,7 @@ subclass_node_data!{
         expr node_data(subclass) = subclass.data.text;
 
         fn from_node_data(text: _) -> UnsafeSubclassWrapper<_, _> {
-            let label_window = WindowBuilder::default().build_text_label();
+            let label_window = WindowBuilder::default().show_window(false).build_text_label();
             let subclass = TextLabelSubclass::new(text);
 
             unsafe{ UnsafeSubclassWrapper::new(label_window, subclass) }
@@ -237,7 +237,7 @@ impl<I> NodeDataWrapper<I> for WidgetGroupNodeData<I>
         where for<'a> I: Parent<()>
 {
     fn from_node_data(node_data: I) -> Self {
-        let wrapper_window = WindowBuilder::default().build_blank();
+        let wrapper_window = WindowBuilder::default().show_window(false).build_blank();
         let subclass = WidgetGroupSubclass::new(node_data);
 
         WidgetGroupNodeData {
@@ -397,6 +397,7 @@ impl<B, I> Subclass<B> for TextButtonSubclass<I>
                 },
                 Wm::SetText(_) => self.mutable_data.borrow_mut().widget_data.abs_size_bounds.min = window.get_ideal_size(),
                 Wm::GetSizeBounds(size_bounds) => size_bounds.min = window.get_ideal_size(),
+                Wm::Size(_) => window.show(true),
                 _ => ()
             },
             Msg::User(DerinMsg::SetRectPropagate(rect)) => window.set_rect(rect),
@@ -446,9 +447,13 @@ impl<P, I> Subclass<P> for WidgetGroupSubclass<I>
 {
     fn subclass_proc(&self, window: &ProcWindowRef<P, Self>, mut msg: Msg<DerinMsg>) -> i64 {
         match msg {
-            Msg::Wm(Wm::GetSizeBounds(size_bounds)) => {
-                *size_bounds = self.mutable_data.borrow_mut().layout_engine.actual_size_bounds();
-                0
+            Msg::Wm(wm) => match wm {
+                Wm::GetSizeBounds(size_bounds) => {
+                    *size_bounds = self.mutable_data.borrow_mut().layout_engine.actual_size_bounds();
+                    0
+                },
+                Wm::Size(_) => {window.show(true); 0},
+                wm => window.default_window_proc(&mut Msg::Wm(wm))
             },
             Msg::User(DerinMsg::SetRectPropagate(rect)) => {
                 let mut mutable_data = self.mutable_data.borrow_mut();
@@ -498,6 +503,7 @@ impl<W, S> Subclass<W> for TextLabelSubclass<S>
                     self.widget_data.set(widget_data);
                 },
                 Wm::GetSizeBounds(size_bounds) => *size_bounds = self.widget_data.get().combined_size_bounds(),
+                Wm::Size(_) => window.show(true),
                 _ => ()
             },
             Msg::User(DerinMsg::SetRectPropagate(rect)) => window.set_rect(rect),

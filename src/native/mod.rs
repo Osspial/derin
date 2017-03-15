@@ -7,7 +7,6 @@ use std::fmt;
 
 use std::default::Default;
 use std::path::PathBuf;
-use std::marker::{Send, Sync};
 
 use dct::geometry::OriginRect;
 
@@ -34,9 +33,6 @@ pub struct WindowConfig {
     /// The path to the window's icon
     pub icon: Option<PathBuf>
 }
-
-unsafe impl Send for WindowConfig {}
-unsafe impl Sync for WindowConfig {}
 
 impl WindowConfig {
     /// Create a new window config. Identical to Default::default()

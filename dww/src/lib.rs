@@ -102,6 +102,26 @@ pub struct WindowBuilder<'a> {
 }
 
 impl<'a> WindowBuilder<'a> {
+    pub fn pos(mut self, pos: Option<(i32, i32)>) -> WindowBuilder<'a> {
+        self.pos = pos;
+        self
+    }
+
+    pub fn size(mut self, size: Option<OriginRect>) -> WindowBuilder<'a> {
+        self.size = size;
+        self
+    }
+
+    pub fn window_text(mut self, window_text: &'a str) -> WindowBuilder<'a> {
+        self.window_text = window_text;
+        self
+    }
+
+    pub fn show_window(mut self, show_window: bool) -> WindowBuilder<'a> {
+        self.show_window = show_window;
+        self
+    }
+
     pub fn build_blank(self) -> BlankBase {
         let window_handle = self.build(WS_CLIPCHILDREN, 0, &BLANK_WINDOW_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
@@ -152,7 +172,7 @@ impl<'a> WindowBuilder<'a> {
                 ptr::null_mut()
             );
 
-            user32::SetWindowLongW(window_handle, GWL_STYLE, 0);
+            user32::SetWindowLongW(window_handle, GWL_STYLE, style as LONG);
 
             if self.show_window {
                 user32::ShowWindow(window_handle, SW_SHOW);
@@ -367,6 +387,14 @@ pub trait Window: Sized {
 
     fn disable(&self) {
         unsafe{ user32::EnableWindow(self.hwnd(), FALSE) };
+    }
+
+    fn show(&self, show_window: bool) {
+        let show_int = match show_window {
+            false => SW_HIDE,
+            true  => SW_SHOWNA
+        };
+        unsafe{ user32::ShowWindow(self.hwnd(), show_int )};
     }
 
     fn orphan(&self) {
