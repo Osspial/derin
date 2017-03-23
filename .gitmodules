@@ -1,0 +1,3 @@
+[submodule "dww/winapi-rs"]
+	path = dww/winapi-rs
+	url = https://github.com/Osspial/winapi-rs.git

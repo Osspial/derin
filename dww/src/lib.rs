@@ -1,7 +1,10 @@
 extern crate winapi;
-extern crate user32;
-extern crate kernel32;
-extern crate comctl32;
+#[macro_use]
+extern crate kernel32 as _kernel32;
+#[macro_use]
+extern crate user32 as _user32;
+#[macro_use]
+extern crate comctl32 as _comctl32;
 #[macro_use]
 extern crate lazy_static;
 extern crate dct;
@@ -82,6 +85,7 @@ lazy_static!{
     };
     static ref BUTTON_CLASS: Ucs2String = ucs2_str("BUTTON").collect();
     static ref STATIC_CLASS: Ucs2String = ucs2_str("STATIC").collect();
+    static ref PROGRESS_CLASS: Ucs2String = ucs2_str("msctls_progress32").collect();
 }
 
 
@@ -94,6 +98,7 @@ impl AsRef<WindowIcon> for WindowIcon {
     fn as_ref(&self) -> &WindowIcon {self}
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct WindowBuilder<'a> {
     pub pos: Option<(i32, i32)>,
     pub size: Option<OriginRect>,
@@ -138,6 +143,12 @@ impl<'a> WindowBuilder<'a> {
         let window_handle = self.build(0, 0, &STATIC_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         TextLabelBase(window_handle)
+    }
+
+    pub fn build_progress_bar(self) -> ProgressBarBase {
+        let window_handle = self.build(0, 0, &PROGRESS_CLASS);
+        assert_ne!(window_handle, ptr::null_mut());
+        ProgressBarBase(window_handle)
     }
 
     fn build(self, style: DWORD, style_ex: DWORD, class: &Ucs2Str) -> HWND {
@@ -196,41 +207,34 @@ impl<'a> Default for WindowBuilder<'a> {
 }
 
 
-pub struct BlankBase( HWND );
-impl Window for BlankBase {
-    #[inline]
-    unsafe fn hwnd(&self) -> HWND {self.0}
+macro_rules! base_wrapper {
+    () => ();
+    (pub struct $name:ident; $($rest:tt)*) => {
+        pub struct $name( HWND );
+        impl Window for $name {
+            #[inline]
+            unsafe fn hwnd(&self) -> HWND {self.0}
+        }
+        impl Drop for $name {
+            fn drop(&mut self) {
+                unsafe{ user32::DestroyWindow(self.0) };
+            }
+        }
+        base_wrapper!{$($rest)*}
+    }
 }
+
+base_wrapper! {
+    pub struct BlankBase;
+    pub struct PushButtonBase;
+    pub struct TextLabelBase;
+    pub struct ProgressBarBase;
+}
+
 impl ParentWindow for BlankBase {}
-impl Drop for BlankBase {
-    fn drop(&mut self) {
-        unsafe{ user32::DestroyWindow(self.0) };
-    }
-}
-
-pub struct PushButtonBase( HWND );
-impl Window for PushButtonBase {
-    #[inline]
-    unsafe fn hwnd(&self) -> HWND {self.0}
-}
 impl ButtonWindow for PushButtonBase {}
-impl Drop for PushButtonBase {
-    fn drop(&mut self) {
-        unsafe{ user32::DestroyWindow(self.0) };
-    }
-}
-
-pub struct TextLabelBase( HWND );
-impl Window for TextLabelBase {
-    #[inline]
-    unsafe fn hwnd(&self) -> HWND {self.0}
-}
 impl TextLabelWindow for TextLabelBase {}
-impl Drop for TextLabelBase {
-    fn drop(&mut self) {
-        unsafe{ user32::DestroyWindow(self.0) };
-    }
-}
+impl ProgressBarWindow for ProgressBarBase {}
 
 
 pub struct IconWrapper<I: AsRef<WindowIcon>, W: Window> {
@@ -554,6 +558,38 @@ pub trait TextLabelWindow: Window {
     }
 }
 
+pub trait ProgressBarWindow: Window {
+    fn set_range(&self, min: WORD, max: WORD) {
+        let lparam = min as LPARAM | ((max as LPARAM) << 16);
+        unsafe{ user32::SendMessageW(self.hwnd(), PBM_SETRANGE, 0, lparam) };
+    }
+
+    fn get_range(&self) -> (WORD, WORD) {
+        let mut range = PBRANGE{ iLow: 0, iHigh: 0 };
+        unsafe{ user32::SendMessageW(self.hwnd(), PBM_GETRANGE, 0, &mut range as *mut _ as LPARAM) };
+        (range.iLow as WORD, range.iHigh as WORD)
+    }
+
+    fn set_progress(&self, progress: WORD) {
+        unsafe{ user32::SendMessageW(self.hwnd(), PBM_SETPOS, progress as WPARAM, 0) };
+    }
+
+    fn get_progress(&self) -> WORD {
+        unsafe{ user32::SendMessageW(self.hwnd(), PBM_GETPOS, 0, 0) as WORD }
+    }
+
+    fn set_marquee(&self, marquee: bool) {
+        unsafe{
+            user32::SendMessageW(self.hwnd(), PBM_SETMARQUEE, marquee as WPARAM, 0);
+            if marquee {
+                self.set_style(self.get_style() | PBS_MARQUEE);
+            } else {
+                self.set_style(self.get_style() & !PBS_MARQUEE);
+            }
+        }
+    }
+}
+
 
 
 // IconWindow impls
@@ -565,6 +601,7 @@ impl<I: AsRef<WindowIcon>, W: Window> OverlappedWindow for IconWrapper<I, W> {}
 impl<I: AsRef<WindowIcon>, W: Window> ParentWindow for IconWrapper<I, W> where W: ParentWindow {}
 impl<I: AsRef<WindowIcon>, W: Window> ButtonWindow for IconWrapper<I, W> where W: ButtonWindow {}
 impl<I: AsRef<WindowIcon>, W: Window> TextLabelWindow for IconWrapper<I, W> where W: TextLabelWindow {}
+impl<I: AsRef<WindowIcon>, W: Window> ProgressBarWindow for IconWrapper<I, W> where W: ProgressBarWindow {}
 impl<I: AsRef<WindowIcon>, W: Window> IconWindow for IconWrapper<I, W> {
     type I = I;
     #[inline]
@@ -581,6 +618,7 @@ impl<W: Window> OverlappedWindow for OverlapWrapper<W> {}
 impl<W: Window> ParentWindow for OverlapWrapper<W> where W: ParentWindow {}
 impl<W: Window> ButtonWindow for OverlapWrapper<W> where W: ButtonWindow {}
 impl<W: Window> TextLabelWindow for OverlapWrapper<W> where W: TextLabelWindow {}
+impl<W: Window> ProgressBarWindow for OverlapWrapper<W> where W: ProgressBarWindow {}
 impl<W: Window> IconWindow for OverlapWrapper<W> where W: IconWindow {
     type I = <W as IconWindow>::I;
     #[inline]
@@ -637,6 +675,7 @@ impl<W: Window, S: Subclass<W>> OverlappedWindow for SubclassWrapper<W, S> where
 impl<W: Window, S: Subclass<W>> ParentWindow for SubclassWrapper<W, S> where W: ParentWindow {}
 impl<W: Window, S: Subclass<W>> ButtonWindow for SubclassWrapper<W, S> where W: ButtonWindow {}
 impl<W: Window, S: Subclass<W>> TextLabelWindow for SubclassWrapper<W, S> where W: TextLabelWindow {}
+impl<W: Window, S: Subclass<W>> ProgressBarWindow for SubclassWrapper<W, S> where W: ProgressBarWindow {}
 impl<W: Window, S: Subclass<W>> IconWindow for SubclassWrapper<W, S> where W: IconWindow {
     type I = <W as IconWindow>::I;
     #[inline]
@@ -694,6 +733,7 @@ impl<W: Window, S: Subclass<W>> OverlappedWindow for UnsafeSubclassWrapper<W, S>
 impl<W: Window, S: Subclass<W>> ParentWindow for UnsafeSubclassWrapper<W, S> where W: ParentWindow {}
 impl<W: Window, S: Subclass<W>> ButtonWindow for UnsafeSubclassWrapper<W, S> where W: ButtonWindow {}
 impl<W: Window, S: Subclass<W>> TextLabelWindow for UnsafeSubclassWrapper<W, S> where W: TextLabelWindow {}
+impl<W: Window, S: Subclass<W>> ProgressBarWindow for UnsafeSubclassWrapper<W, S> where W: ProgressBarWindow {}
 impl<W: Window, S: Subclass<W>> IconWindow for UnsafeSubclassWrapper<W, S> where W: IconWindow {
     type I = <W as IconWindow>::I;
     #[inline]
@@ -752,9 +792,15 @@ impl<W: Window, S: Subclass<W>> OverlappedWindow for ProcWindowRef<W, S> where W
 impl<W: Window, S: Subclass<W>> ParentWindow for ProcWindowRef<W, S> where W: ParentWindow {}
 impl<W: Window, S: Subclass<W>> ButtonWindow for ProcWindowRef<W, S> where W: ButtonWindow {}
 impl<W: Window, S: Subclass<W>> TextLabelWindow for ProcWindowRef<W, S> where W: TextLabelWindow {}
+impl<W: Window, S: Subclass<W>> ProgressBarWindow for ProcWindowRef<W, S> where W: ProgressBarWindow {}
 
 
 // ParentRef impls
+impl ParentRef {
+    pub unsafe fn from_raw(hwnd: HWND) -> ParentRef {
+        ParentRef(hwnd)
+    }
+}
 impl Window for ParentRef {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {
@@ -764,6 +810,12 @@ impl Window for ParentRef {
 impl ParentWindow for ParentRef {}
 
 
+// WindowRef impls
+impl WindowRef {
+    pub unsafe fn from_raw(hwnd: HWND) -> WindowRef {
+        WindowRef(hwnd)
+    }
+}
 impl Window for WindowRef {
     unsafe fn hwnd(&self) -> HWND {
         self.0
@@ -771,8 +823,12 @@ impl Window for WindowRef {
 }
 
 
-
 // UnsafeSubclassRef impls
+impl<U: UserMsg> UnsafeSubclassRef<U> {
+    pub unsafe fn from_raw(hwnd: HWND) -> UnsafeSubclassRef<U> {
+        UnsafeSubclassRef(hwnd, PhantomData)
+    }
+}
 impl<U: UserMsg> UnsafeSubclassRef<U> {
     pub unsafe fn send_user_msg(&self, msg: U) -> i64 {
         let discriminant = msg.discriminant();
@@ -826,47 +882,24 @@ impl Drop for Icon {
     }
 }
 
-/// Enables win32 visual styles in the hackiest of methods. Basically, this steals the application
-/// manifest from `shell32.dll`, which contains the visual styles code, and then enables that
-/// manifest here.
-pub fn enable_visual_styles() {
+pub fn init() {
     // It's true that this static mut could cause a memory race. However, the only consequence of
     // that memory race is that this function runs more than once, which won't have any bad impacts
     // other than perhaps a slight increase in memory usage.
-    static mut ENABLED: bool = false;
+    static mut INITIALIZED: bool = false;
 
     unsafe {
-        if !ENABLED {
-            const ACTCTX_FLAG_ASSEMBLY_DIRECTORY_VALID: DWORD = 0x004;
-            const ACTCTX_FLAG_RESOURCE_NAME_VALID: DWORD = 0x008;
-            const ACTCTX_FLAG_SET_PROCESS_DEFAULT: DWORD = 0x010;
-
-            let mut dir = [0u16; MAX_PATH];
-            kernel32::GetSystemDirectoryW(dir.as_mut_ptr(), MAX_PATH as u32);
-            UCS2_CONVERTER.with_string("shell32.dll", |dll_file_name| {
-                let styles_ctx = ACTCTXW {
-                    cbSize: mem::size_of::<ACTCTXW>() as u32,
-                    dwFlags:
-                        ACTCTX_FLAG_ASSEMBLY_DIRECTORY_VALID |
-                        ACTCTX_FLAG_RESOURCE_NAME_VALID |
-                        ACTCTX_FLAG_SET_PROCESS_DEFAULT,
-                    lpSource: dll_file_name.as_ptr(),
-                    wProcessorArchitecture: 0,
-                    wLangId: 0,
-                    lpAssemblyDirectory: dir.as_ptr(),
-                    lpResourceName: 124 as LPCWSTR,
-                    lpApplicationName: ptr::null_mut(),
-                    hModule: ptr::null_mut()
+        if !INITIALIZED {
+            // Load the common controls dll
+            {
+                let init_ctrls = INITCOMMONCONTROLSEX {
+                    dwSize: mem::size_of::<INITCOMMONCONTROLSEX>() as DWORD,
+                    dwICC: ICC_PROGRESS_CLASS
                 };
+                comctl32::InitCommonControlsEx(&init_ctrls);
+            }
 
-                let mut activation_cookie = 0;
-                kernel32::ActivateActCtx(
-                    kernel32::CreateActCtxW(&styles_ctx),
-                    &mut activation_cookie
-                );
-            });
-
-            ENABLED = true;
+            INITIALIZED = true;
         }
     }
 }
@@ -1055,6 +1088,36 @@ mod ucs2 {
         }
     }
 }
+
+mod kernel32 {isolation_aware_kernel32!{{
+    use _kernel32;
+
+    const SHELL32_DLL: &'static [WCHAR] = &[0x0073, 0x0068, 0x0065, 0x006C, 0x006C, 0x0033, 0x0032, 0x002E, 0x0064, 0x006C, 0x006C, 0x0000];
+    const ACTCTX_FLAG_ASSEMBLY_DIRECTORY_VALID: DWORD = 0x004;
+    const ACTCTX_FLAG_RESOURCE_NAME_VALID: DWORD = 0x008;
+    const ACTCTX_FLAG_SET_PROCESS_DEFAULT: DWORD = 0x010;
+
+    let mut dir = [0u16; MAX_PATH];
+    _kernel32::GetSystemDirectoryW(dir.as_mut_ptr(), MAX_PATH as u32);
+    let styles_ctx = ACTCTXW {
+        cbSize: mem::size_of::<ACTCTXW>() as u32,
+        dwFlags:
+            ACTCTX_FLAG_ASSEMBLY_DIRECTORY_VALID |
+            ACTCTX_FLAG_RESOURCE_NAME_VALID |
+            ACTCTX_FLAG_SET_PROCESS_DEFAULT,
+        lpSource: SHELL32_DLL.as_ptr(),
+        wProcessorArchitecture: 0,
+        wLangId: 0,
+        lpAssemblyDirectory: dir.as_ptr(),
+        lpResourceName: 124 as LPCWSTR,
+        lpApplicationName: ptr::null_mut(),
+        hModule: ptr::null_mut()
+    };
+
+    self::IsolationAwareCreateActCtxW(&styles_ctx)
+}}}
+mod user32 {isolation_aware_user32!{mod_ia_kernel32 = kernel32}}
+mod comctl32 {isolation_aware_comctl32!{mod_ia_kernel32 = kernel32}}
 
 #[cfg(test)]
 mod tests {

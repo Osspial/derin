@@ -7,7 +7,7 @@ pub trait UserMsgConverter<M: UserMsg> {
             where P: MsgParam;
 }
 
-pub trait UserMsg: Sized {
+pub trait UserMsg: Sized + Copy {
     fn discriminant(&self) -> u16;
     unsafe fn empty(discriminant: u16) -> Self;
     /// Give a converter the functions necessary for decoding and encoding this `UserMsg`. This

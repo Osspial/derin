@@ -27,7 +27,7 @@ macro_rules! impl_node_data_wrapper {
                 $($($impl_where_ty: $($(for<$($impl_lt),+>)* $impl_constraint +)+),+)*
         {
             fn from_node_data($fnd_in: $inner_ty) -> $name<$inner_ty> {
-                enable_visual_styles();
+                init();
 
                 $name {
                     subclass: $from_node_data,
