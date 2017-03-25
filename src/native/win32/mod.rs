@@ -13,7 +13,7 @@ use std::cell::RefCell;
 use std::io::{Result, Error};
 
 use ui::layout::GridLayout;
-use ui::intrinsics::{TextButton, TextLabel, WidgetGroup};
+use ui::intrinsics::{TextButton, TextLabel, WidgetGroup, ProgressBar};
 use ui::{Node, Control, Parent, ChildId, NodeProcessor, NodeProcessorAT, NodeDataRegistry};
 
 pub struct Window<N>
@@ -188,6 +188,23 @@ impl<'a, P, A, H, I> NodeProcessor<WidgetGroup<I>> for NativeNodeProcessor<'a, P
     }
 }
 
+impl<'a, P, A, H> NodeProcessor<ProgressBar> for NativeNodeProcessor<'a, P, A, H>
+        where P: ParentChildAdder,
+              H: Iterator<Item=WidgetHints>
+{
+    fn add_child<'b>(&'b mut self, _: ChildId, progress_bar: &'b mut ProgressBar) -> Result<()> {
+        let widget_hints = self.hint_iter.next().unwrap_or(WidgetHints::default());
+        progress_bar.wrapper().update_subclass_ptr();
+
+        if progress_bar.wrapper().needs_update() {
+            self.children_updated = true;
+            progress_bar.wrapper_mut().update_widget(widget_hints);
+            self.parent.add_child_node(progress_bar);
+        }
+        Ok(())
+    }
+}
+
 
 pub struct NativeWrapperRegistry;
 impl<I: AsRef<str> + Control> NodeDataRegistry<TextButton<I>> for NativeWrapperRegistry {
@@ -198,4 +215,7 @@ impl<S: AsRef<str>> NodeDataRegistry<TextLabel<S>> for NativeWrapperRegistry {
 }
 impl<I: Parent<()>> NodeDataRegistry<WidgetGroup<I>> for NativeWrapperRegistry {
     type NodeDataWrapper = WidgetGroupNodeData<I>;
+}
+impl NodeDataRegistry<ProgressBar> for NativeWrapperRegistry {
+    type NodeDataWrapper = ProgressBarNodeData;
 }

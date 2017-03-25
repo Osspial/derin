@@ -29,12 +29,14 @@ use std::io::{Result, Error};
 
 use self::ucs2::{WithString, Ucs2String, Ucs2Str, ucs2_str, ucs2_str_from_ptr, UCS2_CONVERTER};
 
+#[derive(Debug)]
 pub enum Msg<'a, U: UserMsg> {
     Wm(Wm<'a>),
     Bm(Bm<'a>),
     User(U)
 }
 
+#[derive(Debug)]
 pub enum Wm<'a> {
     Close,
     Size(OriginRect),
@@ -45,6 +47,7 @@ pub enum Wm<'a> {
     GetSizeBounds(&'a mut SizeBounds)
 }
 
+#[derive(Debug)]
 pub enum Bm<'a> {
     GetIdealSize(&'a mut OriginRect)
 }
@@ -128,30 +131,54 @@ impl<'a> WindowBuilder<'a> {
     }
 
     pub fn build_blank(self) -> BlankBase {
-        let window_handle = self.build(WS_CLIPCHILDREN, 0, &BLANK_WINDOW_CLASS);
+        let window_handle = self.build(WS_CLIPCHILDREN, 0, None, &BLANK_WINDOW_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         BlankBase(window_handle)
     }
 
     pub fn build_push_button(self) -> PushButtonBase {
-        let window_handle = self.build(BS_PUSHBUTTON, 0, &BUTTON_CLASS);
+        let window_handle = self.build(BS_PUSHBUTTON, 0, None, &BUTTON_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         PushButtonBase(window_handle)
     }
 
     pub fn build_text_label(self) -> TextLabelBase {
-        let window_handle = self.build(0, 0, &STATIC_CLASS);
+        let window_handle = self.build(0, 0, None, &STATIC_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         TextLabelBase(window_handle)
     }
 
     pub fn build_progress_bar(self) -> ProgressBarBase {
-        let window_handle = self.build(0, 0, &PROGRESS_CLASS);
+        let window_handle = self.build(0, 0, None, &PROGRESS_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         ProgressBarBase(window_handle)
     }
 
-    fn build(self, style: DWORD, style_ex: DWORD, class: &Ucs2Str) -> HWND {
+    pub fn build_child_blank<P: ParentWindow>(self, parent: &P) -> ChildWrapper<BlankBase> {
+        let window_handle = self.build(WS_CLIPCHILDREN, 0, unsafe{ Some(parent.hwnd()) }, &BLANK_WINDOW_CLASS);
+        assert_ne!(window_handle, ptr::null_mut());
+        ChildWrapper(BlankBase(window_handle))
+    }
+
+    pub fn build_child_push_button<P: ParentWindow>(self, parent: &P) -> ChildWrapper<PushButtonBase> {
+        let window_handle = self.build(BS_PUSHBUTTON, 0, unsafe{ Some(parent.hwnd()) }, &BUTTON_CLASS);
+        assert_ne!(window_handle, ptr::null_mut());
+        ChildWrapper(PushButtonBase(window_handle))
+    }
+
+    pub fn build_child_text_label<P: ParentWindow>(self, parent: &P) -> ChildWrapper<TextLabelBase> {
+        let window_handle = self.build(0, 0, unsafe{ Some(parent.hwnd()) }, &STATIC_CLASS);
+        assert_ne!(window_handle, ptr::null_mut());
+        ChildWrapper(TextLabelBase(window_handle))
+    }
+
+    pub fn build_child_progress_bar<P: ParentWindow>(self, parent: &P) -> ChildWrapper<ProgressBarBase> {
+        let window_handle = self.build(0, 0, unsafe{ Some(parent.hwnd()) }, &PROGRESS_CLASS);
+        assert_ne!(window_handle, ptr::null_mut());
+        ChildWrapper(ProgressBarBase(window_handle))
+    }
+
+    fn build(self, style: DWORD, style_ex: DWORD, parent: Option<HWND>, class: &Ucs2Str) -> HWND {
         UCS2_CONVERTER.with_string(self.window_text, |window_text| unsafe {
             let pos = self.pos.unwrap_or((CW_USEDEFAULT, CW_USEDEFAULT));
             let size = match self.size {
@@ -169,6 +196,7 @@ impl<'a> WindowBuilder<'a> {
 
                 None => (0, 0)
             };
+            let style = style | parent.map(|_| WS_CHILD | WS_CLIPSIBLINGS).unwrap_or(0);
 
             let window_handle = user32::CreateWindowExW(
                 style_ex,
@@ -177,7 +205,7 @@ impl<'a> WindowBuilder<'a> {
                 style,
                 pos.0, pos.1,
                 size.0, size.1,
-                ptr::null_mut(),
+                parent.unwrap_or(ptr::null_mut()),
                 ptr::null_mut(),
                 kernel32::GetModuleHandleW(ptr::null()),
                 ptr::null_mut()
@@ -211,7 +239,7 @@ macro_rules! base_wrapper {
     () => ();
     (pub struct $name:ident; $($rest:tt)*) => {
         pub struct $name( HWND );
-        impl Window for $name {
+        unsafe impl Window for $name {
             #[inline]
             unsafe fn hwnd(&self) -> HWND {self.0}
         }
@@ -231,11 +259,12 @@ base_wrapper! {
     pub struct ProgressBarBase;
 }
 
-impl ParentWindow for BlankBase {}
-impl ButtonWindow for PushButtonBase {}
-impl TextLabelWindow for TextLabelBase {}
-impl ProgressBarWindow for ProgressBarBase {}
+unsafe impl ParentWindow for BlankBase {}
+unsafe impl ButtonWindow for PushButtonBase {}
+unsafe impl TextLabelWindow for TextLabelBase {}
+unsafe impl ProgressBarWindow for ProgressBarBase {}
 
+pub struct ChildWrapper<W: Window>( W );
 
 pub struct IconWrapper<I: AsRef<WindowIcon>, W: Window> {
     window: W,
@@ -263,15 +292,18 @@ pub struct ProcWindowRef<W: Window, S: Subclass<W> + ?Sized> {
 }
 
 #[derive(Clone, Copy)]
+pub struct ChildRef( HWND );
+#[derive(Clone, Copy)]
 pub struct ParentRef( HWND );
 #[derive(Clone, Copy)]
 pub struct WindowRef( HWND );
 #[derive(Clone, Copy)]
 pub struct UnsafeSubclassRef<U: UserMsg>( HWND, PhantomData<U> );
+#[derive(Clone, Copy)]
+pub struct UnsafeChildSubclassRef<U: UserMsg>( UnsafeSubclassRef<U> );
 
 
-
-pub trait Window: Sized {
+pub unsafe trait Window: Sized {
     unsafe fn hwnd(&self) -> HWND;
 
     fn as_icon<I: AsRef<WindowIcon>>(self, icon: I) -> IconWrapper<I, Self> {
@@ -401,22 +433,6 @@ pub trait Window: Sized {
         unsafe{ user32::ShowWindow(self.hwnd(), show_int )};
     }
 
-    fn orphan(&self) {
-        unsafe {
-            user32::SetParent(self.hwnd(), ptr::null_mut());
-            self.set_style(self.get_style() & !WS_CHILD);
-        }
-    }
-
-    fn get_parent_window(&self) -> Option<ParentRef> {
-        let parent_hwnd = unsafe{ user32::GetParent(self.hwnd()) };
-        if parent_hwnd == ptr::null_mut() {
-            None
-        } else {
-            Some(ParentRef(parent_hwnd))
-        }
-    }
-
     fn size_bounds(&self) -> SizeBounds {
         let mut mmi: MINMAXINFO = MINMAXINFO {
             ptMaxTrackSize: POINT {x: LONG::max_value(), y: LONG::max_value()},
@@ -431,7 +447,7 @@ pub trait Window: Sized {
     }
 }
 
-pub trait OverlappedWindow: Window {
+pub unsafe trait OverlappedWindow: Window {
     /// Set all of the overlapped window properties (i.e. all the other functions in this struct)
     /// to either true or false.
     fn overlapped(&self, overlapped: bool) {
@@ -488,7 +504,7 @@ pub trait OverlappedWindow: Window {
     }
 }
 
-pub trait IconWindow: Window {
+pub unsafe trait IconWindow: Window {
     type I: AsRef<WindowIcon>;
 
     fn icon_mut(&mut self) -> &mut Self::I;
@@ -506,20 +522,40 @@ pub trait IconWindow: Window {
     }
 }
 
-pub trait ParentWindow: Window {
+pub unsafe trait ParentWindow: Window {
     fn parent_ref(&self) -> ParentRef {
         ParentRef(unsafe{ self.hwnd() })
     }
 
-    fn add_child_window<W: Window>(&self, child: W) {
+    fn add_child_window<W: ChildWindow>(&self, child: &W) {
         unsafe {
             user32::SetParent(child.hwnd(), self.hwnd());
-            child.set_style(child.get_style() | WS_CHILD | WS_CLIPSIBLINGS);
         }
     }
 }
 
-pub trait ButtonWindow: Window {
+pub unsafe trait ChildWindow: Window {
+    fn child_ref(&self) -> ChildRef {
+        ChildRef(unsafe{ self.hwnd() })
+    }
+
+    fn orphan(&self) {
+        unsafe {
+            user32::SetParent(self.hwnd(), ptr::null_mut());
+        }
+    }
+
+    fn get_parent_window(&self) -> Option<ParentRef> {
+        let parent_hwnd = unsafe{ user32::GetParent(self.hwnd()) };
+        if parent_hwnd == ptr::null_mut() {
+            None
+        } else {
+            Some(ParentRef(parent_hwnd))
+        }
+    }
+}
+
+pub unsafe trait ButtonWindow: Window {
     fn get_ideal_size(&self) -> OriginRect {
         let mut size = SIZE{ cx: 0, cy: 0 };
         unsafe{ user32::SendMessageW(self.hwnd(), BCM_GETIDEALSIZE, 0, &mut size as *mut SIZE as LPARAM) };
@@ -527,7 +563,7 @@ pub trait ButtonWindow: Window {
     }
 }
 
-pub trait TextLabelWindow: Window {
+pub unsafe trait TextLabelWindow: Window {
     fn min_unclipped_rect(&self) -> OriginRect {
         let text_len = unsafe{ user32::GetWindowTextLengthW(self.hwnd()) };
         UCS2_CONVERTER.with_ucs2_buffer(text_len as usize, |text_buf| unsafe {
@@ -558,7 +594,7 @@ pub trait TextLabelWindow: Window {
     }
 }
 
-pub trait ProgressBarWindow: Window {
+pub unsafe trait ProgressBarWindow: Window {
     fn set_range(&self, min: WORD, max: WORD) {
         let lparam = min as LPARAM | ((max as LPARAM) << 16);
         unsafe{ user32::SendMessageW(self.hwnd(), PBM_SETRANGE, 0, lparam) };
@@ -591,18 +627,35 @@ pub trait ProgressBarWindow: Window {
 }
 
 
+// ChildWrapper impls
+unsafe impl<W: Window> Window for ChildWrapper<W> {
+    #[inline]
+    unsafe fn hwnd(&self) -> HWND {self.0.hwnd()}
+}
+unsafe impl<W: Window> OverlappedWindow for ChildWrapper<W> {}
+unsafe impl<W: Window> ChildWindow for ChildWrapper<W> {}
+unsafe impl<W: Window> ParentWindow for ChildWrapper<W> where W: ParentWindow {}
+unsafe impl<W: Window> ButtonWindow for ChildWrapper<W> where W: ButtonWindow {}
+unsafe impl<W: Window> TextLabelWindow for ChildWrapper<W> where W: TextLabelWindow {}
+unsafe impl<W: Window> ProgressBarWindow for ChildWrapper<W> where W: ProgressBarWindow {}
+unsafe impl<W: Window> IconWindow for ChildWrapper<W> where W: IconWindow {
+    type I = <W as IconWindow>::I;
+    #[inline]
+    fn icon_mut(&mut self) -> &mut <W as IconWindow>::I {self.0.icon_mut()}
+}
 
-// IconWindow impls
-impl<I: AsRef<WindowIcon>, W: Window> Window for IconWrapper<I, W> {
+// IconWrapper impls
+unsafe impl<I: AsRef<WindowIcon>, W: Window> Window for IconWrapper<I, W> {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.window.hwnd()}
 }
-impl<I: AsRef<WindowIcon>, W: Window> OverlappedWindow for IconWrapper<I, W> {}
-impl<I: AsRef<WindowIcon>, W: Window> ParentWindow for IconWrapper<I, W> where W: ParentWindow {}
-impl<I: AsRef<WindowIcon>, W: Window> ButtonWindow for IconWrapper<I, W> where W: ButtonWindow {}
-impl<I: AsRef<WindowIcon>, W: Window> TextLabelWindow for IconWrapper<I, W> where W: TextLabelWindow {}
-impl<I: AsRef<WindowIcon>, W: Window> ProgressBarWindow for IconWrapper<I, W> where W: ProgressBarWindow {}
-impl<I: AsRef<WindowIcon>, W: Window> IconWindow for IconWrapper<I, W> {
+unsafe impl<I: AsRef<WindowIcon>, W: Window> OverlappedWindow for IconWrapper<I, W> {}
+unsafe impl<I: AsRef<WindowIcon>, W: Window> ChildWindow for IconWrapper<I, W> where W: ChildWindow {}
+unsafe impl<I: AsRef<WindowIcon>, W: Window> ParentWindow for IconWrapper<I, W> where W: ParentWindow {}
+unsafe impl<I: AsRef<WindowIcon>, W: Window> ButtonWindow for IconWrapper<I, W> where W: ButtonWindow {}
+unsafe impl<I: AsRef<WindowIcon>, W: Window> TextLabelWindow for IconWrapper<I, W> where W: TextLabelWindow {}
+unsafe impl<I: AsRef<WindowIcon>, W: Window> ProgressBarWindow for IconWrapper<I, W> where W: ProgressBarWindow {}
+unsafe impl<I: AsRef<WindowIcon>, W: Window> IconWindow for IconWrapper<I, W> {
     type I = I;
     #[inline]
     fn icon_mut(&mut self) -> &mut I {&mut self.icon}
@@ -610,16 +663,17 @@ impl<I: AsRef<WindowIcon>, W: Window> IconWindow for IconWrapper<I, W> {
 
 
 // OverlapWrapper impls
-impl<W: Window> Window for OverlapWrapper<W> {
+unsafe impl<W: Window> Window for OverlapWrapper<W> {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.0.hwnd()}
 }
-impl<W: Window> OverlappedWindow for OverlapWrapper<W> {}
-impl<W: Window> ParentWindow for OverlapWrapper<W> where W: ParentWindow {}
-impl<W: Window> ButtonWindow for OverlapWrapper<W> where W: ButtonWindow {}
-impl<W: Window> TextLabelWindow for OverlapWrapper<W> where W: TextLabelWindow {}
-impl<W: Window> ProgressBarWindow for OverlapWrapper<W> where W: ProgressBarWindow {}
-impl<W: Window> IconWindow for OverlapWrapper<W> where W: IconWindow {
+unsafe impl<W: Window> OverlappedWindow for OverlapWrapper<W> {}
+unsafe impl<W: Window> ChildWindow for OverlapWrapper<W> where W: ChildWindow {}
+unsafe impl<W: Window> ParentWindow for OverlapWrapper<W> where W: ParentWindow {}
+unsafe impl<W: Window> ButtonWindow for OverlapWrapper<W> where W: ButtonWindow {}
+unsafe impl<W: Window> TextLabelWindow for OverlapWrapper<W> where W: TextLabelWindow {}
+unsafe impl<W: Window> ProgressBarWindow for OverlapWrapper<W> where W: ProgressBarWindow {}
+unsafe impl<W: Window> IconWindow for OverlapWrapper<W> where W: IconWindow {
     type I = <W as IconWindow>::I;
     #[inline]
     fn icon_mut(&mut self) -> &mut <W as IconWindow>::I {self.0.icon_mut()}
@@ -667,16 +721,17 @@ impl<W: Window, S: Subclass<W>> SubclassWrapper<W, S> {
         }
     }
 }
-impl<W: Window, S: Subclass<W>> Window for SubclassWrapper<W, S> {
+unsafe impl<W: Window, S: Subclass<W>> Window for SubclassWrapper<W, S> {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.window.hwnd()}
 }
-impl<W: Window, S: Subclass<W>> OverlappedWindow for SubclassWrapper<W, S> where W: OverlappedWindow {}
-impl<W: Window, S: Subclass<W>> ParentWindow for SubclassWrapper<W, S> where W: ParentWindow {}
-impl<W: Window, S: Subclass<W>> ButtonWindow for SubclassWrapper<W, S> where W: ButtonWindow {}
-impl<W: Window, S: Subclass<W>> TextLabelWindow for SubclassWrapper<W, S> where W: TextLabelWindow {}
-impl<W: Window, S: Subclass<W>> ProgressBarWindow for SubclassWrapper<W, S> where W: ProgressBarWindow {}
-impl<W: Window, S: Subclass<W>> IconWindow for SubclassWrapper<W, S> where W: IconWindow {
+unsafe impl<W: Window, S: Subclass<W>> OverlappedWindow for SubclassWrapper<W, S> where W: OverlappedWindow {}
+unsafe impl<W: Window, S: Subclass<W>> ChildWindow for SubclassWrapper<W, S> where W: ChildWindow {}
+unsafe impl<W: Window, S: Subclass<W>> ParentWindow for SubclassWrapper<W, S> where W: ParentWindow {}
+unsafe impl<W: Window, S: Subclass<W>> ButtonWindow for SubclassWrapper<W, S> where W: ButtonWindow {}
+unsafe impl<W: Window, S: Subclass<W>> TextLabelWindow for SubclassWrapper<W, S> where W: TextLabelWindow {}
+unsafe impl<W: Window, S: Subclass<W>> ProgressBarWindow for SubclassWrapper<W, S> where W: ProgressBarWindow {}
+unsafe impl<W: Window, S: Subclass<W>> IconWindow for SubclassWrapper<W, S> where W: IconWindow {
     type I = <W as IconWindow>::I;
     #[inline]
     fn icon_mut(&mut self) -> &mut <W as IconWindow>::I {self.window.icon_mut()}
@@ -714,6 +769,12 @@ impl<W: Window, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
         unsafe{ UnsafeSubclassRef(self.hwnd(), PhantomData) }
     }
 
+    pub fn unsafe_child_subclass_ref(&self) -> UnsafeChildSubclassRef<S::UserMsg>
+            where W: ChildWindow
+    {
+        unsafe{ UnsafeChildSubclassRef(UnsafeSubclassRef(self.hwnd(), PhantomData)) }
+    }
+
     pub fn update_subclass_ptr(&self) {
         unsafe {
             comctl32::SetWindowSubclass(
@@ -725,16 +786,17 @@ impl<W: Window, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
         }
     }
 }
-impl<W: Window, S: Subclass<W>> Window for UnsafeSubclassWrapper<W, S> {
+unsafe impl<W: Window, S: Subclass<W>> Window for UnsafeSubclassWrapper<W, S> {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.window.hwnd()}
 }
-impl<W: Window, S: Subclass<W>> OverlappedWindow for UnsafeSubclassWrapper<W, S> where W: OverlappedWindow {}
-impl<W: Window, S: Subclass<W>> ParentWindow for UnsafeSubclassWrapper<W, S> where W: ParentWindow {}
-impl<W: Window, S: Subclass<W>> ButtonWindow for UnsafeSubclassWrapper<W, S> where W: ButtonWindow {}
-impl<W: Window, S: Subclass<W>> TextLabelWindow for UnsafeSubclassWrapper<W, S> where W: TextLabelWindow {}
-impl<W: Window, S: Subclass<W>> ProgressBarWindow for UnsafeSubclassWrapper<W, S> where W: ProgressBarWindow {}
-impl<W: Window, S: Subclass<W>> IconWindow for UnsafeSubclassWrapper<W, S> where W: IconWindow {
+unsafe impl<W: Window, S: Subclass<W>> OverlappedWindow for UnsafeSubclassWrapper<W, S> where W: OverlappedWindow {}
+unsafe impl<W: Window, S: Subclass<W>> ChildWindow for UnsafeSubclassWrapper<W, S> where W: ChildWindow {}
+unsafe impl<W: Window, S: Subclass<W>> ParentWindow for UnsafeSubclassWrapper<W, S> where W: ParentWindow {}
+unsafe impl<W: Window, S: Subclass<W>> ButtonWindow for UnsafeSubclassWrapper<W, S> where W: ButtonWindow {}
+unsafe impl<W: Window, S: Subclass<W>> TextLabelWindow for UnsafeSubclassWrapper<W, S> where W: TextLabelWindow {}
+unsafe impl<W: Window, S: Subclass<W>> ProgressBarWindow for UnsafeSubclassWrapper<W, S> where W: ProgressBarWindow {}
+unsafe impl<W: Window, S: Subclass<W>> IconWindow for UnsafeSubclassWrapper<W, S> where W: IconWindow {
     type I = <W as IconWindow>::I;
     #[inline]
     fn icon_mut(&mut self) -> &mut <W as IconWindow>::I {self.window.icon_mut()}
@@ -782,17 +844,33 @@ impl<W: Window, S: Subclass<W>> ProcWindowRef<W, S> {
         ret
     }
 }
-impl<W: Window, S: Subclass<W>> Window for ProcWindowRef<W, S> {
+unsafe impl<W: Window, S: Subclass<W>> Window for ProcWindowRef<W, S> {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {
         self.hwnd
     }
 }
-impl<W: Window, S: Subclass<W>> OverlappedWindow for ProcWindowRef<W, S> where W: OverlappedWindow {}
-impl<W: Window, S: Subclass<W>> ParentWindow for ProcWindowRef<W, S> where W: ParentWindow {}
-impl<W: Window, S: Subclass<W>> ButtonWindow for ProcWindowRef<W, S> where W: ButtonWindow {}
-impl<W: Window, S: Subclass<W>> TextLabelWindow for ProcWindowRef<W, S> where W: TextLabelWindow {}
-impl<W: Window, S: Subclass<W>> ProgressBarWindow for ProcWindowRef<W, S> where W: ProgressBarWindow {}
+unsafe impl<W: Window, S: Subclass<W>> OverlappedWindow for ProcWindowRef<W, S> where W: OverlappedWindow {}
+unsafe impl<W: Window, S: Subclass<W>> ChildWindow for ProcWindowRef<W, S> where W: ChildWindow {}
+unsafe impl<W: Window, S: Subclass<W>> ParentWindow for ProcWindowRef<W, S> where W: ParentWindow {}
+unsafe impl<W: Window, S: Subclass<W>> ButtonWindow for ProcWindowRef<W, S> where W: ButtonWindow {}
+unsafe impl<W: Window, S: Subclass<W>> TextLabelWindow for ProcWindowRef<W, S> where W: TextLabelWindow {}
+unsafe impl<W: Window, S: Subclass<W>> ProgressBarWindow for ProcWindowRef<W, S> where W: ProgressBarWindow {}
+
+
+// ChildRef impls
+impl ChildRef {
+    pub unsafe fn from_raw(hwnd: HWND) -> ChildRef {
+        ChildRef(hwnd)
+    }
+}
+unsafe impl Window for ChildRef {
+    #[inline]
+    unsafe fn hwnd(&self) -> HWND {
+        self.0
+    }
+}
+unsafe impl ChildWindow for ChildRef {}
 
 
 // ParentRef impls
@@ -801,13 +879,13 @@ impl ParentRef {
         ParentRef(hwnd)
     }
 }
-impl Window for ParentRef {
+unsafe impl Window for ParentRef {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {
         self.0
     }
 }
-impl ParentWindow for ParentRef {}
+unsafe impl ParentWindow for ParentRef {}
 
 
 // WindowRef impls
@@ -816,7 +894,7 @@ impl WindowRef {
         WindowRef(hwnd)
     }
 }
-impl Window for WindowRef {
+unsafe impl Window for WindowRef {
     unsafe fn hwnd(&self) -> HWND {
         self.0
     }
@@ -828,8 +906,7 @@ impl<U: UserMsg> UnsafeSubclassRef<U> {
     pub unsafe fn from_raw(hwnd: HWND) -> UnsafeSubclassRef<U> {
         UnsafeSubclassRef(hwnd, PhantomData)
     }
-}
-impl<U: UserMsg> UnsafeSubclassRef<U> {
+
     pub unsafe fn send_user_msg(&self, msg: U) -> i64 {
         let discriminant = msg.discriminant();
         let encoded_bytes = user_msg::encode(msg);
@@ -848,11 +925,34 @@ impl<U: UserMsg> UnsafeSubclassRef<U> {
         user32::PostMessageW(self.hwnd(), discriminant as UINT + WM_APP, wparam, lparam);
     }
 }
-impl<U: UserMsg> Window for UnsafeSubclassRef<U> {
+unsafe impl<U: UserMsg> Window for UnsafeSubclassRef<U> {
     unsafe fn hwnd(&self) -> HWND {
         self.0
     }
 }
+
+// UnsafeChildSubclassRef impls
+impl<U: UserMsg> UnsafeChildSubclassRef<U> {
+    pub unsafe fn from_raw(hwnd: HWND) -> UnsafeChildSubclassRef<U> {
+        UnsafeChildSubclassRef(UnsafeSubclassRef::from_raw(hwnd))
+    }
+
+    pub unsafe fn send_user_msg(&self, msg: U) -> i64 {
+        self.0.send_user_msg(msg)
+    }
+
+    pub unsafe fn post_user_msg(&self, msg: U)
+            where U: 'static
+    {
+        self.0.post_user_msg(msg)
+    }
+}
+unsafe impl<U: UserMsg> Window for UnsafeChildSubclassRef<U> {
+    unsafe fn hwnd(&self) -> HWND {
+        self.0.hwnd()
+    }
+}
+unsafe impl<U: UserMsg> ChildWindow for UnsafeChildSubclassRef<U> {}
 
 
 

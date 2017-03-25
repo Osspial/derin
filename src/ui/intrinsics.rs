@@ -136,3 +136,56 @@ intrinsics!{
         pub fn inner_mut(this: &mut Self) -> &mut _;
     }
 }
+
+pub struct ProgressBar<R = NativeWrapperRegistry>
+        where R: NodeDataRegistry<ProgressBar<R>>,
+              R::NodeDataWrapper: NodeDataWrapper<ProgBarStatus>
+{
+    wrapper: R::NodeDataWrapper
+}
+
+impl<R> ProgressBar<R>
+        where R: NodeDataRegistry<ProgressBar<R>>,
+              R::NodeDataWrapper: NodeDataWrapper<ProgBarStatus>
+{
+    pub fn new(status: ProgBarStatus) -> ProgressBar<R> {
+        ProgressBar {
+            wrapper: R::NodeDataWrapper::from_node_data(status)
+        }
+    }
+
+    pub fn status(&self) -> ProgBarStatus {
+        *self.wrapper.inner()
+    }
+
+    pub fn status_mut(&mut self) -> &mut ProgBarStatus {
+        self.wrapper.inner_mut()
+    }
+}
+
+impl<R> Node for ProgressBar<R>
+        where R: NodeDataRegistry<ProgressBar<R>>,
+              R::NodeDataWrapper: NodeDataWrapper<ProgBarStatus>
+{
+    type Wrapper = R::NodeDataWrapper;
+    type Inner = ProgBarStatus;
+    type Action = Void;
+
+    fn type_name(&self) -> &'static str {
+        "ProgressBar"
+    }
+
+    fn wrapper(&self) -> &R::NodeDataWrapper {
+        &self.wrapper
+    }
+
+    fn wrapper_mut(&mut self) -> &mut R::NodeDataWrapper {
+        &mut self.wrapper
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ProgBarStatus {
+    Frac(f32),
+    Working
+}
