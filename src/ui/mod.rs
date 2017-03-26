@@ -55,7 +55,7 @@ pub trait Parent<NP>
     fn child_layout(&self) -> Self::ChildLayout;
 }
 
-pub trait Control {
+pub trait Button {
     type Action;
 
     fn on_mouse_event(&self, MouseEvent) -> Option<Self::Action> {None}

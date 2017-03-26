@@ -1,6 +1,6 @@
 use super::toggle_cell::ToggleCell;
 
-use ui::{Control, Parent, Node, ChildId, NodeProcessor, NodeProcessorAT, NodeDataWrapper};
+use ui::{Button, Parent, Node, ChildId, NodeProcessor, NodeProcessorAT, NodeDataWrapper};
 use ui::intrinsics::ProgBarStatus;
 use dww::*;
 use dle::{Tr, Container, LayoutEngine, WidgetData, WidgetConstraintSolver, SolveError};
@@ -11,6 +11,7 @@ use void::Void;
 
 use std::mem;
 use std::cell::{Cell, RefCell};
+use std::borrow::Borrow;
 use std::rc::Rc;
 
 type ToplevelWindowBase = OverlapWrapper<BlankBase>;
@@ -163,7 +164,7 @@ thread_local!{
 
 subclass_node_data!{
     pub struct TextButtonNodeData<I>
-            where I: trait AsRef<str> | trait Control
+            where I: trait Borrow<str> | trait Button
     {
         subclass: UnsafeSubclassWrapper<ChildWrapper<PushButtonBase>, TextButtonSubclass<I>>,
         needs_update: bool
@@ -182,7 +183,7 @@ subclass_node_data!{
         }
         fn update_widget(subclass: _, hints: WidgetHints, action_fn: &SharedFn<I::Action>) {
             subclass.data.mutable_data.get_mut().widget_data.widget_hints = hints;
-            subclass.set_text(subclass.data.node_data.as_ref());
+            subclass.set_text(subclass.data.node_data.borrow());
             subclass.data.action_fn = Some(action_fn.clone());
         }
     }
@@ -391,7 +392,7 @@ impl Default for ButtonState {
     }
 }
 
-struct TextButtonSubclass<I: AsRef<str> + Control> {
+struct TextButtonSubclass<I: Borrow<str> + Button> {
     node_data: I,
     action_fn: Option<SharedFn<I::Action>>,
     mutable_data: RefCell<TBSMut>
@@ -403,7 +404,7 @@ struct TBSMut {
     button_state: ButtonState
 }
 
-impl<I: AsRef<str> + Control> TextButtonSubclass<I> {
+impl<I: Borrow<str> + Button> TextButtonSubclass<I> {
     #[inline]
     fn new(node_data: I) -> TextButtonSubclass<I> {
         TextButtonSubclass {
@@ -416,7 +417,7 @@ impl<I: AsRef<str> + Control> TextButtonSubclass<I> {
 
 impl<B, I> Subclass<B> for TextButtonSubclass<I>
         where B: ButtonWindow,
-              I: AsRef<str> + Control
+              I: Borrow<str> + Button
 {
     type UserMsg = DerinMsg;
     fn subclass_proc(&self, window: &ProcWindowRef<B, Self>, mut msg: Msg<DerinMsg>) -> i64 {

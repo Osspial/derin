@@ -1,5 +1,6 @@
-use super::{Node, NodeDataRegistry, NodeDataWrapper, Parent, Control};
+use super::{Node, NodeDataRegistry, NodeDataWrapper, Parent, Button};
 use std::ops::{Deref, DerefMut};
+use std::borrow::Borrow;
 use native::NativeWrapperRegistry;
 use void::Void;
 
@@ -115,7 +116,7 @@ macro_rules! intrinsics {
 }
 
 intrinsics!{
-    pub struct TextButton<I: AsRef<str> | Control, R: NodeDataRegistry>;
+    pub struct TextButton<I: Button | Borrow<str>, R: NodeDataRegistry>;
     impl TextButton {
         type Action = I::Action;
         pub fn inner(this: &Self) -> &_;

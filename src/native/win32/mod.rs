@@ -9,12 +9,13 @@ use dww::{msg_queue, Window as WindowTrait, OverlappedWindow, WindowBuilder};
 use std::rc::Rc;
 use std::ptr;
 use std::iter::{self, Once};
+use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::io::{Result, Error};
 
 use ui::layout::GridLayout;
 use ui::intrinsics::{TextButton, TextLabel, WidgetGroup, ProgressBar};
-use ui::{Node, Control, Parent, ChildId, NodeProcessor, NodeProcessorAT, NodeDataRegistry};
+use ui::{Node, Button, Parent, ChildId, NodeProcessor, NodeProcessorAT, NodeDataRegistry};
 
 pub struct Window<N>
         where N: Node<Wrapper = <NativeWrapperRegistry as NodeDataRegistry<N>>::NodeDataWrapper>,
@@ -81,7 +82,7 @@ impl<N> Window<N>
         for msg in msg_queue::thread_wait_queue() {
             let msg = msg.expect("Windows message error");
             unsafe{ msg.dispatch() };
-            if !self.action_fn.borrow().continue_loop {
+            if !<RefCell<_>>::borrow(&self.action_fn).continue_loop {
                 break;
             }
         }
@@ -114,23 +115,23 @@ impl<'a, P, A, H, C> NodeProcessor<C> for NativeNodeProcessor<'a, P, A, H>
     }
 }
 
-impl<'a, P, A, H, I> NodeProcessor<TextButton<I>> for NativeNodeProcessor<'a, P, A, H>
-        where P: ParentChildAdder,
-              I: AsRef<str> + Control<Action = A>,
-              H: Iterator<Item=WidgetHints>
-{
-    fn add_child<'b>(&'b mut self, _: ChildId, button: &'b mut TextButton<I>) -> Result<()> {
-        let widget_hints = self.hint_iter.next().unwrap_or(WidgetHints::default());
-        button.wrapper().update_subclass_ptr();
+// impl<'a, P, A, H, I> NodeProcessor<TextButton<I>> for NativeNodeProcessor<'a, P, A, H>
+//         where P: ParentChildAdder,
+//               I: Button<Action = A> + Borrow<str>,
+//               H: Iterator<Item=WidgetHints>
+// {
+//     fn add_child<'b>(&'b mut self, _: ChildId, button: &'b mut TextButton<I>) -> Result<()> {
+//         let widget_hints = self.hint_iter.next().unwrap_or(WidgetHints::default());
+//         button.wrapper().update_subclass_ptr();
 
-        if button.wrapper().needs_update() {
-            self.children_updated = true;
-            button.wrapper_mut().update_widget(widget_hints, self.action_fn);
-            self.parent.add_child_node(button);
-        }
-        Ok(())
-    }
-}
+//         if button.wrapper().needs_update() {
+//             self.children_updated = true;
+//             button.wrapper_mut().update_widget(widget_hints, self.action_fn);
+//             self.parent.add_child_node(button);
+//         }
+//         Ok(())
+//     }
+// }
 
 impl<'a, P, A, H, S> NodeProcessor<TextLabel<S>> for NativeNodeProcessor<'a, P, A, H>
         where P: ParentChildAdder,
@@ -207,7 +208,7 @@ impl<'a, P, A, H> NodeProcessor<ProgressBar> for NativeNodeProcessor<'a, P, A, H
 
 
 pub struct NativeWrapperRegistry;
-impl<I: AsRef<str> + Control> NodeDataRegistry<TextButton<I>> for NativeWrapperRegistry {
+impl<I: Button + Borrow<str>> NodeDataRegistry<TextButton<I>> for NativeWrapperRegistry {
     type NodeDataWrapper = TextButtonNodeData<I>;
 }
 impl<S: AsRef<str>> NodeDataRegistry<TextLabel<S>> for NativeWrapperRegistry {
