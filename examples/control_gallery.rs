@@ -7,15 +7,17 @@ use derin::ui::intrinsics::*;
 use derin::native::{Window, WindowConfig};
 use dct::events::MouseEvent;
 
+use std::borrow::Borrow;
+
 struct AddButton(&'static str);
 
-impl AsRef<str> for AddButton {
-    fn as_ref(&self) -> &str {
+impl Borrow<str> for AddButton {
+    fn borrow(&self) -> &str {
         self.0
     }
 }
 
-impl Control for AddButton {
+impl Button for AddButton {
     type Action = ();
 
     fn on_mouse_event(&self, _: MouseEvent) -> Option<()> {

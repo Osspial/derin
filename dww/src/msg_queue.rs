@@ -1,7 +1,7 @@
 use winapi::*;
 use user32;
 
-use super::WindowRef;
+use super::WindowRefMut;
 
 use std::marker::PhantomData;
 use std::io::{Result, Error};
@@ -10,8 +10,8 @@ pub struct QueueMsg( MSG );
 
 impl QueueMsg {
     #[inline]
-    pub fn window(&self) -> WindowRef {
-        WindowRef(self.0.hwnd)
+    pub fn window(&mut self) -> WindowRefMut {
+        WindowRefMut(self.0.hwnd, PhantomData)
     }
 
     #[inline]
