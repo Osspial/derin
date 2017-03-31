@@ -2,19 +2,16 @@ mod wrapper;
 
 use self::wrapper::*;
 use super::WindowConfig;
-use dle::hints::{WidgetHints, NodeSpan};
 use dww::{msg_queue, WindowOwned, OverlappedWindow, WindowBuilder};
 
 use std::rc::Rc;
 use std::ptr;
-use std::iter::{self, Once};
 use std::borrow::Borrow;
 use std::cell::RefCell;
-use std::io::{Result, Error};
 
-use ui::layout::GridLayout;
-use ui::intrinsics::{TextButton, TextLabel, WidgetGroup, ProgressBar};
-use ui::{Node, Button, Parent, ChildId, NodeProcessor, NodeProcessorAT, NodeDataWrapper, NodeDataRegistry};
+use ui::{Node, Parent, ChildId, NodeProcessorGrid, NodeProcessor, NodeProcessorInit, NodeDataWrapper, NodeDataRegistry};
+use ui::widgets::{Button, TextButton, TextLabel, WidgetGroup, ProgressBar};
+use ui::hints::{WidgetHints, GridSize, TrackHints, NodeSpan};
 
 pub struct Window<N>
         where N: Node<Wrapper = <NativeWrapperRegistry as NodeDataRegistry<N>>::NodeDataWrapper>,
@@ -33,7 +30,6 @@ impl<N> Window<N>
               NativeWrapperRegistry: NodeDataRegistry<N>
 {
     pub fn new(mut root: N, config: &WindowConfig) -> Window<N> {
-
         let overlapped = WindowBuilder {
             pos: None,
             size: config.size,
@@ -52,7 +48,7 @@ impl<N> Window<N>
         }
     }
 
-    pub fn wait_actions<F>(&mut self, mut f: F) -> Result<()>
+    pub fn wait_actions<F>(&mut self, mut f: F) -> Result<(), !>
             where F: FnMut(N::Action) -> bool
     {
         let node_data_moved = self.self_ptr != self;
@@ -67,12 +63,11 @@ impl<N> Window<N>
             node_span: NodeSpan::new(.., ..),
             ..WidgetHints::default()
         };
-        NativeNodeProcessor::<_, N::Action, Once<WidgetHints>> {
+        NativeNodeProcessor::<_, N::Action> {
             parent: &mut self.toplevel,
             action_fn: &self.action_fn,
-            hint_iter: iter::once(root_widget_hints),
-            children_updated: false
-        }.add_child(ChildId::Num(0), &mut self.root)?;
+            children_updated: &mut false
+        }.add_child(ChildId::Num(0), root_widget_hints, &mut self.root)?;
 
         // Modifying the size bounds of windows inside of the toplevel window doesn't trigger a size
         // bounds check in the toplevel. This forces that check.
@@ -91,115 +86,111 @@ impl<N> Window<N>
     }
 }
 
-struct NativeNodeProcessor<'a, P: 'a, A: 'a, H: Iterator<Item=WidgetHints>> {
+struct NativeNodeProcessor<'a, P: 'a, A: 'a> {
     /// The branch that this instance of NativeNodeProcessor is currently processing
     parent: &'a mut P,
     action_fn: &'a SharedFn<A>,
-    hint_iter: H,
-    children_updated: bool
+    children_updated: &'a mut bool
 }
 
-impl<'a, P, A, H> NodeProcessorAT for NativeNodeProcessor<'a, P, A, H>
-        where H: Iterator<Item=WidgetHints>
-{
-    type Error = Error;
+impl<'a, P, A> NodeProcessor for NativeNodeProcessor<'a, P, A> {
+    type Error = !;
 }
 
-impl<'a, P, A, H, C> NodeProcessor<C> for NativeNodeProcessor<'a, P, A, H>
-        where C: Node,
-              H: Iterator<Item=WidgetHints>
+impl<'a, P, A> NodeProcessorInit for NativeNodeProcessor<'a, P, A> {
+    type Error = !;
+    type GridProcessor = Self;
+    fn init_grid<C, R>(self, _: GridSize, _: C, _: R) -> Self::GridProcessor
+            where C: Iterator<Item = TrackHints>,
+                  R: Iterator<Item = TrackHints>
+    {
+        self
+    }
+}
+
+impl<'a, P, A, C> NodeProcessorGrid<C> for NativeNodeProcessor<'a, P, A>
+        where C: Node
 {
-    default fn add_child<'b>(&'b mut self, _: ChildId, _: &'b mut C) -> Result<()> {
+    default fn add_child<'b>(&'b mut self, _: ChildId, _: WidgetHints, _: &'b mut C) -> Result<(), !> {
         panic!("This function should never be called directly, but instead a specialized version should be")
     }
 }
 
-impl<'a, P, A, H, I> NodeProcessor<TextButton<I>> for NativeNodeProcessor<'a, P, A, H>
+impl<'a, P, A, I> NodeProcessorGrid<TextButton<I>> for NativeNodeProcessor<'a, P, A>
         where P: ParentChildAdder,
-              I: Button<Action = A> + Borrow<str>,
-              H: Iterator<Item=WidgetHints>
+              I: Button<Action = A> + Borrow<str>
 {
-    fn add_child<'b>(&'b mut self, _: ChildId, button: &'b mut TextButton<I>) -> Result<()> {
-        let widget_hints = self.hint_iter.next().unwrap_or(WidgetHints::default());
+    fn add_child<'b>(&'b mut self, _: ChildId, _: WidgetHints, button: &'b mut TextButton<I>) -> Result<(), !> {
         button.wrapper().update_subclass_ptr();
 
         if button.wrapper().needs_update() {
-            self.children_updated = true;
-            button.wrapper_mut().update_widget(widget_hints, self.action_fn);
+            *self.children_updated = true;
+            button.wrapper_mut().update_widget(self.action_fn);
             self.parent.add_child_node(button.wrapper_mut());
         }
         Ok(())
     }
 }
 
-impl<'a, P, A, H, S> NodeProcessor<TextLabel<S>> for NativeNodeProcessor<'a, P, A, H>
+impl<'a, P, A, S> NodeProcessorGrid<TextLabel<S>> for NativeNodeProcessor<'a, P, A>
         where P: ParentChildAdder,
-              S: AsRef<str>,
-              H: Iterator<Item=WidgetHints>
+              S: AsRef<str>
 {
-    fn add_child<'b>(&'b mut self, _: ChildId, label: &'b mut TextLabel<S>) -> Result<()> {
-        let widget_hints = self.hint_iter.next().unwrap_or(WidgetHints::default());
+    fn add_child<'b>(&'b mut self, _: ChildId, _: WidgetHints, label: &'b mut TextLabel<S>) -> Result<(), !> {
         label.wrapper().update_subclass_ptr();
 
         if label.wrapper().needs_update() {
-            self.children_updated = true;
-            label.wrapper_mut().update_widget(widget_hints);
+            *self.children_updated = true;
+            label.wrapper_mut().update_widget();
             self.parent.add_child_node(label.wrapper_mut());
         }
         Ok(())
     }
 }
 
-impl<'a, P, A, H, I> NodeProcessor<WidgetGroup<I>> for NativeNodeProcessor<'a, P, A, H>
+impl<'a, P, A, I> NodeProcessorGrid<WidgetGroup<I>> for NativeNodeProcessor<'a, P, A>
         where P: ParentChildAdder,
-      for<'b> I: Parent<()> +
-                 Parent<NativeNodeProcessor<'b, WidgetGroupAdder, A, <<I as Parent<()>>::ChildLayout as GridLayout>::WidgetHintsIter>, ChildAction = A> +
-                 Parent<ConstraintSolverTraverser<'b>>,
-              H: Iterator<Item=WidgetHints>
+      for<'b> I: Parent<!> +
+                 Parent<NativeNodeProcessor<'b, WidgetGroupAdder, A>, ChildAction = A> +
+                 Parent<GridWidgetProcessor<'b>> +
+                 Parent<EngineTypeHarvester<'b>>
 {
-    fn add_child<'b>(&'b mut self, _: ChildId, group: &'b mut WidgetGroup<I>) -> Result<()> {
-        let widget_hints = self.hint_iter.next().unwrap_or(WidgetHints::default());
+    fn add_child<'b>(&'b mut self, _: ChildId, _: WidgetHints, group: &'b mut WidgetGroup<I>) -> Result<(), !> {
         let group_wrapper = group.wrapper_mut();
         group_wrapper.update_subclass_ptr();
 
         if group_wrapper.needs_update() {
-            self.children_updated = true;
+            *self.children_updated = true;
             self.parent.add_child_node(group_wrapper);
         }
 
-        let grid_layout = <I as Parent<()>>::child_layout(group_wrapper.inner());
         let mut adder = group_wrapper.get_adder();
-        let mut child_processor = NativeNodeProcessor {
-            parent: &mut adder,
-            action_fn: self.action_fn,
-            hint_iter: grid_layout.widget_hints(),
-            children_updated: false
-        };
-        group_wrapper.inner_mut().children(&mut child_processor)?;
+        let mut children_updated = false;
+        {
+            let child_processor = NativeNodeProcessor {
+                parent: &mut adder,
+                action_fn: self.action_fn,
+                children_updated: &mut children_updated
+            };
+            group_wrapper.inner_mut().children(child_processor)?;
+        }
 
-        if child_processor.children_updated {
-            group_wrapper.update_widget(
-                widget_hints,
-                grid_layout.grid_size(),
-                grid_layout.col_hints(),
-                grid_layout.row_hints()
-            );
+        if children_updated {
+            group_wrapper.update_widget();
         }
         Ok(())
     }
 }
 
-impl<'a, P, A, H> NodeProcessor<ProgressBar> for NativeNodeProcessor<'a, P, A, H>
-        where P: ParentChildAdder,
-              H: Iterator<Item=WidgetHints>
+impl<'a, P, A> NodeProcessorGrid<ProgressBar> for NativeNodeProcessor<'a, P, A>
+        where P: ParentChildAdder
 {
-    fn add_child<'b>(&'b mut self, _: ChildId, progress_bar: &'b mut ProgressBar) -> Result<()> {
-        let widget_hints = self.hint_iter.next().unwrap_or(WidgetHints::default());
+    fn add_child<'b>(&'b mut self, _: ChildId, _: WidgetHints, progress_bar: &'b mut ProgressBar) -> Result<(), !> {
         progress_bar.wrapper().update_subclass_ptr();
 
         if progress_bar.wrapper().needs_update() {
-            self.children_updated = true;
-            progress_bar.wrapper_mut().update_widget(widget_hints);
+            *self.children_updated = true;
+            progress_bar.wrapper_mut().update_widget();
             self.parent.add_child_node(progress_bar.wrapper_mut());
         }
         Ok(())
@@ -214,7 +205,7 @@ impl<I: Button + Borrow<str>> NodeDataRegistry<TextButton<I>> for NativeWrapperR
 impl<S: AsRef<str>> NodeDataRegistry<TextLabel<S>> for NativeWrapperRegistry {
     type NodeDataWrapper = TextLabelNodeData<S>;
 }
-impl<I: Parent<()>> NodeDataRegistry<WidgetGroup<I>> for NativeWrapperRegistry {
+impl<I: Parent<!>> NodeDataRegistry<WidgetGroup<I>> for NativeWrapperRegistry {
     type NodeDataWrapper = WidgetGroupNodeData<I>;
 }
 impl NodeDataRegistry<ProgressBar> for NativeWrapperRegistry {

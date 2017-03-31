@@ -8,7 +8,6 @@ dle = {path = "./dle"}
 dct = {path = "./dct"}
 dww = {path = "./dww"}
 dww_macros = {path = "./dww_macros"}
-void = "1.0"
 
 [dev-dependencies]
 quickcheck = "0.4"

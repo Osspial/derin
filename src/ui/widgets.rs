@@ -1,8 +1,9 @@
-use super::{Node, NodeDataRegistry, NodeDataWrapper, Parent, Button};
+use super::{Node, NodeDataRegistry, NodeDataWrapper, Parent};
 use std::ops::{Deref, DerefMut};
 use std::borrow::Borrow;
 use native::NativeWrapperRegistry;
-use void::Void;
+
+use super::events::MouseEvent;
 
 macro_rules! intrinsics {
     () => {};
@@ -125,17 +126,22 @@ intrinsics!{
 
     pub struct TextLabel<S: AsRef<str>, R: NodeDataRegistry>;
     impl TextLabel {
-        type Action = Void;
+        type Action = !;
         pub fn text(this: &Self) -> &_;
         pub fn text_mut(this: &mut Self) -> &mut _;
     }
 
-    pub struct WidgetGroup<I: Parent<()>, R: NodeDataRegistry>;
+    pub struct WidgetGroup<I: Parent<!>, R: NodeDataRegistry>;
     impl WidgetGroup {
         type Action = I::ChildAction;
         pub fn inner(this: &Self) -> &_;
         pub fn inner_mut(this: &mut Self) -> &mut _;
     }
+}
+
+pub trait Button {
+    type Action;
+    fn on_mouse_event(&self, MouseEvent) -> Option<Self::Action>;
 }
 
 pub struct ProgressBar<R = NativeWrapperRegistry>
@@ -170,7 +176,7 @@ impl<R> Node for ProgressBar<R>
 {
     type Wrapper = R::NodeDataWrapper;
     type Inner = ProgBarStatus;
-    type Action = Void;
+    type Action = !;
 
     fn type_name(&self) -> &'static str {
         "ProgressBar"

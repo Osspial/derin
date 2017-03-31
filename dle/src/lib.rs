@@ -16,33 +16,12 @@ use std::cell::RefCell;
 pub type Tr = u32;
 pub type Fr = f32;
 
-#[derive(Default, Debug, Clone, Copy)]
-pub struct WidgetData {
-    pub widget_hints: WidgetHints,
-    /// The "absolute" size bounds, defined by the widget and not the user, beyond which there may be
-    /// rendering errors with the widget.
-    pub abs_size_bounds: SizeBounds
-}
-
-impl WidgetData {
-    pub fn new() -> WidgetData {
-        WidgetData::default()
-    }
-
-    pub fn combined_size_bounds(self) -> SizeBounds {
-        SizeBounds {
-            min: self.abs_size_bounds.bound_rect(self.widget_hints.size_bounds.min).converge(),
-            max: self.abs_size_bounds.bound_rect(self.widget_hints.size_bounds.max).converge()
-        }
-    }
-}
-
 pub trait Widget {
     fn set_rect(&mut self, rect: OffsetRect);
 }
 
-pub trait Container {
-    fn update_widget_rects(&mut self, WidgetConstraintSolver);
+pub trait GridContainer {
+    fn update_widget_rects(&mut self, GridConstraintSolver);
 }
 
 
@@ -59,7 +38,7 @@ struct LayoutUpdater {
     solvable_widgets: Vec<Solvable>
 }
 
-pub struct LayoutEngine {
+pub struct GridEngine {
     grid: TrackVec,
     /// The pixel size of the layout engine, as requested by the programmer.
     pub desired_size: OriginRect,
@@ -72,9 +51,9 @@ pub struct LayoutEngine {
     actual_size_bounds: SizeBounds
 }
 
-impl LayoutEngine {
-    pub fn new() -> LayoutEngine {
-        LayoutEngine {
+impl GridEngine {
+    pub fn new() -> GridEngine {
+        GridEngine {
             grid: TrackVec::new(),
             desired_size: OriginRect::min(),
             actual_size: OriginRect::min(),
@@ -126,8 +105,8 @@ impl LayoutEngine {
     /// <sup>\* The only situation where some constraints may end up violated would be when the maximum
     /// size is less than the minimum size. In that case, minimum size overrides maximum size, as doing
     /// otherwise could cause rendering issues. </sup>
-    pub fn update_engine<C>(&mut self, container: &mut C) -> Result<(), OriginRect>
-            where C: Container
+    pub fn update_engine<C>(&mut self, grid_container: &mut C) -> Result<(), OriginRect>
+            where C: GridContainer
     {
         UPDATER.with(|updater| {
             let mut updater = updater.borrow_mut();
@@ -287,7 +266,7 @@ impl LayoutEngine {
                 track_constraints!(get_row, get_row_mut, push_row, num_rows, remove_row, free_height, fr_total_height);
 
                 let mut aborted = false;
-                container.update_widget_rects(WidgetConstraintSolver {
+                grid_container.update_widget_rects(GridConstraintSolver {
                     solvable_index: 0,
                     aborted: &mut aborted,
                     engine: self,
@@ -327,13 +306,14 @@ pub enum SolveError {
     /// The widget's constraints lead to it being unsolvable.
     WidgetUnsolvable,
     /// Some sort of change in the grid has occured that requires the rect loop to abort.
-    Abort
+    Abort,
+    CellOutOfBounds
 }
 
-pub struct WidgetConstraintSolver<'a> {
+pub struct GridConstraintSolver<'a> {
     solvable_index: usize,
     aborted: &'a mut bool,
-    engine: &'a mut LayoutEngine,
+    engine: &'a mut GridEngine,
     updater: &'a mut LayoutUpdater,
 
     free_width: &'a mut Px,
@@ -344,8 +324,13 @@ pub struct WidgetConstraintSolver<'a> {
     frac_min_size: &'a mut OriginRect
 }
 
-impl<'a> WidgetConstraintSolver<'a> {
-    pub fn solve_widget_constraints(&mut self, WidgetData{widget_hints, abs_size_bounds}: WidgetData) -> Result<OffsetRect, SolveError> {
+impl<'a> GridConstraintSolver<'a> {
+    pub fn solve_widget_constraints(
+        &mut self,
+        widget_hints: WidgetHints,
+        abs_size_bounds: SizeBounds
+    ) -> Result<OffsetRect, SolveError>
+    {
         if *self.aborted {
             return Err(SolveError::Abort);
         }
@@ -360,7 +345,7 @@ impl<'a> WidgetConstraintSolver<'a> {
                 ..
             } = self.updater;
 
-            let &mut LayoutEngine {
+            let &mut GridEngine {
                 ref mut grid,
                 ref mut actual_size,
                 ref mut actual_size_bounds,
@@ -511,16 +496,18 @@ impl<'a> WidgetConstraintSolver<'a> {
             // Perform cell hinting and set
             let widget_origin_rect = OriginRect::new(size_x, size_y);
 
-            let offset = grid.get_cell_offset(
+            if let Some(offset) = grid.get_cell_offset(
                 widget_hints.node_span.x.start.unwrap_or(0),
                 widget_hints.node_span.y.start.unwrap_or(0)
-            ).unwrap();
+            ) {
+                let outer_rect = widget_origin_rect.offset(offset);
+                let cell_hinter = CellHinter::new(outer_rect, widget_hints.place_in_cell);
 
-            let outer_rect = widget_origin_rect.offset(offset);
-            let cell_hinter = CellHinter::new(outer_rect, widget_hints.place_in_cell);
-
-            self.solvable_index += 1;
-            cell_hinter.hint(widget_size_bounds_nomargin, widget_hints.margins).map_err(|_| SolveError::WidgetUnsolvable)
+                self.solvable_index += 1;
+                cell_hinter.hint(widget_size_bounds_nomargin, widget_hints.margins).map_err(|_| SolveError::WidgetUnsolvable)
+            } else {
+                Err(SolveError::CellOutOfBounds)
+            }
         } else {
             Err(SolveError::WidgetUnsolvable)
         }

@@ -1,8 +1,7 @@
-#![feature(specialization)]
+#![feature(specialization, never_type)]
 
 extern crate dle;
 extern crate dct;
-extern crate void;
 
 #[cfg(test)]
 #[cfg_attr(test, macro_use)]
