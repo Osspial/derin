@@ -1,4 +1,4 @@
-use ui::{Parent, Node, ChildId, NodeProcessorInit, NodeProcessorGrid, NodeProcessor};
+use ui::{Parent, Node, ChildId, NodeProcessorInit, NodeProcessorGrid, NodeProcessorGridMut, NodeProcessor};
 use ui::widgets::{Button, ProgBarStatus};
 
 use dww::*;
@@ -72,7 +72,8 @@ impl<B, I> Subclass<B> for TextButtonSubclass<I>
                 Wm::Size(_) => window.show(true),
                 _ => ()
             },
-            Msg::User(DerinMsg::SetRectPropagate(rect)) => window.set_rect(rect),
+            Msg::User(DerinMsg::SetRectPropagate(rect)) |
+            Msg::User(DerinMsg::SetRect(rect))         => window.set_rect(rect),
             _ => ()
         }
         ret
@@ -119,6 +120,7 @@ impl<P, I> Subclass<P> for WidgetGroupSubclass<I>
                 Wm::Size(_) => {window.show(true); 0},
                 wm => window.default_window_proc(&mut Msg::Wm(wm))
             },
+            Msg::User(DerinMsg::SetRect(rect)) => {window.set_rect(rect); 0},
             Msg::User(DerinMsg::SetRectPropagate(rect)) => {
                 {
                     let WidgetGroupSubclass {
@@ -169,7 +171,8 @@ impl<W, S> Subclass<W> for TextLabelSubclass<S>
                 Wm::Size(_) => window.show(true),
                 _ => ()
             },
-            Msg::User(DerinMsg::SetRectPropagate(rect)) => window.set_rect(rect),
+            Msg::User(DerinMsg::SetRectPropagate(rect)) |
+            Msg::User(DerinMsg::SetRect(rect))         => window.set_rect(rect),
             _ => ()
         }
         ret
@@ -195,7 +198,8 @@ impl<W> Subclass<W> for ProgressBarSubclass
     type UserMsg = DerinMsg;
     fn subclass_proc(window: &mut ProcWindowRef<W, Self>, msg: Msg<DerinMsg>) -> i64 {
         match msg {
-            Msg::User(DerinMsg::SetRectPropagate(rect)) => {window.set_rect(rect); 0},
+            Msg::User(DerinMsg::SetRectPropagate(rect)) |
+            Msg::User(DerinMsg::SetRect(rect))         => {window.set_rect(rect); 0},
             Msg::Wm(Wm::Size(rect)) => {
                 window.show(true);
                 window.default_window_proc(&mut Msg::Wm(Wm::Size(rect)))
@@ -213,7 +217,7 @@ impl Subclass<ToplevelWindowBase> for ToplevelSubclass {
     fn subclass_proc(window: &mut ProcWindowRef<ToplevelWindowBase, Self>, mut msg: Msg<()>) -> i64 {
         match msg {
             Msg::Wm(Wm::GetSizeBounds(size_bounds)) => {*size_bounds = window.subclass_data().0.size_bounds(); 0},
-            Msg::Wm(Wm::Size(rect)) => unsafe {
+            Msg::Wm(Wm::Size(rect)) => {
                 window.subclass_data().0.post_user_msg(DerinMsg::SetRectPropagate(OffsetRect::from(rect)));
                 0
             },
@@ -250,14 +254,26 @@ impl<'a> NodeProcessorInit for GridWidgetProcessor<'a> {
     {self}
 }
 
+impl<'s, N> NodeProcessorGridMut<N> for GridWidgetProcessor<'s>
+        where N: Node,
+              N::Wrapper: NativeDataWrapper
+{
+    fn add_child_mut<'a>(&'a mut self, id: ChildId, widget_hints: WidgetHints, node: &'a mut N) -> Result<(), ()> {
+        self.add_child(id, widget_hints, node)
+    }
+}
+
 impl<'s, N> NodeProcessorGrid<N> for GridWidgetProcessor<'s>
         where N: Node,
               N::Wrapper: NativeDataWrapper
 {
-    fn add_child<'a>(&'a mut self, _: ChildId, widget_hints: WidgetHints, node: &'a mut N) -> Result<(), ()> {
+    fn add_child<'a>(&'a mut self, _: ChildId, widget_hints: WidgetHints, node: &'a N) -> Result<(), ()> {
         let widget_rect_result = self.solver.solve_widget_constraints(widget_hints, node.wrapper().abs_size_bounds());
         match widget_rect_result {
-            Ok(rect) => {node.wrapper_mut().set_rect(rect); Ok(())},
+            Ok(rect) => {
+                node.wrapper().post_user_msg(DerinMsg::SetRect(rect));
+                Ok(())
+            },
             Err(SolveError::Abort) => Err(()),
             Err(SolveError::WidgetUnsolvable) |
             Err(SolveError::CellOutOfBounds) => Ok(())

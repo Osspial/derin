@@ -773,20 +773,17 @@ impl<W: WindowOwned, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
 
     /// Send a user message, yielding the value returned by `S::subclass_proc`.
     ///
-    /// Unsafe because it cannot guaruntee that the subclass pointer is pointing to the correct
+    /// Unsafe because it cannot guarantee that the subclass pointer is pointing to the correct
     /// location.
     pub unsafe fn send_user_msg(&mut self, msg: S::UserMsg) -> i64 {
         self.unsafe_subclass_ref().send_user_msg(msg)
     }
 
     /// Post a user message to the message queue associatd with the window.
-    ///
-    /// Unsafe because it cannot guaruntee that the subclass pointer is pointing to the correct
-    /// location.
-    pub unsafe fn post_user_msg(&self, msg: S::UserMsg)
+    pub fn post_user_msg(&self, msg: S::UserMsg)
             where S::UserMsg: 'static
     {
-        UnsafeSubclassRef(self.hwnd(), PhantomData).post_user_msg(msg)
+        unsafe{ UnsafeSubclassRef(self.hwnd(), PhantomData).post_user_msg(msg) }
     }
 
     pub fn unsafe_subclass_ref(&mut self) -> UnsafeSubclassRef<S::UserMsg> {
@@ -971,14 +968,16 @@ impl<'a, U: UserMsg> UnsafeSubclassRef<'a, U> {
         user32::SendMessageW(self.hwnd(), discriminant as UINT + WM_APP, wparam, lparam)
     }
 
-    pub unsafe fn post_user_msg(&self, msg: U)
+    pub fn post_user_msg(&self, msg: U)
             where U: 'static
     {
-        let discriminant = msg.discriminant();
-        let encoded_bytes = user_msg::encode(msg);
+        unsafe {
+            let discriminant = msg.discriminant();
+            let encoded_bytes = user_msg::encode(msg);
 
-        let (wparam, lparam): (WPARAM, LPARAM) = mem::transmute(encoded_bytes);
-        user32::PostMessageW(self.hwnd(), discriminant as UINT + WM_APP, wparam, lparam);
+            let (wparam, lparam): (WPARAM, LPARAM) = mem::transmute(encoded_bytes);
+            user32::PostMessageW(self.hwnd(), discriminant as UINT + WM_APP, wparam, lparam);
+        }
     }
 }
 unsafe impl<'a, U: UserMsg> Window for UnsafeSubclassRef<'a, U> {
@@ -997,7 +996,7 @@ impl<'a, U: UserMsg> UnsafeChildSubclassRef<'a, U> {
         self.0.send_user_msg(msg)
     }
 
-    pub unsafe fn post_user_msg(&self, msg: U)
+    pub fn post_user_msg(&self, msg: U)
             where U: 'static
     {
         self.0.post_user_msg(msg)

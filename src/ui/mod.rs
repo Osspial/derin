@@ -22,9 +22,14 @@ pub trait NodeProcessor: Sized {
     type Error;
 }
 
-pub trait NodeProcessorGrid<N: Node>: NodeProcessor {
+pub trait NodeProcessorGridMut<N: Node>: NodeProcessor {
     /// Add a child to the node processor.
-    fn add_child<'a>(&'a mut self, ChildId, WidgetHints, node: &'a mut N) -> Result<(), Self::Error>;
+    fn add_child_mut<'a>(&'a mut self, ChildId, WidgetHints, node: &'a mut N) -> Result<(), Self::Error>;
+}
+
+pub trait NodeProcessorGrid<N: Node>: NodeProcessorGridMut<N> {
+    /// Add a child to the node processor.
+    fn add_child<'a>(&'a mut self, ChildId, WidgetHints, node: &'a N) -> Result<(), Self::Error>;
 }
 
 pub trait NodeDataRegistry<N>
@@ -56,7 +61,10 @@ pub trait Parent<NPI>
 {
     type ChildAction;
 
-    fn children(&mut self, NPI) -> Result<(), NPI::Error>;
+    fn children(&self, NPI) -> Result<(), NPI::Error>
+            where NPI::GridProcessor: NodeProcessorGrid<!>;
+    fn children_mut(&mut self, NPI) -> Result<(), NPI::Error>
+            where NPI::GridProcessor: NodeProcessorGridMut<!>;
 }
 
 
@@ -74,8 +82,30 @@ impl NodeProcessorInit for ! {
     {match self {}}
 }
 
+impl<N: Node> NodeProcessorGridMut<N> for ! {
+    fn add_child_mut<'a>(&'a mut self, _: ChildId, _: WidgetHints, _: &'a mut N) -> Result<(), !> {match *self {}}
+}
+
 impl<N: Node> NodeProcessorGrid<N> for ! {
-    fn add_child<'a>(&'a mut self, _: ChildId, _: WidgetHints, _: &'a mut N) -> Result<(), !> {match *self {}}
+    fn add_child<'a>(&'a mut self, _: ChildId, _: WidgetHints, _: &'a N) -> Result<(), !> {match *self {}}
+}
+
+impl Node for ! {
+    type Wrapper = !;
+    type Inner = !;
+    type Action = !;
+
+    fn type_name(&self) -> &'static str {match self {}}
+    fn wrapper(&self) -> &! {self}
+    fn wrapper_mut(&mut self) -> &mut ! {self}
+}
+
+#[allow(unreachable_code)]
+impl NodeDataWrapper<!> for ! {
+    fn from_node_data(data: !) -> ! {data}
+    fn inner(&self) -> &! {self}
+    fn inner_mut(&mut self) -> &mut ! {self}
+    fn unwrap(self) -> ! {self}
 }
 
 impl NodeProcessor for () {
@@ -91,7 +121,10 @@ impl NodeProcessorInit for () {
     {()}
 }
 
-impl<N: Node> NodeProcessorGrid<N> for () {
-    fn add_child<'a>(&'a mut self, _: ChildId, _: WidgetHints, _: &'a mut N) -> Result<(), !> {Ok(())}
+impl<N: Node> NodeProcessorGridMut<N> for () {
+    fn add_child_mut<'a>(&'a mut self, _: ChildId, _: WidgetHints, _: &'a mut N) -> Result<(), !> {Ok(())}
 }
 
+impl<N: Node> NodeProcessorGrid<N> for () {
+    fn add_child<'a>(&'a mut self, _: ChildId, _: WidgetHints, _: &'a N) -> Result<(), !> {Ok(())}
+}

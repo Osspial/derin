@@ -134,6 +134,11 @@ macro_rules! subclass_node_data {
             }
 
             #[inline]
+            fn post_user_msg(&self, msg: DerinMsg) {
+                self.subclass.post_user_msg(msg);
+            }
+
+            #[inline]
             fn needs_update(&self) -> bool {
                 self.needs_update
             }
@@ -365,7 +370,17 @@ pub trait NativeDataWrapper {
     fn set_rect(&mut self, OffsetRect);
     fn child_ref(&mut self) -> ChildRef;
     fn unsafe_child_subclass_ref(&mut self) -> UnsafeChildSubclassRef<DerinMsg>;
+    fn post_user_msg(&self, DerinMsg);
     fn needs_update(&self) -> bool;
+}
+
+impl NativeDataWrapper for ! {
+    fn abs_size_bounds(&self) -> SizeBounds {match self {}}
+    fn set_rect(&mut self, _: OffsetRect) {match self {}}
+    fn child_ref(&mut self) -> ChildRef {match self {}}
+    fn unsafe_child_subclass_ref(&mut self) -> UnsafeChildSubclassRef<DerinMsg> {match self {}}
+    fn post_user_msg(&self, _: DerinMsg) {}
+    fn needs_update(&self) -> bool {match self {}}
 }
 
 pub trait ParentDataWrapper {
@@ -380,7 +395,8 @@ pub trait ParentChildAdder {
 
 #[derive(Debug, Clone, Copy, UserMsg)]
 pub enum DerinMsg {
-    SetRectPropagate(OffsetRect)
+    SetRectPropagate(OffsetRect),
+    SetRect(OffsetRect)
 }
 
 
