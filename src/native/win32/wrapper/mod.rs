@@ -3,7 +3,7 @@ use self::subclass::*;
 pub use self::subclass::GridWidgetProcessor;
 
 use ui::{Parent, Node, NodeDataWrapper, NodeProcessorInit};
-use ui::widgets::{Button, ProgBarStatus};
+use ui::widgets::{progbar, Button};
 use ui::hints::{GridSize, TrackHints};
 
 use dww::*;
@@ -241,7 +241,7 @@ subclass_node_data!{
         expr abs_size_bounds(_) = SizeBounds::default();
         expr node_data(subclass_data) = subclass_data.status;
 
-        fn from_node_data(status: ProgBarStatus) -> UnsafeSubclassWrapper<_, _> {
+        fn from_node_data(status: progbar::Status) -> UnsafeSubclassWrapper<_, _> {
             HOLDING_PARENT.with(|hp| {
                 let progbar_window = WindowBuilder::default().show_window(true).build_child_progress_bar(hp);
                 let subclass = ProgressBarSubclass::new(status);
@@ -250,12 +250,18 @@ subclass_node_data!{
             })
         }
         fn update_widget(subclass: _) {
-            match subclass.data().status {
-                ProgBarStatus::Frac(prog) => {
+            let status = subclass.data().status;
+
+            match status.orientation {
+                progbar::Orientation::Horizontal => subclass.set_vertical(false),
+                progbar::Orientation::Vertical   => subclass.set_vertical(true)
+            }
+            match status.completion {
+                progbar::Completion::Frac(prog) => {
                     subclass.set_marquee(false);
                     subclass.set_progress((prog * 100.0) as u16);
                 }
-                ProgBarStatus::Working => subclass.set_marquee(true)
+                progbar::Completion::Working => subclass.set_marquee(true)
             }
         }
     }

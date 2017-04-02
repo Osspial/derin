@@ -5,6 +5,7 @@ extern crate dct;
 
 use derin::ui::*;
 use derin::ui::widgets::*;
+use derin::ui::widgets::progbar::*;
 use derin::native::{Window, WindowConfig};
 use dct::events::MouseEvent;
 
@@ -37,7 +38,7 @@ impl BasicParent {
     fn new() -> BasicParent {
         BasicParent {
             label: TextLabel::new("A Label"),
-            bar: ProgressBar::new(ProgBarStatus::Frac(0.5)),
+            bar: ProgressBar::new(Status::new(Completion::Frac(0.5), Orientation::Vertical)),
             button0: TextButton::new(AddButton("Add Button")),
             button_vec: Vec::new()
         }

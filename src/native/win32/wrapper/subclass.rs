@@ -1,5 +1,5 @@
 use ui::{Parent, Node, ChildId, NodeProcessorInit, NodeProcessorGrid, NodeProcessorGridMut, NodeProcessor};
-use ui::widgets::{Button, ProgBarStatus};
+use ui::widgets::{progbar, Button};
 
 use dww::*;
 use dle::{GridContainer, GridEngine, GridConstraintSolver, SolveError};
@@ -180,12 +180,12 @@ impl<W, S> Subclass<W> for TextLabelSubclass<S>
 }
 
 pub struct ProgressBarSubclass {
-    pub status: ProgBarStatus
+    pub status: progbar::Status
 }
 
 impl ProgressBarSubclass {
     #[inline]
-    pub fn new(status: ProgBarStatus) -> ProgressBarSubclass {
+    pub fn new(status: progbar::Status) -> ProgressBarSubclass {
         ProgressBarSubclass {
             status: status
         }
