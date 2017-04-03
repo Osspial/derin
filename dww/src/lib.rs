@@ -245,7 +245,7 @@ unsafe impl ButtonWindow for PushButtonBase {}
 unsafe impl TextLabelWindow for TextLabelBase {}
 unsafe impl ProgressBarWindow for ProgressBarBase {}
 
-pub struct IconWrapper<I: AsRef<WindowIcon>, W: Window> {
+pub struct IconWrapper<W: Window, I: AsRef<WindowIcon>> {
     window: W,
     icon: I
 }
@@ -422,7 +422,7 @@ pub unsafe trait WindowMut: Window {
 }
 
 pub unsafe trait WindowOwned: WindowMut {
-    fn as_icon<I: AsRef<WindowIcon>>(self, icon: I) -> IconWrapper<I, Self> {
+    fn as_icon<I: AsRef<WindowIcon>>(self, icon: I) -> IconWrapper<Self, I> {
         let mut icon_window = IconWrapper {
             window: self,
             icon: unsafe{ mem::uninitialized() }
@@ -617,19 +617,19 @@ pub unsafe trait ProgressBarWindow: Window {
 }
 
 // IconWrapper impls
-unsafe impl<I: AsRef<WindowIcon>, W: WindowOwned> Window for IconWrapper<I, W> {
+unsafe impl<W: WindowOwned, I: AsRef<WindowIcon>> Window for IconWrapper<W, I> {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {self.window.hwnd()}
 }
-unsafe impl<I: AsRef<WindowIcon>, W: WindowOwned + WindowMut> WindowMut for IconWrapper<I, W> {}
-unsafe impl<I: AsRef<WindowIcon>, W: WindowOwned> WindowOwned for IconWrapper<I, W> {}
-unsafe impl<I: AsRef<WindowIcon>, W: WindowOwned> OverlappedWindow for IconWrapper<I, W> {}
-unsafe impl<I: AsRef<WindowIcon>, W: WindowOwned + OrphanableWindow> OrphanableWindow for IconWrapper<I, W> {}
-unsafe impl<I: AsRef<WindowIcon>, W: WindowOwned + ParentWindow> ParentWindow for IconWrapper<I, W> {}
-unsafe impl<I: AsRef<WindowIcon>, W: WindowOwned + ButtonWindow> ButtonWindow for IconWrapper<I, W> {}
-unsafe impl<I: AsRef<WindowIcon>, W: WindowOwned + TextLabelWindow> TextLabelWindow for IconWrapper<I, W> {}
-unsafe impl<I: AsRef<WindowIcon>, W: WindowOwned + ProgressBarWindow> ProgressBarWindow for IconWrapper<I, W> {}
-unsafe impl<I: AsRef<WindowIcon>, W: WindowOwned> IconWindow for IconWrapper<I, W> {
+unsafe impl<W: WindowOwned + WindowMut, I: AsRef<WindowIcon>> WindowMut for IconWrapper<W, I> {}
+unsafe impl<W: WindowOwned, I: AsRef<WindowIcon>> WindowOwned for IconWrapper<W, I> {}
+unsafe impl<W: WindowOwned, I: AsRef<WindowIcon>> OverlappedWindow for IconWrapper<W, I> {}
+unsafe impl<W: WindowOwned + OrphanableWindow, I: AsRef<WindowIcon>> OrphanableWindow for IconWrapper<W, I> {}
+unsafe impl<W: WindowOwned + ParentWindow, I: AsRef<WindowIcon>> ParentWindow for IconWrapper<W, I> {}
+unsafe impl<W: WindowOwned + ButtonWindow, I: AsRef<WindowIcon>> ButtonWindow for IconWrapper<W, I> {}
+unsafe impl<W: WindowOwned + TextLabelWindow, I: AsRef<WindowIcon>> TextLabelWindow for IconWrapper<W, I> {}
+unsafe impl<W: WindowOwned + ProgressBarWindow, I: AsRef<WindowIcon>> ProgressBarWindow for IconWrapper<W, I> {}
+unsafe impl<W: WindowOwned, I: AsRef<WindowIcon>> IconWindow for IconWrapper<W, I> {
     type I = I;
     #[inline]
     fn icon_mut(&mut self) -> &mut I {&mut self.icon}
