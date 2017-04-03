@@ -633,13 +633,15 @@ pub unsafe trait ProgressBarWindow: Window {
         }
     }
 
-    fn set_vertical(&self, vertical: bool) {
+    fn set_vertical(&mut self, vertical: bool) {
+        let progress = self.get_progress();
         let new_style = if vertical {
             self.get_style() | PBS_VERTICAL
         } else {
             self.get_style() & !PBS_VERTICAL
         };
         unsafe{ self.set_style(new_style) };
+        self.set_progress(progress);
     }
 }
 
