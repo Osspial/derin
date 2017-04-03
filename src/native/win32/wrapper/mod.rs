@@ -124,13 +124,13 @@ macro_rules! subclass_node_data {
             }
 
             #[inline]
-            fn child_ref(&mut self) -> ChildRef {
-                self.subclass.child_ref()
+            fn window_ref(&mut self) -> WindowRef {
+                self.subclass.window_ref()
             }
 
             #[inline]
-            fn unsafe_child_subclass_ref(&mut self) -> UnsafeChildSubclassRef<DerinMsg> {
-                self.subclass.unsafe_child_subclass_ref()
+            fn unsafe_subclass_ref(&mut self) -> UnsafeSubclassRef<DerinMsg> {
+                self.subclass.unsafe_subclass_ref()
             }
 
             #[inline]
@@ -168,7 +168,7 @@ subclass_node_data!{
     pub struct TextButtonNodeData<I>
             where I: trait Borrow<str> | trait Button
     {
-        subclass: UnsafeSubclassWrapper<ChildWrapper<PushButtonBase>, TextButtonSubclass<I>>,
+        subclass: UnsafeSubclassWrapper<PushButtonBase, TextButtonSubclass<I>>,
         needs_update: bool
     }
     impl {
@@ -177,7 +177,7 @@ subclass_node_data!{
 
         fn from_node_data(node_data: I) -> UnsafeSubclassWrapper<_, _> {
             HOLDING_PARENT.with(|hp| {
-                let button_window = WindowBuilder::default().show_window(false).build_child_push_button(hp);
+                let button_window = WindowBuilder::default().show_window(false).build_push_button(hp);
                 let subclass = TextButtonSubclass::new(node_data);
 
                 unsafe{ UnsafeSubclassWrapper::new(button_window, subclass) }
@@ -192,7 +192,7 @@ subclass_node_data!{
     pub struct WidgetGroupNodeData<I>
             where I: trait Parent<!>
     {
-        subclass: UnsafeSubclassWrapper<ChildWrapper<BlankBase>, WidgetGroupSubclass<I>>,
+        subclass: UnsafeSubclassWrapper<BlankBase, WidgetGroupSubclass<I>>,
         needs_update: bool
     }
     impl where I: for<'a> trait Parent<GridWidgetProcessor<'a>> | for<'a> trait Parent<EngineTypeHarvester<'a>> {
@@ -213,7 +213,7 @@ subclass_node_data!{
     pub struct TextLabelNodeData<S>
             where S: trait AsRef<str>
     {
-        subclass: UnsafeSubclassWrapper<ChildWrapper<TextLabelBase>, TextLabelSubclass<S>>,
+        subclass: UnsafeSubclassWrapper<TextLabelBase, TextLabelSubclass<S>>,
         needs_update: bool
     }
     impl {
@@ -222,7 +222,7 @@ subclass_node_data!{
 
         fn from_node_data(text: S) -> UnsafeSubclassWrapper<_, _> {
             HOLDING_PARENT.with(|hp| {
-                let label_window = WindowBuilder::default().show_window(false).build_child_text_label(hp);
+                let label_window = WindowBuilder::default().show_window(false).build_text_label(hp);
                 let subclass = TextLabelSubclass::new(text);
 
                 unsafe{ UnsafeSubclassWrapper::new(label_window, subclass) }
@@ -234,7 +234,7 @@ subclass_node_data!{
     }
 
     pub struct ProgressBarNodeData {
-        subclass: UnsafeSubclassWrapper<ChildWrapper<ProgressBarBase>, ProgressBarSubclass>,
+        subclass: UnsafeSubclassWrapper<ProgressBarBase, ProgressBarSubclass>,
         needs_update: bool
     }
     impl {
@@ -243,7 +243,7 @@ subclass_node_data!{
 
         fn from_node_data(status: progbar::Status) -> UnsafeSubclassWrapper<_, _> {
             HOLDING_PARENT.with(|hp| {
-                let progbar_window = WindowBuilder::default().show_window(true).build_child_progress_bar(hp);
+                let progbar_window = WindowBuilder::default().show_window(true).build_progress_bar(hp);
                 let subclass = ProgressBarSubclass::new(status);
 
                 unsafe{ UnsafeSubclassWrapper::new(progbar_window, subclass) }
@@ -271,15 +271,13 @@ impl<I> NodeDataWrapper<I> for WidgetGroupNodeData<I>
         where for<'a> I: Parent<!>
 {
     fn from_node_data(node_data: I) -> Self {
-        HOLDING_PARENT.with(|hp| {
-            let wrapper_window = WindowBuilder::default().show_window(false).build_child_blank(hp);
-            let subclass = WidgetGroupSubclass::new(node_data);
+        let wrapper_window = WindowBuilder::default().show_window(false).build_blank();
+        let subclass = WidgetGroupSubclass::new(node_data);
 
-            WidgetGroupNodeData {
-                subclass: unsafe{ UnsafeSubclassWrapper::new(wrapper_window, subclass) },
-                needs_update: true
-            }
-        })
+        WidgetGroupNodeData {
+            subclass: unsafe{ UnsafeSubclassWrapper::new(wrapper_window, subclass) },
+            needs_update: true
+        }
     }
 
     fn inner(&self) -> &I {
@@ -311,7 +309,7 @@ impl ParentChildAdder for WidgetGroupAdder {
     fn add_child_node<W>(&mut self, child: &mut W)
             where W: NativeDataWrapper
     {
-        self.0.add_child_window(&mut child.child_ref());
+        self.0.add_child_window(&mut child.window_ref());
     }
 }
 
@@ -320,7 +318,7 @@ type ToplevelWindowBase = OverlapWrapper<BlankBase>;
 pub struct ToplevelWindow( UnsafeSubclassWrapper<ToplevelWindowBase, ToplevelSubclass> );
 
 impl ToplevelWindow {
-    pub unsafe fn new<'a>(window: ToplevelWindowBase, node_ref: UnsafeChildSubclassRef<'a, DerinMsg>) -> ToplevelWindow {
+    pub unsafe fn new<'a>(window: ToplevelWindowBase, node_ref: UnsafeSubclassRef<'a, DerinMsg>) -> ToplevelWindow {
         // Expand child window lifetime to 'static with transmute. This is safe because the toplevel
         // window struct will only exist for the length of the child, and even if the child is
         // destroyed any messages sent won't be processed.
@@ -341,11 +339,12 @@ impl ParentChildAdder for ToplevelWindow {
     fn add_child_node<W>(&mut self, child: &mut W)
             where W: NativeDataWrapper
     {
-        // Orphan the Toplevel's current child window, and replace it with the new child passed in
-        // through the `child` field.
-        self.0.data_mut().0.orphan();
+        HOLDING_PARENT.with(|hp| {
+            // Reset the Toplevel's current child window parent to the holding parent.
+            hp.add_child_window(&self.0.data_mut().0);
+        });
         // Expand the lifetime to 'static with transmute. See creation for reason this is done.
-        let mut child_ref = unsafe{ mem::transmute(child.unsafe_child_subclass_ref()) };
+        let mut child_ref = unsafe{ mem::transmute(child.unsafe_subclass_ref()) };
         self.0.add_child_window(&mut child_ref);
 
         self.0.data_mut().0 = child_ref;
@@ -374,8 +373,8 @@ impl NodeDataWrapper<()> for ToplevelWindow {
 pub trait NativeDataWrapper {
     fn abs_size_bounds(&self) -> SizeBounds;
     fn set_rect(&mut self, OffsetRect);
-    fn child_ref(&mut self) -> ChildRef;
-    fn unsafe_child_subclass_ref(&mut self) -> UnsafeChildSubclassRef<DerinMsg>;
+    fn window_ref(&mut self) -> WindowRef;
+    fn unsafe_subclass_ref(&mut self) -> UnsafeSubclassRef<DerinMsg>;
     fn post_user_msg(&self, DerinMsg);
     fn needs_update(&self) -> bool;
 }
@@ -383,8 +382,8 @@ pub trait NativeDataWrapper {
 impl NativeDataWrapper for ! {
     fn abs_size_bounds(&self) -> SizeBounds {match self {}}
     fn set_rect(&mut self, _: OffsetRect) {match self {}}
-    fn child_ref(&mut self) -> ChildRef {match self {}}
-    fn unsafe_child_subclass_ref(&mut self) -> UnsafeChildSubclassRef<DerinMsg> {match self {}}
+    fn window_ref(&mut self) -> WindowRef {match self {}}
+    fn unsafe_subclass_ref(&mut self) -> UnsafeSubclassRef<DerinMsg> {match self {}}
     fn post_user_msg(&self, _: DerinMsg) {}
     fn needs_update(&self) -> bool {match self {}}
 }

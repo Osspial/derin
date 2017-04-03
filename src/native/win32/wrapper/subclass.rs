@@ -210,7 +210,7 @@ impl<W> Subclass<W> for ProgressBarSubclass
 }
 
 /// A top-level window subclass, with a reference to its child.
-pub struct ToplevelSubclass(pub UnsafeChildSubclassRef<'static, DerinMsg>);
+pub struct ToplevelSubclass(pub UnsafeSubclassRef<'static, DerinMsg>);
 
 impl Subclass<ToplevelWindowBase> for ToplevelSubclass {
     type UserMsg = ();

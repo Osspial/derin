@@ -41,7 +41,7 @@ impl<N> Window<N>
         overlapped.min_button(config.minimizable);
 
         Window {
-            toplevel: unsafe{ ToplevelWindow::new(overlapped, root.wrapper_mut().unsafe_child_subclass_ref()) },
+            toplevel: unsafe{ ToplevelWindow::new(overlapped, root.wrapper_mut().unsafe_subclass_ref()) },
             root: root,
             action_fn: Rc::new(RefCell::new(ActionFn::new())),
             self_ptr: ptr::null()
