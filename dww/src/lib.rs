@@ -90,6 +90,7 @@ lazy_static!{
     static ref BUTTON_CLASS: Ucs2String = ucs2_str("BUTTON").collect();
     static ref STATIC_CLASS: Ucs2String = ucs2_str("STATIC").collect();
     static ref PROGRESS_CLASS: Ucs2String = ucs2_str("msctls_progress32").collect();
+    static ref TRACKBAR_CLASS: Ucs2String = ucs2_str("msctls_trackbar32").collect();
 }
 
 
@@ -153,6 +154,12 @@ impl<'a> WindowBuilder<'a> {
         let window_handle = self.build(0, 0, unsafe{ Some(parent.hwnd()) }, &PROGRESS_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         ProgressBarBase(window_handle)
+    }
+
+    pub fn build_trackbar<P: ParentWindow>(self, parent: &P) -> TrackbarBase {
+        let window_handle = self.build(0, 0, unsafe{ Some(parent.hwnd()) }, &TRACKBAR_CLASS);
+        assert_ne!(window_handle, ptr::null_mut());
+        TrackbarBase(window_handle)
     }
 
     fn build(self, style: DWORD, style_ex: DWORD, parent: Option<HWND>, class: &Ucs2Str) -> HWND {
@@ -236,6 +243,7 @@ base_wrapper! {
     pub struct PushButtonBase;
     pub struct TextLabelBase;
     pub struct ProgressBarBase;
+    pub struct TrackbarBase;
 }
 
 unsafe impl ParentWindow for BlankBase {}
@@ -244,6 +252,7 @@ unsafe impl OrphanableWindow for BlankBase {}
 unsafe impl ButtonWindow for PushButtonBase {}
 unsafe impl TextLabelWindow for TextLabelBase {}
 unsafe impl ProgressBarWindow for ProgressBarBase {}
+unsafe impl TrackbarWindow for TrackbarBase {}
 
 pub struct IconWrapper<W: Window, I: AsRef<WindowIcon>> {
     window: W,
@@ -269,6 +278,20 @@ pub struct ProcWindowRef<'a, W: Window, S: 'a + Subclass<W> + ?Sized> {
     lparam: LPARAM,
     subclass_data: &'a mut S,
     __marker: PhantomData<(W, S)>
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TickPosition {
+    BottomRight,
+    TopLeft,
+    Both,
+    None
+}
+
+impl Default for TickPosition {
+    fn default() -> TickPosition {
+        TickPosition::BottomRight
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -616,6 +639,118 @@ pub unsafe trait ProgressBarWindow: Window {
     }
 }
 
+pub unsafe trait TrackbarWindow: Window {
+    fn set_pos(&mut self, pos: u32) {
+        unsafe{ user32::SendMessageW(self.hwnd(), TBM_SETPOS, TRUE as WPARAM, pos as LPARAM) };
+    }
+
+    fn get_pos(&self) -> u32 {
+        unsafe{ user32::SendMessageW(self.hwnd(), TBM_GETPOS, 0, 0) as u32 }
+    }
+
+    fn set_range(&mut self, min: u32, max: u32) {
+        unsafe {
+            user32::SendMessageW(self.hwnd(), TBM_SETRANGEMIN, FALSE as WPARAM, min as LPARAM);
+            user32::SendMessageW(self.hwnd(), TBM_SETRANGEMAX, TRUE as WPARAM, max as LPARAM);
+        }
+    }
+
+    fn set_range_min(&mut self, min: u32) {
+        unsafe{ user32::SendMessageW(self.hwnd(), TBM_SETRANGEMIN, TRUE as WPARAM, min as LPARAM) };
+    }
+
+    fn set_range_max(&mut self, max: u32) {
+        unsafe{ user32::SendMessageW(self.hwnd(), TBM_SETRANGEMAX, TRUE as WPARAM, max as LPARAM) };
+    }
+
+    fn get_range(&self) -> (u32, u32) {
+        unsafe {
+            let min = user32::SendMessageW(self.hwnd(), TBM_GETRANGEMIN, 0, 0) as u32;
+            let max = user32::SendMessageW(self.hwnd(), TBM_GETRANGEMAX, 0, 0) as u32;
+            (min, max)
+        }
+    }
+
+    /// Automatically add tick marks to the trackbar, clearing all other ticks.
+    fn auto_ticks(&mut self, frequency: Option<u32>) {
+        unsafe {
+            if let Some(freq) = frequency {
+                let style = self.get_style() | TBS_AUTOTICKS;
+                self.set_style(style);
+                user32::SendMessageW(self.hwnd(), TBM_SETTICFREQ, freq as WPARAM, 0);
+            } else {
+                user32::SendMessageW(self.hwnd(), TBM_SETTICFREQ, 0, 0);
+            }
+        }
+    }
+
+    /// Add a tick at the specified position on the trackbar.
+    fn add_tick(&mut self, pos: u32) {
+        unsafe{ user32::SendMessageW(self.hwnd(), TBM_SETTIC, 0, pos as LPARAM) };
+    }
+
+    /// Clear all ticks from the trackbar.
+    fn clear_ticks(&mut self) {
+        unsafe{ user32::SendMessageW(self.hwnd(), TBM_CLEARTICS, TRUE as WPARAM, 0) };
+    }
+
+    fn set_tick_position(&self, tick_position: TickPosition) {
+        let new_style = match tick_position {
+            TickPosition::BottomRight =>
+                (self.get_style() | TBS_BOTTOM | TBS_RIGHT) & !(TBS_TOP | TBS_LEFT | TBS_BOTH | TBS_NOTICKS),
+            TickPosition::TopLeft =>
+                (self.get_style() | TBS_TOP | TBS_LEFT) & !(TBS_BOTTOM | TBS_RIGHT | TBS_BOTH | TBS_NOTICKS),
+            TickPosition::Both =>
+                (self.get_style() | TBS_BOTH) & !(TBS_BOTTOM | TBS_RIGHT | TBS_TOP | TBS_LEFT | TBS_NOTICKS),
+            TickPosition::None =>
+                (self.get_style() | TBS_NOTICKS) & !(TBS_BOTTOM | TBS_RIGHT | TBS_TOP | TBS_LEFT | TBS_BOTH)
+        };
+        unsafe{ self.set_style(new_style) };
+    }
+
+    fn set_vertical(&self, vertical: bool) {
+        let new_style = if vertical {
+            self.get_style() | TBS_VERT
+        } else {
+            self.get_style() & !TBS_VERT
+        };
+        unsafe{ self.set_style(new_style) };
+    }
+
+    fn show_slider(&self, show_slider: bool) {
+        let new_style = if show_slider {
+            self.get_style() & !TBS_NOTHUMB
+        } else {
+            self.get_style() | TBS_NOTHUMB
+        };
+        unsafe{ self.set_style(new_style) };
+    }
+
+    fn show_sel_range(&self, sel_range: bool) {
+        let new_style = if sel_range {
+            self.get_style() | TBS_ENABLESELRANGE
+        } else {
+            self.get_style() & !TBS_ENABLESELRANGE
+        };
+        unsafe{ self.set_style(new_style) };
+    }
+
+    fn set_sel_range(&mut self, start: u32, end: u32) {
+        unsafe {
+            user32::SendMessageW(self.hwnd(), TBM_SETSELSTART, FALSE as WPARAM, start as LPARAM);
+            user32::SendMessageW(self.hwnd(), TBM_SETSELEND, TRUE as WPARAM, end as LPARAM);
+        }
+    }
+
+    fn set_sel_start(&mut self, start: u32) {
+        unsafe{ user32::SendMessageW(self.hwnd(), TBM_SETSELSTART, TRUE as WPARAM, start as LPARAM) };
+    }
+
+    fn set_sel_end(&mut self, end: u32) {
+        unsafe{ user32::SendMessageW(self.hwnd(), TBM_SETSELEND, TRUE as WPARAM, end as LPARAM) };
+    }
+}
+
 macro_rules! impl_window_traits {
     (
         unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
@@ -689,7 +824,8 @@ impl_window_traits!{
         ParentWindow,
         ButtonWindow,
         TextLabelWindow,
-        ProgressBarWindow
+        ProgressBarWindow,
+        TrackbarWindow
     for IconWrapper<W, I>
 }
 unsafe impl<W: WindowOwned, I: AsRef<WindowIcon>> IconWindow for IconWrapper<W, I> {
@@ -711,6 +847,7 @@ impl_window_traits!{
         ButtonWindow,
         TextLabelWindow,
         ProgressBarWindow,
+        TrackbarWindow,
         IconWindow
     for OverlapWrapper<W>
 }
@@ -776,6 +913,7 @@ impl_window_traits!{
         ButtonWindow,
         TextLabelWindow,
         ProgressBarWindow,
+        TrackbarWindow,
         IconWindow
     for SubclassWrapper<W, S>
 }
@@ -843,6 +981,7 @@ impl_window_traits!{
         ButtonWindow,
         TextLabelWindow,
         ProgressBarWindow,
+        TrackbarWindow,
         IconWindow
     for UnsafeSubclassWrapper<W, S>
 }
@@ -908,7 +1047,8 @@ impl_window_traits!{
         ParentWindow,
         ButtonWindow,
         TextLabelWindow,
-        ProgressBarWindow
+        ProgressBarWindow,
+        TrackbarWindow
     for ProcWindowRef<'a, W, S>
 }
 
