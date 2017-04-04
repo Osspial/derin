@@ -616,19 +616,82 @@ pub unsafe trait ProgressBarWindow: Window {
     }
 }
 
-// IconWrapper impls
-unsafe impl<W: WindowOwned, I: AsRef<WindowIcon>> Window for IconWrapper<W, I> {
-    #[inline]
-    unsafe fn hwnd(&self) -> HWND {self.window.hwnd()}
+macro_rules! impl_window_traits {
+    (
+        unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
+            ;
+        for $window:ty
+    ) => ();
+
+    (
+        unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
+            Window($self_ident:ident) => $window_expr:expr;
+        for $window:ty
+    ) => (
+        unsafe impl<$($lt,)* W: $($window_bound +)* $(, $gen: $gen_bound)*> Window for $window {
+            #[inline]
+            unsafe fn hwnd(&self) -> HWND {
+                let $self_ident = self;
+                $window_expr.hwnd()
+            }
+        }
+    );
+
+    (
+        unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
+            Window($self_ident:ident) => $window_expr:expr;
+            IconWindow
+            $(, $trait_rest:ident)*
+        for $window:ty
+    ) => {
+        unsafe impl<$($lt,)* W: IconWindow $(+ $window_bound)* $(, $gen: $gen_bound)*> IconWindow for $window {
+            type I = <W as IconWindow>::I;
+            #[inline]
+            fn icon_mut(&mut self) -> &mut <W as IconWindow>::I {
+                let $self_ident = self;
+                $window_expr.icon_mut()
+            }
+        }
+        impl_window_traits!{
+            unsafe impl<$(lifetime $lt,)* W$(: $window_bound)* $(, $gen: $gen_bound)*>
+                Window($self_ident) => $window_expr;
+                $($trait_rest),*
+            for $window
+        }
+    };
+
+    (
+        unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
+            $(Window($self_ident:ident) => $window_expr:expr)*;
+            $trait_name:ident
+            $(, $trait_rest:ident)*
+        for $window:ty
+    ) => {
+        unsafe impl<$($lt,)* W: $trait_name $(+ $window_bound)* $(, $gen: $gen_bound)*> $trait_name for $window {}
+        impl_window_traits!{
+            unsafe impl<$(lifetime $lt,)* W$(: $window_bound)* $(, $gen: $gen_bound)*>
+                $(Window($self_ident) => $window_expr)*;
+                $($trait_rest),*
+            for $window
+        }
+    };
 }
-unsafe impl<W: WindowOwned + WindowMut, I: AsRef<WindowIcon>> WindowMut for IconWrapper<W, I> {}
-unsafe impl<W: WindowOwned, I: AsRef<WindowIcon>> WindowOwned for IconWrapper<W, I> {}
-unsafe impl<W: WindowOwned, I: AsRef<WindowIcon>> OverlappedWindow for IconWrapper<W, I> {}
-unsafe impl<W: WindowOwned + OrphanableWindow, I: AsRef<WindowIcon>> OrphanableWindow for IconWrapper<W, I> {}
-unsafe impl<W: WindowOwned + ParentWindow, I: AsRef<WindowIcon>> ParentWindow for IconWrapper<W, I> {}
-unsafe impl<W: WindowOwned + ButtonWindow, I: AsRef<WindowIcon>> ButtonWindow for IconWrapper<W, I> {}
-unsafe impl<W: WindowOwned + TextLabelWindow, I: AsRef<WindowIcon>> TextLabelWindow for IconWrapper<W, I> {}
-unsafe impl<W: WindowOwned + ProgressBarWindow, I: AsRef<WindowIcon>> ProgressBarWindow for IconWrapper<W, I> {}
+
+
+// IconWrapper impls
+impl_window_traits!{
+    unsafe impl<W: WindowOwned, I: AsRef<WindowIcon>>
+        Window(this) => this.window;
+        WindowMut,
+        WindowOwned,
+        OverlappedWindow,
+        OrphanableWindow,
+        ParentWindow,
+        ButtonWindow,
+        TextLabelWindow,
+        ProgressBarWindow
+    for IconWrapper<W, I>
+}
 unsafe impl<W: WindowOwned, I: AsRef<WindowIcon>> IconWindow for IconWrapper<W, I> {
     type I = I;
     #[inline]
@@ -637,22 +700,19 @@ unsafe impl<W: WindowOwned, I: AsRef<WindowIcon>> IconWindow for IconWrapper<W, 
 
 
 // OverlapWrapper impls
-unsafe impl<W: WindowOwned> Window for OverlapWrapper<W> {
-    #[inline]
-    unsafe fn hwnd(&self) -> HWND {self.0.hwnd()}
-}
-unsafe impl<W: WindowOwned + WindowMut> WindowMut for OverlapWrapper<W> {}
-unsafe impl<W: WindowOwned> WindowOwned for OverlapWrapper<W> {}
 unsafe impl<W: WindowOwned> OverlappedWindow for OverlapWrapper<W> {}
-unsafe impl<W: WindowOwned + OrphanableWindow> OrphanableWindow for OverlapWrapper<W> {}
-unsafe impl<W: WindowOwned + ParentWindow> ParentWindow for OverlapWrapper<W> {}
-unsafe impl<W: WindowOwned + ButtonWindow> ButtonWindow for OverlapWrapper<W> {}
-unsafe impl<W: WindowOwned + TextLabelWindow> TextLabelWindow for OverlapWrapper<W> {}
-unsafe impl<W: WindowOwned + ProgressBarWindow> ProgressBarWindow for OverlapWrapper<W> {}
-unsafe impl<W: IconWindow> IconWindow for OverlapWrapper<W> {
-    type I = <W as IconWindow>::I;
-    #[inline]
-    fn icon_mut(&mut self) -> &mut <W as IconWindow>::I {self.0.icon_mut()}
+impl_window_traits!{
+    unsafe impl<W: WindowOwned>
+        Window(this) => this.0;
+        WindowMut,
+        WindowOwned,
+        OrphanableWindow,
+        ParentWindow,
+        ButtonWindow,
+        TextLabelWindow,
+        ProgressBarWindow,
+        IconWindow
+    for OverlapWrapper<W>
 }
 
 
@@ -705,22 +765,19 @@ impl<W: WindowOwned, S: Subclass<W>> SubclassWrapper<W, S> {
         unsafe{ &mut *self.data.get() }
     }
 }
-unsafe impl<W: WindowOwned, S: Subclass<W>> Window for SubclassWrapper<W, S> {
-    #[inline]
-    unsafe fn hwnd(&self) -> HWND {self.window.hwnd()}
-}
-unsafe impl<W: WindowOwned + WindowMut, S: Subclass<W>> WindowMut for SubclassWrapper<W, S> {}
-unsafe impl<W: WindowOwned, S: Subclass<W>> WindowOwned for SubclassWrapper<W, S> {}
-unsafe impl<W: WindowOwned + OverlappedWindow, S: Subclass<W>> OverlappedWindow for SubclassWrapper<W, S> {}
-unsafe impl<W: WindowOwned + OrphanableWindow, S: Subclass<W>> OrphanableWindow for SubclassWrapper<W, S> {}
-unsafe impl<W: WindowOwned + ParentWindow, S: Subclass<W>> ParentWindow for SubclassWrapper<W, S> {}
-unsafe impl<W: WindowOwned + ButtonWindow, S: Subclass<W>> ButtonWindow for SubclassWrapper<W, S> {}
-unsafe impl<W: WindowOwned + TextLabelWindow, S: Subclass<W>> TextLabelWindow for SubclassWrapper<W, S> {}
-unsafe impl<W: WindowOwned + ProgressBarWindow, S: Subclass<W>> ProgressBarWindow for SubclassWrapper<W, S> {}
-unsafe impl<W: IconWindow, S: Subclass<W>> IconWindow for SubclassWrapper<W, S> {
-    type I = <W as IconWindow>::I;
-    #[inline]
-    fn icon_mut(&mut self) -> &mut <W as IconWindow>::I {self.window.icon_mut()}
+impl_window_traits!{
+    unsafe impl<W: WindowOwned, S: Subclass<W>>
+        Window(this) => this.window;
+        WindowMut,
+        WindowOwned,
+        OverlappedWindow,
+        OrphanableWindow,
+        ParentWindow,
+        ButtonWindow,
+        TextLabelWindow,
+        ProgressBarWindow,
+        IconWindow
+    for SubclassWrapper<W, S>
 }
 
 
@@ -775,22 +832,19 @@ impl<W: WindowOwned, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
         unsafe{ self.data.into_inner() }
     }
 }
-unsafe impl<W: WindowOwned, S: Subclass<W>> Window for UnsafeSubclassWrapper<W, S> {
-    #[inline]
-    unsafe fn hwnd(&self) -> HWND {self.window.hwnd()}
-}
-unsafe impl<W: WindowOwned + WindowMut, S: Subclass<W>> WindowMut for UnsafeSubclassWrapper<W, S> {}
-unsafe impl<W: WindowOwned, S: Subclass<W>> WindowOwned for UnsafeSubclassWrapper<W, S> {}
-unsafe impl<W: WindowOwned + OverlappedWindow, S: Subclass<W>> OverlappedWindow for UnsafeSubclassWrapper<W, S> {}
-unsafe impl<W: WindowOwned + OrphanableWindow, S: Subclass<W>> OrphanableWindow for UnsafeSubclassWrapper<W, S> {}
-unsafe impl<W: WindowOwned + ParentWindow, S: Subclass<W>> ParentWindow for UnsafeSubclassWrapper<W, S> {}
-unsafe impl<W: WindowOwned + ButtonWindow, S: Subclass<W>> ButtonWindow for UnsafeSubclassWrapper<W, S> {}
-unsafe impl<W: WindowOwned + TextLabelWindow, S: Subclass<W>> TextLabelWindow for UnsafeSubclassWrapper<W, S> {}
-unsafe impl<W: WindowOwned + ProgressBarWindow, S: Subclass<W>> ProgressBarWindow for UnsafeSubclassWrapper<W, S> {}
-unsafe impl<W: WindowOwned + IconWindow, S: Subclass<W>> IconWindow for UnsafeSubclassWrapper<W, S> {
-    type I = <W as IconWindow>::I;
-    #[inline]
-    fn icon_mut(&mut self) -> &mut <W as IconWindow>::I {self.window.icon_mut()}
+impl_window_traits!{
+    unsafe impl<W: WindowOwned, S: Subclass<W>>
+        Window(this) => this.window;
+        WindowMut,
+        WindowOwned,
+        OverlappedWindow,
+        OrphanableWindow,
+        ParentWindow,
+        ButtonWindow,
+        TextLabelWindow,
+        ProgressBarWindow,
+        IconWindow
+    for UnsafeSubclassWrapper<W, S>
 }
 
 
@@ -846,13 +900,17 @@ unsafe impl<'a, W: Window, S: Subclass<W>> Window for ProcWindowRef<'a, W, S> {
         self.hwnd
     }
 }
-unsafe impl<'a, W: WindowMut, S: Subclass<W>> WindowMut for ProcWindowRef<'a, W, S> {}
-unsafe impl<'a, W: OverlappedWindow, S: Subclass<W>> OverlappedWindow for ProcWindowRef<'a, W, S> {}
-unsafe impl<'a, W: OrphanableWindow, S: Subclass<W>> OrphanableWindow for ProcWindowRef<'a, W, S> {}
-unsafe impl<'a, W: ParentWindow, S: Subclass<W>> ParentWindow for ProcWindowRef<'a, W, S> {}
-unsafe impl<'a, W: ButtonWindow, S: Subclass<W>> ButtonWindow for ProcWindowRef<'a, W, S> {}
-unsafe impl<'a, W: TextLabelWindow, S: Subclass<W>> TextLabelWindow for ProcWindowRef<'a, W, S> {}
-unsafe impl<'a, W: ProgressBarWindow, S: Subclass<W>> ProgressBarWindow for ProcWindowRef<'a, W, S> {}
+impl_window_traits!{
+    unsafe impl<lifetime 'a, W: Window, S: Subclass<W>>
+        ;WindowMut,
+        OverlappedWindow,
+        OrphanableWindow,
+        ParentWindow,
+        ButtonWindow,
+        TextLabelWindow,
+        ProgressBarWindow
+    for ProcWindowRef<'a, W, S>
+}
 
 
 // ParentRef impls
