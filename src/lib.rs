@@ -2,6 +2,8 @@
 
 extern crate dle;
 extern crate dct;
+#[macro_use]
+extern crate lazy_static;
 
 #[cfg(test)]
 #[cfg_attr(test, macro_use)]

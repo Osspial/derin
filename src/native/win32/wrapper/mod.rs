@@ -163,12 +163,15 @@ macro_rules! subclass_node_data {
 thread_local!{
     static HOLDING_PARENT: BlankBase = WindowBuilder::default().show_window(false).build_blank();
 }
+lazy_static!{
+    static ref CAPTION_FONT: Font = Font::sys_caption_font();
+}
 
 subclass_node_data!{
     pub struct TextButtonNodeData<I>
             where I: trait Borrow<str> | trait Button
     {
-        subclass: UnsafeSubclassWrapper<PushButtonBase, TextButtonSubclass<I>>,
+        subclass: UnsafeSubclassWrapper<PushButtonBase<&'static Font>, TextButtonSubclass<I>>,
         needs_update: bool
     }
     impl {
@@ -177,7 +180,7 @@ subclass_node_data!{
 
         fn from_node_data(node_data: I) -> UnsafeSubclassWrapper<_, _> {
             HOLDING_PARENT.with(|hp| {
-                let button_window = WindowBuilder::default().show_window(false).build_push_button(hp);
+                let button_window = WindowBuilder::default().show_window(false).build_push_button_with_font(hp, &*CAPTION_FONT);
                 let subclass = TextButtonSubclass::new(node_data);
 
                 unsafe{ UnsafeSubclassWrapper::new(button_window, subclass) }
@@ -213,7 +216,7 @@ subclass_node_data!{
     pub struct TextLabelNodeData<S>
             where S: trait AsRef<str>
     {
-        subclass: UnsafeSubclassWrapper<TextLabelBase, TextLabelSubclass<S>>,
+        subclass: UnsafeSubclassWrapper<TextLabelBase<&'static Font>, TextLabelSubclass<S>>,
         needs_update: bool
     }
     impl {
@@ -222,7 +225,7 @@ subclass_node_data!{
 
         fn from_node_data(text: S) -> UnsafeSubclassWrapper<_, _> {
             HOLDING_PARENT.with(|hp| {
-                let label_window = WindowBuilder::default().show_window(false).build_text_label(hp);
+                let label_window = WindowBuilder::default().show_window(false).build_text_label_with_font(hp, &*CAPTION_FONT);
                 let subclass = TextLabelSubclass::new(text);
 
                 unsafe{ UnsafeSubclassWrapper::new(label_window, subclass) }

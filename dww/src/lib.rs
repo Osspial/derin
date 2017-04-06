@@ -5,6 +5,7 @@ extern crate kernel32 as _kernel32;
 extern crate user32 as _user32;
 #[macro_use]
 extern crate comctl32 as _comctl32;
+extern crate gdi32;
 #[macro_use]
 extern crate lazy_static;
 extern crate dct;
@@ -23,10 +24,11 @@ use dct::events::MouseButton;
 use winapi::*;
 
 use std::{ptr, mem, str};
-use std::marker::PhantomData;
+use std::marker::{PhantomData, Send, Sync};
 use std::path::Path;
 use std::io::{Result, Error};
 use std::cell::UnsafeCell;
+use std::borrow::Borrow;
 
 use self::ucs2::{WithString, Ucs2String, Ucs2Str, ucs2_str, ucs2_str_from_ptr, UCS2_CONVERTER};
 
@@ -99,10 +101,6 @@ pub struct WindowIcon {
     pub small: Option<Icon>
 }
 
-impl AsRef<WindowIcon> for WindowIcon {
-    fn as_ref(&self) -> &WindowIcon {self}
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct WindowBuilder<'a> {
     pub pos: Option<(i32, i32)>,
@@ -139,15 +137,27 @@ impl<'a> WindowBuilder<'a> {
     }
 
     pub fn build_push_button<P: ParentWindow>(self, parent: &P) -> PushButtonBase {
+        self.build_push_button_with_font(parent, DefaultFont)
+    }
+
+    pub fn build_push_button_with_font<F: Borrow<Font>, P: ParentWindow>(self, parent: &P, font: F) -> PushButtonBase<F> {
         let window_handle = self.build(BS_PUSHBUTTON, 0, unsafe{ Some(parent.hwnd()) }, &BUTTON_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
-        PushButtonBase(window_handle)
+        let mut window = PushButtonBase(window_handle, unsafe{ mem::uninitialized() });
+        window.set_font(font);
+        window
     }
 
     pub fn build_text_label<P: ParentWindow>(self, parent: &P) -> TextLabelBase {
+        self.build_text_label_with_font(parent, DefaultFont)
+    }
+
+    pub fn build_text_label_with_font<F: Borrow<Font>, P: ParentWindow>(self, parent: &P, font: F) -> TextLabelBase<F> {
         let window_handle = self.build(0, 0, unsafe{ Some(parent.hwnd()) }, &STATIC_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
-        TextLabelBase(window_handle)
+        let mut window = TextLabelBase(window_handle, unsafe{ mem::uninitialized() });
+        window.set_font(font);
+        window
     }
 
     pub fn build_progress_bar<P: ParentWindow>(self, parent: &P) -> ProgressBarBase {
@@ -221,15 +231,22 @@ impl<'a> Default for WindowBuilder<'a> {
 
 macro_rules! base_wrapper {
     () => ();
-    (pub struct $name:ident; $($rest:tt)*) => {
-        pub struct $name( HWND );
-        unsafe impl Window for $name {
+    (pub struct $name:ident$(<$font_generic:ident>)*; $($rest:tt)*) => {
+        pub struct $name$(<$font_generic: Borrow<Font> = DefaultFont>)*( HWND $(, $font_generic)* );
+        unsafe impl$(<$font_generic: Borrow<Font>>)* Window for $name$(<$font_generic>)* {
             #[inline]
             unsafe fn hwnd(&self) -> HWND {self.0}
         }
-        unsafe impl WindowMut for $name {}
-        unsafe impl WindowOwned for $name {}
-        impl Drop for $name {
+        unsafe impl$(<$font_generic: Borrow<Font>>)* WindowMut for $name$(<$font_generic>)* {}
+        unsafe impl$(<$font_generic: Borrow<Font>>)* WindowOwned for $name$(<$font_generic>)* {}
+        $(
+            unsafe impl<$font_generic: Borrow<Font>> WindowFont<$font_generic> for $name<$font_generic> {
+                unsafe fn font_mut(&mut self) -> &mut $font_generic {
+                    &mut self.1
+                }
+            }
+        )*
+        impl$(<$font_generic: Borrow<Font>>)* Drop for $name$(<$font_generic>)* {
             fn drop(&mut self) {
                 unsafe{ user32::DestroyWindow(self.0) };
             }
@@ -240,8 +257,8 @@ macro_rules! base_wrapper {
 
 base_wrapper! {
     pub struct BlankBase;
-    pub struct PushButtonBase;
-    pub struct TextLabelBase;
+    pub struct PushButtonBase<F>;
+    pub struct TextLabelBase<F>;
     pub struct ProgressBarBase;
     pub struct TrackbarBase;
 }
@@ -249,12 +266,12 @@ base_wrapper! {
 unsafe impl ParentWindow for BlankBase {}
 unsafe impl OrphanableWindow for BlankBase {}
 
-unsafe impl ButtonWindow for PushButtonBase {}
-unsafe impl TextLabelWindow for TextLabelBase {}
+unsafe impl<F: Borrow<Font>> ButtonWindow for PushButtonBase<F> {}
+unsafe impl<F: Borrow<Font>> TextLabelWindow for TextLabelBase<F> {}
 unsafe impl ProgressBarWindow for ProgressBarBase {}
 unsafe impl TrackbarWindow for TrackbarBase {}
 
-pub struct IconWrapper<W: Window, I: AsRef<WindowIcon>> {
+pub struct IconWrapper<W: Window, I: Borrow<WindowIcon>> {
     window: W,
     icon: I
 }
@@ -445,7 +462,7 @@ pub unsafe trait WindowMut: Window {
 }
 
 pub unsafe trait WindowOwned: WindowMut {
-    fn as_icon<I: AsRef<WindowIcon>>(self, icon: I) -> IconWrapper<Self, I> {
+    fn as_icon<I: Borrow<WindowIcon>>(self, icon: I) -> IconWrapper<Self, I> {
         let mut icon_window = IconWrapper {
             window: self,
             icon: unsafe{ mem::uninitialized() }
@@ -458,6 +475,16 @@ pub unsafe trait WindowOwned: WindowMut {
         let window = OverlapWrapper(self);
         window.overlapped(overlapped);
         window
+    }
+}
+
+pub unsafe trait WindowFont<F: Borrow<Font>>: Window {
+    unsafe fn font_mut(&mut self) -> &mut F;
+    fn set_font(&mut self, font: F) {
+        unsafe{
+            user32::SendMessageW(self.hwnd(), WM_SETFONT, font.borrow().0 as WPARAM, TRUE as LPARAM);
+            *self.font_mut() = font;
+        }
     }
 }
 
@@ -519,20 +546,15 @@ pub unsafe trait OverlappedWindow: Window {
 }
 
 pub unsafe trait IconWindow: WindowOwned {
-    type I: AsRef<WindowIcon>;
+    type I: Borrow<WindowIcon>;
 
-    fn icon_mut(&mut self) -> &mut Self::I;
+    fn set_icon(&mut self, icon: Self::I);
+    unsafe fn set_window_icon(&self, icon: &WindowIcon) {
+        let big_icon = icon.big.as_ref().map(|icon| icon.0).unwrap_or(ptr::null_mut());
+        let small_icon = icon.small.as_ref().map(|icon| icon.0).unwrap_or(ptr::null_mut());
 
-    fn set_icon(&mut self, icon: Self::I) {
-        unsafe {
-            let icon_ref = icon.as_ref();
-            let big_icon = icon_ref.big.as_ref().map(|icon| icon.0).unwrap_or(ptr::null_mut());
-            let small_icon = icon_ref.small.as_ref().map(|icon| icon.0).unwrap_or(ptr::null_mut());
-
-            user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_BIG as WPARAM, big_icon as LPARAM);
-            user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_SMALL as WPARAM, small_icon as LPARAM);
-        }
-        *self.icon_mut() = icon;
+        user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_BIG as WPARAM, big_icon as LPARAM);
+        user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_SMALL as WPARAM, small_icon as LPARAM);
     }
 }
 
@@ -776,15 +798,37 @@ macro_rules! impl_window_traits {
         unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
             Window($self_ident:ident) => $window_expr:expr;
             IconWindow
-            $(, $trait_rest:ident)*
+            $(, $trait_rest:ident$)*
         for $window:ty
     ) => {
         unsafe impl<$($lt,)* W: IconWindow $(+ $window_bound)* $(, $gen: $gen_bound)*> IconWindow for $window {
             type I = <W as IconWindow>::I;
             #[inline]
-            fn icon_mut(&mut self) -> &mut <W as IconWindow>::I {
+            fn set_icon(&mut self, icon: <W as IconWindow>::I) {
                 let $self_ident = self;
-                $window_expr.icon_mut()
+                unsafe{ $window_expr.set_window_icon(icon.borrow()) };
+                $window_expr.set_icon(icon);
+            }
+        }
+        impl_window_traits!{
+            unsafe impl<$(lifetime $lt,)* W$(: $window_bound)* $(, $gen: $gen_bound)*>
+                Window($self_ident) => $window_expr;
+                $($trait_rest),*
+            for $window
+        }
+    };
+
+    (
+        unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
+            Window($self_ident:ident) => $window_expr:expr;
+            WindowFont
+            $(, $trait_rest:ident)*
+        for $window:ty
+    ) => {
+        unsafe impl<$($lt,)* F: Borrow<Font>, W: WindowFont<F> $(+ $window_bound)* $(, $gen: $gen_bound)*> WindowFont<F> for $window {
+            unsafe fn font_mut(&mut self) -> &mut F {
+                let $self_ident = self;
+                $window_expr.font_mut()
             }
         }
         impl_window_traits!{
@@ -815,10 +859,11 @@ macro_rules! impl_window_traits {
 
 // IconWrapper impls
 impl_window_traits!{
-    unsafe impl<W: WindowOwned, I: AsRef<WindowIcon>>
+    unsafe impl<W: WindowOwned, I: Borrow<WindowIcon>>
         Window(this) => this.window;
         WindowMut,
         WindowOwned,
+        WindowFont,
         OverlappedWindow,
         OrphanableWindow,
         ParentWindow,
@@ -828,10 +873,13 @@ impl_window_traits!{
         TrackbarWindow
     for IconWrapper<W, I>
 }
-unsafe impl<W: WindowOwned, I: AsRef<WindowIcon>> IconWindow for IconWrapper<W, I> {
+unsafe impl<W: WindowOwned, I: Borrow<WindowIcon>> IconWindow for IconWrapper<W, I> {
     type I = I;
     #[inline]
-    fn icon_mut(&mut self) -> &mut I {&mut self.icon}
+    fn set_icon(&mut self, icon: I) {
+        unsafe{ self.set_window_icon(icon.borrow()) };
+        self.icon = icon;
+    }
 }
 
 
@@ -842,6 +890,7 @@ impl_window_traits!{
         Window(this) => this.0;
         WindowMut,
         WindowOwned,
+        WindowFont,
         OrphanableWindow,
         ParentWindow,
         ButtonWindow,
@@ -907,6 +956,7 @@ impl_window_traits!{
         Window(this) => this.window;
         WindowMut,
         WindowOwned,
+        WindowFont,
         OverlappedWindow,
         OrphanableWindow,
         ParentWindow,
@@ -975,6 +1025,7 @@ impl_window_traits!{
         Window(this) => this.window;
         WindowMut,
         WindowOwned,
+        WindowFont,
         OverlappedWindow,
         OrphanableWindow,
         ParentWindow,
@@ -1152,6 +1203,58 @@ impl Drop for Icon {
     }
 }
 
+pub struct Font( HFONT );
+
+impl Font {
+    pub fn def_sys_font() -> Font {
+        Font(ptr::null_mut())
+    }
+
+    pub fn sys_caption_font() -> Font {
+        let non_client_metrics = non_client_metrics();
+        Font(unsafe{ gdi32::CreateFontIndirectW(&non_client_metrics.lfCaptionFont) })
+    }
+
+    pub fn sys_small_caption_font() -> Font {
+        let non_client_metrics = non_client_metrics();
+        Font(unsafe{ gdi32::CreateFontIndirectW(&non_client_metrics.lfSmCaptionFont) })
+    }
+
+    pub fn sys_menu_font() -> Font {
+        let non_client_metrics = non_client_metrics();
+        Font(unsafe{ gdi32::CreateFontIndirectW(&non_client_metrics.lfMenuFont) })
+    }
+
+    pub fn sys_status_font() -> Font {
+        let non_client_metrics = non_client_metrics();
+        Font(unsafe{ gdi32::CreateFontIndirectW(&non_client_metrics.lfStatusFont) })
+    }
+
+    pub fn sys_message_font() -> Font {
+        let non_client_metrics = non_client_metrics();
+        Font(unsafe{ gdi32::CreateFontIndirectW(&non_client_metrics.lfMessageFont) })
+    }
+}
+
+unsafe impl Send for Font {}
+unsafe impl Sync for Font {}
+
+impl Drop for Font {
+    fn drop(&mut self) {
+        unsafe{ gdi32::DeleteObject(self.0 as HGDIOBJ) };
+    }
+}
+
+pub struct DefaultFont;
+impl Borrow<Font> for DefaultFont {
+    fn borrow(&self) -> &Font {
+        static DEFAULT_FONT: usize = 0;
+        unsafe{ mem::transmute(&DEFAULT_FONT) }
+    }
+}
+
+
+
 pub fn init() {
     // It's true that this static mut could cause a memory race. However, the only consequence of
     // that memory race is that this function runs more than once, which won't have any bad impacts
@@ -1171,6 +1274,22 @@ pub fn init() {
 
             INITIALIZED = true;
         }
+    }
+}
+
+fn non_client_metrics() -> NONCLIENTMETRICSW {
+    unsafe {
+        let mut non_client_metrics = NONCLIENTMETRICSW {
+            cbSize: mem::size_of::<NONCLIENTMETRICSW>() as UINT,
+            ..mem::zeroed::<NONCLIENTMETRICSW>()
+        };
+        user32::SystemParametersInfoW(
+            SPI_GETNONCLIENTMETRICS,
+            mem::size_of::<NONCLIENTMETRICSW>() as UINT,
+            &mut non_client_metrics as *mut NONCLIENTMETRICSW as *mut c_void,
+            0
+        );
+        non_client_metrics
     }
 }
 

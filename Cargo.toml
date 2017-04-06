@@ -8,6 +8,7 @@ dle = {path = "./dle"}
 dct = {path = "./dct"}
 dww = {path = "./dww"}
 dww_macros = {path = "./dww_macros"}
+lazy_static = "0.2"
 
 [dev-dependencies]
 quickcheck = "0.4"

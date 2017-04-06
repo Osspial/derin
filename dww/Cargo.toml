@@ -8,6 +8,7 @@ winapi = {path = "./winapi-rs", version = "0.2"}
 user32-sys = {path = "./winapi-rs/lib/user32", version = "0.2"}
 kernel32-sys = {path = "./winapi-rs/lib/kernel32", version = "0.2"}
 comctl32-sys = {path = "./winapi-rs/lib/comctl32", version = "0.2"}
+gdi32-sys = {path = "./winapi-rs/lib/gdi32", version = "0.2"}
 lazy_static = "0.2"
 dct = {path = "../dct"}
 
