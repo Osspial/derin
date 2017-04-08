@@ -398,6 +398,20 @@ pub unsafe trait WindowMut: Window {
         );
     }
 
+    fn set_text_noprefix(&mut self, title: &str) {
+        UCS2_CONVERTER.with_string_noprefix(title, |title_ucs2|
+            unsafe{ user32::SetWindowTextW(self.hwnd(), title_ucs2.as_ptr()) }
+        );
+    }
+
+    fn set_text_noprefix_fn<F>(&mut self, title_fn: F)
+            where F: FnOnce(&Self) -> &str
+    {
+        UCS2_CONVERTER.with_string_noprefix(title_fn(self), |title_ucs2|
+            unsafe{ user32::SetWindowTextW(self.hwnd(), title_ucs2.as_ptr()) }
+        );
+    }
+
     fn set_rect(&mut self, rect: OffsetRect) {
         let adjusted_rect = self.adjust_window_rect(rect);
         unsafe{user32::SetWindowPos(
@@ -607,7 +621,7 @@ pub unsafe trait TextLabelWindow: Window {
         user32::DrawTextW(
             hdc,
             text.as_ptr(),
-            -1,
+            text.len() as c_int - 1,
             &mut label_rect,
             DT_CALCRECT
         );
@@ -1428,6 +1442,29 @@ mod ucs2 {
             })
         }
 
+        fn with_string_noprefix<S, F, R>(&'static self, s: S, f: F) -> R
+                where S: AsRef<OsStr>,
+                      F: FnOnce(&Ucs2Str) -> R
+        {
+            self.with(|converter| {
+                let mut converter = converter.borrow_mut();
+
+                // A lot of controls will interperet the '&' character as a signal to underline the
+                // next character. That's ignored if the '&' character is doubled up, so this does
+                // that.
+                for c in ucs2_str(s.as_ref()) {
+                    converter.str_buf.push(c);
+                    if c == '&' as u16 {
+                        converter.str_buf.push(c);
+                    }
+                }
+
+                let ret = f(&converter.str_buf[..]);
+                converter.str_buf.clear();
+                ret
+            })
+        }
+
         fn with_ucs2_buffer<F, R>(&'static self, len: usize, f: F) -> R
                 where F: FnOnce(&mut Ucs2Str) -> R
         {
@@ -1443,6 +1480,9 @@ mod ucs2 {
 
     pub trait WithString {
         fn with_string<S, F, R>(&'static self, S, F) -> R
+                where S: AsRef<OsStr>,
+                      F: FnOnce(&Ucs2Str) -> R;
+        fn with_string_noprefix<S, F, R>(&'static self, S, F) -> R
                 where S: AsRef<OsStr>,
                       F: FnOnce(&Ucs2Str) -> R;
         fn with_ucs2_buffer<F, R>(&'static self, len: usize, F) -> R

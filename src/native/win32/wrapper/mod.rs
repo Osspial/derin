@@ -187,7 +187,7 @@ subclass_node_data!{
             })
         }
         fn update_widget(subclass: _, action_fn: &SharedFn<I::Action>) {
-            subclass.set_text_fn(|subcl| subcl.data().node_data.borrow());
+            subclass.set_text_noprefix_fn(|subcl| subcl.data().node_data.borrow());
             subclass.data_mut().action_fn = Some(action_fn.clone());
         }
     }
@@ -232,7 +232,7 @@ subclass_node_data!{
             })
         }
         fn update_widget(subclass: _) {
-            subclass.set_text_fn(|subcl| subcl.data().text.as_ref());
+            subclass.set_text_noprefix_fn(|subcl| subcl.data().text.as_ref());
         }
     }
 
