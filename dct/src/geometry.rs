@@ -68,10 +68,10 @@ pub struct OffsetRect {
 }
 
 impl OffsetRect {
-    pub fn new(tl_x: Px, tl_y: Px, lr_x: Px, lr_y: Px) -> OffsetRect {
+    pub fn new(left: Px, top: Px, right: Px, bottom: Px) -> OffsetRect {
         OffsetRect {
-            topleft: Point::new(tl_x, tl_y),
-            lowright: Point::new(lr_x, lr_y)
+            topleft: Point::new(left, top),
+            lowright: Point::new(right, bottom)
         }
     }
 }

@@ -15,6 +15,7 @@ extern crate dww_macros;
 
 pub mod user_msg;
 pub mod msg_queue;
+pub mod hdc;
 
 use user_msg::UserMsg;
 
@@ -30,6 +31,7 @@ use std::io::{Result, Error};
 use std::cell::UnsafeCell;
 use std::borrow::Borrow;
 
+use self::hdc::{DeviceContext, RetrievedContext, TextDrawOptions};
 use self::ucs2::{WithString, Ucs2String, Ucs2Str, ucs2_str, ucs2_str_from_ptr, UCS2_CONVERTER};
 
 #[derive(Debug)]
@@ -47,6 +49,7 @@ pub enum Wm<'a> {
     MouseDoubleDown(MouseButton, Point),
     MouseUp(MouseButton, Point),
     SetText(&'a Ucs2Str),
+    Paint,
     GetSizeBounds(&'a mut SizeBounds)
 }
 
@@ -374,8 +377,16 @@ pub unsafe trait Window: Sized {
         user32::SetWindowLongW(self.hwnd(), GWL_EXSTYLE, style_ex as LONG);
     }
 
+    fn stash_long(&self, long: LONG) {
+        unsafe{ user32::SetWindowLongW(self.hwnd(), GWL_USERDATA, long) };
+    }
+
     fn retrieve_long(&self) -> LONG {
         unsafe{ user32::GetWindowLongW(self.hwnd(), GWL_USERDATA) }
+    }
+
+    fn get_dc(&self) -> Option<RetrievedContext> {
+        unsafe{ RetrievedContext::retrieve_dc(self.hwnd()) }
     }
 }
 
@@ -439,10 +450,6 @@ pub unsafe trait WindowMut: Window {
                 SWP_NOOWNERZORDER | SWP_NOZORDER
             );
         }
-    }
-
-    fn stash_long(&mut self, long: LONG) {
-        unsafe{ user32::SetWindowLongW(self.hwnd(), GWL_USERDATA, long) };
     }
 
     fn enable(&mut self) {
@@ -610,24 +617,7 @@ pub unsafe trait TextLabelWindow: Window {
     }
 
     unsafe fn min_unclipped_rect_raw(&self, text: &Ucs2Str) -> OriginRect {
-        let mut label_rect = RECT {
-            left: 0,
-            top: 0,
-            right: 0,
-            bottom: 0
-        };
-
-        let hdc = user32::GetDC(self.hwnd());
-        user32::DrawTextW(
-            hdc,
-            text.as_ptr(),
-            text.len() as c_int - 1,
-            &mut label_rect,
-            DT_CALCRECT
-        );
-        user32::ReleaseDC(self.hwnd(), hdc);
-
-        OriginRect::new(label_rect.right as Px, label_rect.bottom as Px)
+        self.get_dc().expect("Could not get DC").calc_text_rect_raw(text, TextDrawOptions::default())
     }
 }
 
@@ -1387,6 +1377,9 @@ unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
 
                 ret
             }
+            WM_PAINT => {
+                run_subclass_proc!(Msg::Wm(Wm::Paint))
+            }
 
             BCM_GETIDEALSIZE => {
                 let size_winapi = &mut *(lparam as *mut SIZE);
@@ -1411,7 +1404,7 @@ fn hiword(lparam: LPARAM) -> WORD {
     (lparam >> 16) as WORD
 }
 
-mod ucs2 {
+pub mod ucs2 {
     use std::thread::LocalKey;
     use std::ffi::OsStr;
     use std::os::windows::ffi::{OsStrExt, EncodeWide};
@@ -1425,6 +1418,7 @@ mod ucs2 {
     pub type Ucs2String = Vec<WCHAR>;
 
     thread_local!{
+        #[doc(hidden)]
         pub static UCS2_CONVERTER: RefCell<Ucs2Converter> = RefCell::new(Ucs2Converter::default());
     }
 
@@ -1478,7 +1472,7 @@ mod ucs2 {
         }
     }
 
-    pub trait WithString {
+    pub(crate) trait WithString {
         fn with_string<S, F, R>(&'static self, S, F) -> R
                 where S: AsRef<OsStr>,
                       F: FnOnce(&Ucs2Str) -> R;
