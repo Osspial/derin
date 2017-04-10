@@ -1,6 +1,6 @@
 pub mod widgets;
 
-pub use dct::{geometry, events};
+pub use dct::{geometry, buttons};
 pub use dle::hints;
 use self::hints::{WidgetHints, GridSize, TrackHints};
 

@@ -10,7 +10,7 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 
 use ui::{Node, Parent, ChildId, NodeProcessorGridMut, NodeProcessor, NodeProcessorInit, NodeDataWrapper, NodeDataRegistry};
-use ui::widgets::{Button, TextButton, TextLabel, WidgetGroup, ProgressBar};
+use ui::widgets::{ButtonControl, TextButton, TextLabel, WidgetGroup, ProgressBar, Slider, SliderControl};
 use ui::hints::{WidgetHints, GridSize, TrackHints, NodeSpan};
 
 pub struct Window<N>
@@ -118,7 +118,7 @@ impl<'a, P, A, C> NodeProcessorGridMut<C> for NativeNodeProcessor<'a, P, A>
 
 impl<'a, P, A, I> NodeProcessorGridMut<TextButton<I>> for NativeNodeProcessor<'a, P, A>
         where P: ParentChildAdder,
-              I: Button<Action = A> + Borrow<str>
+              I: ButtonControl<Action = A> + Borrow<str>
 {
     fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, button: &'b mut TextButton<I>) -> Result<(), !> {
         button.wrapper().update_subclass_ptr();
@@ -197,9 +197,25 @@ impl<'a, P, A> NodeProcessorGridMut<ProgressBar> for NativeNodeProcessor<'a, P, 
     }
 }
 
+impl<'a, P, A, C> NodeProcessorGridMut<Slider<C>> for NativeNodeProcessor<'a, P, A>
+        where P: ParentChildAdder,
+              C: SliderControl
+{
+    fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, label: &'b mut Slider<C>) -> Result<(), !> {
+        label.wrapper().update_subclass_ptr();
+
+        if label.wrapper().needs_update() {
+            *self.children_updated = true;
+            label.wrapper_mut().update_widget();
+            self.parent.add_child_node(label.wrapper_mut());
+        }
+        Ok(())
+    }
+}
+
 
 pub struct NativeWrapperRegistry;
-impl<I: Button + Borrow<str>> NodeDataRegistry<TextButton<I>> for NativeWrapperRegistry {
+impl<I: ButtonControl + Borrow<str>> NodeDataRegistry<TextButton<I>> for NativeWrapperRegistry {
     type NodeDataWrapper = TextButtonNodeData<I>;
 }
 impl<S: AsRef<str>> NodeDataRegistry<TextLabel<S>> for NativeWrapperRegistry {
@@ -210,4 +226,7 @@ impl<I: Parent<!>> NodeDataRegistry<WidgetGroup<I>> for NativeWrapperRegistry {
 }
 impl NodeDataRegistry<ProgressBar> for NativeWrapperRegistry {
     type NodeDataWrapper = ProgressBarNodeData;
+}
+impl<C: SliderControl> NodeDataRegistry<Slider<C>> for NativeWrapperRegistry {
+    type NodeDataWrapper = SliderNodeData<C>;
 }

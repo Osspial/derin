@@ -1,10 +1,10 @@
 use ui::{Parent, Node, ChildId, NodeProcessorInit, NodeProcessorGrid, NodeProcessorGridMut, NodeProcessor};
-use ui::widgets::{progbar, Button};
+use ui::widgets::{ButtonControl, MouseEvent, SliderControl, RangeEvent};
+use ui::widgets::status::{progbar, slider};
 
 use dww::*;
 use dle::{GridContainer, GridEngine, GridConstraintSolver, SolveError};
 use dle::hints::{WidgetHints, GridSize, TrackHints};
-use dct::events::MouseEvent;
 use dct::geometry::{OriginRect, OffsetRect, SizeBounds};
 
 use std::borrow::Borrow;
@@ -24,14 +24,14 @@ impl Default for ButtonState {
     }
 }
 
-pub struct TextButtonSubclass<I: Borrow<str> + Button> {
+pub struct TextButtonSubclass<I: Borrow<str> + ButtonControl> {
     pub node_data: I,
     pub action_fn: Option<SharedFn<I::Action>>,
     pub abs_size_bounds: SizeBounds,
     button_state: ButtonState
 }
 
-impl<I: Borrow<str> + Button> TextButtonSubclass<I> {
+impl<I: Borrow<str> + ButtonControl> TextButtonSubclass<I> {
     #[inline]
     pub fn new(node_data: I) -> TextButtonSubclass<I> {
         TextButtonSubclass {
@@ -45,7 +45,7 @@ impl<I: Borrow<str> + Button> TextButtonSubclass<I> {
 
 impl<B, I> Subclass<B> for TextButtonSubclass<I>
         where B: ButtonWindow,
-              I: Borrow<str> + Button
+              I: Borrow<str> + ButtonControl
 {
     type UserMsg = DerinMsg;
     fn subclass_proc(window: &mut ProcWindowRef<B, Self>, mut msg: Msg<DerinMsg>) -> i64 {
@@ -69,7 +69,6 @@ impl<B, I> Subclass<B> for TextButtonSubclass<I>
                 },
                 Wm::SetText(_) => window.subclass_data().abs_size_bounds.min = window.get_ideal_size(),
                 Wm::GetSizeBounds(size_bounds) => size_bounds.min = window.get_ideal_size(),
-                Wm::Size(_) => window.show(true),
                 _ => ()
             },
             Msg::User(DerinMsg::SetRectPropagate(rect)) |
@@ -117,7 +116,6 @@ impl<P, I> Subclass<P> for WidgetGroupSubclass<I>
                     *size_bounds = window.subclass_data().layout_engine.actual_size_bounds();
                     0
                 },
-                Wm::Size(_) => {window.show(true); 0},
                 wm => window.default_window_proc(&mut Msg::Wm(wm))
             },
             Msg::User(DerinMsg::SetRect(rect)) => {window.set_rect(rect); 0},
@@ -168,7 +166,6 @@ impl<W, S> Subclass<W> for TextLabelSubclass<S>
                 Wm::SetText(new_text) =>
                     window.subclass_data().abs_size_bounds.min = unsafe{ window.min_unclipped_rect_raw(new_text) },
                 Wm::GetSizeBounds(size_bounds) => *size_bounds = window.subclass_data().abs_size_bounds,
-                Wm::Size(_) => window.show(true),
                 _ => ()
             },
             Msg::User(DerinMsg::SetRectPropagate(rect)) |
@@ -200,11 +197,33 @@ impl<W> Subclass<W> for ProgressBarSubclass
         match msg {
             Msg::User(DerinMsg::SetRectPropagate(rect)) |
             Msg::User(DerinMsg::SetRect(rect))         => {window.set_rect(rect); 0},
-            Msg::Wm(Wm::Size(rect)) => {
-                window.show(true);
-                window.default_window_proc(&mut Msg::Wm(Wm::Size(rect)))
-            },
             mut msg => window.default_window_proc(&mut msg)
+        }
+    }
+}
+
+pub struct SliderSubclass<C: SliderControl> {
+    pub control: C
+}
+
+impl<C: SliderControl> SliderSubclass<C> {
+    pub fn new(control: C) -> SliderSubclass<C> {
+        SliderSubclass {
+            control
+        }
+    }
+}
+
+impl<W, C> Subclass<W> for SliderSubclass<C>
+        where W: TrackbarWindow + WindowMut,
+              C: SliderControl
+{
+    type UserMsg = DerinMsg;
+    fn subclass_proc(window: &mut ProcWindowRef<W, Self>, mut msg: Msg<DerinMsg>) -> i64 {
+        match msg {
+            Msg::User(DerinMsg::SetRectPropagate(rect)) |
+            Msg::User(DerinMsg::SetRect(rect))         => {window.set_rect(rect); 0},
+            _ => window.default_window_proc(&mut msg)
         }
     }
 }

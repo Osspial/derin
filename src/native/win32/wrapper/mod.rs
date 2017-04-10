@@ -3,7 +3,8 @@ use self::subclass::*;
 pub use self::subclass::GridWidgetProcessor;
 
 use ui::{Parent, Node, NodeDataWrapper, NodeProcessorInit};
-use ui::widgets::{progbar, Button};
+use ui::widgets::{ButtonControl, SliderControl};
+use ui::widgets::status::{progbar, slider, Orientation};
 use ui::hints::{GridSize, TrackHints};
 
 use dww::*;
@@ -169,7 +170,7 @@ lazy_static!{
 
 subclass_node_data!{
     pub struct TextButtonNodeData<I>
-            where I: trait Borrow<str> | trait Button
+            where I: trait Borrow<str> | trait ButtonControl
     {
         subclass: UnsafeSubclassWrapper<PushButtonBase<&'static Font>, TextButtonSubclass<I>>,
         needs_update: bool
@@ -180,7 +181,7 @@ subclass_node_data!{
 
         fn from_node_data(node_data: I) -> UnsafeSubclassWrapper<_, _> {
             HOLDING_PARENT.with(|hp| {
-                let button_window = WindowBuilder::default().show_window(false).build_push_button_with_font(hp, &*CAPTION_FONT);
+                let button_window = WindowBuilder::default().build_push_button_with_font(hp, &*CAPTION_FONT);
                 let subclass = TextButtonSubclass::new(node_data);
 
                 unsafe{ UnsafeSubclassWrapper::new(button_window, subclass) }
@@ -225,7 +226,7 @@ subclass_node_data!{
 
         fn from_node_data(text: S) -> UnsafeSubclassWrapper<_, _> {
             HOLDING_PARENT.with(|hp| {
-                let label_window = WindowBuilder::default().show_window(false).build_text_label_with_font(hp, &*CAPTION_FONT);
+                let label_window = WindowBuilder::default().build_text_label_with_font(hp, &*CAPTION_FONT);
                 let subclass = TextLabelSubclass::new(text);
 
                 unsafe{ UnsafeSubclassWrapper::new(label_window, subclass) }
@@ -246,7 +247,7 @@ subclass_node_data!{
 
         fn from_node_data(status: progbar::Status) -> UnsafeSubclassWrapper<_, _> {
             HOLDING_PARENT.with(|hp| {
-                let progbar_window = WindowBuilder::default().show_window(true).build_progress_bar(hp);
+                let progbar_window = WindowBuilder::default().build_progress_bar(hp);
                 let subclass = ProgressBarSubclass::new(status);
 
                 unsafe{ UnsafeSubclassWrapper::new(progbar_window, subclass) }
@@ -256,8 +257,8 @@ subclass_node_data!{
             let status = subclass.data().status;
 
             match status.orientation {
-                progbar::Orientation::Horizontal => subclass.set_vertical(false),
-                progbar::Orientation::Vertical   => subclass.set_vertical(true)
+                Orientation::Horizontal => subclass.set_vertical(false),
+                Orientation::Vertical   => subclass.set_vertical(true)
             }
             match status.completion {
                 progbar::Completion::Frac(prog) => {
@@ -268,13 +269,55 @@ subclass_node_data!{
             }
         }
     }
+
+    pub struct SliderNodeData<C>
+            where C: trait SliderControl
+    {
+        subclass: UnsafeSubclassWrapper<TrackbarBase, SliderSubclass<C>>,
+        needs_update: bool
+    }
+    impl {
+        expr abs_size_bounds(_) = SizeBounds::default();
+        expr node_data(subclass_data) = subclass_data.control;
+
+        fn from_node_data(control: C) -> UnsafeSubclassWrapper<_, _> {
+            HOLDING_PARENT.with(|hp| {
+                let progbar_window = WindowBuilder::default().build_trackbar(hp);
+                let subclass = SliderSubclass::new(control);
+
+                unsafe{ UnsafeSubclassWrapper::new(progbar_window, subclass) }
+            })
+        }
+        fn update_widget(subclass: _) {
+            let status = subclass.data().control.status();
+
+            subclass.set_pos(status.position);
+            subclass.set_range(status.range.start, status.range.end);
+            subclass.auto_ticks(status.tick_interval);
+
+            match status.orientation {
+                Orientation::Horizontal => subclass.set_vertical(false),
+                Orientation::Vertical   => subclass.set_vertical(true)
+            }
+
+            // Dww tick position and slider tick position are different types, so translate between then.
+            // I don't have this type in DCT because then the documentation is uglier.
+            let tick_position = match status.tick_position {
+                slider::TickPosition::BottomRight => TickPosition::BottomRight,
+                slider::TickPosition::TopLeft => TickPosition::TopLeft,
+                slider::TickPosition::Both => TickPosition::Both,
+                slider::TickPosition::None => TickPosition::None
+            };
+            subclass.set_tick_position(tick_position);
+        }
+    }
 }
 
 impl<I> NodeDataWrapper<I> for WidgetGroupNodeData<I>
         where for<'a> I: Parent<!>
 {
     fn from_node_data(node_data: I) -> Self {
-        let wrapper_window = WindowBuilder::default().show_window(false).build_blank();
+        let wrapper_window = WindowBuilder::default().build_blank();
         let subclass = WidgetGroupSubclass::new(node_data);
 
         WidgetGroupNodeData {

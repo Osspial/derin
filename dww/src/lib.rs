@@ -20,7 +20,7 @@ pub mod hdc;
 use user_msg::UserMsg;
 
 use dct::geometry::{Px, SizeBounds, Rect, Point, OriginRect, OffsetRect};
-use dct::events::MouseButton;
+use dct::buttons::MouseButton;
 
 use winapi::*;
 
@@ -698,15 +698,11 @@ pub unsafe trait TrackbarWindow: Window {
     }
 
     /// Automatically add tick marks to the trackbar, clearing all other ticks.
-    fn auto_ticks(&mut self, frequency: Option<u32>) {
+    fn auto_ticks(&mut self, frequency: u32) {
         unsafe {
-            if let Some(freq) = frequency {
-                let style = self.get_style() | TBS_AUTOTICKS;
-                self.set_style(style);
-                user32::SendMessageW(self.hwnd(), TBM_SETTICFREQ, freq as WPARAM, 0);
-            } else {
-                user32::SendMessageW(self.hwnd(), TBM_SETTICFREQ, 0, 0);
-            }
+            let style = self.get_style() | TBS_AUTOTICKS;
+            self.set_style(style);
+            user32::SendMessageW(self.hwnd(), TBM_SETTICFREQ, frequency as WPARAM, 0);
         }
     }
 
