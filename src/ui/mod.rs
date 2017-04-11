@@ -83,10 +83,12 @@ impl NodeProcessorInit for ! {
 }
 
 impl<N: Node> NodeProcessorGridMut<N> for ! {
+    #[allow(unreachable_code)]
     fn add_child_mut<'a>(&'a mut self, _: ChildId, _: WidgetHints, _: &'a mut N) -> Result<(), !> {match *self {}}
 }
 
 impl<N: Node> NodeProcessorGrid<N> for ! {
+    #[allow(unreachable_code)]
     fn add_child<'a>(&'a mut self, _: ChildId, _: WidgetHints, _: &'a N) -> Result<(), !> {match *self {}}
 }
 

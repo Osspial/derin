@@ -273,7 +273,7 @@ subclass_node_data!{
     pub struct SliderNodeData<C>
             where C: trait SliderControl
     {
-        subclass: UnsafeSubclassWrapper<TrackbarBase, SliderSubclass<C>>,
+        subclass: UnsafeSubclassWrapper<BlankBase, SliderSubclass<C>>,
         needs_update: bool
     }
     impl {
@@ -281,23 +281,27 @@ subclass_node_data!{
         expr node_data(subclass_data) = subclass_data.control;
 
         fn from_node_data(control: C) -> UnsafeSubclassWrapper<_, _> {
-            HOLDING_PARENT.with(|hp| {
-                let progbar_window = WindowBuilder::default().build_trackbar(hp);
-                let subclass = SliderSubclass::new(control);
+            let container_window = WindowBuilder::default().build_blank();
+            let subclass = SliderSubclass::new(control);
 
-                unsafe{ UnsafeSubclassWrapper::new(progbar_window, subclass) }
-            })
+            let mut window = unsafe{ UnsafeSubclassWrapper::new(container_window, subclass) };
+            window.data_mut().slider_window = WindowBuilder::default().build_trackbar(&window);
+            window.add_child_window(&window.data().slider_window);
+            window
         }
-        fn update_widget(subclass: _) {
-            let status = subclass.data().control.status();
+        fn update_widget(subclass: _, action_fn: &SharedFn<C::Action>) {
+            subclass.data_mut().action_fn = Some(action_fn.clone());
 
-            subclass.set_pos(status.position);
-            subclass.set_range(status.range.start, status.range.end);
-            subclass.auto_ticks(status.tick_interval);
+            let status = subclass.data().control.status();
+            let slider_window = &mut subclass.data_mut().slider_window;
+
+            slider_window.set_pos(status.position);
+            slider_window.set_range(status.range.start, status.range.end);
+            slider_window.auto_ticks(status.tick_interval);
 
             match status.orientation {
-                Orientation::Horizontal => subclass.set_vertical(false),
-                Orientation::Vertical   => subclass.set_vertical(true)
+                Orientation::Horizontal => slider_window.set_vertical(false),
+                Orientation::Vertical   => slider_window.set_vertical(true)
             }
 
             // Dww tick position and slider tick position are different types, so translate between then.
@@ -308,7 +312,7 @@ subclass_node_data!{
                 slider::TickPosition::Both => TickPosition::Both,
                 slider::TickPosition::None => TickPosition::None
             };
-            subclass.set_tick_position(tick_position);
+            slider_window.set_tick_position(tick_position);
         }
     }
 }

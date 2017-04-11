@@ -44,7 +44,11 @@ impl SliderControl for BasicSlider {
         &mut self.0
     }
     fn on_range_event(&self, event: RangeEvent) -> Option<GalleryEvent> {
-        Some(GalleryEvent::SliderMoved(event.moved_to))
+        if let RangeEvent::Move(moved_to) = event {
+            Some(GalleryEvent::SliderMoved(moved_to))
+        } else {
+            None
+        }
     }
 }
 
@@ -188,7 +192,11 @@ fn main() {
     let mut window = Window::new(WidgetGroup::new(BasicParent::new()), &WindowConfig::new());
 
     loop {
-        window.wait_actions(|_| {false}).unwrap();
-        window.root.button_vec.push(TextButton::new(AddButton("Another Button")));
+        let mut action = None;
+        window.wait_actions(|new_act| {action = Some(new_act); false}).unwrap();
+        match action.unwrap() {
+            GalleryEvent::AddButton => window.root.button_vec.push(TextButton::new(AddButton("Another Button"))),
+            GalleryEvent::SliderMoved(moved_to) => window.root.bar.completion = progbar::Completion::Frac(moved_to as f32 / 128.0)
+        }
     }
 }

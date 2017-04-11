@@ -178,7 +178,7 @@ impl<'a> WindowBuilder<'a> {
     }
 
     pub fn build_trackbar<P: ParentWindow>(self, parent: &P) -> TrackbarBase {
-        let window_handle = self.build(0, 0, unsafe{ Some(parent.hwnd()) }, &TRACKBAR_CLASS);
+        let window_handle = self.build(TBS_NOTIFYBEFOREMOVE, 0, unsafe{ Some(parent.hwnd()) }, &TRACKBAR_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         TrackbarBase(window_handle)
     }

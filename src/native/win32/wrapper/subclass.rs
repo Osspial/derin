@@ -1,12 +1,14 @@
 use ui::{Parent, Node, ChildId, NodeProcessorInit, NodeProcessorGrid, NodeProcessorGridMut, NodeProcessor};
 use ui::widgets::{ButtonControl, MouseEvent, SliderControl, RangeEvent};
-use ui::widgets::status::{progbar, slider};
+use ui::widgets::status::progbar;
 
 use dww::*;
+use dww::notify::{Notification, NotifyType, ThumbReason};
 use dle::{GridContainer, GridEngine, GridConstraintSolver, SolveError};
 use dle::hints::{WidgetHints, GridSize, TrackHints};
 use dct::geometry::{OriginRect, OffsetRect, SizeBounds};
 
+use std::mem;
 use std::borrow::Borrow;
 
 use super::{DerinMsg, SharedFn, ToplevelWindowBase, NativeDataWrapper};
@@ -203,26 +205,49 @@ impl<W> Subclass<W> for ProgressBarSubclass
 }
 
 pub struct SliderSubclass<C: SliderControl> {
-    pub control: C
+    pub control: C,
+    pub action_fn: Option<SharedFn<C::Action>>,
+    pub slider_window: TrackbarBase
 }
 
 impl<C: SliderControl> SliderSubclass<C> {
     pub fn new(control: C) -> SliderSubclass<C> {
         SliderSubclass {
-            control
+            control,
+            action_fn: None,
+            slider_window: unsafe{ mem::zeroed() }
         }
     }
 }
 
 impl<W, C> Subclass<W> for SliderSubclass<C>
-        where W: TrackbarWindow + WindowMut,
+        where W: WindowMut,
               C: SliderControl
 {
     type UserMsg = DerinMsg;
     fn subclass_proc(window: &mut ProcWindowRef<W, Self>, mut msg: Msg<DerinMsg>) -> i64 {
         match msg {
+            Msg::Wm(Wm::Notify(Notification {
+                notify_type: NotifyType::TrackbarThumbPosChanging(new_pos, reason),
+                ..
+            })) => {
+                let event = match reason {
+                    ThumbReason::EndTrack       |
+                    ThumbReason::ThumbPosition => RangeEvent::Drop(new_pos),
+                    _                          => RangeEvent::Move(new_pos)
+                };
+                let action_opt = window.subclass_data().control.on_range_event(event);
+                if let Some(action) = action_opt {
+                    unsafe{ window.subclass_data().action_fn.as_ref().expect("No Action Function").borrow_mut().call_fn(action) };
+                }
+                0
+            },
             Msg::User(DerinMsg::SetRectPropagate(rect)) |
-            Msg::User(DerinMsg::SetRect(rect))         => {window.set_rect(rect); 0},
+            Msg::User(DerinMsg::SetRect(rect))         => {
+                window.set_rect(rect);
+                window.subclass_data().slider_window.set_rect(OriginRect::from(rect).into());
+                0
+            },
             _ => window.default_window_proc(&mut msg)
         }
     }

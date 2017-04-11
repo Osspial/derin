@@ -167,8 +167,9 @@ pub enum MouseEvent {
     DoubleClicked(MouseButton)
 }
 
-pub struct RangeEvent {
-    pub moved_to: u32
+pub enum RangeEvent {
+    Move(u32),
+    Drop(u32)
 }
 
 pub trait ButtonControl {

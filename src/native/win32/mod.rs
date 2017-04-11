@@ -199,14 +199,14 @@ impl<'a, P, A> NodeProcessorGridMut<ProgressBar> for NativeNodeProcessor<'a, P, 
 
 impl<'a, P, A, C> NodeProcessorGridMut<Slider<C>> for NativeNodeProcessor<'a, P, A>
         where P: ParentChildAdder,
-              C: SliderControl
+              C: SliderControl<Action = A>
 {
     fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, label: &'b mut Slider<C>) -> Result<(), !> {
         label.wrapper().update_subclass_ptr();
 
         if label.wrapper().needs_update() {
             *self.children_updated = true;
-            label.wrapper_mut().update_widget();
+            label.wrapper_mut().update_widget(self.action_fn);
             self.parent.add_child_node(label.wrapper_mut());
         }
         Ok(())
