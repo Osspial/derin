@@ -16,6 +16,7 @@ extern crate dww_macros;
 pub mod user_msg;
 pub mod msg_queue;
 pub mod hdc;
+pub mod notify;
 mod vkey;
 
 use user_msg::UserMsg;
@@ -33,6 +34,7 @@ use std::cell::UnsafeCell;
 use std::borrow::Borrow;
 
 use self::hdc::{DeviceContext, RetrievedContext, TextDrawOptions};
+use self::notify::{Notification, NotifyType, ThumbReason};
 use self::ucs2::{WithString, Ucs2String, Ucs2Str, ucs2_str, ucs2_str_from_ptr, UCS2_CONVERTER};
 
 #[derive(Debug)]
@@ -53,6 +55,7 @@ pub enum Wm<'a> {
     KeyUp(Key, RepeatCount),
     SetText(&'a Ucs2Str),
     Paint,
+    Notify(Notification),
     GetSizeBounds(&'a mut SizeBounds)
 }
 
@@ -319,12 +322,13 @@ impl Default for TickPosition {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct ParentRef( HWND );
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct WindowRef( HWND );
+#[derive(Debug)]
 pub struct WindowRefMut<'a>( HWND, PhantomData<&'a mut ()> );
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct UnsafeSubclassRef<'a, U: UserMsg>( HWND, PhantomData<(U, PhantomData<&'a mut ()>)> );
 
 pub unsafe trait Window: Sized {
@@ -1070,8 +1074,35 @@ impl<'a, W: Window, S: Subclass<W>> ProcWindowRef<'a, W, S> {
         }
     }
 
+    /// Forward the message to the specified window. Panics if the message is a user message.
+    pub fn forward_msg<F, WM>(&mut self, msg: &mut Msg<S::UserMsg>, window: F) -> i64
+            where F: FnOnce(&mut Self) -> &mut WM,
+                  WM: WindowMut
+    {
+        if let Msg::User(_) = *msg {
+            panic!("Attempted to forward user message; use `forward_user_msg` instead");
+        } else {
+            let ret = unsafe{ user32::SendMessageW(window(self).hwnd(), self.msg, self.wparam, self.lparam) };
+            self.update_msg_enum(msg);
+            ret
+        }
+    }
+
+    pub fn forward_user_msg<F>(&mut self, msg: &mut Msg<S::UserMsg>, window: F) -> i64
+            where F: FnOnce(&mut Self) -> UnsafeSubclassRef<S::UserMsg>
+    {
+        let ret = unsafe{ user32::SendMessageW(window(self).hwnd(), self.msg, self.wparam, self.lparam) };
+        self.update_msg_enum(msg);
+        ret
+    }
+
     pub fn default_window_proc(&mut self, msg: &mut Msg<S::UserMsg>) -> i64 {
         let ret = unsafe{ comctl32::DefSubclassProc(self.hwnd, self.msg, self.wparam, self.lparam) as i64 };
+        self.update_msg_enum(msg);
+        ret
+    }
+
+    fn update_msg_enum(&self, msg: &mut Msg<S::UserMsg>) {
         match *msg {
             Msg::Wm(Wm::GetSizeBounds(ref mut size_bounds)) => {
                 assert_eq!(self.msg, WM_GETMINMAXINFO);
@@ -1086,7 +1117,6 @@ impl<'a, W: Window, S: Subclass<W>> ProcWindowRef<'a, W, S> {
             },
             _ => ()
         }
-        ret
     }
 }
 unsafe impl<'a, W: Window, S: Subclass<W>> Window for ProcWindowRef<'a, W, S> {
@@ -1302,12 +1332,10 @@ unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
                                        (hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM,
                                         _: UINT_PTR, subclass_data: DWORD_PTR) -> LRESULT
 {
-    let subclass_data = &mut *(subclass_data as *mut S);
-
     /// Partially applied function to run S::subclass_proc with a message. This is a macro because
     /// using a closure resulted in lifetime errors.
     macro_rules! run_subclass_proc {
-        ($message:expr) => {{S::subclass_proc(&mut ProcWindowRef::new(hwnd, msg, wparam, lparam, subclass_data), $message) as LRESULT}}
+        ($message:expr) => {{S::subclass_proc(&mut ProcWindowRef::new(hwnd, msg, wparam, lparam, &mut *(subclass_data as *mut S)), $message) as LRESULT}}
     }
 
     if WM_APP <= msg && msg <= 0xBFFF {
@@ -1396,6 +1424,61 @@ unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
             }
             WM_PAINT => {
                 run_subclass_proc!(Msg::Wm(Wm::Paint))
+            }
+            WM_NOTIFY => {
+                let notify_info = &*(lparam as *const NMHDR);
+                let notify_type = match notify_info.code {
+                    NM_CHAR => {
+                        use std::char;
+                        let char_info = &*(lparam as *const NMCHAR);
+                        char::from_u32(char_info.ch).map(|ch| NotifyType::Char(ch))
+                    },
+                    NM_FONTCHANGED => Some(NotifyType::FontChanged),
+                    NM_HOVER => Some(NotifyType::Hover),
+                    NM_KEYDOWN => {
+                        let key_info = &*(lparam as *const NMKEY);
+                        let repeat_count = (key_info.uFlags & 0xFFFF) as u16;
+                        vkey::key_from_code(key_info.nVKey as u64).map(|key| NotifyType::KeyDown(key, repeat_count))
+                    },
+                    NM_KILLFOCUS => Some(NotifyType::KillFocus),
+                    NM_LDOWN => Some(NotifyType::LDown),
+                    NM_OUTOFMEMORY => Some(NotifyType::OutOfMemory),
+                    NM_RELEASEDCAPTURE => Some(NotifyType::ReleasedCapture),
+                    NM_RETURN => Some(NotifyType::Return),
+                    NM_SETFOCUS => Some(NotifyType::SetFocus),
+                    NM_THEMECHANGED => Some(NotifyType::ThemeChanged),
+                    NM_TOOLTIPSCREATED => {
+                        let tooltip_info = &*(lparam as *const NMTOOLTIPSCREATED);
+                        Some(NotifyType::TooltipCreated(WindowRef(tooltip_info.hwndToolTips)))
+                    },
+                    TRBN_THUMBPOSCHANGING => {
+                        let thumb_pos_info = &*(lparam as *const NMTRBTHUMBPOSCHANGING);
+                        let reason = match thumb_pos_info.nReason as u64 {
+                            TB_LINEDOWN      => ThumbReason::LineDown,
+                            TB_LINEUP        => ThumbReason::LineUp,
+                            TB_PAGEDOWN      => ThumbReason::PageDown,
+                            TB_PAGEUP        => ThumbReason::PageUp,
+                            TB_ENDTRACK      => ThumbReason::EndTrack,
+                            TB_THUMBPOSITION => ThumbReason::ThumbPosition,
+                            TB_THUMBTRACK    => ThumbReason::ThumbTrack,
+                            TB_BOTTOM        => ThumbReason::Bottom,
+                            TB_TOP           => ThumbReason::Top,
+                            _                => return comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
+                        };
+                        Some(NotifyType::TrackbarThumbPosChanging(thumb_pos_info.dwPos, reason))
+                    },
+                    _ => None
+                };
+
+                if let Some(nty) = notify_type {
+                    let notification = Notification {
+                        source: WindowRef(hwnd),
+                        notify_type: nty
+                    };
+                    run_subclass_proc!(Msg::Wm(Wm::Notify(notification)))
+                } else {
+                    comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
+                }
             }
 
             BCM_GETIDEALSIZE => {
