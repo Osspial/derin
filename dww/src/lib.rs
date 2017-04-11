@@ -16,11 +16,12 @@ extern crate dww_macros;
 pub mod user_msg;
 pub mod msg_queue;
 pub mod hdc;
+mod vkey;
 
 use user_msg::UserMsg;
 
 use dct::geometry::{Px, SizeBounds, Rect, Point, OriginRect, OffsetRect};
-use dct::buttons::MouseButton;
+use dct::buttons::{MouseButton, Key};
 
 use winapi::*;
 
@@ -48,6 +49,8 @@ pub enum Wm<'a> {
     MouseDown(MouseButton, Point),
     MouseDoubleDown(MouseButton, Point),
     MouseUp(MouseButton, Point),
+    KeyDown(Key, RepeatCount),
+    KeyUp(Key, RepeatCount),
     SetText(&'a Ucs2Str),
     Paint,
     GetSizeBounds(&'a mut SizeBounds)
@@ -57,6 +60,8 @@ pub enum Wm<'a> {
 pub enum Bm<'a> {
     GetIdealSize(&'a mut OriginRect)
 }
+
+pub type RepeatCount = u16;
 
 
 
@@ -1352,6 +1357,22 @@ unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
                 };
 
                 run_subclass_proc!(Msg::Wm(Wm::MouseUp(button, Point::new(loword(lparam) as Px, hiword(lparam) as Px))))
+            }
+            WM_KEYDOWN => {
+                if let Some(key) = vkey::key_from_code(wparam) {
+                    let repeat_count = (wparam & 0xFFFF) as u16;
+                    run_subclass_proc!(Msg::Wm(Wm::KeyDown(key, repeat_count)))
+                } else {
+                    1
+                }
+            }
+            WM_KEYUP => {
+                if let Some(key) = vkey::key_from_code(wparam) {
+                    let repeat_count = (wparam & 0xFFFF) as u16;
+                    run_subclass_proc!(Msg::Wm(Wm::KeyUp(key, repeat_count)))
+                } else {
+                    1
+                }
             }
             WM_SETTEXT => {
                 run_subclass_proc!(Msg::Wm(Wm::SetText(ucs2_str_from_ptr(lparam as *const WCHAR))))
