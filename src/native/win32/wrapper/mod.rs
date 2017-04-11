@@ -257,15 +257,19 @@ subclass_node_data!{
             let status = subclass.data().status;
 
             match status.orientation {
-                Orientation::Horizontal => subclass.set_vertical(false),
-                Orientation::Vertical   => subclass.set_vertical(true)
+                Orientation::Horizontal if subclass.is_vertical() => subclass.set_vertical(false),
+                Orientation::Vertical  if !subclass.is_vertical() => subclass.set_vertical(true),
+                _ => ()
             }
             match status.completion {
                 progbar::Completion::Frac(prog) => {
-                    subclass.set_marquee(false);
+                    if subclass.is_marquee() {
+                        subclass.set_marquee(false);
+                    }
                     subclass.set_progress((prog * 100.0) as u16);
                 }
-                progbar::Completion::Working => subclass.set_marquee(true)
+                progbar::Completion::Working if !subclass.is_marquee() => subclass.set_marquee(true),
+                _ => ()
             }
         }
     }
@@ -359,7 +363,9 @@ impl ParentChildAdder for WidgetGroupAdder {
     fn add_child_node<W>(&mut self, child: &mut W)
             where W: NativeDataWrapper
     {
-        self.0.add_child_window(&mut child.window_ref());
+        if child.window_ref().get_parent() != Some(self.0.parent_ref()) {
+            self.0.add_child_window(&mut child.window_ref());
+        }
     }
 }
 
@@ -373,7 +379,9 @@ impl ToplevelWindow {
         // window struct will only exist for the length of the child, and even if the child is
         // destroyed any messages sent won't be processed.
         let subclass = ToplevelSubclass(mem::transmute(node_ref));
-        ToplevelWindow(UnsafeSubclassWrapper::new(window, subclass))
+        let window = ToplevelWindow(UnsafeSubclassWrapper::new(window, subclass));
+        window.0.add_child_window(&node_ref);
+        window
     }
 
     pub fn bound_to_size_bounds(&mut self) {
@@ -389,16 +397,20 @@ impl ParentChildAdder for ToplevelWindow {
     fn add_child_node<W>(&mut self, child: &mut W)
             where W: NativeDataWrapper
     {
-        HOLDING_PARENT.with(|hp| {
-            // Reset the Toplevel's current child window parent to the holding parent.
-            hp.add_child_window(&self.0.data_mut().0);
-        });
-        // Expand the lifetime to 'static with transmute. See creation for reason this is done.
-        let mut child_ref = unsafe{ mem::transmute(child.unsafe_subclass_ref()) };
-        self.0.add_child_window(&mut child_ref);
+        let mut child_ref = child.unsafe_subclass_ref();
 
-        self.0.data_mut().0 = child_ref;
+        // Only perform updates if the child isn't already the stored window ref. Otherwise we get
+        // flickering.
+        if child_ref.window_ref() != self.0.data_mut().0.window_ref() {
+            HOLDING_PARENT.with(|hp| {
+                // Reset the Toplevel's current child window parent to the holding parent.
+                hp.add_child_window(&self.0.data_mut().0);
+            });
+            self.0.add_child_window(&mut child_ref);
 
+            // Expand the lifetime to 'static with transmute. See creation for reason this is done.
+            self.0.data_mut().0 = unsafe{ mem::transmute(child_ref) };
+        }
     }
 }
 

@@ -55,6 +55,7 @@ pub enum Wm<'a> {
     KeyUp(Key, RepeatCount),
     SetText(&'a Ucs2Str),
     Paint,
+    EraseBackground,
     Notify(Notification),
     GetSizeBounds(&'a mut SizeBounds)
 }
@@ -172,7 +173,7 @@ impl<'a> WindowBuilder<'a> {
     }
 
     pub fn build_progress_bar<P: ParentWindow>(self, parent: &P) -> ProgressBarBase {
-        let window_handle = self.build(0, 0, unsafe{ Some(parent.hwnd()) }, &PROGRESS_CLASS);
+        let window_handle = self.build(PBS_SMOOTHREVERSE, 0, unsafe{ Some(parent.hwnd()) }, &PROGRESS_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         ProgressBarBase(window_handle)
     }
@@ -322,13 +323,13 @@ impl Default for TickPosition {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ParentRef( HWND );
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WindowRef( HWND );
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct WindowRefMut<'a>( HWND, PhantomData<&'a mut ()> );
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnsafeSubclassRef<'a, U: UserMsg>( HWND, PhantomData<(U, PhantomData<&'a mut ()>)> );
 
 pub unsafe trait Window: Sized {
@@ -368,6 +369,15 @@ pub unsafe trait Window: Sized {
 
         R::from(OffsetRect::new(winapi_rect.left as Px, winapi_rect.top as Px,
                                 winapi_rect.right as Px, winapi_rect.bottom as Px))
+    }
+
+    fn get_parent(&self) -> Option<ParentRef> {
+        let parent = unsafe{ user32::GetParent(self.hwnd()) };
+        if ptr::null_mut() != parent {
+            Some(ParentRef(parent))
+        } else {
+            None
+        }
     }
 
     fn get_style(&self) -> DWORD {
@@ -595,6 +605,8 @@ pub unsafe trait ParentWindow: Window {
 
     fn add_child_window<W: Window>(&self, child: &W) {
         unsafe {
+            let child_style = child.get_style() | WS_CHILD;
+            child.set_style(child_style);
             user32::SetParent(child.hwnd(), self.hwnd());
         }
     }
@@ -603,6 +615,8 @@ pub unsafe trait ParentWindow: Window {
 pub unsafe trait OrphanableWindow: Window {
     fn orphan(&self) {
         unsafe {
+            let child_style = self.get_style() & !WS_CHILD;
+            self.set_style(child_style);
             user32::SetParent(self.hwnd(), ptr::null_mut());
         }
     }
@@ -646,6 +660,18 @@ pub unsafe trait ProgressBarWindow: Window {
         unsafe{ user32::SendMessageW(self.hwnd(), PBM_SETPOS, progress as WPARAM, 0) };
     }
 
+    fn delta_progress(&mut self, delta: i16) {
+        unsafe{ user32::SendMessageW(self.hwnd(), PBM_DELTAPOS, delta as WPARAM, 0) };
+    }
+
+    fn set_step(&mut self, step: u16) {
+        unsafe{ user32::SendMessageW(self.hwnd(), PBM_SETSTEP, step as WPARAM, 0) };
+    }
+
+    fn step(&mut self) {
+        unsafe{ user32::SendMessageW(self.hwnd(), PBM_STEPIT, 0, 0) };
+    }
+
     fn get_progress(&self) -> WORD {
         unsafe{ user32::SendMessageW(self.hwnd(), PBM_GETPOS, 0, 0) as WORD }
     }
@@ -671,6 +697,14 @@ pub unsafe trait ProgressBarWindow: Window {
         };
         unsafe{ self.set_style(new_style) };
         self.set_progress(progress);
+    }
+
+    fn is_marquee(&self) -> bool {
+        self.get_style() & PBS_MARQUEE != 0
+    }
+
+    fn is_vertical(&self) -> bool {
+        self.get_style() & PBS_VERTICAL != 0
     }
 }
 
@@ -1424,6 +1458,9 @@ unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
             }
             WM_PAINT => {
                 run_subclass_proc!(Msg::Wm(Wm::Paint))
+            }
+            WM_ERASEBKGND => {
+                run_subclass_proc!(Msg::Wm(Wm::EraseBackground))
             }
             WM_NOTIFY => {
                 let notify_info = &*(lparam as *const NMHDR);
