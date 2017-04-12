@@ -1,14 +1,19 @@
 #![feature(specialization)]
 
 extern crate derin;
+#[macro_use]
+extern crate derin_macros;
 extern crate dct;
 
 use derin::ui::*;
 use derin::ui::widgets::*;
 use derin::ui::widgets::status::Orientation;
 use derin::ui::widgets::status::{progbar, slider};
+use derin::ui::hints::*;
+
 use derin::native::{Window, WindowConfig};
 
+use std::iter;
 use std::borrow::Borrow;
 
 enum GalleryEvent {
@@ -52,12 +57,16 @@ impl SliderControl for BasicSlider {
     }
 }
 
+#[derive(Parent)]
+#[derin(child_action = "GalleryEvent")]
 struct BasicParent {
     label: TextLabel<&'static str>,
     bar: ProgressBar,
     slider: Slider<BasicSlider>,
     button0: TextButton<AddButton>,
-    button_vec: Vec<TextButton<AddButton>>
+    #[derin(layout)]
+    layout: BasicParentLayout
+    // button_vec: Vec<TextButton<AddButton>>
 }
 
 impl BasicParent {
@@ -67,124 +76,53 @@ impl BasicParent {
             bar: ProgressBar::new(progbar::Status::new(progbar::Completion::Frac(0.5), Orientation::Horizontal)),
             slider: Slider::new(BasicSlider(slider::Status::default())),
             button0: TextButton::new(AddButton("Add Button")),
-            button_vec: Vec::new()
+            layout: BasicParentLayout
+            // button_vec: Vec::new()
         }
     }
 }
 
-impl<NPI> Parent<NPI> for BasicParent
-        where NPI: NodeProcessorInit,
-              NPI::GridProcessor: NodeProcessorGridMut<TextButton<AddButton>> +
-                                  NodeProcessorGridMut<ProgressBar> +
-                                  NodeProcessorGridMut<Slider<BasicSlider>> +
-                                  NodeProcessorGridMut<TextLabel<&'static str>>
-{
-    type ChildAction = GalleryEvent;
+struct BasicParentLayout;
 
-    default fn children(&self, _: NPI) -> Result<(), NPI::Error> {
-        panic!("Attempted children call when NPI doesn't implement NodeProcessorGrid")
+impl<'a> GridLayout<'a> for BasicParentLayout {
+    type ColHints = iter::Repeat<TrackHints>;
+    type RowHints = iter::Repeat<TrackHints>;
+
+    fn grid_size(&self) -> GridSize {
+        GridSize::new(1, 4)
     }
 
-    fn children_mut(&mut self, npi: NPI) -> Result<(), NPI::Error> {
-        use derin::ui::hints::{GridSize, NodeSpan, WidgetHints, TrackHints};
-        use std::iter;
-
-        let mut np = npi.init_grid(
-            GridSize::new(1, 4 + self.button_vec.len() as u32),
-            iter::empty(),
-            iter::once(TrackHints {
-                fr_size: 0.0,
-                ..TrackHints::default()
-            })
-        );
-
-        let label_hints = WidgetHints {
-            node_span: NodeSpan::new(0..1, 0..1),
-            ..WidgetHints::default()
-        };
-        np.add_child_mut(ChildId::Str("label"), label_hints, &mut self.label)?;
-
-        let bar_hints = WidgetHints {
-            node_span: NodeSpan::new(0..1, 1..2),
-            ..WidgetHints::default()
-        };
-        np.add_child_mut(ChildId::Str("bar"), bar_hints, &mut self.bar)?;
-
-        let slider_hints = WidgetHints {
-            node_span: NodeSpan::new(0..1, 2..3),
-            ..WidgetHints::default()
-        };
-        np.add_child_mut(ChildId::Str("slider"), slider_hints, &mut self.slider)?;
-
-        let button0_hints = WidgetHints {
-            node_span: NodeSpan::new(0..1, 3..4),
-            ..WidgetHints::default()
-        };
-        np.add_child_mut(ChildId::Str("button0"), button0_hints, &mut self.button0)?;
-
-        for (i, button) in self.button_vec.iter_mut().enumerate() {
-            let button_hints = WidgetHints {
-                node_span: NodeSpan::new(0..1, 4+i as u32..4+i as u32+1),
-                ..WidgetHints::default()
-            };
-            np.add_child_mut(ChildId::Num(i as u32), button_hints, button)?;
-        }
-        Ok(())
+    fn col_hints(&'a self) -> Self::ColHints {
+        iter::repeat(TrackHints::default())
     }
-}
 
-impl<NPI> Parent<NPI> for BasicParent
-        where NPI: NodeProcessorInit,
-              NPI::GridProcessor: NodeProcessorGrid<TextButton<AddButton>> +
-                                  NodeProcessorGrid<ProgressBar> +
-                                  NodeProcessorGrid<Slider<BasicSlider>> +
-                                  NodeProcessorGrid<TextLabel<&'static str>>
-{
-    fn children(&self, npi: NPI) -> Result<(), NPI::Error> {
-        use derin::ui::hints::{GridSize, NodeSpan, WidgetHints, TrackHints};
-        use std::iter;
+    fn row_hints(&'a self) -> Self::RowHints {
+        iter::repeat(TrackHints {
+            fr_size: 1.0,
+            ..TrackHints::default()
+        })
+    }
 
-        let mut np = npi.init_grid(
-            GridSize::new(1, 4 + self.button_vec.len() as u32),
-            iter::empty(),
-            iter::once(TrackHints {
-                fr_size: 0.0,
-                ..TrackHints::default()
-            })
-        );
-
-        let label_hints = WidgetHints {
-            node_span: NodeSpan::new(0..1, 0..1),
-            ..WidgetHints::default()
-        };
-        np.add_child(ChildId::Str("label"), label_hints, &self.label)?;
-
-        let bar_hints = WidgetHints {
-            node_span: NodeSpan::new(0..1, 1..2),
-            ..WidgetHints::default()
-        };
-        np.add_child(ChildId::Str("bar"),  bar_hints, &self.bar)?;
-
-        let slider_hints = WidgetHints {
-            node_span: NodeSpan::new(0..1, 2..3),
-            ..WidgetHints::default()
-        };
-        np.add_child(ChildId::Str("slider"), slider_hints, &self.slider)?;
-
-        let button0_hints = WidgetHints {
-            node_span: NodeSpan::new(0..1, 3..4),
-            ..WidgetHints::default()
-        };
-        np.add_child(ChildId::Str("button0"), button0_hints, &self.button0)?;
-
-        for (i, button) in self.button_vec.iter().enumerate() {
-            let button_hints = WidgetHints {
-                node_span: NodeSpan::new(0..1, 4+i as u32..4+i as u32+1),
+    fn get_hints(&self, id: ChildId) -> Option<WidgetHints> {
+        match id {
+            ChildId::Str("label") => Some(WidgetHints {
+                node_span: NodeSpan::new(0, 0),
                 ..WidgetHints::default()
-            };
-            np.add_child(ChildId::Num(i as u32), button_hints, button)?;
+            }),
+            ChildId::Str("bar") => Some(WidgetHints {
+                node_span: NodeSpan::new(0, 1),
+                ..WidgetHints::default()
+            }),
+            ChildId::Str("slider") => Some(WidgetHints {
+                node_span: NodeSpan::new(0, 2),
+                ..WidgetHints::default()
+            }),
+            ChildId::Str("button0") => Some(WidgetHints {
+                node_span: NodeSpan::new(0, 3),
+                ..WidgetHints::default()
+            }),
+            _ => None
         }
-        Ok(())
     }
 }
 
@@ -195,7 +133,7 @@ fn main() {
         let mut action = None;
         window.wait_actions(|new_act| {action = Some(new_act); false}).unwrap();
         match action.unwrap() {
-            GalleryEvent::AddButton => window.root.button_vec.push(TextButton::new(AddButton("Another Button"))),
+            GalleryEvent::AddButton => (),// window.root.button_vec.push(TextButton::new(AddButton("Another Button"))),
             GalleryEvent::SliderMoved(moved_to) => window.root.bar.completion = progbar::Completion::Frac(moved_to as f32 / 128.0)
         }
     }

@@ -67,6 +67,17 @@ pub trait Parent<NPI>
             where NPI::GridProcessor: NodeProcessorGridMut<!>;
 }
 
+pub trait GridLayout<'a> {
+    type ColHints: 'a + Iterator<Item = TrackHints>;
+    type RowHints: 'a + Iterator<Item = TrackHints>;
+
+    fn grid_size(&self) -> GridSize;
+    fn col_hints(&'a self) -> Self::ColHints;
+    fn row_hints(&'a self) -> Self::RowHints;
+
+    fn get_hints(&self, ChildId) -> Option<WidgetHints>;
+}
+
 
 impl NodeProcessor for ! {
     type Error = !;

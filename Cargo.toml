@@ -12,6 +12,7 @@ lazy_static = "0.2"
 
 [dev-dependencies]
 quickcheck = "0.4"
+derin_macros = {path = "./derin_macros"}
 
 [workspace]
-members = ["./dct", "./dle", "./dww", "./dww_macros"]
+members = ["./dct", "./dle", "./dww", "./dww_macros", "./derin_macros"]

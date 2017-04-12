@@ -506,10 +506,10 @@ impl<'a> NodeProcessorInit for EngineTypeHarvester<'a> {
                   R: Iterator<Item = TrackHints>
     {
         self.0.set_grid_size(grid_size);
-        for (i, hint) in col_hints.enumerate() {
+        for (i, hint) in col_hints.enumerate().take(grid_size.x as usize) {
             self.0.set_col_hints(i as Tr, hint);
         }
-        for (i, hint) in row_hints.enumerate() {
+        for (i, hint) in row_hints.enumerate().take(grid_size.y as usize) {
             self.0.set_row_hints(i as Tr, hint);
         }
     }
