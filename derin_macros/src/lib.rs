@@ -73,19 +73,24 @@ fn impl_parent(&DeriveInput{ref ident, ref attrs, ref generics, ref body, ..}: &
         widget_fields.iter().enumerate().map(|(i, field)| field.ident.clone().unwrap_or(Ident::new(i))),
         widget_fields.iter().enumerate().map(|(i, field)| (i as u32, field))
                                         .map(|(i, field)| match field.ident {
-                                            Some(ref ident) => quote!(ChildId::Str(stringify!(#ident))),
-                                            None            => quote!(ChildId::Num(#i))
+                                            Some(ref ident) => quote!(_derive_derin::ui::ChildId::Str(stringify!(#ident))),
+                                            None            => quote!(_derive_derin::ui::ChildId::Num(#i))
                                         })
     );
 
     let parent_mut = parent_mut(ident, generics, body, &child_action_ty, &widget_info_iters, &widget_fields, &layout_ident);
     let parent = parent(ident, generics, body, &widget_info_iters, &widget_fields, &layout_ident);
 
-    quote!{
-        extern crate derin as _derive_derin;
+    let dummy_const = Ident::new(format!("_IMPL_PARENT_FOR_{}", ident));
 
-        #parent_mut
-        #parent
+    quote!{
+        #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+        const #dummy_const: () = {
+            extern crate derin as _derive_derin;
+
+            #parent_mut
+            #parent
+        };
     }
 }
 
@@ -102,7 +107,7 @@ fn parent_mut<F, I, C>(
               I: Iterator<Item = Ident>,
               C: Iterator<Item = Tokens>
 {
-    let mut_generics_raw = expand_generics(generics, body, widget_fields, |ty_string| format!("NodeProcessorGridMut<{}>", ty_string));
+    let mut_generics_raw = expand_generics(generics, body, widget_fields, |ty_string| format!("_derive_derin::ui::NodeProcessorGridMut<{}>", ty_string));
     let (mut_impl_generics, _, mut_where_clause) = mut_generics_raw.split_for_impl();
     let (_, ty_generics, _) = generics.split_for_impl();
     let layout_ident_iter = iter::repeat(&layout_ident);
@@ -113,7 +118,6 @@ fn parent_mut<F, I, C>(
             type ChildAction = #child_action_ty;
 
             fn children_mut(&mut self, npi: NPI) -> Result<(), NPI::Error> {
-                use self::_derive_derin::ui::ChildId;
                 let mut np = npi.init_grid(
                     self.#layout_ident.grid_size(),
                     self.#layout_ident.col_hints(),
@@ -144,7 +148,7 @@ fn parent<F, I, C>(
               I: Iterator<Item = Ident>,
               C: Iterator<Item = Tokens>
 {
-    let mut_generics_raw = expand_generics(generics, body, widget_fields, |ty_string| format!("NodeProcessorGrid<{}>", ty_string));
+    let mut_generics_raw = expand_generics(generics, body, widget_fields, |ty_string| format!("_derive_derin::ui::NodeProcessorGrid<{}>", ty_string));
     let (mut_impl_generics, _, mut_where_clause) = mut_generics_raw.split_for_impl();
     let (_, ty_generics, _) = generics.split_for_impl();
     let layout_ident_iter = iter::repeat(&layout_ident);
@@ -153,7 +157,6 @@ fn parent<F, I, C>(
     quote!{
         impl #mut_impl_generics Parent<NPI> for #ident #ty_generics #mut_where_clause {
             fn children(&self, npi: NPI) -> Result<(), NPI::Error> {
-                use self::_derive_derin::ui::ChildId;
                 let mut np = npi.init_grid(
                     self.#layout_ident.grid_size(),
                     self.#layout_ident.col_hints(),
@@ -207,7 +210,7 @@ fn expand_generics<F>(generics: &Generics, body: &Body, widget_fields: &[&Field]
         bounds: vec![TyParamBound::Trait(
             PolyTraitRef {
                 bound_lifetimes: Vec::new(),
-                trait_ref: syn::parse_path("self::_derive_derin::ui::NodeProcessorInit").unwrap()
+                trait_ref: syn::parse_path("_derive_derin::ui::NodeProcessorInit").unwrap()
             },
             TraitBoundModifier::None
         )]
