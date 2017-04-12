@@ -9,7 +9,7 @@ use std::ptr;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 
-use ui::{Node, Parent, ChildId, NodeProcessorGridMut, NodeProcessor, NodeProcessorInit, NodeDataWrapper, NodeDataRegistry};
+use ui::{Node, Parent, ParentMut, ChildId, NodeProcessorGridMut, NodeProcessor, NodeProcessorInit, NodeDataWrapper, NodeDataRegistry};
 use ui::widgets::{ButtonControl, TextButton, TextLabel, WidgetGroup, ProgressBar, Slider, SliderControl};
 use ui::hints::{WidgetHints, GridSize, TrackHints, NodeSpan};
 
@@ -151,7 +151,7 @@ impl<'a, P, A, S> NodeProcessorGridMut<TextLabel<S>> for NativeNodeProcessor<'a,
 impl<'a, P, A, I> NodeProcessorGridMut<WidgetGroup<I>> for NativeNodeProcessor<'a, P, A>
         where P: ParentChildAdder,
       for<'b> I: Parent<!> +
-                 Parent<NativeNodeProcessor<'b, WidgetGroupAdder, A>, ChildAction = A> +
+                 ParentMut<NativeNodeProcessor<'b, WidgetGroupAdder, A>, ChildAction = A> +
                  Parent<GridWidgetProcessor<'b>> +
                  Parent<EngineTypeHarvester<'b>>
 {

@@ -56,15 +56,20 @@ pub trait NodeDataWrapper<I> {
     fn unwrap(self) -> I;
 }
 
-pub trait Parent<NPI>
-        where NPI: NodeProcessorInit
+pub trait ParentMut<NPI>
+        where NPI: NodeProcessorInit,
+              NPI::GridProcessor: NodeProcessorGridMut<!>
 {
     type ChildAction;
 
-    fn children(&self, NPI) -> Result<(), NPI::Error>
-            where NPI::GridProcessor: NodeProcessorGrid<!>;
-    fn children_mut(&mut self, NPI) -> Result<(), NPI::Error>
-            where NPI::GridProcessor: NodeProcessorGridMut<!>;
+    fn children_mut(&mut self, NPI) -> Result<(), NPI::Error>;
+}
+
+pub trait Parent<NPI>: ParentMut<NPI>
+        where NPI: NodeProcessorInit,
+              NPI::GridProcessor: NodeProcessorGrid<!>
+{
+    fn children(&self, NPI) -> Result<(), NPI::Error>;
 }
 
 pub trait GridLayout<'a> {

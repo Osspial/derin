@@ -1,4 +1,4 @@
-#![feature(specialization)]
+#![feature(never_type)]
 
 extern crate derin;
 #[macro_use]

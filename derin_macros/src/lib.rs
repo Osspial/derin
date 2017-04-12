@@ -19,7 +19,8 @@ pub fn derive_parent(input_tokens: TokenStream) -> TokenStream {
     let input = input_tokens.to_string();
     let item = syn::parse_derive_input(&input).expect("Attempted derive on non-item");
 
-    impl_parent(&item).parse().unwrap()
+    let output = impl_parent(&item).parse().unwrap();
+    output
 }
 
 fn impl_parent(&DeriveInput{ref ident, ref attrs, ref generics, ref body, ..}: &DeriveInput) -> Tokens {
@@ -108,12 +109,8 @@ fn parent_mut<F, I, C>(
     let (widget_idents, widget_child_ids) = widget_info_iters();
 
     quote!{
-        impl #mut_impl_generics Parent<NPI> for #ident #ty_generics #mut_where_clause {
+        impl #mut_impl_generics ParentMut<NPI> for #ident #ty_generics #mut_where_clause {
             type ChildAction = #child_action_ty;
-
-            default fn children(&self, _: NPI) -> Result<(), NPI::Error> {
-                panic!("Attempted children call when NPI doesn't implement NodeProcessorGrid")
-            }
 
             fn children_mut(&mut self, npi: NPI) -> Result<(), NPI::Error> {
                 use self::_derive_derin::ui::ChildId;
@@ -233,6 +230,20 @@ fn expand_generics<F>(generics: &Generics, body: &Body, widget_fields: &[&Field]
         };
         generics.where_clause.predicates.push(WherePredicate::BoundPredicate(member_bound));
     }
+
+    let never_bound = WhereBoundPredicate {
+        bound_lifetimes: Vec::new(),
+        bounded_ty: npi_gridproc_ty.clone(),
+        bounds: vec![TyParamBound::Trait(
+            PolyTraitRef{
+                bound_lifetimes: Vec::new(),
+                trait_ref: syn::parse_path(&trait_fn("!")).unwrap()
+            },
+            TraitBoundModifier::None
+        )]
+    };
+    generics.where_clause.predicates.push(WherePredicate::BoundPredicate(never_bound));
+
 
     generics
 }
