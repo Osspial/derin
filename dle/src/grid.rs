@@ -255,7 +255,7 @@ impl<T> TrackVec<T> {
             ..cmp::min(range.end.unwrap_or(self.num_cols), self.num_cols) as usize;
 
         if range_usize.end as u32 <= self.num_cols {
-            Some(&self.dims[range_usize])
+            self.dims.get(range_usize)
         } else {
             None
         }
@@ -271,7 +271,7 @@ impl<T> TrackVec<T> {
             ..(cmp::min(range.end.unwrap_or(self.num_rows), self.num_rows) + self.num_cols) as usize;
 
         if range_usize.end as u32 <= self.num_rows + self.num_cols {
-            Some(&self.dims[range_usize])
+            self.dims.get(range_usize)
         } else {
             None
         }
@@ -287,7 +287,7 @@ impl<T> TrackVec<T> {
             ..cmp::min(range.end.unwrap_or(self.num_cols), self.num_cols) as usize;
 
         if range_usize.end as u32 <= self.num_cols {
-            Some(&mut self.dims[range_usize])
+            self.dims.get_mut(range_usize)
         } else {
             None
         }
@@ -303,7 +303,7 @@ impl<T> TrackVec<T> {
             ..(cmp::min(range.end.unwrap_or(self.num_rows), self.num_rows) + self.num_cols) as usize;
 
         if range_usize.end as u32 <= self.num_rows + self.num_cols {
-            Some(&mut self.dims[range_usize])
+            self.dims.get_mut(range_usize)
         } else {
             None
         }
