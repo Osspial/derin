@@ -841,7 +841,7 @@ macro_rules! impl_window_traits {
         unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
             Window($self_ident:ident) => $window_expr:expr;
             IconWindow
-            $(, $trait_rest:ident$)*
+            $(, $trait_rest:ident)*
         for $window:ty
     ) => {
         unsafe impl<$($lt,)* W: IconWindow $(+ $window_bound)* $(, $gen: $gen_bound)*> IconWindow for $window {
