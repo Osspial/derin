@@ -7,7 +7,9 @@ use self::hints::{WidgetHints, GridSize, TrackHints};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ChildId {
     Str(&'static str),
-    Num(u32)
+    Num(u32),
+    StrCollection(&'static str, u32),
+    NumCollection(u32, u32)
 }
 
 pub trait NodeProcessorInit: Sized {

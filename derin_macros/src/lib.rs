@@ -12,7 +12,6 @@ use proc_macro::TokenStream;
 
 use syn::*;
 use quote::Tokens;
-use std::iter;
 
 #[proc_macro_derive(Parent, attributes(derin))]
 pub fn derive_parent(input_tokens: TokenStream) -> TokenStream {
@@ -23,7 +22,14 @@ pub fn derive_parent(input_tokens: TokenStream) -> TokenStream {
     output
 }
 
-fn impl_parent(&DeriveInput{ref ident, ref attrs, ref generics, ref body, ..}: &DeriveInput) -> Tokens {
+fn impl_parent(derive_input: &DeriveInput) -> Tokens {
+    let DeriveInput{
+        ref ident,
+        ref attrs,
+        ref body,
+        ..
+    } = *derive_input;
+
     // Process attributes on the item being derived
     let mut child_action_ty = None;
     derin_attribute_iter(attrs, |attr| {
@@ -46,40 +52,41 @@ fn impl_parent(&DeriveInput{ref ident, ref attrs, ref generics, ref body, ..}: &
     match *body {
         Body::Struct(ref variant_data) =>
             for (index, field) in variant_data.fields().iter().enumerate() {
-                let mut is_layout_field = false;
+                let mut widget_field = Some(WidgetField::Widget(field));
                 derin_attribute_iter(&field.attrs, |attr| {
                     match *attr {
                         MetaItem::Word(ref attr_name)
                             if attr_name == "layout" =>
                             if layout_ident.is_none() {
                                 layout_ident = Some(field.ident.clone().unwrap_or(Ident::new(index)));
-                                is_layout_field = true;
+                                widget_field = None;
                             } else {
                                 panic!("Repeated #[derin(layout)] attribute: {}", quote!(#attr).to_string())
+                            },
+                        MetaItem::Word(ref attr_name)
+                            if attr_name == "collection" =>
+                            if let Some(ref mut widget_field_ref) = widget_field {
+                                match *widget_field_ref {
+                                    WidgetField::Widget(_) => *widget_field_ref = WidgetField::Collection(field),
+                                    WidgetField::Collection(_) => panic!("Repeated #[derin(collection)] attribute")
+                                }
+                            } else {
+                                panic!("layout and collection field on same attribute")
                             },
                         _ => panic!("Bad Derin attribute: {}", quote!(#attr).to_string())
                     }
                 });
 
-                if !is_layout_field {
-                    widget_fields.push(field);
+                if let Some(widget_field) = widget_field {
+                    widget_fields.push(widget_field);
                 }
             },
         _ => unimplemented!()
     }
     let layout_ident = layout_ident.expect("No field with #[derin(layout)] attribute");
 
-    let widget_info_iters = || (
-        widget_fields.iter().enumerate().map(|(i, field)| field.ident.clone().unwrap_or(Ident::new(i))),
-        widget_fields.iter().enumerate().map(|(i, field)| (i as u32, field))
-                                        .map(|(i, field)| match field.ident {
-                                            Some(ref ident) => quote!(_derive_derin::ui::ChildId::Str(stringify!(#ident))),
-                                            None            => quote!(_derive_derin::ui::ChildId::Num(#i))
-                                        })
-    );
-
-    let parent_mut = parent_mut(ident, generics, body, &child_action_ty, &widget_info_iters, &widget_fields, &layout_ident);
-    let parent = parent(ident, generics, body, &widget_info_iters, &widget_fields, &layout_ident);
+    let parent_mut = parent_mut(derive_input, &child_action_ty, &widget_fields, &layout_ident);
+    let parent = parent(derive_input, &widget_fields, &layout_ident);
 
     let dummy_const = Ident::new(format!("_IMPL_PARENT_FOR_{}", ident));
 
@@ -94,27 +101,25 @@ fn impl_parent(&DeriveInput{ref ident, ref attrs, ref generics, ref body, ..}: &
     }
 }
 
-fn parent_mut<F, I, C>(
-    ident: &Ident,
-    generics: &Generics,
-    body: &Body,
-    child_action_ty: &Ty,
-    widget_info_iters: &F,
-    widget_fields: &[&Field],
-    layout_ident: &Ident
-) -> Tokens
-        where F: Fn() -> (I, C),
-              I: Iterator<Item = Ident>,
-              C: Iterator<Item = Tokens>
-{
-    let mut_generics_raw = expand_generics(generics, body, widget_fields, |ty_string| format!("_derive_derin::ui::NodeProcessorGridMut<{}>", ty_string));
-    let (mut_impl_generics, _, mut_where_clause) = mut_generics_raw.split_for_impl();
+fn parent_mut(derive_input: &DeriveInput, child_action_ty: &Ty, widget_fields: &[WidgetField], layout_ident: &Ident) -> Tokens {
+    let &DeriveInput{
+        ref ident,
+        ref generics,
+        ..
+    } = derive_input;
+
+    let generics_raw = expand_generics(generics, widget_fields, |ty_string| format!("_derive_derin::ui::NodeProcessorGridMut<{}>", ty_string));
+    let (impl_generics_mut, _, where_clause_mut) = generics_raw.split_for_impl();
     let (_, ty_generics, _) = generics.split_for_impl();
-    let layout_ident_iter = iter::repeat(&layout_ident);
-    let (widget_idents, widget_child_ids) = widget_info_iters();
+    let add_child_mut_iter = AddChildIter {
+        layout_ident: layout_ident.clone(),
+        fields: widget_fields.iter().cloned(),
+        field_num: 0,
+        is_mut: true
+    };
 
     quote!{
-        impl #mut_impl_generics ParentMut<NPI> for #ident #ty_generics #mut_where_clause {
+        impl #impl_generics_mut ParentMut<NPI> for #ident #ty_generics #where_clause_mut {
             type ChildAction = #child_action_ty;
 
             fn children_mut(&mut self, npi: NPI) -> Result<(), NPI::Error> {
@@ -124,38 +129,33 @@ fn parent_mut<F, I, C>(
                     self.#layout_ident.row_hints()
                 );
 
-                #({
-                    let child_id = #widget_child_ids;
-                    if let Some(hints) = self.#layout_ident_iter.get_hints(child_id) {
-                        np.add_child_mut(child_id, hints, &mut self.#widget_idents)?;
-                    }
-                })*
+                #(#add_child_mut_iter)*
                 Ok(())
             }
         }
     }
 }
 
-fn parent<F, I, C>(
-    ident: &Ident,
-    generics: &Generics,
-    body: &Body,
-    widget_info_iters: &F,
-    widget_fields: &[&Field],
-    layout_ident: &Ident
-) -> Tokens
-        where F: Fn() -> (I, C),
-              I: Iterator<Item = Ident>,
-              C: Iterator<Item = Tokens>
-{
-    let mut_generics_raw = expand_generics(generics, body, widget_fields, |ty_string| format!("_derive_derin::ui::NodeProcessorGrid<{}>", ty_string));
-    let (mut_impl_generics, _, mut_where_clause) = mut_generics_raw.split_for_impl();
+fn parent(derive_input: &DeriveInput, widget_fields: &[WidgetField], layout_ident: &Ident) -> Tokens {
+    let &DeriveInput{
+        ref ident,
+        ref generics,
+        ..
+    } = derive_input;
+
+    let generics_raw = expand_generics(generics, widget_fields, |ty_string| format!("_derive_derin::ui::NodeProcessorGrid<{}>", ty_string));
+    let (impl_generics, _, where_clause) = generics_raw.split_for_impl();
     let (_, ty_generics, _) = generics.split_for_impl();
-    let layout_ident_iter = iter::repeat(&layout_ident);
-    let (widget_idents, widget_child_ids) = widget_info_iters();
+    let add_child_iter = AddChildIter {
+        layout_ident: layout_ident.clone(),
+        fields: widget_fields.iter().cloned(),
+        field_num: 0,
+        is_mut: false
+    };
 
     quote!{
-        impl #mut_impl_generics Parent<NPI> for #ident #ty_generics #mut_where_clause {
+        impl #impl_generics Parent<NPI> for #ident #ty_generics #where_clause {
+
             fn children(&self, npi: NPI) -> Result<(), NPI::Error> {
                 let mut np = npi.init_grid(
                     self.#layout_ident.grid_size(),
@@ -163,14 +163,92 @@ fn parent<F, I, C>(
                     self.#layout_ident.row_hints()
                 );
 
-                #({
-                    let child_id = #widget_child_ids;
-                    if let Some(hints) = self.#layout_ident_iter.get_hints(child_id) {
-                        np.add_child(child_id, hints, &self.#widget_idents)?;
-                    }
-                })*
+                #(#add_child_iter)*
                 Ok(())
             }
+        }
+    }
+}
+
+struct AddChildIter<'a, W>
+        where W: Iterator<Item = WidgetField<'a>>
+{
+    layout_ident: Ident,
+    fields: W,
+    field_num: u32,
+    is_mut: bool
+}
+
+impl<'a, W> Iterator for AddChildIter<'a, W>
+        where W: Iterator<Item = WidgetField<'a>>
+{
+    type Item = Tokens;
+
+    fn next(&mut self) -> Option<Tokens> {
+        if let Some(widget_field) = self.fields.next() {
+            let add_child_fn_ident = match self.is_mut {
+                true => Ident::new("add_child_mut"),
+                false => Ident::new("add_child")
+            };
+            let widget_ident = widget_field.ident().clone().unwrap_or(Ident::new(self.field_num as usize));
+            let widget_expr = match self.is_mut {
+                true => quote!(&mut self.#widget_ident),
+                false => quote!(&self.#widget_ident)
+            };
+
+            let layout_ident = &self.layout_ident;
+            let output: Tokens;
+
+            match widget_field {
+                WidgetField::Widget(field) => {
+                    let child_id = match field.ident {
+                        Some(_) => quote!(ChildId::Str(stringify!(#widget_ident))),
+                        None => quote!(ChildId::Num(#widget_ident))
+                    };
+
+                    output = quote!{{
+                        let child_id = #child_id;
+                        if let Some(hints) = self.#layout_ident.get_hints(child_id) {
+                            np.#add_child_fn_ident(child_id, hints, #widget_expr)?;
+                        }
+                    }};
+                },
+                WidgetField::Collection(field) => {
+                    let child_id = match field.ident {
+                        Some(_) => quote!(ChildId::StrCollection(stringify!(#widget_ident), child_index as u32)),
+                        None => quote!(ChildId::NumCollection(#widget_ident, child_index as u32))
+                    };
+
+                    output = quote!{{
+                        for (child_index, child) in (#widget_expr).into_iter().enumerate() {
+                            let child_id = #child_id;
+                            if let Some(hints) = self.#layout_ident.get_hints(child_id) {
+                                np.#add_child_fn_ident(child_id, hints, child)?;
+                            }
+                        }
+                    }}
+                }
+            }
+
+            self.field_num += 1;
+            Some(output)
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum WidgetField<'a> {
+    Widget(&'a Field),
+    Collection(&'a Field)
+}
+
+impl<'a> WidgetField<'a> {
+    fn ident(self) -> &'a Option<Ident> {
+        match self {
+            WidgetField::Widget(field) |
+            WidgetField::Collection(field) => &field.ident
         }
     }
 }
@@ -193,7 +271,7 @@ fn derin_attribute_iter<F>(attrs: &[Attribute], mut for_each: F)
     }
 }
 
-fn expand_generics<F>(generics: &Generics, body: &Body, widget_fields: &[&Field], mut trait_fn: F) -> Generics
+fn expand_generics<F>(generics: &Generics, widget_fields: &[WidgetField], mut trait_fn: F) -> Generics
         where F: FnMut(&str) -> String
 {
     let mut generics = generics.clone();
@@ -218,7 +296,7 @@ fn expand_generics<F>(generics: &Generics, body: &Body, widget_fields: &[&Field]
     generics.where_clause.predicates.push(WherePredicate::BoundPredicate(init_bound));
 
     let npi_gridproc_ty = syn::parse_type("NPI::GridProcessor").unwrap();
-    for ty in field_types(body, widget_fields) {
+    for ty in field_types(widget_fields.iter()) {
         let ty_string = quote!(#ty).to_string();
         let member_bound = WhereBoundPredicate {
             bound_lifetimes: Vec::new(),
@@ -251,25 +329,12 @@ fn expand_generics<F>(generics: &Generics, body: &Body, widget_fields: &[&Field]
     generics
 }
 
-fn field_types(body: &Body, widget_fields: &[&Field]) -> Vec<Ty> {
-    let mut ty_vec = Vec::new();
-    match *body {
-        Body::Struct(ref variant_data) => {
-            for field in variant_data.fields() {
-                if !ty_vec.contains(&field.ty) && widget_fields.contains(&field) {
-                    ty_vec.push(field.ty.clone());
-                }
-            }
-        },
-        Body::Enum(ref variants) => {
-            for variant_data in variants.iter().map(|variant| &variant.data) {
-                for field in variant_data.fields() {
-                    if !ty_vec.contains(&field.ty) {
-                        ty_vec.push(field.ty.clone());
-                    }
-                }
-            }
+fn field_types<'a, I: 'a + Iterator<Item = &'a WidgetField<'a>>>(widget_fields: I) -> impl 'a + Iterator<Item=Ty> {
+    widget_fields.map(|widget_field|
+        match *widget_field {
+            WidgetField::Widget(ref widget_field) => widget_field.ty.clone(),
+            WidgetField::Collection(&Field{ref ty, ..}) =>
+                syn::parse_type(&format!("{}", quote!(<#ty as IntoIterator>::Item))).unwrap()
         }
-    }
-    ty_vec
+    )
 }
