@@ -99,7 +99,7 @@ pub trait DeviceContext {
         user32::DrawTextW(
             self.hdc(),
             text_ucs2.as_ptr(),
-            text_ucs2.len() as c_int - 1,
+            -1,
             &mut rect,
             draw_options.into_text_format()
         );
@@ -124,12 +124,13 @@ pub trait DeviceContext {
         user32::DrawTextW(
             self.hdc(),
             text_ucs2.as_ptr(),
-            text_ucs2.len() as c_int - 1,
+            -1,
             &mut rect,
             DT_CALCRECT | draw_options.into_text_format()
         );
 
-        OriginRect::new(rect.right as Px, rect.bottom as Px)
+        let ret = OriginRect::new(rect.right as Px, rect.bottom as Px);
+        ret
     }
 }
 
