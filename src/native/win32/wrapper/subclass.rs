@@ -73,8 +73,7 @@ impl<B, I> Subclass<B> for TextButtonSubclass<I>
                 Wm::GetSizeBounds(size_bounds) => size_bounds.min = window.get_ideal_size(),
                 _ => ()
             },
-            Msg::User(DerinMsg::SetRectPropagate(rect)) |
-            Msg::User(DerinMsg::SetRect(rect))         => window.set_rect(rect),
+            Msg::User(DerinMsg::SetRect(rect)) => window.set_rect(rect),
             _ => ()
         }
         ret
@@ -120,8 +119,7 @@ impl<P, I> Subclass<P> for WidgetGroupSubclass<I>
                 },
                 wm => window.default_window_proc(&mut Msg::Wm(wm))
             },
-            Msg::User(DerinMsg::SetRect(rect)) => {window.set_rect(rect); 0},
-            Msg::User(DerinMsg::SetRectPropagate(rect)) => {
+            Msg::User(DerinMsg::SetRect(rect)) => {
                 {
                     let WidgetGroupSubclass {
                         ref mut node_data,
@@ -170,8 +168,7 @@ impl<W, S> Subclass<W> for TextLabelSubclass<S>
                 Wm::GetSizeBounds(size_bounds) => *size_bounds = window.subclass_data().abs_size_bounds,
                 _ => ()
             },
-            Msg::User(DerinMsg::SetRectPropagate(rect)) |
-            Msg::User(DerinMsg::SetRect(rect))         => window.set_rect(rect),
+            Msg::User(DerinMsg::SetRect(rect)) => window.set_rect(rect),
             _ => ()
         }
         ret
@@ -197,8 +194,7 @@ impl<W> Subclass<W> for ProgressBarSubclass
     type UserMsg = DerinMsg;
     fn subclass_proc(window: &mut ProcWindowRef<W, Self>, msg: Msg<DerinMsg>) -> i64 {
         match msg {
-            Msg::User(DerinMsg::SetRectPropagate(rect)) |
-            Msg::User(DerinMsg::SetRect(rect))         => {window.set_rect(rect); 0},
+            Msg::User(DerinMsg::SetRect(rect)) => {window.set_rect(rect); 0},
             mut msg => window.default_window_proc(&mut msg)
         }
     }
@@ -242,8 +238,7 @@ impl<W, C> Subclass<W> for SliderSubclass<C>
                 }
                 0
             },
-            Msg::User(DerinMsg::SetRectPropagate(rect)) |
-            Msg::User(DerinMsg::SetRect(rect))         => {
+            Msg::User(DerinMsg::SetRect(rect)) => {
                 window.set_rect(rect);
                 window.subclass_data().slider_window.set_rect(OriginRect::from(rect).into());
                 0
@@ -262,7 +257,7 @@ impl Subclass<ToplevelWindowBase> for ToplevelSubclass {
         match msg {
             Msg::Wm(Wm::GetSizeBounds(size_bounds)) => {*size_bounds = window.subclass_data().0.size_bounds(); 0},
             Msg::Wm(Wm::Size(rect)) => {
-                window.subclass_data().0.post_user_msg(DerinMsg::SetRectPropagate(OffsetRect::from(rect)));
+                window.subclass_data().0.post_user_msg(DerinMsg::SetRect(OffsetRect::from(rect)));
                 0
             },
             _ => window.default_window_proc(&mut msg)

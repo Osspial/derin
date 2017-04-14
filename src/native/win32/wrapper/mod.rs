@@ -200,7 +200,7 @@ subclass_node_data!{
         needs_update: bool
     }
     impl where I: for<'a> trait Parent<GridWidgetProcessor<'a>> | for<'a> trait Parent<EngineTypeHarvester<'a>> {
-        expr abs_size_bounds(_) = SizeBounds::default();
+        expr abs_size_bounds(subclass_data) = subclass_data.layout_engine.actual_size_bounds();
         fn update_widget(subclass: _) {
             let WidgetGroupSubclass {
                 ref mut layout_engine,
@@ -325,13 +325,17 @@ impl<I> NodeDataWrapper<I> for WidgetGroupNodeData<I>
         where for<'a> I: Parent<!>
 {
     fn from_node_data(node_data: I) -> Self {
-        let wrapper_window = WindowBuilder::default().build_blank();
-        let subclass = WidgetGroupSubclass::new(node_data);
+        HOLDING_PARENT.with(|hp| {
+            let mut wrapper_window = WindowBuilder::default().show_window(false).build_blank();
+            hp.add_child_window(&wrapper_window);
+            wrapper_window.show(true);
+            let subclass = WidgetGroupSubclass::new(node_data);
 
-        WidgetGroupNodeData {
-            subclass: unsafe{ UnsafeSubclassWrapper::new(wrapper_window, subclass) },
-            needs_update: true
-        }
+            WidgetGroupNodeData {
+                subclass: unsafe{ UnsafeSubclassWrapper::new(wrapper_window, subclass) },
+                needs_update: true
+            }
+        })
     }
 
     fn inner(&self) -> &I {
@@ -462,7 +466,6 @@ pub trait ParentChildAdder {
 
 #[derive(Debug, Clone, Copy, UserMsg)]
 pub enum DerinMsg {
-    SetRectPropagate(OffsetRect),
     SetRect(OffsetRect)
 }
 
