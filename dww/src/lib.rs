@@ -332,6 +332,16 @@ pub struct WindowRefMut<'a>( HWND, PhantomData<&'a mut ()> );
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnsafeSubclassRef<'a, U: UserMsg>( HWND, PhantomData<(U, PhantomData<&'a mut ()>)> );
 
+#[derive(Clone)]
+pub struct WindowIterTopDown {
+    next_window: HWND
+}
+
+#[derive(Clone)]
+pub struct WindowIterBottomUp {
+    next_window: HWND
+}
+
 pub unsafe trait Window: Sized {
     unsafe fn hwnd(&self) -> HWND;
 
@@ -371,12 +381,96 @@ pub unsafe trait Window: Sized {
                                 winapi_rect.right as Px, winapi_rect.bottom as Px))
     }
 
+    #[inline]
     fn get_parent(&self) -> Option<ParentRef> {
         let parent = unsafe{ user32::GetParent(self.hwnd()) };
         if ptr::null_mut() != parent {
             Some(ParentRef(parent))
         } else {
             None
+        }
+    }
+
+    #[inline]
+    fn move_before<W: Window>(&self, window: &W) -> Result<()> {
+        unsafe {
+            // Windows only provides functions for moving windows after other windows, so we need
+            // to get the window before the provided window and then move this window after that
+            // window.
+            let mut window_after = user32::GetWindow(window.hwnd(), GW_HWNDPREV);
+            if ptr::null_mut() == window_after {
+                window_after = HWND_BOTTOM;
+            }
+
+            let result = user32::SetWindowPos(
+                self.hwnd(),
+                window_after,
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+            );
+            if result != 0 {
+                Ok(())
+            } else {
+                Err(Error::last_os_error())
+            }
+        }
+    }
+
+    #[inline]
+    fn move_after<W: Window>(&self, window: &W) -> Result<()> {
+        unsafe {
+            let result = user32::SetWindowPos(
+                self.hwnd(),
+                window.hwnd(),
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+            );
+            if result != 0 {
+                Ok(())
+            } else {
+                Err(Error::last_os_error())
+            }
+        }
+    }
+
+    #[inline]
+    fn move_to_bottom(&self) {
+        unsafe {
+            user32::SetWindowPos(
+                self.hwnd(),
+                HWND_BOTTOM,
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+            );
+        }
+    }
+
+    #[inline]
+    fn move_to_top(&self) {
+        unsafe {
+            user32::SetWindowPos(
+                self.hwnd(),
+                HWND_TOP,
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+            );
+        }
+    }
+
+    #[inline]
+    fn windows_below(&self) -> WindowIterTopDown {
+        WindowIterTopDown {
+            // The window iterators stores the window that will be returned next by the iterator,
+            // not the window that is below (or above) the window that will be returned next. So,
+            // we need to get the window below this now instead of waiting for the iterator.
+            next_window: unsafe{ user32::GetWindow(self.hwnd(), GW_HWNDNEXT) }
+        }
+    }
+
+    #[inline]
+    fn windows_above(&self) -> WindowIterBottomUp {
+        WindowIterBottomUp {
+            next_window: unsafe{ user32::GetWindow(self.hwnd(), GW_HWNDPREV) }
         }
     }
 
@@ -1245,6 +1339,34 @@ unsafe impl<'a, U: UserMsg> Window for UnsafeSubclassRef<'a, U> {
     }
 }
 unsafe impl<'a, U: UserMsg> WindowMut for UnsafeSubclassRef<'a, U> {}
+
+impl Iterator for WindowIterTopDown {
+    type Item = WindowRef;
+
+    fn next(&mut self) -> Option<WindowRef> {
+        if ptr::null_mut() != self.next_window {
+            let ret = Some(WindowRef(self.next_window));
+            self.next_window = unsafe{ user32::GetWindow(self.next_window, GW_HWNDNEXT) };
+            ret
+        } else {
+            None
+        }
+    }
+}
+
+impl Iterator for WindowIterBottomUp {
+    type Item = WindowRef;
+
+    fn next(&mut self) -> Option<WindowRef> {
+        if ptr::null_mut() != self.next_window {
+            let ret = Some(WindowRef(self.next_window));
+            self.next_window = unsafe{ user32::GetWindow(self.next_window, GW_HWNDPREV) };
+            ret
+        } else {
+            None
+        }
+    }
+}
 
 
 pub struct Icon( HICON );
