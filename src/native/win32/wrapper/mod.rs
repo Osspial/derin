@@ -33,7 +33,7 @@ macro_rules! impl_node_data_wrapper {
 
                 $name {
                     subclass: $from_node_data,
-                    needs_update: true
+                    needs_widget_update: true
                 }
             }
 
@@ -42,7 +42,7 @@ macro_rules! impl_node_data_wrapper {
                 &$node_data
             }
             fn inner_mut(&mut self) -> &mut $nd_ty {
-                self.needs_update = true;
+                self.needs_widget_update = true;
                 let $node_data_in = self.subclass.data_mut();
                 &mut $node_data
             }
@@ -63,7 +63,7 @@ macro_rules! subclass_node_data {
                 $(where $($where_ty:ty: $($(for<$($lt:tt),+>)* trait $constraint:path)|+),+)*
         {
             subclass: $field_ty:ty,
-            needs_update: bool
+            needs_widget_update: bool
         }
 
         impl $(where $($impl_where_ty:ty: $($(for<$($impl_lt:tt),+>)* trait $impl_constraint:path)|+),+)* {
@@ -86,7 +86,7 @@ macro_rules! subclass_node_data {
                 $(where $($where_ty: $($(for<$($lt),+>)* $constraint +)+),+)*
         {
             subclass: $field_ty,
-            needs_update: bool
+            needs_widget_update: bool
         }
 
         impl$(<$inner_ty>)* $name$(<$inner_ty>)*
@@ -95,7 +95,8 @@ macro_rules! subclass_node_data {
         {
             #[doc(hidden)]
             #[inline]
-            pub fn update_subclass_ptr(&self) {
+            pub fn update_window(&self) {
+                self.subclass.move_to_top();
                 self.subclass.update_subclass_ptr();
             }
 
@@ -103,7 +104,7 @@ macro_rules! subclass_node_data {
             pub fn update_widget$(<$($uw_gen),+>)*(&mut self $(, $uw_extra: $uw_extra_ty)*)
                     $(where $($uw_where_ty: $($(for<$($uw_lt),+>)* $uw_constraint +)+),+)*
             {
-                self.needs_update = false;
+                self.needs_widget_update = false;
                 let $uw_in = &mut self.subclass;
                 $($update_widget)*
             }
@@ -125,7 +126,7 @@ macro_rules! subclass_node_data {
             }
 
             #[inline]
-            fn window_ref(&mut self) -> WindowRef {
+            fn window_ref(&self) -> WindowRef {
                 self.subclass.window_ref()
             }
 
@@ -140,8 +141,8 @@ macro_rules! subclass_node_data {
             }
 
             #[inline]
-            fn needs_update(&self) -> bool {
-                self.needs_update
+            fn needs_widget_update(&self) -> bool {
+                self.needs_widget_update
             }
         }
 
@@ -162,7 +163,7 @@ macro_rules! subclass_node_data {
 }
 
 thread_local!{
-    static HOLDING_PARENT: BlankBase = WindowBuilder::default().show_window(false).build_blank();
+    pub static HOLDING_PARENT: BlankBase = WindowBuilder::default().show_window(false).build_blank();
 }
 lazy_static!{
     static ref CAPTION_FONT: Font = Font::sys_caption_font();
@@ -173,7 +174,7 @@ subclass_node_data!{
             where I: trait Borrow<str> | trait ButtonControl
     {
         subclass: UnsafeSubclassWrapper<PushButtonBase<&'static Font>, TextButtonSubclass<I>>,
-        needs_update: bool
+        needs_widget_update: bool
     }
     impl {
         expr abs_size_bounds(subclass_data) = subclass_data.abs_size_bounds;
@@ -197,7 +198,7 @@ subclass_node_data!{
             where I: trait Parent<!>
     {
         subclass: UnsafeSubclassWrapper<BlankBase, WidgetGroupSubclass<I>>,
-        needs_update: bool
+        needs_widget_update: bool
     }
     impl where I: for<'a> trait Parent<GridWidgetProcessor<'a>> | for<'a> trait Parent<EngineTypeHarvester<'a>> {
         expr abs_size_bounds(subclass_data) = subclass_data.layout_engine.actual_size_bounds();
@@ -218,7 +219,7 @@ subclass_node_data!{
             where S: trait AsRef<str>
     {
         subclass: UnsafeSubclassWrapper<TextLabelBase<&'static Font>, TextLabelSubclass<S>>,
-        needs_update: bool
+        needs_widget_update: bool
     }
     impl {
         expr abs_size_bounds(subclass_data) = subclass_data.abs_size_bounds;
@@ -239,7 +240,7 @@ subclass_node_data!{
 
     pub struct ProgressBarNodeData {
         subclass: UnsafeSubclassWrapper<ProgressBarBase, ProgressBarSubclass>,
-        needs_update: bool
+        needs_widget_update: bool
     }
     impl {
         expr abs_size_bounds(_) = SizeBounds::default();
@@ -278,7 +279,7 @@ subclass_node_data!{
             where C: trait SliderControl
     {
         subclass: UnsafeSubclassWrapper<BlankBase, SliderSubclass<C>>,
-        needs_update: bool
+        needs_widget_update: bool
     }
     impl {
         expr abs_size_bounds(_) = SizeBounds::default();
@@ -333,7 +334,7 @@ impl<I> NodeDataWrapper<I> for WidgetGroupNodeData<I>
 
             WidgetGroupNodeData {
                 subclass: unsafe{ UnsafeSubclassWrapper::new(wrapper_window, subclass) },
-                needs_update: true
+                needs_widget_update: true
             }
         })
     }
@@ -343,7 +344,7 @@ impl<I> NodeDataWrapper<I> for WidgetGroupNodeData<I>
     }
 
     fn inner_mut(&mut self) -> &mut I {
-        self.needs_update = true;
+        self.needs_widget_update = true;
         &mut self.subclass.data_mut().node_data
     }
 
@@ -392,8 +393,8 @@ impl ToplevelWindow {
         self.0.bound_to_size_bounds()
     }
 
-    pub fn update_subclass_ptr(&self) {
-        self.0.update_subclass_ptr()
+    pub fn update_window(&self) {
+        self.0.update_subclass_ptr();
     }
 }
 
@@ -439,19 +440,19 @@ impl NodeDataWrapper<()> for ToplevelWindow {
 pub trait NativeDataWrapper {
     fn abs_size_bounds(&self) -> SizeBounds;
     fn set_rect(&mut self, OffsetRect);
-    fn window_ref(&mut self) -> WindowRef;
+    fn window_ref(&self) -> WindowRef;
     fn unsafe_subclass_ref(&mut self) -> UnsafeSubclassRef<DerinMsg>;
     fn post_user_msg(&self, DerinMsg);
-    fn needs_update(&self) -> bool;
+    fn needs_widget_update(&self) -> bool;
 }
 
 impl NativeDataWrapper for ! {
     fn abs_size_bounds(&self) -> SizeBounds {match self {}}
     fn set_rect(&mut self, _: OffsetRect) {match self {}}
-    fn window_ref(&mut self) -> WindowRef {match self {}}
+    fn window_ref(&self) -> WindowRef {match self {}}
     fn unsafe_subclass_ref(&mut self) -> UnsafeSubclassRef<DerinMsg> {match self {}}
     fn post_user_msg(&self, _: DerinMsg) {}
-    fn needs_update(&self) -> bool {match self {}}
+    fn needs_widget_update(&self) -> bool {match self {}}
 }
 
 pub trait ParentDataWrapper {

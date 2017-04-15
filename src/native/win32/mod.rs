@@ -2,7 +2,7 @@ mod wrapper;
 
 use self::wrapper::*;
 use super::WindowConfig;
-use dww::{msg_queue, WindowOwned, OverlappedWindow, WindowBuilder};
+use dww::{msg_queue, WindowOwned, Window as WindowTrait, ParentWindow, WindowRef, OverlappedWindow, WindowBuilder};
 
 use std::rc::Rc;
 use std::ptr;
@@ -56,17 +56,19 @@ impl<N> Window<N>
         self.action_fn.borrow_mut().set_fn(&mut f);
 
         if node_data_moved {
-            self.toplevel.update_subclass_ptr();
+            self.toplevel.update_window();
         }
 
         let root_widget_hints = WidgetHints {
             node_span: NodeSpan::new(.., ..),
             ..WidgetHints::default()
         };
+        let mut children_updated = false;
         NativeNodeProcessor::<_, N::Action> {
             parent: &mut self.toplevel,
             action_fn: &self.action_fn,
-            children_updated: &mut false
+            bottom_window: None,
+            children_updated: &mut children_updated
         }.add_child_mut(ChildId::Num(0), root_widget_hints, &mut self.root)?;
 
         // Modifying the size bounds of windows inside of the toplevel window doesn't trigger a size
@@ -90,6 +92,7 @@ struct NativeNodeProcessor<'a, P: 'a, A: 'a> {
     /// The branch that this instance of NativeNodeProcessor is currently processing
     parent: &'a mut P,
     action_fn: &'a SharedFn<A>,
+    bottom_window: Option<WindowRef>,
     children_updated: &'a mut bool
 }
 
@@ -108,6 +111,18 @@ impl<'a, P, A> NodeProcessorInit for NativeNodeProcessor<'a, P, A> {
     }
 }
 
+impl<'a, P, A> Drop for NativeNodeProcessor<'a, P, A> {
+    fn drop(&mut self) {
+        if let Some(bottom_window) = self.bottom_window {
+            HOLDING_PARENT.with(|hp| {
+                for window in bottom_window.windows_below() {
+                    hp.add_child_window(&window);
+                }
+            });
+        }
+    }
+}
+
 impl<'a, P, A, C> NodeProcessorGridMut<C> for NativeNodeProcessor<'a, P, A>
         where C: Node
 {
@@ -121,9 +136,13 @@ impl<'a, P, A, I> NodeProcessorGridMut<TextButton<I>> for NativeNodeProcessor<'a
               I: ButtonControl<Action = A> + Borrow<str>
 {
     fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, button: &'b mut TextButton<I>) -> Result<(), !> {
-        button.wrapper().update_subclass_ptr();
+        button.wrapper().update_window();
 
-        if button.wrapper().needs_update() {
+        if self.bottom_window.is_none() {
+            self.bottom_window = Some(button.wrapper().window_ref());
+        }
+
+        if button.wrapper().needs_widget_update() {
             *self.children_updated = true;
             button.wrapper_mut().update_widget(self.action_fn);
             self.parent.add_child_node(button.wrapper_mut());
@@ -137,9 +156,13 @@ impl<'a, P, A, S> NodeProcessorGridMut<TextLabel<S>> for NativeNodeProcessor<'a,
               S: AsRef<str>
 {
     fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, label: &'b mut TextLabel<S>) -> Result<(), !> {
-        label.wrapper().update_subclass_ptr();
+        label.wrapper().update_window();
 
-        if label.wrapper().needs_update() {
+        if self.bottom_window.is_none() {
+            self.bottom_window = Some(label.wrapper().window_ref());
+        }
+
+        if label.wrapper().needs_widget_update() {
             *self.children_updated = true;
             label.wrapper_mut().update_widget();
             self.parent.add_child_node(label.wrapper_mut());
@@ -157,9 +180,13 @@ impl<'a, P, A, I> NodeProcessorGridMut<WidgetGroup<I>> for NativeNodeProcessor<'
 {
     fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, group: &'b mut WidgetGroup<I>) -> Result<(), !> {
         let group_wrapper = group.wrapper_mut();
-        group_wrapper.update_subclass_ptr();
+        group_wrapper.update_window();
 
-        if group_wrapper.needs_update() {
+        if self.bottom_window.is_none() {
+            self.bottom_window = Some(group_wrapper.window_ref());
+        }
+
+        if group_wrapper.needs_widget_update() {
             *self.children_updated = true;
             self.parent.add_child_node(group_wrapper);
         }
@@ -170,6 +197,7 @@ impl<'a, P, A, I> NodeProcessorGridMut<WidgetGroup<I>> for NativeNodeProcessor<'
             let child_processor = NativeNodeProcessor {
                 parent: &mut adder,
                 action_fn: self.action_fn,
+                bottom_window: None,
                 children_updated: &mut children_updated
             };
             group_wrapper.inner_mut().children_mut(child_processor)?;
@@ -186,9 +214,13 @@ impl<'a, P, A> NodeProcessorGridMut<ProgressBar> for NativeNodeProcessor<'a, P, 
         where P: ParentChildAdder
 {
     fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, progress_bar: &'b mut ProgressBar) -> Result<(), !> {
-        progress_bar.wrapper().update_subclass_ptr();
+        progress_bar.wrapper().update_window();
 
-        if progress_bar.wrapper().needs_update() {
+        if self.bottom_window.is_none() {
+            self.bottom_window = Some(progress_bar.wrapper().window_ref());
+        }
+
+        if progress_bar.wrapper().needs_widget_update() {
             *self.children_updated = true;
             progress_bar.wrapper_mut().update_widget();
             self.parent.add_child_node(progress_bar.wrapper_mut());
@@ -201,13 +233,17 @@ impl<'a, P, A, C> NodeProcessorGridMut<Slider<C>> for NativeNodeProcessor<'a, P,
         where P: ParentChildAdder,
               C: SliderControl<Action = A>
 {
-    fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, label: &'b mut Slider<C>) -> Result<(), !> {
-        label.wrapper().update_subclass_ptr();
+    fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, slider: &'b mut Slider<C>) -> Result<(), !> {
+        slider.wrapper().update_window();
 
-        if label.wrapper().needs_update() {
+        if self.bottom_window.is_none() {
+            self.bottom_window = Some(slider.wrapper().window_ref());
+        }
+
+        if slider.wrapper().needs_widget_update() {
             *self.children_updated = true;
-            label.wrapper_mut().update_widget(self.action_fn);
-            self.parent.add_child_node(label.wrapper_mut());
+            slider.wrapper_mut().update_widget(self.action_fn);
+            self.parent.add_child_node(slider.wrapper_mut());
         }
         Ok(())
     }
