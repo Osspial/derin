@@ -192,19 +192,18 @@ impl Default for SizeBounds {
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Margins {
-    pub top: Px,
-    pub bottom: Px,
     pub left: Px,
-    pub right: Px
+    pub top: Px,
+    pub right: Px,
+    pub bottom: Px
 }
 
 impl Margins {
-    pub fn new(top: Px, bottom: Px, left: Px, right: Px) -> Margins {
+    pub fn new(left: Px, top: Px, right: Px, bottom: Px) -> Margins {
         Margins {
-            top: top,
-            bottom: bottom,
             left: left,
-            right: right
-        }
+            top: top,
+            right: right,
+            bottom: bottom       }
     }
 }
