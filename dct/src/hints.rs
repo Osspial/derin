@@ -152,32 +152,21 @@ impl SizeBounds {
         }
     }
 
-    /// Bound a rectangle to be within the size bounds. Returns `Ok` if the rect wasn't bounded, and
-    /// `Err` if it was bounded.
-    pub fn bound_rect(self, mut desired_size: OriginRect) -> Result<OriginRect, OriginRect> {
-        let mut size_bounded = false;
-
+    /// Bound a rectangle to be within the size bounds.
+    pub fn bound_rect(self, mut desired_size: OriginRect) -> OriginRect {
         if desired_size.width() < self.min.width() {
             desired_size.width = self.min.width();
-            size_bounded = true;
         } else if desired_size.width() > self.max.width() {
             desired_size.width = self.max.width();
-            size_bounded = true;
         }
 
         if desired_size.height() < self.min.height() {
             desired_size.height = self.min.height();
-            size_bounded = true;
         } else if desired_size.height() > self.max.height() {
             desired_size.height = self.max.height();
-            size_bounded = true;
         }
 
-        if !size_bounded {
-            Ok(desired_size)
-        } else {
-            Err(desired_size)
-        }
+        desired_size
     }
 }
 
@@ -205,5 +194,13 @@ impl Margins {
             top: top,
             right: right,
             bottom: bottom       }
+    }
+
+    pub fn width(self) -> Px {
+        self.left + self.right
+    }
+
+    pub fn height(self) -> Px {
+        self.top + self.bottom
     }
 }

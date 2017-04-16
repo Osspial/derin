@@ -5,7 +5,7 @@ extern crate dct;
 
 mod grid;
 
-use dct::geometry::{Px, Rect, OriginRect, OffsetRect};
+use dct::geometry::{Px, Rect, Point, OriginRect, OffsetRect};
 use dct::hints::{Fr, Tr, PlaceInCell, Place, GridSize, WidgetHints, TrackHints, SizeBounds, Margins};
 use grid::{TrackVec, SizeResult};
 
@@ -44,7 +44,9 @@ pub struct GridEngine {
     /// The size bounds of the engine, as requested by the programmer.
     pub desired_size_bounds: SizeBounds,
     /// The size bounds of the engine, accounting for the size bounds of the widgets.
-    actual_size_bounds: SizeBounds
+    actual_size_bounds: SizeBounds,
+    /// The margins that appear around the outside of the widget grid
+    pub grid_margins: Margins
 }
 
 impl GridEngine {
@@ -54,7 +56,8 @@ impl GridEngine {
             desired_size: OriginRect::min(),
             actual_size: OriginRect::min(),
             desired_size_bounds: SizeBounds::default(),
-            actual_size_bounds: SizeBounds::default()
+            actual_size_bounds: SizeBounds::default(),
+            grid_margins: Margins::default()
         }
     }
 
@@ -108,9 +111,9 @@ impl GridEngine {
             let mut updater = updater.borrow_mut();
 
             // We start out by setting the free space to its maximum possible value.
-            let mut free_width = self.desired_size.width();
+            let mut free_width = self.desired_size.width().saturating_sub(self.grid_margins.width());
             let mut fr_total_width = 0.0;
-            let mut free_height = self.desired_size.height();
+            let mut free_height = self.desired_size.height().saturating_sub(self.grid_margins.height());
             let mut fr_total_height = 0.0;
 
             let old_engine_size = self.actual_size;
@@ -158,16 +161,16 @@ impl GridEngine {
 
 
             self.actual_size_bounds.max =
-                self.desired_size_bounds.bound_rect(self.actual_size_bounds.max).converge();
+                self.desired_size_bounds.bound_rect(self.actual_size_bounds.max);
 
             self.actual_size_bounds.min = OriginRect::new(
-                frac_min_size.width() + rigid_min_size.width(),
-                frac_min_size.height() + rigid_min_size.height()
+                frac_min_size.width() + rigid_min_size.width() + self.grid_margins.width(),
+                frac_min_size.height() + rigid_min_size.height() + self.grid_margins.height()
             );
             self.actual_size_bounds.min =
-                self.desired_size_bounds.bound_rect(self.actual_size_bounds.min).converge();
+                self.desired_size_bounds.bound_rect(self.actual_size_bounds.min);
 
-            self.actual_size = self.actual_size_bounds.bound_rect(self.desired_size).converge();
+            self.actual_size = self.actual_size_bounds.bound_rect(self.desired_size);
 
             'update: loop {
                 /// Macro for solving the track constraints independent of axis. Because each axis is
@@ -267,6 +270,7 @@ impl GridEngine {
                     aborted: &mut aborted,
                     engine: self,
                     updater: &mut *updater,
+
                     free_width: &mut free_width,
                     free_height: &mut free_height,
                     fr_total_width: &mut fr_total_width,
@@ -359,8 +363,8 @@ impl<'a> GridConstraintSolver<'a> {
 
             // The widget size bounds without the margin
             let widget_size_bounds_nomargin = SizeBounds {
-                min: abs_size_bounds.bound_rect(widget_hints.size_bounds.min).converge(),
-                max: abs_size_bounds.bound_rect(widget_hints.size_bounds.max).converge()
+                min: abs_size_bounds.bound_rect(widget_hints.size_bounds.min),
+                max: abs_size_bounds.bound_rect(widget_hints.size_bounds.max)
             };
             // The widget size bounds, including the margin
             let widget_size_bounds = {
@@ -464,7 +468,7 @@ impl<'a> GridConstraintSolver<'a> {
                             solvable.$axis = SolveAxis::Unsolvable;
                         }
 
-                        actual_size_bounds.min.$size = self.frac_min_size.$size() + self.rigid_min_size.$size();
+                        actual_size_bounds.min.$size = self.frac_min_size.$size() + self.rigid_min_size.$size() + self.engine.grid_margins.$size();
                         if actual_size.$size() < actual_size_bounds.min.$size() {
                             grid_changed = true;
                             actual_size.$size = actual_size_bounds.min.$size();
@@ -500,7 +504,10 @@ impl<'a> GridConstraintSolver<'a> {
                 let cell_hinter = CellHinter::new(outer_rect, widget_hints.place_in_cell);
 
                 self.solvable_index += 1;
-                cell_hinter.hint(widget_size_bounds_nomargin, widget_hints.margins).map_err(|_| SolveError::WidgetUnsolvable)
+                let grid_margin_offset = Point::new(self.engine.grid_margins.left, self.engine.grid_margins.top);
+                cell_hinter.hint(widget_size_bounds_nomargin, widget_hints.margins)
+                    .map(|rect| rect.offset(grid_margin_offset))
+                    .map_err(|_| SolveError::WidgetUnsolvable)
             } else {
                 Err(SolveError::CellOutOfBounds)
             }
@@ -653,21 +660,6 @@ impl CellHinter {
 enum HintError {
     /// The outer rect is smaller than the minimum size bound, making constraint unsolvable
     ORTooSmall
-}
-
-trait Converge<T> {
-    /// Given a result where both `Ok` and `Err` contain the same type, "converge" those values
-    /// to just one value.
-    fn converge(self) -> T;
-}
-
-impl<T> Converge<T> for Result<T, T> {
-    fn converge(self) -> T {
-        match self {
-            Ok(t) |
-            Err(t) => t
-        }
-    }
 }
 
 
