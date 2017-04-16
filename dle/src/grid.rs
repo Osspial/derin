@@ -1,6 +1,6 @@
 use Tr;
 use dct::geometry::{Px, Point};
-use hints::{GridSize, TrRange, TrackHints};
+use dct::hints::{GridSize, TrRange, TrackHints};
 
 use std::cmp;
 use std::fmt::{Debug, Formatter, Error};

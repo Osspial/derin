@@ -1,7 +1,6 @@
 pub mod widgets;
 
-pub use dct::{geometry, buttons};
-pub use dle::hints;
+pub use dct::{geometry, buttons, hints};
 use self::hints::{WidgetHints, GridSize, TrackHints};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

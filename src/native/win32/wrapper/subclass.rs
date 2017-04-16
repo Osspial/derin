@@ -5,8 +5,8 @@ use ui::widgets::status::progbar;
 use dww::*;
 use dww::notify::{Notification, NotifyType, ThumbReason};
 use dle::{GridContainer, GridEngine, GridConstraintSolver, SolveError};
-use dle::hints::{WidgetHints, GridSize, TrackHints};
-use dct::geometry::{OriginRect, OffsetRect, SizeBounds};
+use ui::hints::{WidgetHints, GridSize, TrackHints, SizeBounds};
+use ui::geometry::{OriginRect, OffsetRect};
 
 use std::mem;
 use std::borrow::Borrow;

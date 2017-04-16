@@ -21,8 +21,9 @@ mod vkey;
 
 use user_msg::UserMsg;
 
-use dct::geometry::{Px, SizeBounds, Rect, Point, OriginRect, OffsetRect};
 use dct::buttons::{MouseButton, Key};
+use dct::geometry::{Px, Rect, Point, OriginRect, OffsetRect};
+use dct::hints::SizeBounds;
 
 use winapi::*;
 

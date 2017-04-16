@@ -3,18 +3,14 @@
 extern crate quickcheck;
 extern crate dct;
 
-pub mod hints;
 mod grid;
 
-use dct::geometry::{Px, Rect, OriginRect, OffsetRect, SizeBounds, Margins};
-use hints::{PlaceInCell, Place, GridSize, WidgetHints, TrackHints};
+use dct::geometry::{Px, Rect, OriginRect, OffsetRect};
+use dct::hints::{Fr, Tr, PlaceInCell, Place, GridSize, WidgetHints, TrackHints, SizeBounds, Margins};
 use grid::{TrackVec, SizeResult};
 
 use std::cmp;
 use std::cell::RefCell;
-
-pub type Tr = u32;
-pub type Fr = f32;
 
 pub trait Widget {
     fn set_rect(&mut self, rect: OffsetRect);

@@ -8,8 +8,9 @@ use ui::widgets::status::{progbar, slider, Orientation};
 use ui::hints::{GridSize, TrackHints};
 
 use dww::*;
-use dle::{Tr, GridEngine};
-use dct::geometry::{OffsetRect, SizeBounds};
+use dle::GridEngine;
+use dct::geometry::OffsetRect;
+use dct::hints::{Tr, SizeBounds};
 
 use std::mem;
 use std::rc::Rc;
