@@ -74,7 +74,6 @@ impl<B, I> Subclass<B> for TextButtonSubclass<I>
                 _ => ()
             },
             Msg::User(DerinMsg::SetRect(rect)) => window.set_rect(rect),
-            _ => ()
         }
         ret
     }
@@ -110,7 +109,7 @@ impl<P, I> Subclass<P> for WidgetGroupSubclass<I>
         where P: ParentWindow + WindowMut,
       for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>>
 {
-    fn subclass_proc(window: &mut ProcWindowRef<P, Self>, mut msg: Msg<DerinMsg>) -> i64 {
+    fn subclass_proc(window: &mut ProcWindowRef<P, Self>, msg: Msg<DerinMsg>) -> i64 {
         match msg {
             Msg::Wm(wm) => match wm {
                 Wm::GetSizeBounds(size_bounds) => {
@@ -133,7 +132,6 @@ impl<P, I> Subclass<P> for WidgetGroupSubclass<I>
                 window.set_rect(rect);
                 0
             },
-            _ => window.default_window_proc(&mut msg)
         }
     }
 }
@@ -169,7 +167,6 @@ impl<W, S> Subclass<W> for TextLabelSubclass<S>
                 _ => ()
             },
             Msg::User(DerinMsg::SetRect(rect)) => window.set_rect(rect),
-            _ => ()
         }
         ret
     }

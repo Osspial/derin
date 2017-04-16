@@ -40,7 +40,6 @@ use self::ucs2::{WithString, Ucs2String, Ucs2Str, ucs2_str, ucs2_str_from_ptr, U
 #[derive(Debug)]
 pub enum Msg<'a, U: UserMsg> {
     Wm(Wm<'a>),
-    Bm(Bm<'a>),
     User(U)
 }
 
@@ -58,11 +57,6 @@ pub enum Wm<'a> {
     EraseBackground,
     Notify(Notification),
     GetSizeBounds(&'a mut SizeBounds)
-}
-
-#[derive(Debug)]
-pub enum Bm<'a> {
-    GetIdealSize(&'a mut OriginRect)
 }
 
 pub type RepeatCount = u16;
@@ -152,7 +146,7 @@ impl<'a> WindowBuilder<'a> {
         self.build_push_button_with_font(parent, DefaultFont)
     }
 
-    pub fn build_push_button_with_font<F: Borrow<Font>, P: ParentWindow>(self, parent: &P, font: F) -> PushButtonBase<F> {
+    pub fn build_push_button_with_font<P: ParentWindow, F: Borrow<Font>>(self, parent: &P, font: F) -> PushButtonBase<F> {
         let window_handle = self.build(BS_PUSHBUTTON, 0, unsafe{ Some(parent.hwnd()) }, &BUTTON_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         let mut window = PushButtonBase(window_handle, unsafe{ mem::uninitialized() });
@@ -164,7 +158,7 @@ impl<'a> WindowBuilder<'a> {
         self.build_text_label_with_font(parent, DefaultFont)
     }
 
-    pub fn build_text_label_with_font<F: Borrow<Font>, P: ParentWindow>(self, parent: &P, font: F) -> TextLabelBase<F> {
+    pub fn build_text_label_with_font<P: ParentWindow, F: Borrow<Font>>(self, parent: &P, font: F) -> TextLabelBase<F> {
         let window_handle = self.build(0, 0, unsafe{ Some(parent.hwnd()) }, &STATIC_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         let mut window = TextLabelBase(window_handle, unsafe{ mem::uninitialized() });
@@ -717,7 +711,7 @@ pub unsafe trait OrphanableWindow: Window {
 }
 
 pub unsafe trait ButtonWindow: WindowMut {
-    fn get_ideal_size(&mut self) -> OriginRect {
+    fn get_ideal_size(&self) -> OriginRect {
         let mut size = SIZE{ cx: 0, cy: 0 };
         unsafe{ user32::SendMessageW(self.hwnd(), BCM_GETIDEALSIZE, 0, &mut size as *mut SIZE as LPARAM) };
         OriginRect::new(size.cx as Px, size.cy as Px)
@@ -1238,11 +1232,6 @@ impl<'a, W: Window, S: Subclass<W>> ProcWindowRef<'a, W, S> {
                 size_bounds.min = OriginRect::new(mmi.ptMinTrackSize.x as Px, mmi.ptMinTrackSize.y as Px);
                 size_bounds.max = OriginRect::new(mmi.ptMaxTrackSize.x as Px, mmi.ptMaxTrackSize.y as Px);
             },
-            Msg::Bm(Bm::GetIdealSize(ref mut ideal_size)) => {
-                assert_eq!(self.msg, BCM_GETIDEALSIZE);
-                let size = unsafe{ *(self.lparam as *mut SIZE) };
-                **ideal_size = OriginRect::new(size.cx as Px, size.cy as Px);
-            },
             _ => ()
         }
     }
@@ -1640,14 +1629,6 @@ unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
                 }
             }
 
-            BCM_GETIDEALSIZE => {
-                let size_winapi = &mut *(lparam as *mut SIZE);
-                let mut size = OriginRect::new(size_winapi.cx as Px, size_winapi.cy as Px);
-                let ret = run_subclass_proc!(Msg::Bm(Bm::GetIdealSize(&mut size)));
-                size_winapi.cx = size.width as LONG;
-                size_winapi.cy = size.height as LONG;
-                ret
-            }
             _ => comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
         }
     }
