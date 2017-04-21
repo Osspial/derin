@@ -1,6 +1,6 @@
-use ui::{Parent, Node, ChildId, NodeProcessorInit, NodeProcessorGrid, NodeProcessorGridMut, NodeProcessor};
-use ui::widgets::{ButtonControl, MouseEvent, SliderControl, RangeEvent};
-use ui::widgets::status::progbar;
+use ui::{Parent, Node, ChildId, NodeProcessorInit, NodeProcessorGrid, NodeProcessorGridMut, NodeProcessor, EventActionMap};
+use ui::widgets::{MouseEvent, RangeEvent};
+use ui::widgets::status::{progbar, slider};
 
 use dww::*;
 use dww::notify::{Notification, NotifyType, ThumbReason};
@@ -9,7 +9,6 @@ use ui::hints::{WidgetHints, GridSize, TrackHints, SizeBounds};
 use ui::geometry::{OriginRect, OffsetRect};
 
 use std::mem;
-use std::borrow::Borrow;
 
 use super::{DerinMsg, SharedFn, ToplevelWindowBase, NativeDataWrapper};
 
@@ -26,18 +25,20 @@ impl Default for ButtonState {
     }
 }
 
-pub struct TextButtonSubclass<I: Borrow<str> + ButtonControl> {
-    pub node_data: I,
-    pub action_fn: Option<SharedFn<I::Action>>,
+pub struct TextButtonSubclass<B: EventActionMap<MouseEvent>, S: AsRef<str>> {
+    pub button_action_map: B,
+    pub text: S,
+    pub action_fn: Option<SharedFn<B::Action>>,
     pub abs_size_bounds: SizeBounds,
     button_state: ButtonState
 }
 
-impl<I: Borrow<str> + ButtonControl> TextButtonSubclass<I> {
+impl<B: EventActionMap<MouseEvent>, S: AsRef<str>> TextButtonSubclass<B, S> {
     #[inline]
-    pub fn new(node_data: I) -> TextButtonSubclass<I> {
+    pub fn new(button_action_map: B, text: S) -> TextButtonSubclass<B, S> {
         TextButtonSubclass {
-            node_data: node_data,
+            button_action_map,
+            text,
             action_fn: None,
             abs_size_bounds: SizeBounds::default(),
             button_state: ButtonState::default()
@@ -45,12 +46,13 @@ impl<I: Borrow<str> + ButtonControl> TextButtonSubclass<I> {
     }
 }
 
-impl<B, I> Subclass<B> for TextButtonSubclass<I>
-        where B: ButtonWindow,
-              I: Borrow<str> + ButtonControl
+impl<W, B, S> Subclass<W> for TextButtonSubclass<B, S>
+        where W: ButtonWindow,
+              B: EventActionMap<MouseEvent>,
+              S: AsRef<str>
 {
     type UserMsg = DerinMsg;
-    fn subclass_proc(window: &mut ProcWindowRef<B, Self>, mut msg: Msg<DerinMsg>) -> i64 {
+    fn subclass_proc(window: &mut ProcWindowRef<W, Self>, mut msg: Msg<DerinMsg>) -> i64 {
         let ret = window.default_window_proc(&mut msg);
 
         match msg {
@@ -59,8 +61,8 @@ impl<B, I> Subclass<B> for TextButtonSubclass<I>
                 Wm::MouseDoubleDown(_, _) => window.subclass_data().button_state = ButtonState::DoublePressed,
                 Wm::MouseUp(button, _) => {
                     let action_opt = match window.subclass_data().button_state {
-                        ButtonState::Pressed       => window.subclass_data().node_data.on_mouse_event(MouseEvent::Clicked(button)),
-                        ButtonState::DoublePressed => window.subclass_data().node_data.on_mouse_event(MouseEvent::DoubleClicked(button)),
+                        ButtonState::Pressed       => window.subclass_data().button_action_map.on_event(MouseEvent::Clicked(button)),
+                        ButtonState::DoublePressed => window.subclass_data().button_action_map.on_event(MouseEvent::DoubleClicked(button)),
                         ButtonState::Released      => None
                     };
                     if let Some(action) = action_opt {
@@ -81,15 +83,15 @@ impl<B, I> Subclass<B> for TextButtonSubclass<I>
 
 
 pub struct WidgetGroupSubclass<I: Parent<!>> {
-    pub node_data: I,
+    pub content_data: I,
     pub layout_engine: GridEngine
 }
 
 impl<I: Parent<!>> WidgetGroupSubclass<I> {
     #[inline]
-    pub fn new(node_data: I) -> WidgetGroupSubclass<I> {
+    pub fn new(content_data: I) -> WidgetGroupSubclass<I> {
         WidgetGroupSubclass {
-            node_data: node_data,
+            content_data: content_data,
             layout_engine: GridEngine::new()
         }
     }
@@ -121,13 +123,13 @@ impl<P, I> Subclass<P> for WidgetGroupSubclass<I>
             Msg::User(DerinMsg::SetRect(rect)) => {
                 {
                     let WidgetGroupSubclass {
-                        ref mut node_data,
+                        ref mut content_data,
                         ref mut layout_engine,
                         ..
                     } = *window.subclass_data();
 
                     layout_engine.desired_size = OriginRect::from(rect);
-                    layout_engine.update_engine(&mut ParentContainer(node_data)).ok();
+                    layout_engine.update_engine(&mut ParentContainer(content_data)).ok();
                 }
                 window.set_rect(rect);
                 0
@@ -197,16 +199,18 @@ impl<W> Subclass<W> for ProgressBarSubclass
     }
 }
 
-pub struct SliderSubclass<C: SliderControl> {
-    pub control: C,
+pub struct SliderSubclass<C: EventActionMap<RangeEvent>> {
+    pub range_action_map: C,
+    pub status: slider::Status,
     pub action_fn: Option<SharedFn<C::Action>>,
     pub slider_window: TrackbarBase
 }
 
-impl<C: SliderControl> SliderSubclass<C> {
-    pub fn new(control: C) -> SliderSubclass<C> {
+impl<C: EventActionMap<RangeEvent>> SliderSubclass<C> {
+    pub fn new(range_action_map: C, status: slider::Status) -> SliderSubclass<C> {
         SliderSubclass {
-            control,
+            range_action_map,
+            status,
             action_fn: None,
             slider_window: unsafe{ mem::zeroed() }
         }
@@ -215,7 +219,7 @@ impl<C: SliderControl> SliderSubclass<C> {
 
 impl<W, C> Subclass<W> for SliderSubclass<C>
         where W: WindowMut,
-              C: SliderControl
+              C: EventActionMap<RangeEvent>
 {
     type UserMsg = DerinMsg;
     fn subclass_proc(window: &mut ProcWindowRef<W, Self>, mut msg: Msg<DerinMsg>) -> i64 {
@@ -229,7 +233,7 @@ impl<W, C> Subclass<W> for SliderSubclass<C>
                     ThumbReason::ThumbPosition => RangeEvent::Drop(new_pos),
                     _                          => RangeEvent::Move(new_pos)
                 };
-                let action_opt = window.subclass_data().control.on_range_event(event);
+                let action_opt = window.subclass_data().range_action_map.on_event(event);
                 if let Some(action) = action_opt {
                     unsafe{ window.subclass_data().action_fn.as_ref().expect("No Action Function").borrow_mut().call_fn(action) };
                 }

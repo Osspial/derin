@@ -3,6 +3,8 @@ pub mod widgets;
 pub use dct::{geometry, buttons, hints};
 use self::hints::{WidgetHints, GridSize, TrackHints};
 
+use std::marker::PhantomData;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ChildId {
     Str(&'static str),
@@ -36,13 +38,13 @@ pub trait NodeProcessorGrid<N: Node>: NodeProcessorGridMut<N> {
 pub trait NodeDataRegistry<N>
         where N: Node<Wrapper = Self::NodeDataWrapper>
 {
-    type NodeDataWrapper: NodeDataWrapper<N::Inner>;
+    type NodeDataWrapper: NodeDataWrapper<N::Map>;
 }
 
 pub trait Node {
-    type Wrapper: NodeDataWrapper<Self::Inner>;
-    type Inner;
-    type Action;
+    type Wrapper: NodeDataWrapper<Self::Map>;
+    type Map: EventActionMap<Self::Event>;
+    type Event;
 
     fn type_name(&self) -> &'static str;
 
@@ -50,11 +52,18 @@ pub trait Node {
     fn wrapper_mut(&mut self) -> &mut Self::Wrapper;
 }
 
-pub trait NodeDataWrapper<I> {
-    fn from_node_data(I) -> Self;
-    fn inner(&self) -> &I;
-    fn inner_mut(&mut self) -> &mut I;
-    fn unwrap(self) -> I;
+pub trait NodeDataWrapper<M> {
+    type ContentData;
+
+    fn from_node_data(M, Self::ContentData) -> Self;
+
+    fn event_map(&self) -> &M;
+    fn event_map_mut(&mut self) -> &mut M;
+
+    fn content_data(&self) -> &Self::ContentData;
+    fn content_data_mut(&mut self) -> &mut Self::ContentData;
+
+    fn unwrap(self) -> (M, Self::ContentData);
 }
 
 pub trait ParentMut<NPI>
@@ -84,6 +93,12 @@ pub trait GridLayout<'a> {
     fn get_hints(&self, ChildId) -> Option<WidgetHints>;
 }
 
+pub trait EventActionMap<E> {
+    type Action;
+
+    fn on_event(&self, E) -> Option<Self::Action>;
+}
+
 
 impl NodeProcessor for ! {
     type Error = !;
@@ -111,8 +126,8 @@ impl<N: Node> NodeProcessorGrid<N> for ! {
 
 impl Node for ! {
     type Wrapper = !;
-    type Inner = !;
-    type Action = !;
+    type Map = !;
+    type Event = !;
 
     fn type_name(&self) -> &'static str {match self {}}
     fn wrapper(&self) -> &! {self}
@@ -120,11 +135,24 @@ impl Node for ! {
 }
 
 #[allow(unreachable_code)]
-impl NodeDataWrapper<!> for ! {
-    fn from_node_data(data: !) -> ! {data}
-    fn inner(&self) -> &! {self}
-    fn inner_mut(&mut self) -> &mut ! {self}
-    fn unwrap(self) -> ! {self}
+impl<A> NodeDataWrapper<A> for ! {
+    type ContentData = !;
+
+    fn from_node_data(_: A, data: !) -> ! {data}
+
+    fn event_map(&self) -> &A {match self {}}
+    fn event_map_mut(&mut self) -> &mut A {match self {}}
+
+    fn content_data(&self) -> &! {self}
+    fn content_data_mut(&mut self) -> &mut ! {self}
+
+    fn unwrap(self) -> (A, !) {(self, self)}
+}
+
+impl<E> EventActionMap<E> for ! {
+    type Action = !;
+
+    fn on_event(&self, _: E) -> Option<!> {*self}
 }
 
 impl NodeProcessor for () {
@@ -146,4 +174,18 @@ impl<N: Node> NodeProcessorGridMut<N> for () {
 
 impl<N: Node> NodeProcessorGrid<N> for () {
     fn add_child<'a>(&'a mut self, _: ChildId, _: WidgetHints, _: &'a N) -> Result<(), !> {Ok(())}
+}
+
+impl<E> EventActionMap<E> for () {
+    type Action = !;
+
+    fn on_event(&self, _: E) -> Option<!> {None}
+}
+
+impl<E, A> EventActionMap<E> for PhantomData<A> {
+    type Action = A;
+
+    fn on_event(&self, _: E) -> Option<A> {
+        None
+    }
 }

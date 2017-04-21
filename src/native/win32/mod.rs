@@ -6,11 +6,10 @@ use dww::{msg_queue, WindowOwned, Window as WindowTrait, ParentWindow, WindowRef
 
 use std::rc::Rc;
 use std::ptr;
-use std::borrow::Borrow;
 use std::cell::RefCell;
 
-use ui::{Node, Parent, ParentMut, ChildId, NodeProcessorGridMut, NodeProcessor, NodeProcessorInit, NodeDataWrapper, NodeDataRegistry};
-use ui::widgets::{ButtonControl, TextButton, TextLabel, WidgetGroup, ProgressBar, Slider, SliderControl};
+use ui::*;
+use ui::widgets::{TextButton, TextLabel, WidgetGroup, ProgressBar, Slider, MouseEvent, RangeEvent};
 use ui::hints::{WidgetHints, GridSize, TrackHints, NodeSpan};
 
 pub struct Window<N>
@@ -20,7 +19,7 @@ pub struct Window<N>
 {
     pub root: N,
     toplevel: ToplevelWindow,
-    action_fn: SharedFn<N::Action>,
+    action_fn: SharedFn<<N::Map as EventActionMap<N::Event>>::Action>,
     self_ptr: *const Window<N>
 }
 
@@ -49,7 +48,7 @@ impl<N> Window<N>
     }
 
     pub fn wait_actions<F>(&mut self, mut f: F) -> Result<(), !>
-            where F: FnMut(N::Action) -> bool
+            where F: FnMut(<N::Map as EventActionMap<N::Event>>::Action) -> bool
     {
         let node_data_moved = self.self_ptr != self;
         self.self_ptr = self;
@@ -64,7 +63,7 @@ impl<N> Window<N>
             ..WidgetHints::default()
         };
         let mut children_updated = false;
-        NativeNodeProcessor::<_, N::Action> {
+        NativeNodeProcessor::<_, <N::Map as EventActionMap<N::Event>>::Action> {
             parent: &mut self.toplevel,
             action_fn: &self.action_fn,
             bottom_window: None,
@@ -131,11 +130,12 @@ impl<'a, P, A, C> NodeProcessorGridMut<C> for NativeNodeProcessor<'a, P, A>
     }
 }
 
-impl<'a, P, A, I> NodeProcessorGridMut<TextButton<I>> for NativeNodeProcessor<'a, P, A>
+impl<'a, P, A, B, S> NodeProcessorGridMut<TextButton<B, S>> for NativeNodeProcessor<'a, P, A>
         where P: ParentChildAdder,
-              I: ButtonControl<Action = A> + Borrow<str>
+              B: EventActionMap<MouseEvent, Action = A>,
+              S: AsRef<str>
 {
-    fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, button: &'b mut TextButton<I>) -> Result<(), !> {
+    fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, button: &'b mut TextButton<B, S>) -> Result<(), !> {
         button.wrapper().update_window();
 
         if self.bottom_window.is_none() {
@@ -200,7 +200,7 @@ impl<'a, P, A, I> NodeProcessorGridMut<WidgetGroup<I>> for NativeNodeProcessor<'
                 bottom_window: None,
                 children_updated: &mut children_updated
             };
-            group_wrapper.inner_mut().children_mut(child_processor)?;
+            group_wrapper.content_data_mut().children_mut(child_processor)?;
         }
 
         if children_updated {
@@ -231,7 +231,7 @@ impl<'a, P, A> NodeProcessorGridMut<ProgressBar> for NativeNodeProcessor<'a, P, 
 
 impl<'a, P, A, C> NodeProcessorGridMut<Slider<C>> for NativeNodeProcessor<'a, P, A>
         where P: ParentChildAdder,
-              C: SliderControl<Action = A>
+              C: EventActionMap<RangeEvent, Action = A>
 {
     fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, slider: &'b mut Slider<C>) -> Result<(), !> {
         slider.wrapper().update_window();
@@ -251,8 +251,8 @@ impl<'a, P, A, C> NodeProcessorGridMut<Slider<C>> for NativeNodeProcessor<'a, P,
 
 
 pub struct NativeWrapperRegistry;
-impl<I: ButtonControl + Borrow<str>> NodeDataRegistry<TextButton<I>> for NativeWrapperRegistry {
-    type NodeDataWrapper = TextButtonNodeData<I>;
+impl<B: EventActionMap<MouseEvent>, S: AsRef<str>> NodeDataRegistry<TextButton<B, S>> for NativeWrapperRegistry {
+    type NodeDataWrapper = TextButtonNodeData<B, S>;
 }
 impl<S: AsRef<str>> NodeDataRegistry<TextLabel<S>> for NativeWrapperRegistry {
     type NodeDataWrapper = TextLabelNodeData<S>;
@@ -263,6 +263,6 @@ impl<I: Parent<!>> NodeDataRegistry<WidgetGroup<I>> for NativeWrapperRegistry {
 impl NodeDataRegistry<ProgressBar> for NativeWrapperRegistry {
     type NodeDataWrapper = ProgressBarNodeData;
 }
-impl<C: SliderControl> NodeDataRegistry<Slider<C>> for NativeWrapperRegistry {
+impl<C: EventActionMap<RangeEvent>> NodeDataRegistry<Slider<C>> for NativeWrapperRegistry {
     type NodeDataWrapper = SliderNodeData<C>;
 }

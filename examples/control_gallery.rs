@@ -13,41 +13,28 @@ use derin::ui::hints::*;
 use derin::native::{Window, WindowConfig};
 
 use std::iter;
-use std::borrow::Borrow;
 
 enum GalleryEvent {
     AddButton,
     SliderMoved(u32)
 }
 
-struct AddButton(&'static str);
+struct AddButton;
 
-impl Borrow<str> for AddButton {
-    fn borrow(&self) -> &str {
-        self.0
-    }
-}
-
-impl ButtonControl for AddButton {
+impl EventActionMap<MouseEvent> for AddButton {
     type Action = GalleryEvent;
 
-    fn on_mouse_event(&self, _: MouseEvent) -> Option<GalleryEvent> {
+    fn on_event(&self, _: MouseEvent) -> Option<GalleryEvent> {
         Some(GalleryEvent::AddButton)
     }
 }
 
-struct BasicSlider(slider::Status);
+struct BasicSlider;
 
-impl SliderControl for BasicSlider {
+impl EventActionMap<RangeEvent> for BasicSlider {
     type Action = GalleryEvent;
 
-    fn status(&self) -> slider::Status {
-        self.0.clone()
-    }
-    fn status_mut(&mut self) -> &mut slider::Status {
-        &mut self.0
-    }
-    fn on_range_event(&self, event: RangeEvent) -> Option<GalleryEvent> {
+    fn on_event(&self, event: RangeEvent) -> Option<GalleryEvent> {
         if let RangeEvent::Move(moved_to) = event {
             Some(GalleryEvent::SliderMoved(moved_to))
         } else {
@@ -72,9 +59,9 @@ impl BasicParent {
         BasicParent {
             label: TextLabel::new("A Label"),
             bar: ProgressBar::new(progbar::Status::new(progbar::Completion::Frac(0.5), Orientation::Horizontal)),
-            slider: Slider::new(BasicSlider(slider::Status::default())),
+            slider: Slider::new(BasicSlider, slider::Status::default()),
             nested_parent: WidgetGroup::new(NestedParent {
-                button: TextButton::new(AddButton("A Button")),
+                button: TextButton::new(AddButton, "A Button"),
                 button_vec: Vec::new(),
                 layout: NestedParentLayout
             }),
@@ -86,9 +73,9 @@ impl BasicParent {
 #[derive(Parent)]
 #[derin(child_action = "GalleryEvent")]
 struct NestedParent {
-    button: TextButton<AddButton>,
+    button: TextButton<AddButton, &'static str>,
     #[derin(collection)]
-    button_vec: Vec<TextButton<AddButton>>,
+    button_vec: Vec<TextButton<AddButton, &'static str>>,
     #[derin(layout)]
     layout: NestedParentLayout
 }
@@ -179,7 +166,7 @@ fn main() {
         let mut action = None;
         window.wait_actions(|new_act| {action = Some(new_act); false}).unwrap();
         match action.unwrap() {
-            GalleryEvent::AddButton => window.root.nested_parent.button_vec.push(TextButton::new(AddButton("Another Button"))),
+            GalleryEvent::AddButton => (),//window.root.nested_parent.button_vec.push(TextButton::new(AddButton, "Another Button")),
             GalleryEvent::SliderMoved(moved_to) => window.root.bar.completion = progbar::Completion::Frac(moved_to as f32 / 128.0)
         }
     }
