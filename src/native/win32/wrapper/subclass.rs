@@ -1,6 +1,6 @@
 use ui::{Parent, Node, ChildId, NodeProcessorInit, NodeProcessorGrid, NodeProcessorGridMut, NodeProcessor, EventActionMap};
 use ui::widgets::{MouseEvent, RangeEvent};
-use ui::widgets::status::{progbar, slider};
+use ui::widgets::content::{SliderStatus, ProgbarStatus};
 
 use dww::*;
 use dww::notify::{Notification, NotifyType, ThumbReason};
@@ -82,22 +82,22 @@ impl<W, B, S> Subclass<W> for TextButtonSubclass<B, S>
 }
 
 
-pub struct WidgetGroupSubclass<I: Parent<!>> {
+pub struct GroupSubclass<I: Parent<!>> {
     pub content_data: I,
     pub layout_engine: GridEngine
 }
 
-impl<I: Parent<!>> WidgetGroupSubclass<I> {
+impl<I: Parent<!>> GroupSubclass<I> {
     #[inline]
-    pub fn new(content_data: I) -> WidgetGroupSubclass<I> {
-        WidgetGroupSubclass {
+    pub fn new(content_data: I) -> GroupSubclass<I> {
+        GroupSubclass {
             content_data: content_data,
             layout_engine: GridEngine::new()
         }
     }
 }
 
-impl<P, I> Subclass<P> for WidgetGroupSubclass<I>
+impl<P, I> Subclass<P> for GroupSubclass<I>
         where P: ParentWindow + WindowMut,
               I: Parent<!>
 {
@@ -107,7 +107,7 @@ impl<P, I> Subclass<P> for WidgetGroupSubclass<I>
     }
 }
 
-impl<P, I> Subclass<P> for WidgetGroupSubclass<I>
+impl<P, I> Subclass<P> for GroupSubclass<I>
         where P: ParentWindow + WindowMut,
       for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>>
 {
@@ -122,7 +122,7 @@ impl<P, I> Subclass<P> for WidgetGroupSubclass<I>
             },
             Msg::User(DerinMsg::SetRect(rect)) => {
                 {
-                    let WidgetGroupSubclass {
+                    let GroupSubclass {
                         ref mut content_data,
                         ref mut layout_engine,
                         ..
@@ -174,20 +174,20 @@ impl<W, S> Subclass<W> for TextLabelSubclass<S>
     }
 }
 
-pub struct ProgressBarSubclass {
-    pub status: progbar::Status
+pub struct ProgbarSubclass {
+    pub status: ProgbarStatus
 }
 
-impl ProgressBarSubclass {
+impl ProgbarSubclass {
     #[inline]
-    pub fn new(status: progbar::Status) -> ProgressBarSubclass {
-        ProgressBarSubclass {
+    pub fn new(status: ProgbarStatus) -> ProgbarSubclass {
+        ProgbarSubclass {
             status: status
         }
     }
 }
 
-impl<W> Subclass<W> for ProgressBarSubclass
+impl<W> Subclass<W> for ProgbarSubclass
         where W: ProgressBarWindow + WindowMut
 {
     type UserMsg = DerinMsg;
@@ -201,13 +201,13 @@ impl<W> Subclass<W> for ProgressBarSubclass
 
 pub struct SliderSubclass<C: EventActionMap<RangeEvent>> {
     pub range_action_map: C,
-    pub status: slider::Status,
+    pub status: SliderStatus,
     pub action_fn: Option<SharedFn<C::Action>>,
     pub slider_window: TrackbarBase
 }
 
 impl<C: EventActionMap<RangeEvent>> SliderSubclass<C> {
-    pub fn new(range_action_map: C, status: slider::Status) -> SliderSubclass<C> {
+    pub fn new(range_action_map: C, status: SliderStatus) -> SliderSubclass<C> {
         SliderSubclass {
             range_action_map,
             status,

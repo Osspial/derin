@@ -9,7 +9,7 @@ use std::ptr;
 use std::cell::RefCell;
 
 use ui::*;
-use ui::widgets::{TextButton, TextLabel, WidgetGroup, ProgressBar, Slider, MouseEvent, RangeEvent};
+use ui::widgets::{TextButton, TextLabel, Group, Progbar, Slider, MouseEvent, RangeEvent};
 use ui::hints::{WidgetHints, GridSize, TrackHints, NodeSpan};
 
 pub struct Window<N>
@@ -171,14 +171,14 @@ impl<'a, P, A, S> NodeProcessorGridMut<TextLabel<S>> for NativeNodeProcessor<'a,
     }
 }
 
-impl<'a, P, A, I> NodeProcessorGridMut<WidgetGroup<I>> for NativeNodeProcessor<'a, P, A>
+impl<'a, P, A, I> NodeProcessorGridMut<Group<I>> for NativeNodeProcessor<'a, P, A>
         where P: ParentChildAdder,
       for<'b> I: Parent<!> +
-                 ParentMut<NativeNodeProcessor<'b, WidgetGroupAdder, A>, ChildAction = A> +
+                 ParentMut<NativeNodeProcessor<'b, GroupAdder, A>, ChildAction = A> +
                  Parent<GridWidgetProcessor<'b>> +
                  Parent<EngineTypeHarvester<'b>>
 {
-    fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, group: &'b mut WidgetGroup<I>) -> Result<(), !> {
+    fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, group: &'b mut Group<I>) -> Result<(), !> {
         let group_wrapper = group.wrapper_mut();
         group_wrapper.update_window();
 
@@ -210,10 +210,10 @@ impl<'a, P, A, I> NodeProcessorGridMut<WidgetGroup<I>> for NativeNodeProcessor<'
     }
 }
 
-impl<'a, P, A> NodeProcessorGridMut<ProgressBar> for NativeNodeProcessor<'a, P, A>
+impl<'a, P, A> NodeProcessorGridMut<Progbar> for NativeNodeProcessor<'a, P, A>
         where P: ParentChildAdder
 {
-    fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, progress_bar: &'b mut ProgressBar) -> Result<(), !> {
+    fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, progress_bar: &'b mut Progbar) -> Result<(), !> {
         progress_bar.wrapper().update_window();
 
         if self.bottom_window.is_none() {
@@ -257,11 +257,11 @@ impl<B: EventActionMap<MouseEvent>, S: AsRef<str>> NodeDataRegistry<TextButton<B
 impl<S: AsRef<str>> NodeDataRegistry<TextLabel<S>> for NativeWrapperRegistry {
     type NodeDataWrapper = TextLabelNodeData<S>;
 }
-impl<I: Parent<!>> NodeDataRegistry<WidgetGroup<I>> for NativeWrapperRegistry {
-    type NodeDataWrapper = WidgetGroupNodeData<I>;
+impl<I: Parent<!>> NodeDataRegistry<Group<I>> for NativeWrapperRegistry {
+    type NodeDataWrapper = GroupNodeData<I>;
 }
-impl NodeDataRegistry<ProgressBar> for NativeWrapperRegistry {
-    type NodeDataWrapper = ProgressBarNodeData;
+impl NodeDataRegistry<Progbar> for NativeWrapperRegistry {
+    type NodeDataWrapper = ProgbarNodeData;
 }
 impl<C: EventActionMap<RangeEvent>> NodeDataRegistry<Slider<C>> for NativeWrapperRegistry {
     type NodeDataWrapper = SliderNodeData<C>;

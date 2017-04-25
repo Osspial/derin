@@ -1,6 +1,6 @@
 use super::{Node, NodeDataRegistry, NodeDataWrapper, Parent, EventActionMap};
 use super::buttons::MouseButton;
-use self::status::*;
+use self::content::*;
 
 use std::marker::PhantomData;
 use native::NativeWrapperRegistry;
@@ -244,23 +244,23 @@ intrinsics!{
         pub content_mut fn text_mut(&mut self) -> _;
     }
 
-    pub struct WidgetGroup<I>((), I)
+    pub struct Group<I>((), I)
             where I: Parent<!>;
-    impl WidgetGroup {
+    impl Group {
         type Map = PhantomData<I::ChildAction>;
         type Event = !;
         pub content fn children(&self) -> _;
         pub content_mut fn children_mut(&mut self) -> _;
     }
 
-    pub struct ProgressBar((), progbar::Status);
-    impl ProgressBar {
+    pub struct Progbar((), ProgbarStatus);
+    impl Progbar {
         type Event = !;
         pub content fn status(&self) -> _;
         pub content_mut fn status_mut(&mut self) -> _;
     }
 
-    pub struct Slider<C>(C, slider::Status)
+    pub struct Slider<C>(C, SliderStatus)
             where C: EventActionMap<RangeEvent>;
     impl Slider {
         type Event = RangeEvent;
@@ -280,7 +280,9 @@ pub enum RangeEvent {
     Drop(u32)
 }
 
-pub mod status {
+pub mod content {
+    use std::ops::Range;
+
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum Orientation {
         Horizontal,
@@ -294,90 +296,81 @@ pub mod status {
         }
     }
 
-    pub mod progbar {
-        use super::Orientation;
+    #[derive(Default, Debug, Clone, Copy, PartialEq)]
+    pub struct ProgbarStatus {
+        pub completion: Completion,
+        pub orientation: Orientation
+    }
 
-        #[derive(Default, Debug, Clone, Copy, PartialEq)]
-        pub struct Status {
-            pub completion: Completion,
-            pub orientation: Orientation
-        }
-
-        impl Status {
-            #[inline]
-            pub fn new(completion: Completion, orientation: Orientation) -> Status {
-                Status {
-                    completion,
-                    orientation
-                }
-            }
-
-            pub fn new_completion(completion: Completion) -> Status {
-                Status {
-                    completion,
-                    orientation: Orientation::default()
-                }
-            }
-
-            pub fn new_orientation(orientation: Orientation) -> Status {
-                Status {
-                    completion: Completion::default(),
-                    orientation
-                }
+    impl ProgbarStatus {
+        #[inline]
+        pub fn new(completion: Completion, orientation: Orientation) -> ProgbarStatus {
+            ProgbarStatus {
+                completion,
+                orientation
             }
         }
 
-        #[derive(Debug, Clone, Copy, PartialEq)]
-        pub enum Completion {
-            Frac(f32),
-            Working
+        pub fn new_completion(completion: Completion) -> ProgbarStatus {
+            ProgbarStatus {
+                completion,
+                orientation: Orientation::default()
+            }
         }
 
-        impl Default for Completion {
-            #[inline]
-            fn default() -> Completion {
-                Completion::Frac(0.0)
+        pub fn new_orientation(orientation: Orientation) -> ProgbarStatus {
+            ProgbarStatus {
+                completion: Completion::default(),
+                orientation
             }
         }
     }
 
-    pub mod slider {
-        use std::ops::Range;
-        use super::Orientation;
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    pub enum Completion {
+        Frac(f32),
+        Working
+    }
 
-        #[derive(Debug, Clone, PartialEq)]
-        pub struct Status {
-            pub position: u32,
-            pub range: Range<u32>,
-            pub tick_interval: u32,
-            pub orientation: Orientation,
-            pub tick_position: TickPosition
+    impl Default for Completion {
+        #[inline]
+        fn default() -> Completion {
+            Completion::Frac(0.0)
         }
+    }
 
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub enum TickPosition {
-            BottomRight,
-            TopLeft,
-            Both,
-            None
-        }
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct SliderStatus {
+        pub position: u32,
+        pub range: Range<u32>,
+        pub tick_interval: u32,
+        pub orientation: Orientation,
+        pub tick_position: TickPosition
+    }
 
-        impl Default for Status {
-            fn default() -> Status {
-                Status {
-                    position: 0,
-                    range: 0..128,
-                    tick_interval: 0,
-                    orientation: Orientation::default(),
-                    tick_position: TickPosition::default()
-                }
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum TickPosition {
+        BottomRight,
+        TopLeft,
+        Both,
+        None
+    }
+
+    impl Default for SliderStatus {
+        fn default() -> SliderStatus {
+            SliderStatus {
+                position: 0,
+                range: 0..128,
+                tick_interval: 0,
+                orientation: Orientation::default(),
+                tick_position: TickPosition::default()
             }
         }
+    }
 
-        impl Default for TickPosition {
-            fn default() -> TickPosition {
-                TickPosition::BottomRight
-            }
+    impl Default for TickPosition {
+        fn default() -> TickPosition {
+            TickPosition::BottomRight
         }
     }
 }

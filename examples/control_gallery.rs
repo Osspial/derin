@@ -6,8 +6,7 @@ extern crate derin_macros;
 
 use derin::ui::*;
 use derin::ui::widgets::*;
-use derin::ui::widgets::status::Orientation;
-use derin::ui::widgets::status::{progbar, slider};
+use derin::ui::widgets::content::{Orientation, Completion, ProgbarStatus, SliderStatus};
 use derin::ui::hints::*;
 
 use derin::native::{Window, WindowConfig};
@@ -47,9 +46,9 @@ impl EventActionMap<RangeEvent> for BasicSlider {
 #[derin(child_action = "GalleryEvent")]
 struct BasicParent {
     label: TextLabel<&'static str>,
-    bar: ProgressBar,
+    bar: Progbar,
     slider: Slider<BasicSlider>,
-    nested_parent: WidgetGroup<NestedParent>,
+    nested_parent: Group<NestedParent>,
     #[derin(layout)]
     layout: BasicParentLayout
 }
@@ -58,9 +57,9 @@ impl BasicParent {
     fn new() -> BasicParent {
         BasicParent {
             label: TextLabel::new("A Label"),
-            bar: ProgressBar::new(progbar::Status::new(progbar::Completion::Frac(0.5), Orientation::Horizontal)),
-            slider: Slider::new(BasicSlider, slider::Status::default()),
-            nested_parent: WidgetGroup::new(NestedParent {
+            bar: Progbar::new(ProgbarStatus::new(Completion::Frac(0.5), Orientation::Horizontal)),
+            slider: Slider::new(BasicSlider, SliderStatus::default()),
+            nested_parent: Group::new(NestedParent {
                 button: TextButton::new(AddButton, "A Button"),
                 button_vec: Vec::new(),
                 layout: NestedParentLayout
@@ -160,7 +159,7 @@ impl<'a> GridLayout<'a> for NestedParentLayout {
 }
 
 fn main() {
-    let mut window = Window::new(WidgetGroup::new(BasicParent::new()), &WindowConfig::new());
+    let mut window = Window::new(Group::new(BasicParent::new()), &WindowConfig::new());
 
     loop {
         let mut action = None;
@@ -172,7 +171,7 @@ fn main() {
                       .button_vec.push(TextButton::new(AddButton, "Another Button")),
             GalleryEvent::SliderMoved(moved_to) =>
                 window.root.children_mut()
-                      .bar.status_mut().completion = progbar::Completion::Frac(moved_to as f32 / 128.0)
+                      .bar.status_mut().completion = Completion::Frac(moved_to as f32 / 128.0)
         }
     }
 }

@@ -4,7 +4,7 @@ pub use self::subclass::GridWidgetProcessor;
 
 use ui::{Parent, Node, NodeDataWrapper, NodeProcessorInit, EventActionMap};
 use ui::widgets::{MouseEvent, RangeEvent};
-use ui::widgets::status::{progbar, slider, Orientation};
+use ui::widgets::content::{SliderStatus, ProgbarStatus, Completion, Orientation, TickPosition as SliderTickPosition};
 use ui::hints::{GridSize, TrackHints};
 
 use dww::*;
@@ -232,16 +232,16 @@ subclass_node_data!{
         }
     }
 
-    pub struct WidgetGroupNodeData<I>
+    pub struct GroupNodeData<I>
             where I: trait Parent<!>
     {
-        subclass: UnsafeSubclassWrapper<BlankBase, WidgetGroupSubclass<I>>,
+        subclass: UnsafeSubclassWrapper<BlankBase, GroupSubclass<I>>,
         needs_widget_update: bool
     }
     impl where I: for<'a> trait Parent<GridWidgetProcessor<'a>> | for<'a> trait Parent<EngineTypeHarvester<'a>> {
         expr abs_size_bounds(subclass_data) = subclass_data.layout_engine.actual_size_bounds();
         fn update_widget(subclass: _) {
-            let WidgetGroupSubclass {
+            let GroupSubclass {
                 ref mut layout_engine,
                 ref mut content_data
             } = *subclass.data_mut();
@@ -277,19 +277,19 @@ subclass_node_data!{
         }
     }
 
-    pub struct ProgressBarNodeData {
-        subclass: UnsafeSubclassWrapper<ProgressBarBase, ProgressBarSubclass>,
+    pub struct ProgbarNodeData {
+        subclass: UnsafeSubclassWrapper<ProgressBarBase, ProgbarSubclass>,
         needs_widget_update: bool
     }
     impl {
         expr abs_size_bounds(_) = SizeBounds::default();
         expr content_data(subclass_data) = subclass_data.status;
 
-        fn from_node_data(empty: (), status: progbar::Status) -> UnsafeSubclassWrapper<_, _> {
+        fn from_node_data(empty: (), status: ProgbarStatus) -> UnsafeSubclassWrapper<_, _> {
             let _ = empty;
             HOLDING_PARENT.with(|hp| {
                 let progbar_window = WindowBuilder::default().build_progress_bar(hp);
-                let subclass = ProgressBarSubclass::new(status);
+                let subclass = ProgbarSubclass::new(status);
 
                 unsafe{ UnsafeSubclassWrapper::new(progbar_window, subclass) }
             })
@@ -303,13 +303,13 @@ subclass_node_data!{
                 _ => ()
             }
             match status.completion {
-                progbar::Completion::Frac(prog) => {
+                Completion::Frac(prog) => {
                     if subclass.is_marquee() {
                         subclass.set_marquee(false);
                     }
                     subclass.set_progress((prog * 100.0) as u16);
                 }
-                progbar::Completion::Working if !subclass.is_marquee() => subclass.set_marquee(true),
+                Completion::Working if !subclass.is_marquee() => subclass.set_marquee(true),
                 _ => ()
             }
         }
@@ -326,7 +326,7 @@ subclass_node_data!{
         expr event_map(subclass_data) = subclass_data.range_action_map;
         expr content_data(subclass_data) = subclass_data.status;
 
-        fn from_node_data(range_action_map: C, status: slider::Status) -> UnsafeSubclassWrapper<_, _> {
+        fn from_node_data(range_action_map: C, status: SliderStatus) -> UnsafeSubclassWrapper<_, _> {
             let container_window = WindowBuilder::default().build_blank();
             let subclass = SliderSubclass::new(range_action_map, status);
 
@@ -353,17 +353,17 @@ subclass_node_data!{
             // Dww tick position and slider tick position are different types, so translate between then.
             // I don't have this type in DCT because then the documentation is uglier.
             let tick_position = match status.tick_position {
-                slider::TickPosition::BottomRight => TickPosition::BottomRight,
-                slider::TickPosition::TopLeft => TickPosition::TopLeft,
-                slider::TickPosition::Both => TickPosition::Both,
-                slider::TickPosition::None => TickPosition::None
+                SliderTickPosition::BottomRight => TickPosition::BottomRight,
+                SliderTickPosition::TopLeft => TickPosition::TopLeft,
+                SliderTickPosition::Both => TickPosition::Both,
+                SliderTickPosition::None => TickPosition::None
             };
             slider_window.set_tick_position(tick_position);
         }
     }
 }
 
-impl<I> NodeDataWrapper<PhantomData<I::ChildAction>> for WidgetGroupNodeData<I>
+impl<I> NodeDataWrapper<PhantomData<I::ChildAction>> for GroupNodeData<I>
         where for<'a> I: Parent<!>
 {
     type ContentData = I;
@@ -372,9 +372,9 @@ impl<I> NodeDataWrapper<PhantomData<I::ChildAction>> for WidgetGroupNodeData<I>
             let mut wrapper_window = WindowBuilder::default().show_window(false).build_blank();
             hp.add_child_window(&wrapper_window);
             wrapper_window.show(true);
-            let subclass = WidgetGroupSubclass::new(content_data);
+            let subclass = GroupSubclass::new(content_data);
 
-            WidgetGroupNodeData {
+            GroupNodeData {
                 subclass: unsafe{ UnsafeSubclassWrapper::new(wrapper_window, subclass) },
                 needs_widget_update: true
             }
@@ -402,18 +402,18 @@ impl<I> NodeDataWrapper<PhantomData<I::ChildAction>> for WidgetGroupNodeData<I>
     }
 }
 
-impl<I> ParentDataWrapper for WidgetGroupNodeData<I>
+impl<I> ParentDataWrapper for GroupNodeData<I>
         where for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>>
 {
-    type Adder = WidgetGroupAdder;
-    fn get_adder(&mut self) -> WidgetGroupAdder {
-        WidgetGroupAdder(self.subclass.parent_ref())
+    type Adder = GroupAdder;
+    fn get_adder(&mut self) -> GroupAdder {
+        GroupAdder(self.subclass.parent_ref())
     }
 }
 
-pub struct WidgetGroupAdder(ParentRef);
+pub struct GroupAdder(ParentRef);
 
-impl ParentChildAdder for WidgetGroupAdder {
+impl ParentChildAdder for GroupAdder {
     fn add_child_node<W>(&mut self, child: &mut W)
             where W: NativeDataWrapper
     {
