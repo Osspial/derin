@@ -155,6 +155,18 @@ impl<'a> WindowBuilder<'a> {
         window
     }
 
+    pub fn build_group_box<P: ParentWindow>(self, parent: &P) -> GroupBoxBase {
+        self.build_group_box_with_font(parent, DefaultFont)
+    }
+
+    pub fn build_group_box_with_font<P: ParentWindow, F: Borrow<Font>>(self, parent: &P, font: F) -> GroupBoxBase<F> {
+        let window_handle = self.build(BS_GROUPBOX, 0, unsafe{ Some(parent.hwnd()) }, &BUTTON_CLASS);
+        assert_ne!(window_handle, ptr::null_mut());
+        let mut window = GroupBoxBase(window_handle, unsafe{ mem::uninitialized() });
+        window.set_font(font);
+        window
+    }
+
     pub fn build_text_label<P: ParentWindow>(self, parent: &P) -> TextLabelBase {
         self.build_text_label_with_font(parent, DefaultFont)
     }
@@ -265,6 +277,7 @@ macro_rules! base_wrapper {
 base_wrapper! {
     pub struct BlankBase;
     pub struct PushButtonBase<F>;
+    pub struct GroupBoxBase<F>;
     pub struct TextLabelBase<F>;
     pub struct ProgressBarBase;
     pub struct TrackbarBase;
@@ -274,6 +287,7 @@ unsafe impl ParentWindow for BlankBase {}
 unsafe impl OrphanableWindow for BlankBase {}
 
 unsafe impl<F: Borrow<Font>> ButtonWindow for PushButtonBase<F> {}
+unsafe impl<F: Borrow<Font>> ParentWindow for GroupBoxBase<F> {}
 unsafe impl<F: Borrow<Font>> TextLabelWindow for TextLabelBase<F> {}
 unsafe impl ProgressBarWindow for ProgressBarBase {}
 unsafe impl TrackbarWindow for TrackbarBase {}
@@ -466,6 +480,22 @@ pub unsafe trait Window: Sized {
     fn windows_above(&self) -> WindowIterBottomUp {
         WindowIterBottomUp {
             next_window: unsafe{ user32::GetWindow(self.hwnd(), GW_HWNDPREV) }
+        }
+    }
+
+    fn get_outer_size(&self) -> OriginRect {
+        unsafe {
+            let mut rect: RECT = mem::zeroed();
+            user32::GetWindowRect(self.hwnd(), &mut rect);
+            OriginRect::new((rect.right - rect.left) as Px, (rect.bottom - rect.top) as Px)
+        }
+    }
+
+    fn get_inner_size(&self) -> OriginRect {
+        unsafe {
+            let mut rect: RECT = mem::zeroed();
+            user32::GetClientRect(self.hwnd(), &mut rect);
+            OriginRect::new((rect.right - rect.left) as Px, (rect.bottom - rect.top) as Px)
         }
     }
 
