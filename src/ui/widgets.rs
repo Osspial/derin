@@ -2,10 +2,9 @@ use super::{Node, NodeDataRegistry, NodeDataWrapper, Parent, EventActionMap};
 use super::buttons::MouseButton;
 use self::status::*;
 
-use std::ops::{Deref, DerefMut};
-use std::borrow::{Borrow, BorrowMut};
 use std::marker::PhantomData;
 use native::NativeWrapperRegistry;
+
 
 macro_rules! intrinsics {
     () => {};
@@ -18,8 +17,15 @@ macro_rules! intrinsics {
             $(type Map = $map_ty_override:ty;)*
             type Event = $event:ty;
 
-            pub fn $content_data:ident(&self) -> &_;
-            pub fn $content_data_mut:ident(&mut self) -> &mut _;
+            $(
+                pub
+                    $(map fn $map:ident(&self) -> _;)*
+                    $(map_mut fn $map_mut:ident(&mut self) -> _;)*
+                    $(content fn $content_data:ident(&self) -> _;)*
+                    $(content_mut fn $content_data_mut:ident(&mut self) -> _;)*
+                    $(borrow fn $borrow:ident($borrow_in:ident: &Self) -> _ $borrow_block:block)*
+                    $(borrow_mut fn $borrow_mut:ident($borrow_mut_in:ident: &mut Self) -> _ $borrow_mut_block:block)*
+            )*
         }
 
         $($rest:tt)*
@@ -43,46 +49,63 @@ macro_rules! intrinsics {
                     }
                 }
 
-                pub fn $content_data(&self) -> &_;
-                pub fn $content_data_mut(&mut self) -> &mut _;
-                pub fn borrow(this: &Self) -> &$content_data_ty {this.$content_data()}
-                pub fn borrow_mut(this: &mut Self) -> &mut $content_data_ty {this.$content_data_mut()}
+                $(
+                    pub
+                        $(map fn $map(&self) -> _;)*
+                        $(map_mut fn $map_mut(&mut self) -> _;)*
+                        $(content fn $content_data(&self) -> _;)*
+                        $(content_mut fn $content_data_mut(&mut self) -> _;)*
+                        $(borrow fn $borrow($borrow_in: &Self) -> _ $borrow_block)*
+                        $(borrow_mut fn $borrow_mut($borrow_mut_in: &mut Self) -> _ $borrow_mut_block)*
+                )*
             }
 
             $($rest)*
         }
     };
     (
-        pub struct $name:ident$(<$generic:ident>)*($event_action_map:ty, $content_data_ty:ty)
+        pub struct $name:ident$(<$generic:ident>)*($map_ty:ty, $content_data_ty:ty)
                 $(where $($where_ty:ty: $($constraint:path)|+),+)*;
 
         impl $name_impl:ident {
             $(type Map = $map_ty_override:ty;)*
             type Event = $event:ty;
 
-            pub fn $content_data:ident(&self) -> &_;
-            pub fn $content_data_mut:ident(&mut self) -> &mut _;
+            $(
+                pub
+                    $(map fn $map:ident(&self) -> _;)*
+                    $(map_mut fn $map_mut:ident(&mut self) -> _;)*
+                    $(content fn $content_data:ident(&self) -> _;)*
+                    $(content_mut fn $content_data_mut:ident(&mut self) -> _;)*
+                    $(borrow fn $borrow:ident($borrow_in:ident: &Self) -> _ $borrow_block:block)*
+                    $(borrow_mut fn $borrow_mut:ident($borrow_mut_in:ident: &mut Self) -> _ $borrow_mut_block:block)*
+            )*
         }
 
         $($rest:tt)*
     ) => {
         intrinsics!{
-            pub struct $name$(<$generic>)*($event_action_map, $content_data_ty)
+            pub struct $name$(<$generic>)*($map_ty, $content_data_ty)
                     $(where $($where_ty: $($constraint)|+),+)*;
 
             impl $name_impl {
                 $(type Map = $map_ty_override;)*
                 type Event = $event;
 
-                pub fn new(event_action_map: $event_action_map, content_data: $content_data_ty) -> Self {
+                pub fn new(event_action_map: $map_ty, content_data: $content_data_ty) -> Self {
                     $name {
                         wrapper: R::NodeDataWrapper::from_node_data(event_action_map, content_data)
                     }
                 }
-                pub fn $content_data(&self) -> &_;
-                pub fn $content_data_mut(&mut self) -> &mut _;
-                pub fn borrow(this: &Self) -> &$event_action_map {this.wrapper.event_map()}
-                pub fn borrow_mut(this: &mut Self) -> &mut $event_action_map {this.wrapper.event_map_mut()}
+                $(
+                    pub
+                        $(map fn $map(&self) -> _;)*
+                        $(map_mut fn $map_mut(&mut self) -> _;)*
+                        $(content fn $content_data(&self) -> _;)*
+                        $(content_mut fn $content_data_mut(&mut self) -> _;)*
+                        $(borrow fn $borrow($borrow_in: &Self) -> _ $borrow_block)*
+                        $(borrow_mut fn $borrow_mut($borrow_mut_in: &mut Self) -> _ $borrow_mut_block)*
+                )*
             }
 
             $($rest)*
@@ -90,7 +113,7 @@ macro_rules! intrinsics {
     };
 
     (
-        pub struct $name:ident$(<$generic:ident>)*($event_action_map:ty, $content_data_ty:ty)
+        pub struct $name:ident$(<$generic:ident>)*($map_ty:ty, $content_data_ty:ty)
                 $(where $($where_ty:ty: $($constraint:path)|+),+)*;
 
         impl $name_impl:ident {
@@ -98,10 +121,16 @@ macro_rules! intrinsics {
             type Event = $event:ty;
 
             pub fn new($($params:tt)*) -> Self $new_block:block
-            pub fn $content_data:ident(&self) -> &_;
-            pub fn $content_data_mut:ident(&mut self) -> &mut _;
-            pub fn borrow($borrow_param:ident: &Self) -> &$borrow_ty:ty $borrow_block:block
-            pub fn borrow_mut($borrow_param_mut:ident: &mut Self) -> &mut $borrow_ty_mut:ty $borrow_block_mut:block
+
+            $(
+                pub
+                    $(map fn $map:ident(&self) -> _;)*
+                    $(map_mut fn $map_mut:ident(&mut self) -> _;)*
+                    $(content fn $content_data:ident(&self) -> _;)*
+                    $(content_mut fn $content_data_mut:ident(&mut self) -> _;)*
+                    $(borrow fn $borrow:ident($borrow_in:ident: &Self) -> &$borrow_ty:ty $borrow_block:block)*
+                    $(borrow_mut fn $borrow_mut:ident($borrow_mut_in:ident: &mut Self) -> &mut $borrow_mut_ty:ty $borrow_mut_block:block)*
+            )*
         }
 
         $($rest:tt)*
@@ -109,7 +138,7 @@ macro_rules! intrinsics {
         // Just a shorthand for naming the event_action_map type. Rust supports macro overriding, so
         // there's no concern of this "corrupting" future calls to the intrinsics macro.
         macro_rules! event_action_map {
-            () => (if_tokens!{($($map_ty_override)*) {$($map_ty_override)*} else {$event_action_map}});
+            () => (if_tokens!{($($map_ty_override)*) {$($map_ty_override)*} else {$map_ty}});
         }
 
         pub struct $name<$($generic,)* R = NativeWrapperRegistry>
@@ -127,63 +156,46 @@ macro_rules! intrinsics {
         {
             pub fn new($($params)*) -> Self $new_block
 
-            pub fn $content_data(&self) -> &$content_data_ty {
-                self.wrapper.content_data()
-            }
-
-            pub fn $content_data_mut(&mut self) -> &mut $content_data_ty {
-                self.wrapper.content_data_mut()
-            }
+            $(
+                $(
+                    pub fn $map(&self) -> &$map_ty {
+                        self.wrapper.event_map()
+                    }
+                )*
+                $(
+                    pub fn $map_mut(&mut self) -> &mut $map_ty {
+                        self.wrapper.event_map_mut()
+                    }
+                )*
+                $(
+                    pub fn $content_data(&self) -> &$content_data_ty {
+                        self.wrapper.content_data()
+                    }
+                )*
+                $(
+                    pub fn $content_data_mut(&mut self) -> &mut $content_data_ty {
+                        self.wrapper.content_data_mut()
+                    }
+                )*
+                $(
+                    pub fn $borrow(&self) -> $borrow_ty {
+                        let $borrow_in = self;
+                        $borrow_block
+                    }
+                )*
+                $(
+                    pub fn $borrow_mut(&self) -> $borrow_mut_ty {
+                        let $borrow_mut_in = self;
+                        $borrow_mut_block
+                    }
+                )*
+            )*
 
             pub fn unwrap(this: Self) -> (event_action_map!(), $content_data_ty) {
                 this.wrapper.unwrap()
             }
         }
 
-        impl<$($generic,)* R> Borrow<$borrow_ty> for $name_impl<$($generic,)* R>
-                where $($($where_ty: $($constraint + )+,)*)*
-                      R: NodeDataRegistry<$name<$($generic,)* R>>,
-                      R::NodeDataWrapper: NodeDataWrapper<event_action_map!(), ContentData = $content_data_ty>
-        {
-            fn borrow(&self) -> &$borrow_ty {
-                let $borrow_param = self;
-                $borrow_block
-            }
-        }
-
-        impl<$($generic,)* R> BorrowMut<$borrow_ty_mut> for $name_impl<$($generic,)* R>
-                where $($($where_ty: $($constraint + )+,)*)*
-                      R: NodeDataRegistry<$name<$($generic,)* R>>,
-                      R::NodeDataWrapper: NodeDataWrapper<event_action_map!(), ContentData = $content_data_ty>
-        {
-            fn borrow_mut(&mut self) -> &mut $borrow_ty_mut {
-                let $borrow_param_mut = self;
-                $borrow_block_mut
-            }
-        }
-
-        impl<$($generic,)* R> Deref for $name_impl<$($generic,)* R>
-                where $($($where_ty: $($constraint + )+,)*)*
-                      R: NodeDataRegistry<$name<$($generic,)* R>>,
-                      R::NodeDataWrapper: NodeDataWrapper<event_action_map!(), ContentData = $content_data_ty>
-        {
-            type Target = $borrow_ty;
-            fn deref(&self) -> &$borrow_ty {
-                let $borrow_param = self;
-                $borrow_block
-            }
-        }
-
-        impl<$($generic,)* R> DerefMut for $name_impl<$($generic,)* R>
-                where $($($where_ty: $($constraint + )+,)*)*
-                      R: NodeDataRegistry<$name<$($generic,)* R>>,
-                      R::NodeDataWrapper: NodeDataWrapper<event_action_map!(), ContentData = $content_data_ty>
-        {
-            fn deref_mut(&mut self) -> &mut $borrow_ty_mut {
-                let $borrow_param_mut = self;
-                $borrow_block_mut
-            }
-        }
 
         impl<$($generic,)* R> Node for $name_impl<$($generic,)* R>
                 where $($($where_ty: $($constraint + )+,)*)*
@@ -218,16 +230,18 @@ intrinsics!{
     impl TextButton {
         type Event = MouseEvent;
 
-        pub fn text(&self) -> &_;
-        pub fn text_mut(&mut self) -> &mut _;
+        pub content fn text(&self) -> _;
+        pub content_mut fn text_mut(&mut self) -> _;
+        pub map fn map(&self) -> _;
+        pub map_mut fn map_mut(&mut self) -> _;
     }
 
     pub struct TextLabel<S>((), S)
             where S: AsRef<str>;
     impl TextLabel {
         type Event = !;
-        pub fn text(&self) -> &_;
-        pub fn text_mut(&mut self) -> &mut _;
+        pub content fn text(&self) -> _;
+        pub content_mut fn text_mut(&mut self) -> _;
     }
 
     pub struct WidgetGroup<I>((), I)
@@ -235,23 +249,23 @@ intrinsics!{
     impl WidgetGroup {
         type Map = PhantomData<I::ChildAction>;
         type Event = !;
-        pub fn parent(&self) -> &_;
-        pub fn parent_mut(&mut self) -> &mut _;
+        pub content fn children(&self) -> _;
+        pub content_mut fn children_mut(&mut self) -> _;
     }
 
     pub struct ProgressBar((), progbar::Status);
     impl ProgressBar {
         type Event = !;
-        pub fn status(&self) -> &_;
-        pub fn status_mut(&mut self) -> &mut _;
+        pub content fn status(&self) -> _;
+        pub content_mut fn status_mut(&mut self) -> _;
     }
 
     pub struct Slider<C>(C, slider::Status)
             where C: EventActionMap<RangeEvent>;
     impl Slider {
         type Event = RangeEvent;
-        pub fn status(&self) -> &_;
-        pub fn status_mut(&mut self) -> &mut _;
+        pub content fn status(&self) -> _;
+        pub content_mut fn status_mut(&mut self) -> _;
     }
 }
 

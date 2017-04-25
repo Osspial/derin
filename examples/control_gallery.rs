@@ -166,8 +166,13 @@ fn main() {
         let mut action = None;
         window.wait_actions(|new_act| {action = Some(new_act); false}).unwrap();
         match action.unwrap() {
-            GalleryEvent::AddButton => (),//window.root.nested_parent.button_vec.push(TextButton::new(AddButton, "Another Button")),
-            GalleryEvent::SliderMoved(moved_to) => window.root.bar.completion = progbar::Completion::Frac(moved_to as f32 / 128.0)
+            GalleryEvent::AddButton =>
+                window.root.children_mut()
+                      .nested_parent.children_mut()
+                      .button_vec.push(TextButton::new(AddButton, "Another Button")),
+            GalleryEvent::SliderMoved(moved_to) =>
+                window.root.children_mut()
+                      .bar.status_mut().completion = progbar::Completion::Frac(moved_to as f32 / 128.0)
         }
     }
 }
