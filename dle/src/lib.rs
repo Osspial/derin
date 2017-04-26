@@ -132,25 +132,29 @@ impl GridEngine {
             // rigid.
             macro_rules! first_track_pass {
                 ($rect_size:ident, $push_track:ident, $track_range_mut:ident, $free_size:expr, $fr_total:expr) => {
-                    for (index, track) in self.grid.$track_range_mut(..).unwrap().iter_mut().enumerate() {
-                        let track_fr_size = track.hints().fr_size;
-                        if track_fr_size <= 0.0 {
-                            track.reset_shrink();
-                            rigid_min_size.$rect_size += track.min_size();
-                            // To make sure that the maximum size isn't below the minimum needed for this track,
-                            // increase the engine maximum size by the rigid track minimum size.
-                            self.actual_size_bounds.max.$rect_size =
-                                self.actual_size_bounds.max.$rect_size.saturating_add(track.min_size());
-                            $free_size = $free_size.saturating_sub(track.size());
-                        } else {
-                            // The engine maximum size isn't expanded in a rigid track because the track won't
-                            // expand when the rectangle of the engine is expanded.
-                            self.actual_size_bounds.max.$rect_size =
-                                self.actual_size_bounds.max.$rect_size.saturating_add(track.max_size());
-                            track.reset_expand();
-                            frac_min_size.$rect_size += track.min_size();
-                            $fr_total += track_fr_size;
-                            updater.frac_tracks.$push_track(index as Tr);
+                    if 0 == self.grid.$track_range_mut(..).unwrap().len() {
+                        self.actual_size_bounds.max.$rect_size = u16::max_value();
+                    } else {
+                        for (index, track) in self.grid.$track_range_mut(..).unwrap().iter_mut().enumerate() {
+                            let track_fr_size = track.hints().fr_size;
+                            if track_fr_size <= 0.0 {
+                                track.reset_shrink();
+                                rigid_min_size.$rect_size += track.min_size();
+                                // To make sure that the maximum size isn't below the minimum needed for this track,
+                                // increase the engine maximum size by the rigid track minimum size.
+                                self.actual_size_bounds.max.$rect_size =
+                                    self.actual_size_bounds.max.$rect_size.saturating_add(track.min_size());
+                                $free_size = $free_size.saturating_sub(track.size());
+                            } else {
+                                // The engine maximum size isn't expanded in a rigid track because the track won't
+                                // expand when the rectangle of the engine is expanded.
+                                self.actual_size_bounds.max.$rect_size =
+                                    self.actual_size_bounds.max.$rect_size.saturating_add(track.max_size());
+                                track.reset_expand();
+                                frac_min_size.$rect_size += track.min_size();
+                                $fr_total += track_fr_size;
+                                updater.frac_tracks.$push_track(index as Tr);
+                            }
                         }
                     }
                 }
