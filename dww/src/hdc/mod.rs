@@ -19,11 +19,18 @@ use ucs2::{UCS2_CONVERTER, WithString, Ucs2Str};
 pub struct PaintInit<'a>( HWND, PhantomData<&'a ()> );
 pub struct PaintContext( PAINTSTRUCT, HWND );
 pub struct RetrievedContext( HDC, HWND );
+pub struct BufferedContext( HDC, HWND );
 
 pub struct ThemeData( HTHEME );
 
+thread_local!{
+    /// See ThreadBufferedPaint docs for details
+    static THREAD_BUFFERED_PAINT: ThreadBufferedPaint = ThreadBufferedPaint::new();
+}
+
 pub unsafe trait DeviceContext {
     unsafe fn hdc(&self) -> HDC;
+    unsafe fn hwnd(&self) -> HWND;
 
     fn with_font<F, R>(&self, font: &Font, run: F) -> R
             where F: FnOnce(&Self) -> R
@@ -172,6 +179,53 @@ pub unsafe trait DeviceContext {
             background_rect.right as Px,
             background_rect.bottom as Px
         )
+    }
+
+    fn begin_buffered_animation<F, G>(&self, rect: OffsetRect, anim_style: AnimStyle, duration: u32, context_from: F, context_into: G)
+            where F: FnOnce(&BufferedContext),
+                  G: FnOnce(&BufferedContext)
+    {
+        THREAD_BUFFERED_PAINT.with(|_| {
+            let rect = RECT {
+                left: rect.topleft.x as LONG,
+                top: rect.topleft.y as LONG,
+                right: rect.lowright.x as LONG,
+                bottom: rect.lowright.y as LONG
+            };
+            let mut anim_params = BP_ANIMATIONPARAMS {
+                cbSize: mem::size_of::<BP_ANIMATIONPARAMS>() as DWORD,
+                dwFlags: 0,
+                style: match anim_style {
+                    AnimStyle::None => BPAS_NONE,
+                    AnimStyle::Linear => BPAS_LINEAR,
+                    AnimStyle::Cubic => BPAS_CUBIC,
+                    AnimStyle::Sine => BPAS_SINE
+                },
+                dwDuration: duration
+            };
+            let (mut hdc_from, mut hdc_into) = (0 as HDC, 0 as HDC);
+            unsafe {
+                let anim_buffer = uxtheme::BeginBufferedAnimation(
+                    self.hwnd(),
+                    self.hdc(),
+                    &rect,
+                    BPBF_COMPATIBLEBITMAP,
+                    ptr::null_mut(),
+                    &mut anim_params,
+                    &mut hdc_from,
+                    &mut hdc_into
+                );
+
+                context_from(&BufferedContext(hdc_from, self.hwnd()));
+                context_into(&BufferedContext(hdc_into, self.hwnd()));
+
+                uxtheme::EndBufferedAnimation(anim_buffer, TRUE);
+            }
+        })
+    }
+
+    fn render_buffered_animation(&self) -> bool {
+        unsafe{ uxtheme::BufferedPaintRenderAnimation(self.hwnd(), self.hdc()) == TRUE }
     }
 
     unsafe fn draw_text_ucs2(&self, text_ucs2: &Ucs2Str, rect: OffsetRect, text_format: TextFormat) -> OffsetRect {
@@ -361,6 +415,10 @@ unsafe impl DeviceContext for PaintContext {
     unsafe fn hdc(&self) -> HDC {
         self.0.hdc
     }
+
+    unsafe fn hwnd(&self) -> HWND {
+        self.1
+    }
 }
 
 impl Drop for PaintContext {
@@ -387,6 +445,10 @@ unsafe impl DeviceContext for RetrievedContext {
     unsafe fn hdc(&self) -> HDC {
         self.0
     }
+
+    unsafe fn hwnd(&self) -> HWND {
+        self.1
+    }
 }
 
 impl Drop for RetrievedContext {
@@ -394,6 +456,16 @@ impl Drop for RetrievedContext {
         unsafe {
             user32::ReleaseDC(self.1, self.0);
         }
+    }
+}
+
+unsafe impl DeviceContext for BufferedContext {
+    unsafe fn hdc(&self) -> HDC {
+        self.0
+    }
+
+    unsafe fn hwnd(&self) -> HWND {
+        self.1
     }
 }
 
@@ -522,4 +594,28 @@ pub enum CharSet {
     Arabic,
     Hebrew,
     Thai
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AnimStyle {
+    None,
+    Linear,
+    Cubic,
+    Sine
+}
+
+/// Handles initializing and uninitializing thread buffered painting.
+struct ThreadBufferedPaint;
+
+impl ThreadBufferedPaint {
+    fn new() -> ThreadBufferedPaint {
+        unsafe{ uxtheme::BufferedPaintInit() };
+        ThreadBufferedPaint
+    }
+}
+
+impl Drop for ThreadBufferedPaint {
+    fn drop(&mut self) {
+        unsafe{ uxtheme::BufferedPaintUnInit() };
+    }
 }
