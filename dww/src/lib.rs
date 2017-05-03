@@ -6,8 +6,10 @@ extern crate user32 as _user32;
 #[macro_use]
 extern crate comctl32 as _comctl32;
 extern crate gdi32;
+extern crate uxtheme;
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
 extern crate dct;
 #[cfg(test)]
 #[cfg_attr(test, macro_use)]
@@ -34,7 +36,7 @@ use std::io::{Result, Error};
 use std::cell::UnsafeCell;
 use std::borrow::Borrow;
 
-use self::hdc::{DeviceContext, RetrievedContext, TextDrawOptions};
+use self::hdc::{DeviceContext, RetrievedContext, TextFormat, PaintInit};
 use self::notify::{Notification, NotifyType, ThumbReason};
 use self::ucs2::{WithString, Ucs2String, Ucs2Str, ucs2_str, ucs2_str_from_ptr, UCS2_CONVERTER};
 
@@ -54,7 +56,7 @@ pub enum Wm<'a> {
     KeyDown(Key, RepeatCount),
     KeyUp(Key, RepeatCount),
     SetText(&'a Ucs2Str),
-    Paint,
+    Paint(PaintInit<'a>),
     EraseBackground,
     Notify(Notification),
     GetSizeBounds(&'a mut SizeBounds)
@@ -66,7 +68,7 @@ pub type RepeatCount = u16;
 
 /// A trait representing a subclass on a window. Note that, if multiple subclasses are applied,
 /// only the outermost subclass is used.
-pub trait Subclass<W: Window> {
+pub trait Subclass<W: WindowBase> {
     type UserMsg: UserMsg;
 
     fn subclass_proc(&mut ProcWindowRef<W, Self>, Msg<Self::UserMsg>) -> i64;
@@ -76,7 +78,7 @@ const SUBCLASS_ID: UINT_PTR = 0;
 
 lazy_static!{
     static ref BLANK_WINDOW_CLASS: Ucs2String = unsafe {
-        let class_name: Ucs2String = ucs2_str("Blank Window Class").collect();
+        let class_name: Ucs2String = ucs2_str("Blank WindowBase Class").collect();
 
         let window_class = WNDCLASSEXW {
             cbSize: mem::size_of::<WNDCLASSEXW>() as UINT,
@@ -252,7 +254,7 @@ macro_rules! base_wrapper {
     () => ();
     (pub struct $name:ident$(<$font_generic:ident>)*; $($rest:tt)*) => {
         pub struct $name$(<$font_generic: Borrow<Font> = DefaultFont>)*( HWND $(, $font_generic)* );
-        unsafe impl$(<$font_generic: Borrow<Font>>)* Window for $name$(<$font_generic>)* {
+        unsafe impl$(<$font_generic: Borrow<Font>>)* WindowBase for $name$(<$font_generic>)* {
             #[inline]
             unsafe fn hwnd(&self) -> HWND {self.0}
         }
@@ -292,24 +294,24 @@ unsafe impl<F: Borrow<Font>> TextLabelWindow for TextLabelBase<F> {}
 unsafe impl ProgressBarWindow for ProgressBarBase {}
 unsafe impl TrackbarWindow for TrackbarBase {}
 
-pub struct IconWrapper<W: Window, I: Borrow<WindowIcon>> {
+pub struct IconWrapper<W: WindowBase, I: Borrow<WindowIcon>> {
     window: W,
     icon: I
 }
 
-pub struct OverlapWrapper<W: Window>( W );
+pub struct OverlapWrapper<W: WindowBase>( W );
 
-pub struct SubclassWrapper<W: Window, S: Subclass<W>> {
+pub struct SubclassWrapper<W: WindowBase, S: Subclass<W>> {
     window: W,
     data: Box<UnsafeCell<S>>
 }
 
-pub struct UnsafeSubclassWrapper<W: Window, S: Subclass<W>> {
+pub struct UnsafeSubclassWrapper<W: WindowBase, S: Subclass<W>> {
     window: W,
     data: UnsafeCell<S>
 }
 
-pub struct ProcWindowRef<'a, W: Window, S: 'a + Subclass<W> + ?Sized> {
+pub struct ProcWindowRef<'a, W: WindowBase, S: 'a + Subclass<W> + ?Sized> {
     hwnd: HWND,
     msg: UINT,
     wparam: WPARAM,
@@ -351,7 +353,7 @@ pub struct WindowIterBottomUp {
     next_window: HWND
 }
 
-pub unsafe trait Window: Sized {
+pub unsafe trait WindowBase: Sized {
     unsafe fn hwnd(&self) -> HWND;
 
     fn window_ref(&self) -> WindowRef {
@@ -401,7 +403,7 @@ pub unsafe trait Window: Sized {
     }
 
     #[inline]
-    fn move_before<W: Window>(&self, window: &W) -> Result<()> {
+    fn move_before<W: WindowBase>(&self, window: &W) -> Result<()> {
         unsafe {
             // Windows only provides functions for moving windows after other windows, so we need
             // to get the window before the provided window and then move this window after that
@@ -426,7 +428,7 @@ pub unsafe trait Window: Sized {
     }
 
     #[inline]
-    fn move_after<W: Window>(&self, window: &W) -> Result<()> {
+    fn move_after<W: WindowBase>(&self, window: &W) -> Result<()> {
         unsafe {
             let result = user32::SetWindowPos(
                 self.hwnd(),
@@ -528,7 +530,7 @@ pub unsafe trait Window: Sized {
     }
 }
 
-pub unsafe trait WindowMut: Window {
+pub unsafe trait WindowMut: WindowBase {
     fn window_ref_mut(&mut self) -> WindowRefMut {
         WindowRefMut(unsafe{ self.hwnd() }, PhantomData)
     }
@@ -637,7 +639,7 @@ pub unsafe trait WindowOwned: WindowMut {
     }
 }
 
-pub unsafe trait WindowFont<F: Borrow<Font>>: Window {
+pub unsafe trait WindowFont<F: Borrow<Font>>: WindowBase {
     unsafe fn font_mut(&mut self) -> &mut F;
     fn set_font(&mut self, font: F) {
         unsafe{
@@ -647,7 +649,7 @@ pub unsafe trait WindowFont<F: Borrow<Font>>: Window {
     }
 }
 
-pub unsafe trait OverlappedWindow: Window {
+pub unsafe trait OverlappedWindow: WindowBase {
     /// Set all of the overlapped window properties (i.e. all the other functions in this struct)
     /// to either true or false.
     fn overlapped(&self, overlapped: bool) {
@@ -717,12 +719,12 @@ pub unsafe trait IconWindow: WindowOwned {
     }
 }
 
-pub unsafe trait ParentWindow: Window {
+pub unsafe trait ParentWindow: WindowBase {
     fn parent_ref(&self) -> ParentRef {
         ParentRef(unsafe{ self.hwnd() })
     }
 
-    fn add_child_window<W: Window>(&self, child: &W) {
+    fn add_child_window<W: WindowBase>(&self, child: &W) {
         unsafe {
             let child_style = child.get_style() | WS_CHILD;
             child.set_style(child_style);
@@ -731,7 +733,7 @@ pub unsafe trait ParentWindow: Window {
     }
 }
 
-pub unsafe trait OrphanableWindow: Window {
+pub unsafe trait OrphanableWindow: WindowBase {
     fn orphan(&self) {
         unsafe {
             let child_style = self.get_style() & !WS_CHILD;
@@ -749,21 +751,21 @@ pub unsafe trait ButtonWindow: WindowMut {
     }
 }
 
-pub unsafe trait TextLabelWindow: Window {
+pub unsafe trait TextLabelWindow: WindowBase {
     fn min_unclipped_rect(&self) -> OriginRect {
         let text_len = unsafe{ user32::GetWindowTextLengthW(self.hwnd()) };
         UCS2_CONVERTER.with_ucs2_buffer(text_len as usize, |text_buf| unsafe {
             user32::GetWindowTextW(self.hwnd(), text_buf.as_mut_ptr(), text_len);
-            self.min_unclipped_rect_raw(text_buf)
+            self.min_unclipped_rect_ucs2(text_buf)
         })
     }
 
-    unsafe fn min_unclipped_rect_raw(&self, text: &Ucs2Str) -> OriginRect {
-        self.get_dc().expect("Could not get DC").calc_text_rect_raw(text, TextDrawOptions::default())
+    unsafe fn min_unclipped_rect_ucs2(&self, text: &Ucs2Str) -> OriginRect {
+        self.get_dc().expect("Could not get DC").calc_text_rect_ucs2(text, TextFormat::default())
     }
 }
 
-pub unsafe trait ProgressBarWindow: Window {
+pub unsafe trait ProgressBarWindow: WindowBase {
     fn set_range(&mut self, min: WORD, max: WORD) {
         let lparam = min as LPARAM | ((max as LPARAM) << 16);
         unsafe{ user32::SendMessageW(self.hwnd(), PBM_SETRANGE, 0, lparam) };
@@ -827,7 +829,7 @@ pub unsafe trait ProgressBarWindow: Window {
     }
 }
 
-pub unsafe trait TrackbarWindow: Window {
+pub unsafe trait TrackbarWindow: WindowBase {
     fn set_pos(&mut self, pos: u32) {
         unsafe{ user32::SendMessageW(self.hwnd(), TBM_SETPOS, TRUE as WPARAM, pos as LPARAM) };
     }
@@ -944,10 +946,10 @@ macro_rules! impl_window_traits {
 
     (
         unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
-            Window($self_ident:ident) => $window_expr:expr;
+            WindowBase($self_ident:ident) => $window_expr:expr;
         for $window:ty
     ) => (
-        unsafe impl<$($lt,)* W: $($window_bound +)* $(, $gen: $gen_bound)*> Window for $window {
+        unsafe impl<$($lt,)* W: $($window_bound +)* $(, $gen: $gen_bound)*> WindowBase for $window {
             #[inline]
             unsafe fn hwnd(&self) -> HWND {
                 let $self_ident = self;
@@ -958,7 +960,7 @@ macro_rules! impl_window_traits {
 
     (
         unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
-            Window($self_ident:ident) => $window_expr:expr;
+            WindowBase($self_ident:ident) => $window_expr:expr;
             IconWindow
             $(, $trait_rest:ident)*
         for $window:ty
@@ -974,7 +976,7 @@ macro_rules! impl_window_traits {
         }
         impl_window_traits!{
             unsafe impl<$(lifetime $lt,)* W$(: $window_bound)* $(, $gen: $gen_bound)*>
-                Window($self_ident) => $window_expr;
+                WindowBase($self_ident) => $window_expr;
                 $($trait_rest),*
             for $window
         }
@@ -982,7 +984,7 @@ macro_rules! impl_window_traits {
 
     (
         unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
-            Window($self_ident:ident) => $window_expr:expr;
+            WindowBase($self_ident:ident) => $window_expr:expr;
             WindowFont
             $(, $trait_rest:ident)*
         for $window:ty
@@ -995,7 +997,7 @@ macro_rules! impl_window_traits {
         }
         impl_window_traits!{
             unsafe impl<$(lifetime $lt,)* W$(: $window_bound)* $(, $gen: $gen_bound)*>
-                Window($self_ident) => $window_expr;
+                WindowBase($self_ident) => $window_expr;
                 $($trait_rest),*
             for $window
         }
@@ -1003,7 +1005,7 @@ macro_rules! impl_window_traits {
 
     (
         unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
-            $(Window($self_ident:ident) => $window_expr:expr)*;
+            $(WindowBase($self_ident:ident) => $window_expr:expr)*;
             $trait_name:ident
             $(, $trait_rest:ident)*
         for $window:ty
@@ -1011,7 +1013,7 @@ macro_rules! impl_window_traits {
         unsafe impl<$($lt,)* W: $trait_name $(+ $window_bound)* $(, $gen: $gen_bound)*> $trait_name for $window {}
         impl_window_traits!{
             unsafe impl<$(lifetime $lt,)* W$(: $window_bound)* $(, $gen: $gen_bound)*>
-                $(Window($self_ident) => $window_expr)*;
+                $(WindowBase($self_ident) => $window_expr)*;
                 $($trait_rest),*
             for $window
         }
@@ -1022,7 +1024,7 @@ macro_rules! impl_window_traits {
 // IconWrapper impls
 impl_window_traits!{
     unsafe impl<W: WindowOwned, I: Borrow<WindowIcon>>
-        Window(this) => this.window;
+        WindowBase(this) => this.window;
         WindowMut,
         WindowOwned,
         WindowFont,
@@ -1049,7 +1051,7 @@ unsafe impl<W: WindowOwned, I: Borrow<WindowIcon>> IconWindow for IconWrapper<W,
 unsafe impl<W: WindowOwned> OverlappedWindow for OverlapWrapper<W> {}
 impl_window_traits!{
     unsafe impl<W: WindowOwned>
-        Window(this) => this.0;
+        WindowBase(this) => this.0;
         WindowMut,
         WindowOwned,
         WindowFont,
@@ -1115,7 +1117,7 @@ impl<W: WindowOwned, S: Subclass<W>> SubclassWrapper<W, S> {
 }
 impl_window_traits!{
     unsafe impl<W: WindowOwned, S: Subclass<W>>
-        Window(this) => this.window;
+        WindowBase(this) => this.window;
         WindowMut,
         WindowOwned,
         WindowFont,
@@ -1184,7 +1186,7 @@ impl<W: WindowOwned, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
 }
 impl_window_traits!{
     unsafe impl<W: WindowOwned, S: Subclass<W>>
-        Window(this) => this.window;
+        WindowBase(this) => this.window;
         WindowMut,
         WindowOwned,
         WindowFont,
@@ -1201,7 +1203,7 @@ impl_window_traits!{
 
 
 // ProcWindowRef impls
-impl<'a, W: Window, S: Subclass<W>> ProcWindowRef<'a, W, S> {
+impl<'a, W: WindowBase, S: Subclass<W>> ProcWindowRef<'a, W, S> {
     unsafe fn new(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM, subclass_data: &'a mut S) -> ProcWindowRef<'a, W, S> {
         ProcWindowRef {
             hwnd: hwnd,
@@ -1267,14 +1269,14 @@ impl<'a, W: Window, S: Subclass<W>> ProcWindowRef<'a, W, S> {
         }
     }
 }
-unsafe impl<'a, W: Window, S: Subclass<W>> Window for ProcWindowRef<'a, W, S> {
+unsafe impl<'a, W: WindowBase, S: Subclass<W>> WindowBase for ProcWindowRef<'a, W, S> {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {
         self.hwnd
     }
 }
 impl_window_traits!{
-    unsafe impl<lifetime 'a, W: Window, S: Subclass<W>>
+    unsafe impl<lifetime 'a, W: WindowBase, S: Subclass<W>>
         ;WindowMut,
         OverlappedWindow,
         OrphanableWindow,
@@ -1293,7 +1295,7 @@ impl ParentRef {
         ParentRef(hwnd)
     }
 }
-unsafe impl Window for ParentRef {
+unsafe impl WindowBase for ParentRef {
     #[inline]
     unsafe fn hwnd(&self) -> HWND {
         self.0
@@ -1308,7 +1310,7 @@ impl WindowRef {
         WindowRef(hwnd)
     }
 }
-unsafe impl Window for WindowRef {
+unsafe impl WindowBase for WindowRef {
     unsafe fn hwnd(&self) -> HWND {
         self.0
     }
@@ -1320,7 +1322,7 @@ impl<'a> WindowRefMut<'a> {
         WindowRefMut(hwnd, PhantomData)
     }
 }
-unsafe impl<'a> Window for WindowRefMut<'a> {
+unsafe impl<'a> WindowBase for WindowRefMut<'a> {
     unsafe fn hwnd(&self) -> HWND {
         self.0
     }
@@ -1353,7 +1355,7 @@ impl<'a, U: UserMsg> UnsafeSubclassRef<'a, U> {
         }
     }
 }
-unsafe impl<'a, U: UserMsg> Window for UnsafeSubclassRef<'a, U> {
+unsafe impl<'a, U: UserMsg> WindowBase for UnsafeSubclassRef<'a, U> {
     unsafe fn hwnd(&self) -> HWND {
         self.0
     }
@@ -1504,7 +1506,7 @@ fn non_client_metrics() -> NONCLIENTMETRICSW {
     }
 }
 
-unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
+unsafe extern "system" fn subclass_proc<W: WindowBase, S: Subclass<W>>
                                        (hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM,
                                         _: UINT_PTR, subclass_data: DWORD_PTR) -> LRESULT
 {
@@ -1599,7 +1601,7 @@ unsafe extern "system" fn subclass_proc<W: Window, S: Subclass<W>>
                 ret
             }
             WM_PAINT => {
-                run_subclass_proc!(Msg::Wm(Wm::Paint))
+                run_subclass_proc!(Msg::Wm(Wm::Paint(PaintInit::new(hwnd))))
             }
             WM_ERASEBKGND => {
                 run_subclass_proc!(Msg::Wm(Wm::EraseBackground))
@@ -1810,8 +1812,8 @@ mod kernel32 {isolation_aware_kernel32!{{
 
     self::IsolationAwareCreateActCtxW(&styles_ctx)
 }}}
-mod user32 {isolation_aware_user32!{mod_ia_kernel32 = kernel32}}
-mod comctl32 {isolation_aware_comctl32!{mod_ia_kernel32 = kernel32}}
+mod user32 {isolation_aware_user32!{kernel32}}
+mod comctl32 {isolation_aware_comctl32!{kernel32}}
 
 #[cfg(test)]
 mod tests {
@@ -1826,7 +1828,7 @@ mod tests {
         Slice(&'a [u64])
     }
 
-    #[derive(UserMsg)]
+    #[derive(UserMsg, Clone, Copy)]
     enum SingleVarMsg {
         Bar(u32)
     }
@@ -1857,7 +1859,7 @@ mod tests {
         test_encoding(BadMsg::Bar(&1024, &[2048, 10]));
     }
 
-    fn test_encoding<U: UserMsg + Debug + Eq + Copy>(msg: M) {
+    fn test_encoding<U: UserMsg + Debug + Eq + Copy>(msg: U) {
         let discriminant = msg.discriminant();
 
         assert_eq!(msg, unsafe{ user_msg::decode(discriminant, user_msg::encode(msg)) });

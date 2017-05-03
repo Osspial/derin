@@ -193,7 +193,8 @@ impl Margins {
             left: left,
             top: top,
             right: right,
-            bottom: bottom       }
+            bottom: bottom
+        }
     }
 
     pub fn width(self) -> Px {

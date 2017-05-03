@@ -164,7 +164,7 @@ impl<W, S> Subclass<W> for TextLabelSubclass<S>
         match msg {
             Msg::Wm(wm) => match wm {
                 Wm::SetText(new_text) =>
-                    window.subclass_data().abs_size_bounds.min = unsafe{ window.min_unclipped_rect_raw(new_text) },
+                    window.subclass_data().abs_size_bounds.min = unsafe{ window.min_unclipped_rect_ucs2(new_text) },
                 Wm::GetSizeBounds(size_bounds) => *size_bounds = window.subclass_data().abs_size_bounds,
                 _ => ()
             },

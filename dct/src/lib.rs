@@ -42,6 +42,31 @@ macro_rules! two_axis_type {
     }
 }
 
+/// Switch between two different token trees, using the first token tree if the parenthesis contain
+/// tokens and the second tree if the parenthesis don't contain tokens.
+#[macro_export]
+macro_rules! if_tokens {
+    (
+        ($($if_tokens:tt)+) {
+            $($tokens_exist:tt)*
+        } else {
+            $($tokens_else:tt)*
+        }
+    ) => {
+        $($tokens_exist)*
+    };
+
+    (
+        () {
+            $($tokens_exist:tt)*
+        } else {
+            $($tokens_else:tt)*
+        }
+    ) => {
+        $($tokens_else)*
+    };
+}
+
 pub mod buttons;
 pub mod geometry;
 pub mod hints;

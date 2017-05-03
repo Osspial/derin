@@ -2,7 +2,7 @@ mod wrapper;
 
 use self::wrapper::*;
 use super::WindowConfig;
-use dww::{msg_queue, WindowOwned, Window as WindowTrait, ParentWindow, WindowRef, OverlappedWindow, WindowBuilder};
+use dww::{msg_queue, WindowOwned, WindowBase, ParentWindow, WindowRef, OverlappedWindow, WindowBuilder};
 
 use std::rc::Rc;
 use std::ptr;
