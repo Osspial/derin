@@ -1,6 +1,6 @@
 use dct::buttons::Key;
 
-use {WindowRef, RepeatCount};
+use {WindowRef, RepeatedPress};
 
 #[derive(Debug)]
 pub struct Notification {
@@ -13,7 +13,7 @@ pub enum NotifyType {
     Char(char),
     FontChanged,
     Hover,
-    KeyDown(Key, RepeatCount),
+    KeyDown(Key, RepeatedPress),
     KillFocus,
     LDown,
     OutOfMemory,

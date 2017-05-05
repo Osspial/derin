@@ -53,8 +53,8 @@ pub enum Wm<'a> {
     MouseDown(MouseButton, Point),
     MouseDoubleDown(MouseButton, Point),
     MouseUp(MouseButton, Point),
-    KeyDown(Key, RepeatCount),
-    KeyUp(Key, RepeatCount),
+    KeyDown(Key, RepeatedPress),
+    KeyUp(Key, RepeatedPress),
     SetText(&'a Ucs2Str),
     Paint(PaintInit<'a>),
     EraseBackground,
@@ -62,7 +62,7 @@ pub enum Wm<'a> {
     GetSizeBounds(&'a mut SizeBounds)
 }
 
-pub type RepeatCount = u16;
+pub type RepeatedPress = bool;
 
 
 
@@ -71,7 +71,7 @@ pub type RepeatCount = u16;
 pub trait Subclass<W: WindowBase> {
     type UserMsg: UserMsg;
 
-    fn subclass_proc(&mut ProcWindowRef<W, Self>, Msg<Self::UserMsg>) -> i64;
+    fn subclass_proc(window: &mut ProcWindowRef<W, Self>, msg: Msg<Self::UserMsg>) -> i64;
 }
 
 const SUBCLASS_ID: UINT_PTR = 0;
@@ -1566,16 +1566,16 @@ unsafe extern "system" fn subclass_proc<W: WindowBase, S: Subclass<W>>
             }
             WM_KEYDOWN => {
                 if let Some(key) = vkey::key_from_code(wparam) {
-                    let repeat_count = (wparam & 0xFFFF) as u16;
-                    run_subclass_proc!(Msg::Wm(Wm::KeyDown(key, repeat_count)))
+                    let repeated_press = (lparam & (1 << 30)) != 0;
+                    run_subclass_proc!(Msg::Wm(Wm::KeyDown(key, repeated_press)))
                 } else {
                     1
                 }
             }
             WM_KEYUP => {
                 if let Some(key) = vkey::key_from_code(wparam) {
-                    let repeat_count = (wparam & 0xFFFF) as u16;
-                    run_subclass_proc!(Msg::Wm(Wm::KeyUp(key, repeat_count)))
+                    let repeated_press = (lparam & (1 << 30)) != 0;
+                    run_subclass_proc!(Msg::Wm(Wm::KeyUp(key, repeated_press)))
                 } else {
                     1
                 }
@@ -1618,8 +1618,8 @@ unsafe extern "system" fn subclass_proc<W: WindowBase, S: Subclass<W>>
                     NM_HOVER => Some(NotifyType::Hover),
                     NM_KEYDOWN => {
                         let key_info = &*(lparam as *const NMKEY);
-                        let repeat_count = (key_info.uFlags & 0xFFFF) as u16;
-                        vkey::key_from_code(key_info.nVKey as u64).map(|key| NotifyType::KeyDown(key, repeat_count))
+                        let repeated_press = (key_info.uFlags & (1 << 30)) != 0;
+                        vkey::key_from_code(key_info.nVKey as u64).map(|key| NotifyType::KeyDown(key, repeated_press))
                     },
                     NM_KILLFOCUS => Some(NotifyType::KillFocus),
                     NM_LDOWN => Some(NotifyType::LDown),
