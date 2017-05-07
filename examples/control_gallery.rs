@@ -15,11 +15,11 @@ use std::iter;
 
 enum GalleryEvent {
     AddButton,
+    DelButton,
     SliderMoved(u32)
 }
 
 struct AddButton;
-
 impl EventActionMap<MouseEvent> for AddButton {
     type Action = GalleryEvent;
 
@@ -28,8 +28,16 @@ impl EventActionMap<MouseEvent> for AddButton {
     }
 }
 
-struct BasicSlider;
+struct DelButton;
+impl EventActionMap<MouseEvent> for DelButton {
+    type Action = GalleryEvent;
 
+    fn on_event(&self, _: MouseEvent) -> Option<GalleryEvent> {
+        Some(GalleryEvent::DelButton)
+    }
+}
+
+struct BasicSlider;
 impl EventActionMap<RangeEvent> for BasicSlider {
     type Action = GalleryEvent;
 
@@ -48,7 +56,7 @@ struct BasicParent {
     label: TextLabel<&'static str>,
     bar: Progbar,
     slider: Slider<BasicSlider>,
-    nested_parent: Group<NestedParent>,
+    nested_parent: LabelGroup<&'static str, NestedParent>,
     #[derin(layout)]
     layout: BasicParentLayout
 }
@@ -59,8 +67,9 @@ impl BasicParent {
             label: TextLabel::new("A Label"),
             bar: Progbar::new(ProgbarStatus::new(Completion::Frac(0.5), Orientation::Horizontal)),
             slider: Slider::new(BasicSlider, SliderStatus::default()),
-            nested_parent: Group::new(NestedParent {
-                button: TextButton::new(AddButton, "A Button"),
+            nested_parent: LabelGroup::new("Hello World", NestedParent {
+                del_button: TextButton::new(DelButton, "Delete Button"),
+                add_button: TextButton::new(AddButton, "Add Button"),
                 button_vec: Vec::new(),
                 layout: NestedParentLayout
             }),
@@ -72,7 +81,8 @@ impl BasicParent {
 #[derive(Parent)]
 #[derin(child_action = "GalleryEvent")]
 struct NestedParent {
-    button: TextButton<AddButton, &'static str>,
+    del_button: TextButton<DelButton, &'static str>,
+    add_button: TextButton<AddButton, &'static str>,
     #[derin(collection)]
     button_vec: Vec<TextButton<AddButton, &'static str>>,
     #[derin(layout)]
@@ -145,12 +155,16 @@ impl<'a> GridLayout<'a> for NestedParentLayout {
 
     fn get_hints(&self, id: ChildId) -> Option<WidgetHints> {
         match id {
-            ChildId::Str("button") => Some(WidgetHints {
+            ChildId::Str("add_button") => Some(WidgetHints {
                 node_span: NodeSpan::new(0, 0),
                 ..WidgetHints::default()
             }),
+            ChildId::Str("del_button") => Some(WidgetHints {
+                node_span: NodeSpan::new(1, 0),
+                ..WidgetHints::default()
+            }),
             ChildId::StrCollection("button_vec", num) => Some(WidgetHints {
-                node_span: NodeSpan::new(1 + num, 0),
+                node_span: NodeSpan::new(2 + num, 0),
                 ..WidgetHints::default()
             }),
             _ => None
@@ -160,6 +174,7 @@ impl<'a> GridLayout<'a> for NestedParentLayout {
 
 fn main() {
     let mut window = Window::new(Group::new(BasicParent::new()), &WindowConfig::new());
+    let mut button_buf = Vec::new();
 
     loop {
         let mut action = None;
@@ -169,6 +184,11 @@ fn main() {
                 window.root.children_mut()
                       .nested_parent.children_mut()
                       .button_vec.push(TextButton::new(AddButton, "Another Button")),
+            GalleryEvent::DelButton => {
+                window.root.children_mut()
+                      .nested_parent.children_mut()
+                      .button_vec.pop().map(|button| button_buf.push(button));
+            },
             GalleryEvent::SliderMoved(moved_to) =>
                 window.root.children_mut()
                       .bar.status_mut().completion = Completion::Frac(moved_to as f32 / 128.0)

@@ -2,9 +2,9 @@ mod subclass;
 use self::subclass::*;
 pub use self::subclass::GridWidgetProcessor;
 
-use ui::{Parent, Node, NodeDataWrapper, NodeProcessorInit, EventActionMap};
+use ui::{Parent, ParentMut, Node, NodeDataWrapper, NodeProcessorInit, EventActionMap};
 use ui::widgets::{MouseEvent, RangeEvent};
-use ui::widgets::content::{SliderStatus, ProgbarStatus, Completion, Orientation, TickPosition as SliderTickPosition};
+use ui::widgets::content::{SliderStatus, ProgbarStatus, LabelGroupContents,  Completion, Orientation, TickPosition as SliderTickPosition};
 use ui::hints::{GridSize, TrackHints};
 
 use dww::*;
@@ -20,77 +20,6 @@ use std::marker::PhantomData;
 static EMPTY: () = ();
 static mut EMPTY_MUT: () = ();
 
-macro_rules! impl_node_data_wrapper {
-    (
-        $name:ident$(<$inner_ty:ident>)*;
-        $(where $($where_ty:ty: $($(for<$($lt:tt),+>)* trait $constraint:path)|+),+;)*
-        $(impl where $($impl_where_ty:ty: $($(for<$($impl_lt:tt),+>)* trait $impl_constraint:path)|+),+;)*
-
-        $(expr event_map($event_map_in:ident) = $event_map:expr;)*
-        expr content_data($node_data_in:ident) = $content_data:expr;
-        fn from_node_data($eam_ident:ident: $eam_ty:ty, $wd_ident:ident: $wd_ty:ty) -> UnsafeSubclassWrapper<_, _> $from_node_data:block;
-    ) => {
-        impl<$($inner_ty,)*> NodeDataWrapper<$eam_ty> for $name<$($inner_ty),*>
-                $(where $($where_ty: $($(for<$($lt),+>)* $constraint +)+,)+)*
-                $($($impl_where_ty: $($(for<$($impl_lt),+>)* $impl_constraint +)+),+)*
-        {
-            type ContentData = $wd_ty;
-
-            fn from_node_data($eam_ident: $eam_ty, $wd_ident: $wd_ty) -> $name<$($inner_ty),*> {
-                init();
-
-                $name {
-                    subclass: $from_node_data,
-                    needs_widget_update: true
-                }
-            }
-
-            fn event_map(&self) -> &$eam_ty {
-                if_tokens!{($($event_map_in)*) {$(
-                    let $event_map_in = self.subclass.data();
-                    &$event_map
-                )*} else {
-                    &EMPTY
-                }}
-            }
-
-            fn event_map_mut(&mut self) -> &mut $eam_ty {
-                self.needs_widget_update = true;
-                if_tokens!{($($event_map_in)*) {$(
-                    let $event_map_in = self.subclass.data_mut();
-                    &mut $event_map
-                )*} else {
-                    unsafe{ &mut EMPTY_MUT }
-                }}
-            }
-
-            fn content_data(&self) -> &$wd_ty {
-                let $node_data_in = self.subclass.data();
-                &$content_data
-            }
-            fn content_data_mut(&mut self) -> &mut $wd_ty {
-                self.needs_widget_update = true;
-                let $node_data_in = self.subclass.data_mut();
-                &mut $content_data
-            }
-
-            fn unwrap(self) -> ($eam_ty, $wd_ty) {
-                let $node_data_in = self.subclass.unwrap_data();
-                if_tokens!{($($event_map)*) {
-                    ($($event_map)*, $content_data)
-                } else {
-                    ((), $content_data)
-                }}
-            }
-        }
-    };
-    (
-        $name:ident$(<$inner_ty:ident>)*;
-        $(where $($where_ty:ty: $($(for<$($lt:tt),+>)* trait $constraint:path)|+),+;)*
-        $(impl where $($impl_where_ty:ty: $($(for<$($impl_lt:tt),+>)* trait $impl_constraint:path)|+),+;)*
-    ) => ();
-}
-
 macro_rules! subclass_node_data {
     (
         pub struct $name:ident$(<$inner_ty:ident>)*
@@ -103,12 +32,17 @@ macro_rules! subclass_node_data {
         impl $(where $($impl_where_ty:ty: $($(for<$($impl_lt:tt),+>)* trait $impl_constraint:path)|+),+)* {
             expr abs_size_bounds($asb_in:tt) = $abs_size_bounds:expr;
             $(
-                $(expr event_map($event_map_in:ident) = $event_map:expr;)*
-                expr content_data($node_data_in:ident) = $content_data:expr;
-                fn from_node_data($eam_ident:ident: $eam_ty:ty, $wd_ident:ident: $wd_ty:ty) -> UnsafeSubclassWrapper<_, _> $from_node_data:block
+                expr event_map($event_map_in:tt) = $event_map:expr;
+                $(expr event_map_mut($event_map_mut_in:tt) = $event_map_mut:expr;)*
+            )*
+            expr content_data($content_data_in:tt) = $content_data:expr;
+            fn from_node_data($eam_ident:tt: $eam_ty:ty, $wd_ident:ident: $wd_ty:ty) -> UnsafeSubclassWrapper<_, _> $from_node_data:block
+
+            $(
+                fn update_window($uwin_in:tt: _) $uwin_block:block
             )*
 
-            fn update_widget$(<$($uw_gen:ident),+>)*($uw_in:ident: _ $(, $uw_extra:ident: $uw_extra_ty:ty)*)
+            fn update_widget$(<$($uw_gen:ident),+>)*($uw_in:tt: _ $(, $uw_extra:tt: $uw_extra_ty:ty)*)
                     $(where $($uw_where_ty:ty: $($(for<$($uw_lt:tt),+>)* trait $uw_constraint:path)|+),+)*
             {
                 $($update_widget:tt)*
@@ -133,6 +67,10 @@ macro_rules! subclass_node_data {
             pub fn update_window(&self) {
                 self.subclass.move_to_top();
                 self.subclass.update_subclass_ptr();
+                $(
+                    let $uwin_in = &self.subclass;
+                    $uwin_block
+                )*
             }
 
             #[doc(hidden)]
@@ -181,15 +119,63 @@ macro_rules! subclass_node_data {
             }
         }
 
-        impl_node_data_wrapper!{
-            $name$(<$inner_ty>)*;
-            $(where $($where_ty: $($(for<$($lt),+>)* trait $constraint)|+),+;)*
-            $(impl where $($impl_where_ty: $($(for<$($impl_lt),+>)* trait $impl_constraint)|+),+;)*
-            $(
-                $(expr event_map($event_map_in) = $event_map;)*
-                expr content_data($node_data_in) = $content_data;
-                fn from_node_data($eam_ident: $eam_ty, $wd_ident: $wd_ty) -> UnsafeSubclassWrapper<_, _> $from_node_data;
-            )*
+        impl<$($inner_ty,)*> NodeDataWrapper<$eam_ty> for $name<$($inner_ty),*>
+                $(where $($where_ty: $($(for<$($lt),+>)* $constraint +)+,)+)*
+                $($($impl_where_ty: $($(for<$($impl_lt),+>)* $impl_constraint +)+),+)*
+        {
+            type ContentData = $wd_ty;
+
+            fn from_node_data($eam_ident: $eam_ty, $wd_ident: $wd_ty) -> $name<$($inner_ty),*> {
+                init();
+
+                $name {
+                    subclass: $from_node_data,
+                    needs_widget_update: true
+                }
+            }
+
+            fn event_map(&self) -> &$eam_ty {
+                if_tokens!{($($event_map_in)*) {$(
+                    let $event_map_in = self.subclass.data();
+                    &$event_map
+                )*} else {
+                    &EMPTY
+                }}
+            }
+
+            fn event_map_mut(&mut self) -> &mut $eam_ty {
+                self.needs_widget_update = true;
+                if_tokens!{($($event_map_in)*) {$(
+                    if_tokens!{($($event_map_mut_in)*) {$(
+                        let $event_map_mut_in = self.subclass.data_mut();
+                        &mut $event_map_mut
+                    )*} else {
+                        let $event_map_in = self.subclass.data_mut();
+                        &mut $event_map
+                    }}
+                )*} else {
+                    unsafe{ &mut EMPTY_MUT }
+                }}
+            }
+
+            fn content_data(&self) -> &$wd_ty {
+                let $content_data_in = self.subclass.data();
+                &$content_data
+            }
+            fn content_data_mut(&mut self) -> &mut $wd_ty {
+                self.needs_widget_update = true;
+                let $content_data_in = self.subclass.data_mut();
+                &mut $content_data
+            }
+
+            fn unwrap(self) -> ($eam_ty, $wd_ty) {
+                let $content_data_in = self.subclass.unwrap_data();
+                if_tokens!{($($event_map)*) {
+                    ($($event_map)*, $content_data)
+                } else {
+                    ((), $content_data)
+                }}
+            }
         }
 
         subclass_node_data!{$($rest)*}
@@ -240,6 +226,20 @@ subclass_node_data!{
     }
     impl where I: for<'a> trait Parent<GridWidgetProcessor<'a>> | for<'a> trait Parent<EngineTypeHarvester<'a>> {
         expr abs_size_bounds(subclass_data) = subclass_data.layout_engine.actual_size_bounds();
+        expr event_map(_) = *unsafe{ &*(&EMPTY as *const () as *const _) };
+        expr event_map_mut(_) = *unsafe{ &mut*(&mut EMPTY_MUT as *mut () as *mut _) };
+        expr content_data(subclass_data) = subclass_data.content_data;
+
+        fn from_node_data(_: PhantomData<<I as ParentMut<!>>::ChildAction>, content_data: I) -> UnsafeSubclassWrapper<_, _> {
+            HOLDING_PARENT.with(|hp| {
+                let mut wrapper_window = WindowBuilder::default().show_window(false).build_blank();
+                hp.add_child_window(&wrapper_window);
+                wrapper_window.show(true);
+                let subclass = GroupSubclass::new(content_data);
+
+                unsafe{ UnsafeSubclassWrapper::new(wrapper_window, subclass) }
+            })
+        }
         fn update_widget(subclass: _) {
             let GroupSubclass {
                 ref mut layout_engine,
@@ -253,6 +253,50 @@ subclass_node_data!{
         }
     }
 
+    pub struct LabelGroupNodeData<S><I>
+            where S: trait AsRef<str>,
+                  I: trait Parent<!>
+    {
+        subclass: UnsafeSubclassWrapper<BlankBase, LabelGroupSubclass<S, I>>,
+        needs_widget_update: bool
+    }
+    impl where I: for<'a> trait Parent<GridWidgetProcessor<'a>> | for<'a> trait Parent<EngineTypeHarvester<'a>> {
+        expr abs_size_bounds(subclass_data) = subclass_data.layout_engine.actual_size_bounds();
+        expr event_map(_) = *unsafe{ &*(&EMPTY as *const () as *const _) };
+        expr event_map_mut(_) = *unsafe{ &mut*(&mut EMPTY_MUT as *mut () as *mut _) };
+        expr content_data(subclass_data) = subclass_data.contents;
+
+        fn from_node_data(
+            _: PhantomData<<I as ParentMut<!>>::ChildAction>,
+            content_data: LabelGroupContents<S, I>
+        ) -> UnsafeSubclassWrapper<_, _> {
+            HOLDING_PARENT.with(|hp| {
+                let wrapper_window = WindowBuilder::default().build_blank();
+                hp.add_child_window(&wrapper_window);
+                let subclass = LabelGroupSubclass::new(content_data, &wrapper_window);
+
+                unsafe{ UnsafeSubclassWrapper::new(wrapper_window, subclass) }
+            })
+        }
+        fn update_window(subclass: _) {
+            subclass.data().groupbox_window.move_to_top();
+        }
+        fn update_widget(subclass: _) {
+            let LabelGroupSubclass {
+                ref mut layout_engine,
+                ref mut contents,
+                ref mut groupbox_window
+            } = *subclass.data_mut();
+
+            groupbox_window.set_text_noprefix(contents.text.as_ref());
+
+            // Update the layout engine track hints and size
+            contents.children.children(EngineTypeHarvester(layout_engine)).ok();
+
+            layout_engine.update_engine(&mut ParentContainer(&mut contents.children)).ok();
+        }
+    }
+
     pub struct TextLabelNodeData<S>
             where S: trait AsRef<str>
     {
@@ -263,8 +307,7 @@ subclass_node_data!{
         expr abs_size_bounds(subclass_data) = subclass_data.abs_size_bounds;
         expr content_data(subclass_data) = subclass_data.text;
 
-        fn from_node_data(empty: (), text: S) -> UnsafeSubclassWrapper<_, _> {
-            let _ = empty;
+        fn from_node_data(_: (), text: S) -> UnsafeSubclassWrapper<_, _> {
             HOLDING_PARENT.with(|hp| {
                 let label_window = WindowBuilder::default().build_text_label_with_font(hp, &*CAPTION_FONT);
                 let subclass = TextLabelSubclass::new(text);
@@ -285,8 +328,7 @@ subclass_node_data!{
         expr abs_size_bounds(_) = SizeBounds::default();
         expr content_data(subclass_data) = subclass_data.status;
 
-        fn from_node_data(empty: (), status: ProgbarStatus) -> UnsafeSubclassWrapper<_, _> {
-            let _ = empty;
+        fn from_node_data(_: (), status: ProgbarStatus) -> UnsafeSubclassWrapper<_, _> {
             HOLDING_PARENT.with(|hp| {
                 let progbar_window = WindowBuilder::default().build_progress_bar(hp);
                 let subclass = ProgbarSubclass::new(status);
@@ -328,12 +370,9 @@ subclass_node_data!{
 
         fn from_node_data(range_action_map: C, status: SliderStatus) -> UnsafeSubclassWrapper<_, _> {
             let container_window = WindowBuilder::default().build_blank();
-            let subclass = SliderSubclass::new(range_action_map, status);
+            let subclass = SliderSubclass::new(range_action_map, status, &container_window);
 
-            let mut window = unsafe{ UnsafeSubclassWrapper::new(container_window, subclass) };
-            window.data_mut().slider_window = WindowBuilder::default().build_trackbar(&window);
-            window.add_child_window(&window.data().slider_window);
-            window
+            unsafe{ UnsafeSubclassWrapper::new(container_window, subclass) }
         }
         fn update_widget(subclass: _, action_fn: &SharedFn<C::Action>) {
             subclass.data_mut().action_fn = Some(action_fn.clone());
@@ -363,47 +402,27 @@ subclass_node_data!{
     }
 }
 
-impl<I> NodeDataWrapper<PhantomData<I::ChildAction>> for GroupNodeData<I>
-        where for<'a> I: Parent<!>
+impl<I> ParentDataWrapper for GroupNodeData<I>
+        where for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>>
 {
-    type ContentData = I;
-    fn from_node_data(_: PhantomData<I::ChildAction>, content_data: I) -> Self {
-        HOLDING_PARENT.with(|hp| {
-            let mut wrapper_window = WindowBuilder::default().show_window(false).build_blank();
-            hp.add_child_window(&wrapper_window);
-            wrapper_window.show(true);
-            let subclass = GroupSubclass::new(content_data);
-
-            GroupNodeData {
-                subclass: unsafe{ UnsafeSubclassWrapper::new(wrapper_window, subclass) },
-                needs_widget_update: true
-            }
-        })
-    }
-
-    fn event_map(&self) -> &PhantomData<I::ChildAction> {
-        unsafe{ &*(&EMPTY as *const () as *const PhantomData<I::ChildAction>) }
-    }
-    fn event_map_mut(&mut self) -> &mut PhantomData<I::ChildAction> {
-        unsafe{ &mut*(&mut EMPTY_MUT as *mut () as *mut PhantomData<I::ChildAction>) }
-    }
-
-    fn content_data(&self) -> &Self::ContentData {
-        &self.subclass.data().content_data
-    }
-
-    fn content_data_mut(&mut self) -> &mut Self::ContentData {
-        self.needs_widget_update = true;
-        &mut self.subclass.data_mut().content_data
-    }
-
-    fn unwrap(self) -> (PhantomData<I::ChildAction>, I) {
-        (PhantomData, self.subclass.unwrap_data().content_data)
+    type Adder = GroupAdder;
+    fn get_adder(&mut self) -> GroupAdder {
+        GroupAdder(self.subclass.parent_ref())
     }
 }
 
-impl<I> ParentDataWrapper for GroupNodeData<I>
-        where for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>>
+impl<S, I> LabelGroupNodeData<S, I>
+        where S: AsRef<str>,
+              for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>>
+{
+    pub(super) fn groupbox_window_ref(&self) -> WindowRef {
+        self.subclass.data().groupbox_window.window_ref()
+    }
+}
+
+impl<S, I> ParentDataWrapper for LabelGroupNodeData<S, I>
+        where S: AsRef<str>,
+              for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>>
 {
     type Adder = GroupAdder;
     fn get_adder(&mut self) -> GroupAdder {

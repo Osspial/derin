@@ -1,14 +1,12 @@
 use ui::{Parent, Node, ChildId, NodeProcessorInit, NodeProcessorGrid, NodeProcessorGridMut, NodeProcessor, EventActionMap};
 use ui::widgets::{MouseEvent, RangeEvent};
-use ui::widgets::content::{SliderStatus, ProgbarStatus};
+use ui::widgets::content::{SliderStatus, ProgbarStatus, LabelGroupContents};
 
 use dww::*;
 use dww::notify::{Notification, NotifyType, ThumbReason};
 use dle::{GridContainer, GridEngine, GridConstraintSolver, SolveError};
-use ui::hints::{WidgetHints, GridSize, TrackHints, SizeBounds};
+use ui::hints::{WidgetHints, GridSize, TrackHints, SizeBounds, Margins};
 use ui::geometry::{OriginRect, OffsetRect};
-
-use std::mem;
 
 use super::{DerinMsg, SharedFn, ToplevelWindowBase, NativeDataWrapper};
 
@@ -97,21 +95,21 @@ impl<I: Parent<!>> GroupSubclass<I> {
     }
 }
 
-impl<P, I> Subclass<P> for GroupSubclass<I>
-        where P: ParentWindow + WindowMut,
+impl<W, I> Subclass<W> for GroupSubclass<I>
+        where W: ParentWindow + WindowMut,
               I: Parent<!>
 {
     type UserMsg = DerinMsg;
-    default fn subclass_proc(_: &mut ProcWindowRef<P, Self>, _: Msg<DerinMsg>) -> i64 {
+    default fn subclass_proc(_: &mut ProcWindowRef<W, Self>, _: Msg<DerinMsg>) -> i64 {
         panic!("Should never be called; just here to hide GridWidgetProcessor type from public exposure")
     }
 }
 
-impl<P, I> Subclass<P> for GroupSubclass<I>
-        where P: ParentWindow + WindowMut,
+impl<W, I> Subclass<W> for GroupSubclass<I>
+        where W: ParentWindow + WindowMut,
       for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>>
 {
-    fn subclass_proc(window: &mut ProcWindowRef<P, Self>, msg: Msg<DerinMsg>) -> i64 {
+    fn subclass_proc(window: &mut ProcWindowRef<W, Self>, msg: Msg<DerinMsg>) -> i64 {
         match msg {
             Msg::Wm(wm) => match wm {
                 Wm::GetSizeBounds(size_bounds) => {
@@ -130,6 +128,70 @@ impl<P, I> Subclass<P> for GroupSubclass<I>
 
                     layout_engine.desired_size = OriginRect::from(rect);
                     layout_engine.update_engine(&mut ParentContainer(content_data)).ok();
+                }
+                window.set_rect(rect);
+                0
+            },
+        }
+    }
+}
+
+
+pub struct LabelGroupSubclass<S: AsRef<str>, I: Parent<!>> {
+    pub contents: LabelGroupContents<S, I>,
+    pub groupbox_window: GroupBoxBase<&'static Font>,
+    pub layout_engine: GridEngine
+}
+
+impl<S: AsRef<str>, I: Parent<!>> LabelGroupSubclass<S, I> {
+    pub fn new<W: ParentWindow>(contents: LabelGroupContents<S, I>, container_window: &W) -> LabelGroupSubclass<S, I> {
+        container_window.clip_children(false);
+        let mut layout_engine = GridEngine::new();
+        layout_engine.grid_margins = Margins::new(9, 16, 9, 11);
+        LabelGroupSubclass {
+            contents,
+            groupbox_window: WindowBuilder::default().build_group_box_with_font(container_window, &*super::CAPTION_FONT),
+            layout_engine
+        }
+    }
+}
+
+impl<W, S, I> Subclass<W> for LabelGroupSubclass<S, I>
+        where W: ParentWindow + WindowMut,
+              S: AsRef<str>,
+              I: Parent<!>
+{
+    type UserMsg = DerinMsg;
+    default fn subclass_proc(_: &mut ProcWindowRef<W, Self>, _: Msg<DerinMsg>) -> i64 {
+        panic!("Should never be called; just here to hide GridWidgetProcessor type from public exposure")
+    }
+}
+
+impl<W, S, I> Subclass<W> for LabelGroupSubclass<S, I>
+        where W: ParentWindow + WindowMut,
+              S: AsRef<str>,
+      for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>>
+{
+    fn subclass_proc(window: &mut ProcWindowRef<W, Self>, msg: Msg<DerinMsg>) -> i64 {
+        match msg {
+            Msg::Wm(wm) => match wm {
+                Wm::GetSizeBounds(size_bounds) => {
+                    *size_bounds = window.subclass_data().layout_engine.actual_size_bounds();
+                    0
+                },
+                wm => window.default_window_proc(&mut Msg::Wm(wm))
+            },
+            Msg::User(DerinMsg::SetRect(rect)) => {
+                {
+                    let LabelGroupSubclass {
+                        contents: LabelGroupContents {ref mut children, ..},
+                        ref mut groupbox_window,
+                        ref mut layout_engine
+                    } = *window.subclass_data();
+
+                    layout_engine.desired_size = OriginRect::from(rect);
+                    layout_engine.update_engine(&mut ParentContainer(children)).ok();
+                    groupbox_window.set_rect(OriginRect::from(rect).into());
                 }
                 window.set_rect(rect);
                 0
@@ -207,12 +269,12 @@ pub struct SliderSubclass<C: EventActionMap<RangeEvent>> {
 }
 
 impl<C: EventActionMap<RangeEvent>> SliderSubclass<C> {
-    pub fn new(range_action_map: C, status: SliderStatus) -> SliderSubclass<C> {
+    pub fn new<W: ParentWindow>(range_action_map: C, status: SliderStatus, container_window: &W) -> SliderSubclass<C> {
         SliderSubclass {
             range_action_map,
             status,
             action_fn: None,
-            slider_window: unsafe{ mem::zeroed() }
+            slider_window: WindowBuilder::default().build_trackbar(container_window)
         }
     }
 }

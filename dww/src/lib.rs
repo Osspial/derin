@@ -289,7 +289,6 @@ unsafe impl ParentWindow for BlankBase {}
 unsafe impl OrphanableWindow for BlankBase {}
 
 unsafe impl<F: Borrow<Font>> ButtonWindow for PushButtonBase<F> {}
-unsafe impl<F: Borrow<Font>> ParentWindow for GroupBoxBase<F> {}
 unsafe impl<F: Borrow<Font>> TextLabelWindow for TextLabelBase<F> {}
 unsafe impl ProgressBarWindow for ProgressBarBase {}
 unsafe impl TrackbarWindow for TrackbarBase {}
@@ -469,6 +468,22 @@ pub unsafe trait WindowBase: Sized {
     }
 
     #[inline]
+    fn make_topmost(&self, topmost: bool) {
+        unsafe {
+            let insert_after = match topmost {
+                true => HWND_TOPMOST,
+                false => HWND_NOTOPMOST
+            };
+            user32::SetWindowPos(
+                self.hwnd(),
+                insert_after,
+                0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+            );
+        }
+    }
+
+    #[inline]
     fn windows_below(&self) -> WindowIterTopDown {
         WindowIterTopDown {
             // The window iterators stores the window that will be returned next by the iterator,
@@ -523,6 +538,40 @@ pub unsafe trait WindowBase: Sized {
 
     fn retrieve_long(&self) -> LONG {
         unsafe{ user32::GetWindowLongW(self.hwnd(), GWL_USERDATA) }
+    }
+
+    fn invalidate_rect(&self, erase: bool, rect: Option<OffsetRect>) {
+        let winapi_rect: RECT;
+        let rect_ptr = if let Some(rect) = rect {
+            winapi_rect = RECT {
+                left: rect.topleft.x as LONG,
+                top: rect.topleft.y as LONG,
+                right: rect.lowright.x as LONG,
+                bottom: rect.lowright.y as LONG
+            };
+            &winapi_rect
+        } else {
+            ptr::null()
+        };
+
+        unsafe{ user32::InvalidateRect(self.hwnd(), rect_ptr, erase as BOOL) };
+    }
+
+    fn validate_rect(&self, rect: Option<OffsetRect>) {
+        let winapi_rect: RECT;
+        let rect_ptr = if let Some(rect) = rect {
+            winapi_rect = RECT {
+                left: rect.topleft.x as LONG,
+                top: rect.topleft.y as LONG,
+                right: rect.lowright.x as LONG,
+                bottom: rect.lowright.y as LONG
+            };
+            &winapi_rect
+        } else {
+            ptr::null()
+        };
+
+        unsafe{ user32::ValidateRect(self.hwnd(), rect_ptr) };
     }
 
     fn get_dc(&self) -> Option<RetrievedContext> {
@@ -722,6 +771,14 @@ pub unsafe trait IconWindow: WindowOwned {
 pub unsafe trait ParentWindow: WindowBase {
     fn parent_ref(&self) -> ParentRef {
         ParentRef(unsafe{ self.hwnd() })
+    }
+
+    fn clip_children(&self, clip_children: bool) {
+        let new_style = match clip_children {
+            true => self.get_style() | WS_CLIPCHILDREN,
+            false => self.get_style() & !WS_CLIPCHILDREN
+        };
+        unsafe{ self.set_style(new_style) };
     }
 
     fn add_child_window<W: WindowBase>(&self, child: &W) {

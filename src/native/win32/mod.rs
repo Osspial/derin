@@ -9,7 +9,7 @@ use std::ptr;
 use std::cell::RefCell;
 
 use ui::*;
-use ui::widgets::{TextButton, TextLabel, Group, Progbar, Slider, MouseEvent, RangeEvent};
+use ui::widgets::{TextButton, TextLabel, Group, LabelGroup, Progbar, Slider, MouseEvent, RangeEvent};
 use ui::hints::{WidgetHints, GridSize, TrackHints, NodeSpan};
 
 pub struct Window<N>
@@ -210,6 +210,45 @@ impl<'a, P, A, I> NodeProcessorGridMut<Group<I>> for NativeNodeProcessor<'a, P, 
     }
 }
 
+impl<'a, P, A, S, I> NodeProcessorGridMut<LabelGroup<S, I>> for NativeNodeProcessor<'a, P, A>
+        where P: ParentChildAdder,
+              S: AsRef<str>,
+      for<'b> I: Parent<!> +
+                 ParentMut<NativeNodeProcessor<'b, GroupAdder, A>, ChildAction = A> +
+                 Parent<GridWidgetProcessor<'b>> +
+                 Parent<EngineTypeHarvester<'b>>
+{
+    fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, group: &'b mut LabelGroup<S, I>) -> Result<(), !> {
+        let group_wrapper = group.wrapper_mut();
+        group_wrapper.update_window();
+
+        if self.bottom_window.is_none() {
+            self.bottom_window = Some(group_wrapper.window_ref());
+        }
+
+        if group_wrapper.needs_widget_update() {
+            *self.children_updated = true;
+            self.parent.add_child_node(group_wrapper);
+
+            let mut adder = group_wrapper.get_adder();
+            let mut children_updated = false;
+            {
+                let child_processor = NativeNodeProcessor {
+                    parent: &mut adder,
+                    action_fn: self.action_fn,
+                    bottom_window: Some(group_wrapper.groupbox_window_ref()),
+                    children_updated: &mut children_updated
+                };
+                group_wrapper.content_data_mut().children.children_mut(child_processor)?;
+            }
+
+            group_wrapper.update_widget();
+        }
+
+        Ok(())
+    }
+}
+
 impl<'a, P, A> NodeProcessorGridMut<Progbar> for NativeNodeProcessor<'a, P, A>
         where P: ParentChildAdder
 {
@@ -257,8 +296,16 @@ impl<B: EventActionMap<MouseEvent>, S: AsRef<str>> NodeDataRegistry<TextButton<B
 impl<S: AsRef<str>> NodeDataRegistry<TextLabel<S>> for NativeWrapperRegistry {
     type NodeDataWrapper = TextLabelNodeData<S>;
 }
-impl<I: Parent<!>> NodeDataRegistry<Group<I>> for NativeWrapperRegistry {
+impl<I> NodeDataRegistry<Group<I>> for NativeWrapperRegistry
+        where for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>> + Parent<EngineTypeHarvester<'a>>
+{
     type NodeDataWrapper = GroupNodeData<I>;
+}
+impl<S, I> NodeDataRegistry<LabelGroup<S, I>> for NativeWrapperRegistry
+        where S: AsRef<str>,
+              for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>> + Parent<EngineTypeHarvester<'a>>
+{
+    type NodeDataWrapper = LabelGroupNodeData<S, I>;
 }
 impl NodeDataRegistry<Progbar> for NativeWrapperRegistry {
     type NodeDataWrapper = ProgbarNodeData;

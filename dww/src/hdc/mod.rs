@@ -36,8 +36,7 @@ pub unsafe trait DeviceContext {
             where F: FnOnce(&Self) -> R
     {
         unsafe {
-            let old_font = gdi32::GetCurrentObject(self.hdc(), OBJ_FONT);
-            gdi32::SelectObject(self.hdc(), font.0 as HGDIOBJ);
+            let old_font = gdi32::SelectObject(self.hdc(), font.0 as HGDIOBJ);
             let ret = run(self);
             gdi32::SelectObject(self.hdc(), old_font);
             ret
