@@ -350,7 +350,6 @@ pub unsafe trait WindowBase: Sized {
     }
 
     fn adjust_window_rect<R: Rect>(&self, rect: R) -> R {
-        use std::cmp;
         let mut winapi_rect = RECT {
             left: rect.topleft().x as LONG,
             top: rect.topleft().y as LONG,
@@ -365,17 +364,19 @@ pub unsafe trait WindowBase: Sized {
             self.get_style_ex()
         )};
 
-        let x_offset = -cmp::min(winapi_rect.left, Px::min_value() as LONG);
-        let y_offset = -cmp::min(winapi_rect.top, Px::min_value() as LONG);
-
-        winapi_rect.left += x_offset;
-        winapi_rect.right += x_offset;
-        winapi_rect.top += y_offset;
-        winapi_rect.bottom += y_offset;
-
-        // Clamp the values to within the `Px` range bounds
-        winapi_rect.right = cmp::min(Px::max_value() as LONG, winapi_rect.right);
-        winapi_rect.bottom = cmp::min(Px::max_value() as LONG, winapi_rect.bottom);
+        // Catch overflows
+        if rect.topleft().x < winapi_rect.left {
+            winapi_rect.left = rect.topleft().x;
+        }
+        if rect.topleft().y < winapi_rect.top {
+            winapi_rect.top = rect.topleft().y;
+        }
+        if rect.lowright().x > winapi_rect.right {
+            winapi_rect.right = rect.lowright().x;
+        }
+        if rect.lowright().y > winapi_rect.bottom {
+            winapi_rect.bottom = rect.lowright().y;
+        }
 
         R::from(OffsetRect::new(winapi_rect.left as Px, winapi_rect.top as Px,
                                 winapi_rect.right as Px, winapi_rect.bottom as Px))

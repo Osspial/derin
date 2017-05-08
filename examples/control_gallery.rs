@@ -173,7 +173,7 @@ impl<'a> GridLayout<'a> for NestedParentLayout {
 }
 
 fn main() {
-    let mut window = Window::new(Group::new(BasicParent::new()), &WindowConfig::new());
+    let mut window = Window::new(Group::new(BasicParent::new()), &WindowConfig::new().name("Derin Window".to_string()));
     let mut button_buf = Vec::new();
 
     loop {

@@ -111,9 +111,9 @@ impl GridEngine {
             let mut updater = updater.borrow_mut();
 
             // We start out by setting the free space to its maximum possible value.
-            let mut free_width = self.desired_size.width().saturating_sub(self.grid_margins.width());
+            let mut free_width = sub_px_bound_zero(self.desired_size.width(), self.grid_margins.width());
             let mut fr_total_width = 0.0;
-            let mut free_height = self.desired_size.height().saturating_sub(self.grid_margins.height());
+            let mut free_height = sub_px_bound_zero(self.desired_size.height(), self.grid_margins.height());
             let mut fr_total_height = 0.0;
 
             let old_engine_size = self.actual_size;
@@ -133,7 +133,7 @@ impl GridEngine {
             macro_rules! first_track_pass {
                 ($rect_size:ident, $push_track:ident, $track_range_mut:ident, $free_size:expr, $fr_total:expr) => {
                     if 0 == self.grid.$track_range_mut(..).unwrap().len() {
-                        self.actual_size_bounds.max.$rect_size = u16::max_value();
+                        self.actual_size_bounds.max.$rect_size = Px::max_value();
                     } else {
                         for (index, track) in self.grid.$track_range_mut(..).unwrap().iter_mut().enumerate() {
                             let track_fr_size = track.hints().fr_size;
@@ -144,7 +144,7 @@ impl GridEngine {
                                 // increase the engine maximum size by the rigid track minimum size.
                                 self.actual_size_bounds.max.$rect_size =
                                     self.actual_size_bounds.max.$rect_size.saturating_add(track.min_size());
-                                $free_size = $free_size.saturating_sub(track.size());
+                                $free_size = sub_px_bound_zero($free_size, track.size());
                             } else {
                                 // The engine maximum size isn't expanded in a rigid track because the track won't
                                 // expand when the rectangle of the engine is expanded.
@@ -396,7 +396,7 @@ impl<'a> GridConstraintSolver<'a> {
                         for (index, track) in track_slice.iter().enumerate() {
                             let track_fr_size = track.hints().fr_size;
                             px_widget += track.size();
-                            min_size_debt = min_size_debt.saturating_sub(track.min_size());
+                            min_size_debt = sub_px_bound_zero(min_size_debt, track.min_size());
 
                             if track_fr_size == 0.0 {
                                 rigid_tracks_widget.push(index as Tr);
@@ -421,7 +421,7 @@ impl<'a> GridConstraintSolver<'a> {
                                 let expansion = rigid_expand + (expand_rem != 0) as Px;
 
                                 if track.min_size() + expansion <= track.max_size() {
-                                    min_size_debt = min_size_debt.saturating_sub(expansion);
+                                    min_size_debt = sub_px_bound_zero(min_size_debt, expansion);
                                     let new_size = track.min_size() + expansion;
 
                                     if let Err(expanded) = track.expand_widget_min_size(new_size) {
@@ -429,7 +429,7 @@ impl<'a> GridConstraintSolver<'a> {
                                             actual_size_bounds.max.$size().saturating_add(expanded);
                                         actual_size.$size += expanded;
 
-                                        $free_size = $free_size.saturating_sub(expanded);
+                                        $free_size = sub_px_bound_zero($free_size, expanded);
                                         self.rigid_min_size.$size += expanded;
 
                                         grid_changed = true;
@@ -438,7 +438,7 @@ impl<'a> GridConstraintSolver<'a> {
 
                                 } else {
                                     rigid_tracks_widget.remove(rigid_index);
-                                    min_size_debt = min_size_debt.saturating_sub(track.max_size() - track.min_size());
+                                    min_size_debt = sub_px_bound_zero(min_size_debt, track.max_size() - track.min_size());
 
                                     let track_max_size = track.max_size();
                                     if let Err(expanded) = track.expand_widget_min_size(track_max_size) {
@@ -446,7 +446,7 @@ impl<'a> GridConstraintSolver<'a> {
                                             actual_size_bounds.max.$size().saturating_add(expanded);
                                         actual_size.$size += expanded;
 
-                                        $free_size = $free_size.saturating_sub(expanded);
+                                        $free_size = sub_px_bound_zero($free_size, expanded);
                                         self.rigid_min_size.$size += track.max_size() - track.min_size();
 
                                         grid_changed = true;
@@ -455,7 +455,7 @@ impl<'a> GridConstraintSolver<'a> {
                                     // we don't continue because TODO PUT WHY
                                 }
 
-                                expand_rem = expand_rem.saturating_sub(1);
+                                expand_rem = sub_px_bound_zero(expand_rem, 1);
                             }
 
                             if 0 == min_size_debt {break}
@@ -466,7 +466,7 @@ impl<'a> GridConstraintSolver<'a> {
                             self.frac_min_size.$size()
                         );
 
-                        min_size_debt = min_size_debt.saturating_sub(fr_expand);
+                        min_size_debt = sub_px_bound_zero(min_size_debt, fr_expand);
 
                         if 0 < min_size_debt {
                             solvable.$axis = SolveAxis::Unsolvable;
@@ -643,8 +643,8 @@ impl CellHinter {
                             inner_rect.lowright.$axis -= size_diff / 2;
                         }
 
-                        let front_margin_shift = $front_margin.saturating_sub(inner_rect.topleft.$axis - self.outer_rect.topleft.$axis);
-                        let back_margin_shift = $back_margin.saturating_sub(self.outer_rect.lowright.$axis - inner_rect.lowright.$axis);
+                        let front_margin_shift = sub_px_bound_zero($front_margin, inner_rect.topleft.$axis - self.outer_rect.topleft.$axis);
+                        let back_margin_shift = sub_px_bound_zero($back_margin, self.outer_rect.lowright.$axis - inner_rect.lowright.$axis);
                         inner_rect.topleft.$axis += front_margin_shift;
                         inner_rect.lowright.$axis += front_margin_shift;
                         inner_rect.topleft.$axis -= back_margin_shift;
@@ -658,6 +658,16 @@ impl CellHinter {
         place_on_axis!(y, height, margins.top, margins.bottom);
 
         Ok(inner_rect)
+    }
+}
+
+#[inline]
+fn sub_px_bound_zero(lhs: Px, rhs: Px) -> Px {
+    let result = lhs.saturating_sub(rhs);
+    if 0 <= result {
+        result
+    } else {
+        0
     }
 }
 

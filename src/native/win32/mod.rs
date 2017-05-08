@@ -229,6 +229,7 @@ impl<'a, P, A, S, I> NodeProcessorGridMut<LabelGroup<S, I>> for NativeNodeProces
         }
 
         if group_wrapper.needs_widget_update() {
+            group_wrapper.groupbox_window_ref().move_to_top();
             *self.children_updated = true;
             self.parent.add_child_node(group_wrapper);
 

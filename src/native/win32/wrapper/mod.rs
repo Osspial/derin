@@ -41,10 +41,6 @@ macro_rules! subclass_node_data {
             expr content_data($content_data_in:tt) = $content_data:expr;
             fn from_node_data($eam_ident:tt: $eam_ty:ty, $wd_ident:ident: $wd_ty:ty) -> UnsafeSubclassWrapper<_, _> $from_node_data:block
 
-            $(
-                fn update_window($uwin_in:tt: _) $uwin_block:block
-            )*
-
             fn update_widget$(<$($uw_gen:ident),+>)*($uw_in:tt: _ $(, $uw_extra:tt: $uw_extra_ty:ty)*)
                     $(where $($uw_where_ty:ty: $($(for<$($uw_lt:tt),+>)* trait $uw_constraint:path)|+),+)*
             {
@@ -70,10 +66,6 @@ macro_rules! subclass_node_data {
             pub fn update_window(&self) {
                 self.subclass.move_to_top();
                 self.subclass.update_subclass_ptr();
-                $(
-                    let $uwin_in = &self.subclass;
-                    $uwin_block
-                )*
             }
 
             #[doc(hidden)]
@@ -280,9 +272,6 @@ subclass_node_data!{
 
                 unsafe{ UnsafeSubclassWrapper::new(wrapper_window, subclass) }
             })
-        }
-        fn update_window(subclass: _) {
-            subclass.data().groupbox_window.move_to_top();
         }
         fn update_widget(subclass: _) {
             let LabelGroupSubclass {

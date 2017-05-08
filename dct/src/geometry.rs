@@ -1,6 +1,6 @@
 use std::ops::{Add, AddAssign};
 
-pub type Px = u16;
+pub type Px = i32;
 
 two_axis_type!{
     #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
@@ -37,14 +37,17 @@ pub trait Rect: From<OriginRect> + From<OffsetRect> + Copy {
     fn topleft(self) -> Point;
     fn lowright(self) -> Point;
 
+    #[inline]
     fn width(self) -> Px {
-        self.lowright().x - self.topleft().x
+        self.lowright().x.saturating_sub(self.topleft().x)
     }
 
+    #[inline]
     fn height(self) -> Px {
-        self.lowright().y - self.topleft().y
+        self.lowright().y.saturating_sub(self.topleft().y)
     }
 
+    #[inline]
     fn offset(self, offset: Point) -> OffsetRect {
         OffsetRect {
             topleft: self.topleft() + offset,
