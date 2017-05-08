@@ -7,7 +7,10 @@ use ui::widgets::{MouseEvent, RangeEvent};
 use ui::widgets::content::{SliderStatus, ProgbarStatus, LabelGroupContents,  Completion, Orientation, TickPosition as SliderTickPosition};
 use ui::hints::{GridSize, TrackHints};
 
-use dww::*;
+use dww::{self, Font};
+use dww::window::*;
+use dww::window::refs::*;
+use dww::window::wrappers::*;
 use dle::GridEngine;
 use dct::geometry::OffsetRect;
 use dct::hints::{Tr, SizeBounds};
@@ -126,7 +129,7 @@ macro_rules! subclass_node_data {
             type ContentData = $wd_ty;
 
             fn from_node_data($eam_ident: $eam_ty, $wd_ident: $wd_ty) -> $name<$($inner_ty),*> {
-                init();
+                dww::init();
 
                 $name {
                     subclass: $from_node_data,

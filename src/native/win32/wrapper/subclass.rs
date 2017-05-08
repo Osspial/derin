@@ -2,8 +2,11 @@ use ui::{Parent, Node, ChildId, NodeProcessorInit, NodeProcessorGrid, NodeProces
 use ui::widgets::{MouseEvent, RangeEvent};
 use ui::widgets::content::{SliderStatus, ProgbarStatus, LabelGroupContents};
 
-use dww::*;
-use dww::notify::{Notification, NotifyType, ThumbReason};
+use dww::Font;
+use dww::window::*;
+use dww::window::refs::{ProcWindowRef, UnsafeSubclassRef};
+use dww::msg::Msg;
+use dww::msg::notify::{Notification, NotifyType, ThumbReason};
 use dle::{GridContainer, GridEngine, GridConstraintSolver, SolveError};
 use ui::hints::{WidgetHints, GridSize, TrackHints, SizeBounds, Margins};
 use ui::geometry::{OriginRect, OffsetRect};
@@ -54,26 +57,24 @@ impl<W, B, S> Subclass<W> for TextButtonSubclass<B, S>
         let ret = window.default_window_proc(&mut msg);
 
         match msg {
-            Msg::Wm(wm) => match wm {
-                Wm::MouseDown(_, _) => window.subclass_data().button_state = ButtonState::Pressed,
-                Wm::MouseDoubleDown(_, _) => window.subclass_data().button_state = ButtonState::DoublePressed,
-                Wm::MouseUp(button, _) => {
-                    let action_opt = match window.subclass_data().button_state {
-                        ButtonState::Pressed       => window.subclass_data().button_action_map.on_event(MouseEvent::Clicked(button)),
-                        ButtonState::DoublePressed => window.subclass_data().button_action_map.on_event(MouseEvent::DoubleClicked(button)),
-                        ButtonState::Released      => None
-                    };
-                    if let Some(action) = action_opt {
-                        unsafe{ window.subclass_data().action_fn.as_ref().expect("No Action Function").borrow_mut().call_fn(action) };
-                    }
+            Msg::MouseDown(_, _) => window.subclass_data().button_state = ButtonState::Pressed,
+            Msg::MouseDoubleDown(_, _) => window.subclass_data().button_state = ButtonState::DoublePressed,
+            Msg::MouseUp(button, _) => {
+                let action_opt = match window.subclass_data().button_state {
+                    ButtonState::Pressed       => window.subclass_data().button_action_map.on_event(MouseEvent::Clicked(button)),
+                    ButtonState::DoublePressed => window.subclass_data().button_action_map.on_event(MouseEvent::DoubleClicked(button)),
+                    ButtonState::Released      => None
+                };
+                if let Some(action) = action_opt {
+                    unsafe{ window.subclass_data().action_fn.as_ref().expect("No Action Function").borrow_mut().call_fn(action) };
+                }
 
-                    window.subclass_data().button_state = ButtonState::Released;
-                },
-                Wm::SetText(_) => window.subclass_data().abs_size_bounds.min = window.get_ideal_size(),
-                Wm::GetSizeBounds(size_bounds) => size_bounds.min = window.get_ideal_size(),
-                _ => ()
+                window.subclass_data().button_state = ButtonState::Released;
             },
+            Msg::SetText(_) => window.subclass_data().abs_size_bounds.min = window.get_ideal_size(),
+            Msg::GetSizeBounds(size_bounds) => size_bounds.min = window.get_ideal_size(),
             Msg::User(DerinMsg::SetRect(rect)) => window.set_rect(rect),
+            _ => ()
         }
         ret
     }
@@ -111,12 +112,9 @@ impl<W, I> Subclass<W> for GroupSubclass<I>
 {
     fn subclass_proc(window: &mut ProcWindowRef<W, Self>, msg: Msg<DerinMsg>) -> i64 {
         match msg {
-            Msg::Wm(wm) => match wm {
-                Wm::GetSizeBounds(size_bounds) => {
-                    *size_bounds = window.subclass_data().layout_engine.actual_size_bounds();
-                    0
-                },
-                wm => window.default_window_proc(&mut Msg::Wm(wm))
+            Msg::GetSizeBounds(size_bounds) => {
+                *size_bounds = window.subclass_data().layout_engine.actual_size_bounds();
+                0
             },
             Msg::User(DerinMsg::SetRect(rect)) => {
                 {
@@ -132,6 +130,7 @@ impl<W, I> Subclass<W> for GroupSubclass<I>
                 window.set_rect(rect);
                 0
             },
+            mut msg => window.default_window_proc(&mut msg)
         }
     }
 }
@@ -174,12 +173,9 @@ impl<W, S, I> Subclass<W> for LabelGroupSubclass<S, I>
 {
     fn subclass_proc(window: &mut ProcWindowRef<W, Self>, msg: Msg<DerinMsg>) -> i64 {
         match msg {
-            Msg::Wm(wm) => match wm {
-                Wm::GetSizeBounds(size_bounds) => {
-                    *size_bounds = window.subclass_data().layout_engine.actual_size_bounds();
-                    0
-                },
-                wm => window.default_window_proc(&mut Msg::Wm(wm))
+            Msg::GetSizeBounds(size_bounds) => {
+                *size_bounds = window.subclass_data().layout_engine.actual_size_bounds();
+                0
             },
             Msg::User(DerinMsg::SetRect(rect)) => {
                 {
@@ -196,6 +192,7 @@ impl<W, S, I> Subclass<W> for LabelGroupSubclass<S, I>
                 window.set_rect(rect);
                 0
             },
+            mut msg => window.default_window_proc(&mut msg)
         }
     }
 }
@@ -224,13 +221,11 @@ impl<W, S> Subclass<W> for TextLabelSubclass<S>
     fn subclass_proc(window: &mut ProcWindowRef<W, Self>, mut msg: Msg<DerinMsg>) -> i64 {
         let ret = window.default_window_proc(&mut msg);
         match msg {
-            Msg::Wm(wm) => match wm {
-                Wm::SetText(new_text) =>
-                    window.subclass_data().abs_size_bounds.min = unsafe{ window.min_unclipped_rect_ucs2(new_text) },
-                Wm::GetSizeBounds(size_bounds) => *size_bounds = window.subclass_data().abs_size_bounds,
-                _ => ()
-            },
+            Msg::SetText(new_text) =>
+                window.subclass_data().abs_size_bounds.min = unsafe{ window.min_unclipped_rect_ucs2(new_text) },
+            Msg::GetSizeBounds(size_bounds) => *size_bounds = window.subclass_data().abs_size_bounds,
             Msg::User(DerinMsg::SetRect(rect)) => window.set_rect(rect),
+            _ => ()
         }
         ret
     }
@@ -286,10 +281,10 @@ impl<W, C> Subclass<W> for SliderSubclass<C>
     type UserMsg = DerinMsg;
     fn subclass_proc(window: &mut ProcWindowRef<W, Self>, mut msg: Msg<DerinMsg>) -> i64 {
         match msg {
-            Msg::Wm(Wm::Notify(Notification {
+            Msg::Notify(Notification {
                 notify_type: NotifyType::TrackbarThumbPosChanging(new_pos, reason),
                 ..
-            })) => {
+            }) => {
                 let event = match reason {
                     ThumbReason::EndTrack       |
                     ThumbReason::ThumbPosition => RangeEvent::Drop(new_pos),
@@ -318,8 +313,8 @@ impl Subclass<ToplevelWindowBase> for ToplevelSubclass {
     type UserMsg = ();
     fn subclass_proc(window: &mut ProcWindowRef<ToplevelWindowBase, Self>, mut msg: Msg<()>) -> i64 {
         match msg {
-            Msg::Wm(Wm::GetSizeBounds(size_bounds)) => {*size_bounds = window.subclass_data().0.size_bounds(); 0},
-            Msg::Wm(Wm::Size(rect)) => {
+            Msg::GetSizeBounds(size_bounds) => {*size_bounds = window.subclass_data().0.size_bounds(); 0},
+            Msg::Size(rect) => {
                 window.subclass_data().0.post_user_msg(DerinMsg::SetRect(OffsetRect::from(rect)));
                 0
             },

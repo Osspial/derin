@@ -1,3 +1,5 @@
+#![recursion_limit = "128"]
+
 extern crate proc_macro;
 extern crate syn;
 #[macro_use]
@@ -60,7 +62,7 @@ fn impl_user_msg(&DeriveInput{ref ident, ref generics, ref body, ..}: &DeriveInp
             const #dummy_const: () = {
                 #extern_crate
                 #[automatically_derived]
-                impl #impl_generics #crate_root::user_msg::UserMsg for #ident #ty_generics #where_clause {
+                impl #impl_generics #crate_root::msg::user::UserMsg for #ident #ty_generics #where_clause {
                     fn discriminant(&self) -> u16 {
                         match *self {
                             #(#discriminant_match_branches),*
@@ -76,7 +78,7 @@ fn impl_user_msg(&DeriveInput{ref ident, ref generics, ref body, ..}: &DeriveInp
                     }
 
                     fn register_conversion<C>(discriminant: u16, converter: &mut C)
-                            where C: #crate_root::user_msg::UserMsgConverter<Self>
+                            where C: #crate_root::msg::user::UserMsgConverter<Self>
                     {
                         match discriminant {
                             #(#conversion_offset_branches,)*

@@ -2,7 +2,9 @@ mod wrapper;
 
 use self::wrapper::*;
 use super::WindowConfig;
-use dww::{msg_queue, WindowOwned, WindowBase, ParentWindow, WindowRef, OverlappedWindow, WindowBuilder};
+use dww::msg;
+use dww::window::{WindowOwned, WindowBase, ParentWindow, OverlappedWindow, WindowBuilder};
+use dww::window::refs::WindowRef;
 
 use std::rc::Rc;
 use std::ptr;
@@ -74,7 +76,7 @@ impl<N> Window<N>
         // bounds check in the toplevel. This forces that check.
         self.toplevel.bound_to_size_bounds();
 
-        for msg in msg_queue::thread_wait_queue() {
+        for msg in msg::queue::thread_wait_queue() {
             let msg = msg.expect("Windows message error");
             unsafe{ msg.dispatch() };
             if !<RefCell<_>>::borrow(&self.action_fn).continue_loop {
