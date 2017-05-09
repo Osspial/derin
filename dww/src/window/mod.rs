@@ -12,7 +12,7 @@ macro_rules! impl_window_traits {
     ) => (
         unsafe impl<$($lt,)* W: $($window_bound +)* $(, $gen: $gen_bound)*> WindowBase for $window {
             #[inline]
-            unsafe fn hwnd(&self) -> HWND {
+            fn hwnd(&self) -> HWND {
                 let $self_ident = self;
                 $window_expr.hwnd()
             }
@@ -161,7 +161,7 @@ impl<'a> WindowBuilder<'a> {
     }
 
     pub fn build_push_button_with_font<P: ParentWindow, F: Borrow<Font>>(self, parent: &P, font: F) -> PushButtonBase<F> {
-        let window_handle = self.build(BS_PUSHBUTTON, 0, unsafe{ Some(parent.hwnd()) }, &BUTTON_CLASS);
+        let window_handle = self.build(BS_PUSHBUTTON, 0, Some(parent.hwnd()), &BUTTON_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         let mut window = PushButtonBase(window_handle, unsafe{ mem::uninitialized() });
         window.set_font(font);
@@ -173,7 +173,7 @@ impl<'a> WindowBuilder<'a> {
     }
 
     pub fn build_group_box_with_font<P: ParentWindow, F: Borrow<Font>>(self, parent: &P, font: F) -> GroupBoxBase<F> {
-        let window_handle = self.build(BS_GROUPBOX, 0, unsafe{ Some(parent.hwnd()) }, &BUTTON_CLASS);
+        let window_handle = self.build(BS_GROUPBOX, 0, Some(parent.hwnd()), &BUTTON_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         let mut window = GroupBoxBase(window_handle, unsafe{ mem::uninitialized() });
         window.set_font(font);
@@ -185,7 +185,7 @@ impl<'a> WindowBuilder<'a> {
     }
 
     pub fn build_text_label_with_font<P: ParentWindow, F: Borrow<Font>>(self, parent: &P, font: F) -> TextLabelBase<F> {
-        let window_handle = self.build(0, 0, unsafe{ Some(parent.hwnd()) }, &STATIC_CLASS);
+        let window_handle = self.build(0, 0, Some(parent.hwnd()), &STATIC_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         let mut window = TextLabelBase(window_handle, unsafe{ mem::uninitialized() });
         window.set_font(font);
@@ -193,13 +193,13 @@ impl<'a> WindowBuilder<'a> {
     }
 
     pub fn build_progress_bar<P: ParentWindow>(self, parent: &P) -> ProgressBarBase {
-        let window_handle = self.build(PBS_SMOOTHREVERSE, 0, unsafe{ Some(parent.hwnd()) }, &PROGRESS_CLASS);
+        let window_handle = self.build(PBS_SMOOTHREVERSE, 0, Some(parent.hwnd()), &PROGRESS_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         ProgressBarBase(window_handle)
     }
 
     pub fn build_trackbar<P: ParentWindow>(self, parent: &P) -> TrackbarBase {
-        let window_handle = self.build(TBS_NOTIFYBEFOREMOVE, 0, unsafe{ Some(parent.hwnd()) }, &TRACKBAR_CLASS);
+        let window_handle = self.build(TBS_NOTIFYBEFOREMOVE, 0, Some(parent.hwnd()), &TRACKBAR_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         TrackbarBase(window_handle)
     }
@@ -266,7 +266,7 @@ macro_rules! base_window {
         pub struct $name$(<$font_generic: Borrow<Font> = DefaultFont>)*( HWND $(, $font_generic)* );
         unsafe impl$(<$font_generic: Borrow<Font>>)* WindowBase for $name$(<$font_generic>)* {
             #[inline]
-            unsafe fn hwnd(&self) -> HWND {self.0}
+            fn hwnd(&self) -> HWND {self.0}
         }
         unsafe impl$(<$font_generic: Borrow<Font>>)* WindowMut for $name$(<$font_generic>)* {}
         unsafe impl$(<$font_generic: Borrow<Font>>)* WindowOwned for $name$(<$font_generic>)* {}
@@ -343,7 +343,7 @@ pub trait Subclass<W: WindowBase> {
 }
 
 pub unsafe trait WindowBase: Sized {
-    unsafe fn hwnd(&self) -> HWND;
+    fn hwnd(&self) -> HWND;
 
     fn window_ref(&self) -> WindowRef {
         unsafe{ WindowRef::from_raw(self.hwnd()) }

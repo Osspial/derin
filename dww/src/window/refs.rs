@@ -35,7 +35,7 @@ impl ParentRef {
 }
 unsafe impl WindowBase for ParentRef {
     #[inline]
-    unsafe fn hwnd(&self) -> HWND {
+    fn hwnd(&self) -> HWND {
         self.0
     }
 }
@@ -49,7 +49,7 @@ impl WindowRef {
     }
 }
 unsafe impl WindowBase for WindowRef {
-    unsafe fn hwnd(&self) -> HWND {
+    fn hwnd(&self) -> HWND {
         self.0
     }
 }
@@ -61,7 +61,7 @@ impl<'a> WindowRefMut<'a> {
     }
 }
 unsafe impl<'a> WindowBase for WindowRefMut<'a> {
-    unsafe fn hwnd(&self) -> HWND {
+    fn hwnd(&self) -> HWND {
         self.0
     }
 }
@@ -94,7 +94,7 @@ impl<'a, U: UserMsg> UnsafeSubclassRef<'a, U> {
     }
 }
 unsafe impl<'a, U: UserMsg> WindowBase for UnsafeSubclassRef<'a, U> {
-    unsafe fn hwnd(&self) -> HWND {
+    fn hwnd(&self) -> HWND {
         self.0
     }
 }
@@ -169,7 +169,7 @@ impl<'a, W: WindowBase, S: Subclass<W>> ProcWindowRef<'a, W, S> {
 }
 unsafe impl<'a, W: WindowBase, S: Subclass<W>> WindowBase for ProcWindowRef<'a, W, S> {
     #[inline]
-    unsafe fn hwnd(&self) -> HWND {
+    fn hwnd(&self) -> HWND {
         self.hwnd
     }
 }

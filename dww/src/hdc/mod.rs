@@ -29,8 +29,8 @@ thread_local!{
 }
 
 pub unsafe trait DeviceContext {
-    unsafe fn hdc(&self) -> HDC;
-    unsafe fn hwnd(&self) -> HWND;
+    fn hdc(&self) -> HDC;
+    fn hwnd(&self) -> HWND;
 
     fn with_font<F, R>(&self, font: &Font, run: F) -> R
             where F: FnOnce(&Self) -> R
@@ -411,11 +411,11 @@ impl PaintContext {
 }
 
 unsafe impl DeviceContext for PaintContext {
-    unsafe fn hdc(&self) -> HDC {
+    fn hdc(&self) -> HDC {
         self.0.hdc
     }
 
-    unsafe fn hwnd(&self) -> HWND {
+    fn hwnd(&self) -> HWND {
         self.1
     }
 }
@@ -441,11 +441,11 @@ impl RetrievedContext {
 }
 
 unsafe impl DeviceContext for RetrievedContext {
-    unsafe fn hdc(&self) -> HDC {
+    fn hdc(&self) -> HDC {
         self.0
     }
 
-    unsafe fn hwnd(&self) -> HWND {
+    fn hwnd(&self) -> HWND {
         self.1
     }
 }
@@ -459,11 +459,11 @@ impl Drop for RetrievedContext {
 }
 
 unsafe impl DeviceContext for BufferedContext {
-    unsafe fn hdc(&self) -> HDC {
+    fn hdc(&self) -> HDC {
         self.0
     }
 
-    unsafe fn hwnd(&self) -> HWND {
+    fn hwnd(&self) -> HWND {
         self.1
     }
 }
