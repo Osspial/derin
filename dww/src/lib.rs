@@ -25,28 +25,6 @@ use winapi::*;
 
 use std::mem;
 
-pub fn init() {
-    // It's true that this static mut could cause a memory race. However, the only consequence of
-    // that memory race is that this function runs more than once, which won't have any bad impacts
-    // other than perhaps a slight increase in memory usage.
-    static mut INITIALIZED: bool = false;
-
-    unsafe {
-        if !INITIALIZED {
-            // Load the common controls dll
-            {
-                let init_ctrls = INITCOMMONCONTROLSEX {
-                    dwSize: mem::size_of::<INITCOMMONCONTROLSEX>() as DWORD,
-                    dwICC: ICC_PROGRESS_CLASS
-                };
-                comctl32::InitCommonControlsEx(&init_ctrls);
-            }
-
-            INITIALIZED = true;
-        }
-    }
-}
-
 fn non_client_metrics() -> NONCLIENTMETRICSW {
     unsafe {
         let mut non_client_metrics = NONCLIENTMETRICSW {

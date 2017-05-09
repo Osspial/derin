@@ -104,6 +104,28 @@ use std::{ptr, mem};
 use std::borrow::Borrow;
 use std::io::{Result, Error};
 
+fn init_common_controls() {
+    // It's true that this static mut could cause a memory race. However, the only consequence of
+    // that memory race is that this function runs more than once, which won't have any bad impacts
+    // other than perhaps a slight increase in memory usage.
+    static mut INITIALIZED: bool = false;
+
+    unsafe {
+        if !INITIALIZED {
+            // Load the common controls dll
+            {
+                let init_ctrls = INITCOMMONCONTROLSEX {
+                    dwSize: mem::size_of::<INITCOMMONCONTROLSEX>() as DWORD,
+                    dwICC: ICC_PROGRESS_CLASS
+                };
+                comctl32::InitCommonControlsEx(&init_ctrls);
+            }
+
+            INITIALIZED = true;
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum TickPosition {
     BottomRight,
@@ -195,6 +217,7 @@ impl<'a> WindowBuilder<'a> {
     }
 
     pub fn build_progress_bar<P: ParentWindow>(self, parent: &P) -> ProgressBarBase {
+        init_common_controls();
         let window_handle = self.build(PBS_SMOOTHREVERSE, 0, Some(parent.hwnd()), &PROGRESS_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         ProgressBarBase(window_handle)

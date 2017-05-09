@@ -7,7 +7,6 @@ use ui::widgets::{MouseEvent, RangeEvent};
 use ui::widgets::content::{SliderStatus, ProgbarStatus, LabelGroupContents,  Completion, Orientation, TickPosition as SliderTickPosition};
 use ui::hints::{GridSize, TrackHints};
 
-use dww;
 use dww::window::*;
 use dww::window::refs::*;
 use dww::window::wrappers::*;
@@ -122,8 +121,6 @@ macro_rules! subclass_node_data {
             type ContentData = $wd_ty;
 
             fn from_node_data($eam_ident: $eam_ty, $wd_ident: $wd_ty) -> $name<$($inner_ty),*> {
-                dww::init();
-
                 $name {
                     subclass: $from_node_data,
                     needs_widget_update: true
