@@ -7,10 +7,11 @@ use ui::widgets::{MouseEvent, RangeEvent};
 use ui::widgets::content::{SliderStatus, ProgbarStatus, LabelGroupContents,  Completion, Orientation, TickPosition as SliderTickPosition};
 use ui::hints::{GridSize, TrackHints};
 
-use dww::{self, Font};
+use dww;
 use dww::window::*;
 use dww::window::refs::*;
 use dww::window::wrappers::*;
+use dww::gdi::text::Font;
 use dle::GridEngine;
 use dct::geometry::OffsetRect;
 use dct::hints::{Tr, SizeBounds};

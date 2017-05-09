@@ -1,7 +1,9 @@
-use {Font, user32, comctl32, msg};
+use {user32, comctl32, msg};
 use window::*;
 use window::refs::*;
 use winapi::*;
+
+use gdi::text::Font;
 
 use std::mem;
 use std::borrow::Borrow;

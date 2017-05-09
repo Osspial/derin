@@ -8,7 +8,7 @@ use dct::geometry::*;
 use dct::buttons::*;
 use dct::hints::SizeBounds;
 use ucs2::Ucs2Str;
-use hdc::PaintInit;
+use gdi::PaintInit;
 
 #[derive(Debug)]
 pub enum Msg<'a, U: UserMsg> {

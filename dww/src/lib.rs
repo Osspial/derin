@@ -16,99 +16,14 @@ extern crate dct;
 extern crate dww_macros;
 
 pub mod msg;
-pub mod hdc;
+pub mod gdi;
 pub mod ucs2;
 pub mod window;
 mod vkey;
 
-use dct::geometry::{Rect, OriginRect};
-
 use winapi::*;
 
-use std::{ptr, mem};
-use std::marker::{Send, Sync};
-use std::path::Path;
-use std::io::{Result, Error};
-use std::borrow::Borrow;
-
-use ucs2::{WithString, UCS2_CONVERTER};
-
-pub struct Icon( HICON );
-
-impl Icon {
-    pub fn open<P: AsRef<Path>>(path: P, size: OriginRect) -> Result<Icon> {
-        UCS2_CONVERTER.with_string(path.as_ref(), |path| {
-            let icon = unsafe{ user32::LoadImageW(
-                ptr::null_mut(), path.as_ptr(), IMAGE_ICON, size.width() as c_int,
-                size.height() as c_int, LR_LOADFROMFILE
-            )};
-
-            if icon != ptr::null_mut() {
-                Ok(Icon(icon as HICON))
-            } else {
-                Err(Error::last_os_error())
-            }
-        })
-    }
-}
-
-impl Drop for Icon {
-    fn drop(&mut self) {
-        unsafe{ user32::DestroyIcon(self.0) };
-    }
-}
-
-pub struct Font( HFONT );
-
-impl Font {
-    pub fn def_sys_font() -> Font {
-        Font(ptr::null_mut())
-    }
-
-    pub fn sys_caption_font() -> Font {
-        let non_client_metrics = non_client_metrics();
-        Font(unsafe{ gdi32::CreateFontIndirectW(&non_client_metrics.lfCaptionFont) })
-    }
-
-    pub fn sys_small_caption_font() -> Font {
-        let non_client_metrics = non_client_metrics();
-        Font(unsafe{ gdi32::CreateFontIndirectW(&non_client_metrics.lfSmCaptionFont) })
-    }
-
-    pub fn sys_menu_font() -> Font {
-        let non_client_metrics = non_client_metrics();
-        Font(unsafe{ gdi32::CreateFontIndirectW(&non_client_metrics.lfMenuFont) })
-    }
-
-    pub fn sys_status_font() -> Font {
-        let non_client_metrics = non_client_metrics();
-        Font(unsafe{ gdi32::CreateFontIndirectW(&non_client_metrics.lfStatusFont) })
-    }
-
-    pub fn sys_message_font() -> Font {
-        let non_client_metrics = non_client_metrics();
-        Font(unsafe{ gdi32::CreateFontIndirectW(&non_client_metrics.lfMessageFont) })
-    }
-}
-
-unsafe impl Send for Font {}
-unsafe impl Sync for Font {}
-
-impl Drop for Font {
-    fn drop(&mut self) {
-        unsafe{ gdi32::DeleteObject(self.0 as HGDIOBJ) };
-    }
-}
-
-pub struct DefaultFont;
-impl Borrow<Font> for DefaultFont {
-    fn borrow(&self) -> &Font {
-        static DEFAULT_FONT: usize = 0;
-        unsafe{ mem::transmute(&DEFAULT_FONT) }
-    }
-}
-
-
+use std::mem;
 
 pub fn init() {
     // It's true that this static mut could cause a memory race. However, the only consequence of

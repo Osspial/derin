@@ -2,9 +2,9 @@ use ui::{Parent, Node, ChildId, NodeProcessorInit, NodeProcessorGrid, NodeProces
 use ui::widgets::{MouseEvent, RangeEvent};
 use ui::widgets::content::{SliderStatus, ProgbarStatus, LabelGroupContents};
 
-use dww::Font;
 use dww::window::*;
 use dww::window::refs::{ProcWindowRef, UnsafeSubclassRef};
+use dww::gdi::text::Font;
 use dww::msg::Msg;
 use dww::msg::notify::{Notification, NotifyType, ThumbReason};
 use dle::{GridContainer, GridEngine, GridConstraintSolver, SolveError};

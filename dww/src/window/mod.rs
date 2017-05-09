@@ -88,8 +88,10 @@ use self::wrappers::*;
 use self::refs::*;
 
 use winapi::*;
-use {comctl32, user32, kernel32, vkey, Icon, Font, DefaultFont};
-use hdc::{DeviceContext, RetrievedContext};
+use {comctl32, user32, kernel32, vkey};
+use gdi::{DeviceContext, RetrievedContext};
+use gdi::img::Icon;
+use gdi::text::{Font, DefaultFont, TextFormat};
 use msg::{self, Msg};
 use ucs2::{ucs2_str, ucs2_str_from_ptr, Ucs2Str, Ucs2String, WithString, UCS2_CONVERTER};
 use msg::user::UserMsg;
@@ -683,7 +685,7 @@ pub unsafe trait WindowFont<F: Borrow<Font>>: WindowBase {
     unsafe fn font_mut(&mut self) -> &mut F;
     fn set_font(&mut self, font: F) {
         unsafe{
-            user32::SendMessageW(self.hwnd(), WM_SETFONT, font.borrow().0 as WPARAM, TRUE as LPARAM);
+            user32::SendMessageW(self.hwnd(), WM_SETFONT, font.borrow().hfont() as WPARAM, TRUE as LPARAM);
             *self.font_mut() = font;
         }
     }
@@ -751,8 +753,8 @@ pub unsafe trait IconWindow: WindowOwned {
 
     fn set_icon(&mut self, icon: Self::I);
     unsafe fn set_window_icon(&self, icon: &WindowIcon) {
-        let big_icon = icon.big.as_ref().map(|icon| icon.0).unwrap_or(ptr::null_mut());
-        let small_icon = icon.small.as_ref().map(|icon| icon.0).unwrap_or(ptr::null_mut());
+        let big_icon = icon.big.as_ref().map(|icon| icon.hicon()).unwrap_or(ptr::null_mut());
+        let small_icon = icon.small.as_ref().map(|icon| icon.hicon()).unwrap_or(ptr::null_mut());
 
         user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_BIG as WPARAM, big_icon as LPARAM);
         user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_SMALL as WPARAM, small_icon as LPARAM);
@@ -809,7 +811,6 @@ pub unsafe trait TextLabelWindow: WindowBase {
     }
 
     unsafe fn min_unclipped_rect_ucs2(&self, text: &Ucs2Str) -> OriginRect {
-        use hdc::TextFormat;
         self.get_dc().expect("Could not get DC").calc_text_rect_ucs2(text, TextFormat::default())
     }
 }
@@ -1120,7 +1121,7 @@ unsafe extern "system" fn subclass_proc<W: WindowBase, S: Subclass<W>>
                 ret
             }
             WM_PAINT => {
-                use hdc::PaintInit;
+                use gdi::PaintInit;
                 run_subclass_proc!(Msg::Paint(PaintInit::new(hwnd)))
             }
             WM_ERASEBKGND => {
