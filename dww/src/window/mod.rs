@@ -92,7 +92,6 @@ use {comctl32, user32, kernel32, vkey};
 use gdi::{DeviceContext, RetrievedContext};
 use gdi::img::Icon;
 use gdi::text::{Font, DefaultFont, TextFormat};
-use msg::{self, Msg};
 use ucs2::{ucs2_str, ucs2_str_from_ptr, Ucs2Str, Ucs2String, WithString, UCS2_CONVERTER};
 use msg::user::UserMsg;
 
@@ -147,25 +146,32 @@ pub struct WindowIcon {
 
 #[derive(Clone, Copy, Debug)]
 pub struct WindowBuilder<'a> {
-    pub pos: Option<(i32, i32)>,
+    pub pos: Option<Point>,
     pub size: Option<OriginRect>,
-    pub window_text: &'a str,
+    pub text: &'a str,
     pub show_window: bool
 }
 
 impl<'a> WindowBuilder<'a> {
-    pub fn pos(mut self, pos: Option<(i32, i32)>) -> WindowBuilder<'a> {
-        self.pos = pos;
+    pub fn rect(mut self, rect: OffsetRect) -> WindowBuilder<'a> {
+        self.pos = Some(rect.topleft);
+        self.size = Some(rect.into());
+
         self
     }
 
-    pub fn size(mut self, size: Option<OriginRect>) -> WindowBuilder<'a> {
-        self.size = size;
+    pub fn pos(mut self, pos: Point) -> WindowBuilder<'a> {
+        self.pos = Some(pos);
         self
     }
 
-    pub fn window_text(mut self, window_text: &'a str) -> WindowBuilder<'a> {
-        self.window_text = window_text;
+    pub fn size(mut self, size: OriginRect) -> WindowBuilder<'a> {
+        self.size = Some(size);
+        self
+    }
+
+    pub fn text(mut self, text: &'a str) -> WindowBuilder<'a> {
+        self.text = text;
         self
     }
 
@@ -230,8 +236,8 @@ impl<'a> WindowBuilder<'a> {
     }
 
     fn build(self, style: DWORD, style_ex: DWORD, parent: Option<HWND>, class: &Ucs2Str) -> HWND {
-        UCS2_CONVERTER.with_string(self.window_text, |window_text| unsafe {
-            let pos = self.pos.unwrap_or((CW_USEDEFAULT, CW_USEDEFAULT));
+        UCS2_CONVERTER.with_string(self.text, |text| unsafe {
+            let pos = self.pos.unwrap_or(Point::new(CW_USEDEFAULT, CW_USEDEFAULT));
             let size = match self.size {
                 Some(s) => {
                     let mut size_rect = RECT {
@@ -252,9 +258,9 @@ impl<'a> WindowBuilder<'a> {
             let window_handle = user32::CreateWindowExW(
                 style_ex,
                 class.as_ptr(),
-                window_text.as_ptr(),
+                text.as_ptr(),
                 style,
-                pos.0, pos.1,
+                pos.x, pos.y,
                 size.0, size.1,
                 parent.unwrap_or(ptr::null_mut()),
                 ptr::null_mut(),
@@ -279,7 +285,7 @@ impl<'a> Default for WindowBuilder<'a> {
         WindowBuilder {
             pos: None,
             size: None,
-            window_text: "",
+            text: "",
             show_window: true
         }
     }
@@ -364,7 +370,25 @@ lazy_static!{
 pub trait Subclass<W: WindowBase> {
     type UserMsg: UserMsg;
 
-    fn subclass_proc(window: &mut ProcWindowRef<W, Self>, msg: Msg<Self::UserMsg>) -> i64;
+    fn subclass_proc(window: ProcWindowRef<W, Self>) -> i64;
+}
+
+impl<W: WindowBase> Subclass<W> for () {
+    type UserMsg = !;
+    fn subclass_proc(mut window: ProcWindowRef<W, ()>) -> i64 {
+        window.default_window_proc()
+    }
+}
+
+impl<W, F> Subclass<W> for F
+        where W: WindowBase,
+              F: for<'a> FnMut(ProcWindowRef<W, ()>) -> i64
+{
+    type UserMsg = !;
+    fn subclass_proc(window: ProcWindowRef<W, F>) -> i64 {
+        let (func, data) = window.split_subclass_data();
+        func(data)
+    }
 }
 
 pub unsafe trait WindowBase: Sized {
@@ -1053,164 +1077,7 @@ unsafe extern "system" fn subclass_proc<W: WindowBase, S: Subclass<W>>
                                        (hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM,
                                         _: UINT_PTR, subclass_data: DWORD_PTR) -> LRESULT
 {
-    /// Partially applied function to run S::subclass_proc with a message. This is a macro because
-    /// using a closure resulted in lifetime errors.
-    macro_rules! run_subclass_proc {
-        ($message:expr) => {{S::subclass_proc(&mut ProcWindowRef::new(hwnd, msg, wparam, lparam, &mut *(subclass_data as *mut S)), $message) as LRESULT}}
-    }
-
-    if WM_APP <= msg && msg <= 0xBFFF {
-        let discriminant = (msg - WM_APP) as u16;
-        let bytes: [u8; 16] = mem::transmute((wparam, lparam));
-        run_subclass_proc!(Msg::User(msg::user::decode(discriminant, bytes)))
-    } else {
-        match msg {
-            WM_CLOSE => run_subclass_proc!(Msg::Close),
-            WM_SIZE  => run_subclass_proc!(Msg::Size(OriginRect::new(loword(lparam) as Px, hiword(lparam) as Px))),
-            WM_LBUTTONDOWN  |
-            WM_MBUTTONDOWN  |
-            WM_RBUTTONDOWN  |
-            WM_XBUTTONDOWN => {
-                let button = match msg {
-                    WM_LBUTTONDOWN => MouseButton::Left,
-                    WM_MBUTTONDOWN => MouseButton::Middle,
-                    WM_RBUTTONDOWN => MouseButton::Right,
-                    WM_XBUTTONDOWN => MouseButton::Other(hiword(wparam as LPARAM) as u8),
-                    _ => unreachable!()
-                };
-
-                run_subclass_proc!(Msg::MouseDown(button, Point::new(loword(lparam) as Px, hiword(lparam) as Px)))
-            }
-            WM_LBUTTONDBLCLK  |
-            WM_MBUTTONDBLCLK  |
-            WM_RBUTTONDBLCLK => {
-                let button = match msg {
-                    WM_LBUTTONDBLCLK => MouseButton::Left,
-                    WM_MBUTTONDBLCLK => MouseButton::Middle,
-                    WM_RBUTTONDBLCLK => MouseButton::Right,
-                    WM_XBUTTONDBLCLK => MouseButton::Other(hiword(wparam as LPARAM) as u8),
-                    _ => unreachable!()
-                };
-
-                run_subclass_proc!(Msg::MouseDoubleDown(button, Point::new(loword(lparam) as Px, hiword(lparam) as Px)))
-            }
-            WM_LBUTTONUP  |
-            WM_MBUTTONUP  |
-            WM_RBUTTONUP => {
-                let button = match msg {
-                    WM_LBUTTONUP => MouseButton::Left,
-                    WM_MBUTTONUP => MouseButton::Middle,
-                    WM_RBUTTONUP => MouseButton::Right,
-                    WM_XBUTTONUP => MouseButton::Other(hiword(wparam as LPARAM) as u8),
-                    _ => unreachable!()
-                };
-
-                run_subclass_proc!(Msg::MouseUp(button, Point::new(loword(lparam) as Px, hiword(lparam) as Px)))
-            }
-            WM_KEYDOWN => {
-                if let Some(key) = vkey::key_from_code(wparam) {
-                    let repeated_press = (lparam & (1 << 30)) != 0;
-                    run_subclass_proc!(Msg::KeyDown(key, repeated_press))
-                } else {
-                    1
-                }
-            }
-            WM_KEYUP => {
-                if let Some(key) = vkey::key_from_code(wparam) {
-                    let repeated_press = (lparam & (1 << 30)) != 0;
-                    run_subclass_proc!(Msg::KeyUp(key, repeated_press))
-                } else {
-                    1
-                }
-            }
-            WM_SETTEXT => {
-                run_subclass_proc!(Msg::SetText(ucs2_str_from_ptr(lparam as *const WCHAR)))
-            }
-            WM_GETMINMAXINFO => {
-                let mut mmi = &mut*(lparam as *mut MINMAXINFO);
-                let mut size_bounds = SizeBounds::default();
-
-                let ret = run_subclass_proc!(Msg::GetSizeBounds(&mut size_bounds));
-
-                let window = WindowRef::from_raw(hwnd);
-                size_bounds.min = window.adjust_window_rect(size_bounds.min);
-                size_bounds.max = window.adjust_window_rect(size_bounds.max);
-
-                mmi.ptMinTrackSize.x = size_bounds.min.width as LONG;
-                mmi.ptMinTrackSize.y = size_bounds.min.height as LONG;
-                mmi.ptMaxTrackSize.x = size_bounds.max.width as LONG;
-                mmi.ptMaxTrackSize.y = size_bounds.max.height as LONG;
-
-                ret
-            }
-            WM_PAINT => {
-                use gdi::PaintInit;
-                run_subclass_proc!(Msg::Paint(PaintInit::new(hwnd)))
-            }
-            WM_ERASEBKGND => {
-                run_subclass_proc!(Msg::EraseBackground)
-            }
-            WM_NOTIFY => {
-                use msg::notify::*;
-
-                let notify_info = &*(lparam as *const NMHDR);
-                let notify_type = match notify_info.code {
-                    NM_CHAR => {
-                        use std::char;
-                        let char_info = &*(lparam as *const NMCHAR);
-                        char::from_u32(char_info.ch).map(|ch| NotifyType::Char(ch))
-                    },
-                    NM_FONTCHANGED => Some(NotifyType::FontChanged),
-                    NM_HOVER => Some(NotifyType::Hover),
-                    NM_KEYDOWN => {
-                        let key_info = &*(lparam as *const NMKEY);
-                        let repeated_press = (key_info.uFlags & (1 << 30)) != 0;
-                        vkey::key_from_code(key_info.nVKey as u64).map(|key| NotifyType::KeyDown(key, repeated_press))
-                    },
-                    NM_KILLFOCUS => Some(NotifyType::KillFocus),
-                    NM_LDOWN => Some(NotifyType::LDown),
-                    NM_OUTOFMEMORY => Some(NotifyType::OutOfMemory),
-                    NM_RELEASEDCAPTURE => Some(NotifyType::ReleasedCapture),
-                    NM_RETURN => Some(NotifyType::Return),
-                    NM_SETFOCUS => Some(NotifyType::SetFocus),
-                    NM_THEMECHANGED => Some(NotifyType::ThemeChanged),
-                    NM_TOOLTIPSCREATED => {
-                        let tooltip_info = &*(lparam as *const NMTOOLTIPSCREATED);
-                        Some(NotifyType::TooltipCreated(WindowRef::from_raw(tooltip_info.hwndToolTips)))
-                    },
-                    TRBN_THUMBPOSCHANGING => {
-                        let thumb_pos_info = &*(lparam as *const NMTRBTHUMBPOSCHANGING);
-                        let reason = match thumb_pos_info.nReason as u64 {
-                            TB_LINEDOWN      => ThumbReason::LineDown,
-                            TB_LINEUP        => ThumbReason::LineUp,
-                            TB_PAGEDOWN      => ThumbReason::PageDown,
-                            TB_PAGEUP        => ThumbReason::PageUp,
-                            TB_ENDTRACK      => ThumbReason::EndTrack,
-                            TB_THUMBPOSITION => ThumbReason::ThumbPosition,
-                            TB_THUMBTRACK    => ThumbReason::ThumbTrack,
-                            TB_BOTTOM        => ThumbReason::Bottom,
-                            TB_TOP           => ThumbReason::Top,
-                            _                => return comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
-                        };
-                        Some(NotifyType::TrackbarThumbPosChanging(thumb_pos_info.dwPos, reason))
-                    },
-                    _ => None
-                };
-
-                if let Some(nty) = notify_type {
-                    let notification = Notification {
-                        source: WindowRef::from_raw(hwnd),
-                        notify_type: nty
-                    };
-                    run_subclass_proc!(Msg::Notify(notification))
-                } else {
-                    comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
-                }
-            }
-
-            _ => comctl32::DefSubclassProc(hwnd, msg, wparam, lparam)
-        }
-    }
+    S::subclass_proc(ProcWindowRef::new(hwnd, msg, wparam, lparam, &mut *(subclass_data as *mut S))) as LRESULT
 }
 
 #[inline(always)]

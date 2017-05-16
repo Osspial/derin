@@ -34,7 +34,7 @@ impl<N> Window<N>
         let overlapped = WindowBuilder {
             pos: None,
             size: config.size,
-            window_text: &config.name,
+            text: &config.name,
             show_window: config.show_window
         }.build_blank().as_overlapped(true);
         overlapped.size_border(config.resizable);

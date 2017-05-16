@@ -53,28 +53,29 @@ impl<W, B, S> Subclass<W> for TextButtonSubclass<B, S>
               S: AsRef<str>
 {
     type UserMsg = DerinMsg;
-    fn subclass_proc(window: &mut ProcWindowRef<W, Self>, mut msg: Msg<DerinMsg>) -> i64 {
-        let ret = window.default_window_proc(&mut msg);
+    fn subclass_proc(mut window: ProcWindowRef<W, Self>) -> i64 {
+        let ret = window.default_window_proc();
+        if let Some((window, msg)) = window.msg() {
+            match msg {
+                Msg::MouseDown(_, _) => window.subclass_data().button_state = ButtonState::Pressed,
+                Msg::MouseDoubleDown(_, _) => window.subclass_data().button_state = ButtonState::DoublePressed,
+                Msg::MouseUp(button, _) => {
+                    let action_opt = match window.subclass_data().button_state {
+                        ButtonState::Pressed       => window.subclass_data().button_action_map.on_event(MouseEvent::Clicked(button)),
+                        ButtonState::DoublePressed => window.subclass_data().button_action_map.on_event(MouseEvent::DoubleClicked(button)),
+                        ButtonState::Released      => None
+                    };
+                    if let Some(action) = action_opt {
+                        unsafe{ window.subclass_data().action_fn.as_ref().expect("No Action Function").borrow_mut().call_fn(action) };
+                    }
 
-        match msg {
-            Msg::MouseDown(_, _) => window.subclass_data().button_state = ButtonState::Pressed,
-            Msg::MouseDoubleDown(_, _) => window.subclass_data().button_state = ButtonState::DoublePressed,
-            Msg::MouseUp(button, _) => {
-                let action_opt = match window.subclass_data().button_state {
-                    ButtonState::Pressed       => window.subclass_data().button_action_map.on_event(MouseEvent::Clicked(button)),
-                    ButtonState::DoublePressed => window.subclass_data().button_action_map.on_event(MouseEvent::DoubleClicked(button)),
-                    ButtonState::Released      => None
-                };
-                if let Some(action) = action_opt {
-                    unsafe{ window.subclass_data().action_fn.as_ref().expect("No Action Function").borrow_mut().call_fn(action) };
-                }
-
-                window.subclass_data().button_state = ButtonState::Released;
-            },
-            Msg::SetText(_) => window.subclass_data().abs_size_bounds.min = window.get_ideal_size(),
-            Msg::GetSizeBounds(size_bounds) => size_bounds.min = window.get_ideal_size(),
-            Msg::User(DerinMsg::SetRect(rect)) => window.set_rect(rect),
-            _ => ()
+                    window.subclass_data().button_state = ButtonState::Released;
+                },
+                Msg::SetText(_) => window.subclass_data().abs_size_bounds.min = window.get_ideal_size(),
+                Msg::GetSizeBounds(size_bounds) => size_bounds.min = window.get_ideal_size(),
+                Msg::User(DerinMsg::SetRect(rect)) => window.set_rect(rect),
+                _ => ()
+            }
         }
         ret
     }
@@ -101,7 +102,7 @@ impl<W, I> Subclass<W> for GroupSubclass<I>
               I: Parent<!>
 {
     type UserMsg = DerinMsg;
-    default fn subclass_proc(_: &mut ProcWindowRef<W, Self>, _: Msg<DerinMsg>) -> i64 {
+    default fn subclass_proc(_: ProcWindowRef<W, Self>) -> i64 {
         panic!("Should never be called; just here to hide GridWidgetProcessor type from public exposure")
     }
 }
@@ -110,28 +111,32 @@ impl<W, I> Subclass<W> for GroupSubclass<I>
         where W: ParentWindow + WindowMut,
       for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>>
 {
-    fn subclass_proc(window: &mut ProcWindowRef<W, Self>, msg: Msg<DerinMsg>) -> i64 {
-        match msg {
-            Msg::GetSizeBounds(size_bounds) => {
-                *size_bounds = window.subclass_data().layout_engine.actual_size_bounds();
-                0
-            },
-            Msg::User(DerinMsg::SetRect(rect)) => {
-                {
-                    let GroupSubclass {
-                        ref mut content_data,
-                        ref mut layout_engine,
-                        ..
-                    } = *window.subclass_data();
+    fn subclass_proc(mut window: ProcWindowRef<W, Self>) -> i64 {
+        if let Some((window, msg)) = window.msg() {
+            match msg {
+                Msg::GetSizeBounds(size_bounds) => {
+                    *size_bounds = window.subclass_data().layout_engine.actual_size_bounds();
+                    return 0;
+                },
+                Msg::User(DerinMsg::SetRect(rect)) => {
+                    {
+                        let GroupSubclass {
+                            ref mut content_data,
+                            ref mut layout_engine,
+                            ..
+                        } = *window.subclass_data();
 
-                    layout_engine.desired_size = OriginRect::from(rect);
-                    layout_engine.update_engine(&mut ParentContainer(content_data)).ok();
-                }
-                window.set_rect(rect);
-                0
-            },
-            mut msg => window.default_window_proc(&mut msg)
+                        layout_engine.desired_size = OriginRect::from(rect);
+                        layout_engine.update_engine(&mut ParentContainer(content_data)).ok();
+                    }
+                    window.set_rect(rect);
+                    return 0;
+                },
+                _ => ()
+            }
         }
+
+        window.default_window_proc()
     }
 }
 
@@ -161,7 +166,7 @@ impl<W, S, I> Subclass<W> for LabelGroupSubclass<S, I>
               I: Parent<!>
 {
     type UserMsg = DerinMsg;
-    default fn subclass_proc(_: &mut ProcWindowRef<W, Self>, _: Msg<DerinMsg>) -> i64 {
+    default fn subclass_proc(_: ProcWindowRef<W, Self>) -> i64 {
         panic!("Should never be called; just here to hide GridWidgetProcessor type from public exposure")
     }
 }
@@ -171,29 +176,33 @@ impl<W, S, I> Subclass<W> for LabelGroupSubclass<S, I>
               S: AsRef<str>,
       for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>>
 {
-    fn subclass_proc(window: &mut ProcWindowRef<W, Self>, msg: Msg<DerinMsg>) -> i64 {
-        match msg {
-            Msg::GetSizeBounds(size_bounds) => {
-                *size_bounds = window.subclass_data().layout_engine.actual_size_bounds();
-                0
-            },
-            Msg::User(DerinMsg::SetRect(rect)) => {
-                {
-                    let LabelGroupSubclass {
-                        contents: LabelGroupContents {ref mut children, ..},
-                        ref mut groupbox_window,
-                        ref mut layout_engine
-                    } = *window.subclass_data();
+    fn subclass_proc(mut window: ProcWindowRef<W, Self>) -> i64 {
+        if let Some((window, msg)) = window.msg() {
+            match msg {
+                Msg::GetSizeBounds(size_bounds) => {
+                    *size_bounds = window.subclass_data().layout_engine.actual_size_bounds();
+                    return 0;
+                },
+                Msg::User(DerinMsg::SetRect(rect)) => {
+                    {
+                        let LabelGroupSubclass {
+                            contents: LabelGroupContents {ref mut children, ..},
+                            ref mut groupbox_window,
+                            ref mut layout_engine
+                        } = *window.subclass_data();
 
-                    layout_engine.desired_size = OriginRect::from(rect);
-                    layout_engine.update_engine(&mut ParentContainer(children)).ok();
-                    groupbox_window.set_rect(OriginRect::from(rect).into());
-                }
-                window.set_rect(rect);
-                0
-            },
-            mut msg => window.default_window_proc(&mut msg)
+                        layout_engine.desired_size = OriginRect::from(rect);
+                        layout_engine.update_engine(&mut ParentContainer(children)).ok();
+                        groupbox_window.set_rect(OriginRect::from(rect).into());
+                    }
+                    window.set_rect(rect);
+                    return 0;
+                },
+                _ => ()
+            }
         }
+
+        window.default_window_proc()
     }
 }
 
@@ -218,14 +227,16 @@ impl<W, S> Subclass<W> for TextLabelSubclass<S>
               S: AsRef<str>
 {
     type UserMsg = DerinMsg;
-    fn subclass_proc(window: &mut ProcWindowRef<W, Self>, mut msg: Msg<DerinMsg>) -> i64 {
-        let ret = window.default_window_proc(&mut msg);
-        match msg {
-            Msg::SetText(new_text) =>
-                window.subclass_data().abs_size_bounds.min = unsafe{ window.min_unclipped_rect_ucs2(new_text) },
-            Msg::GetSizeBounds(size_bounds) => *size_bounds = window.subclass_data().abs_size_bounds,
-            Msg::User(DerinMsg::SetRect(rect)) => window.set_rect(rect),
-            _ => ()
+    fn subclass_proc(mut window: ProcWindowRef<W, Self>) -> i64 {
+        let ret = window.default_window_proc();
+        if let Some((window, msg)) = window.msg() {
+            match msg {
+                Msg::SetText(new_text) =>
+                    window.subclass_data().abs_size_bounds.min = unsafe{ window.min_unclipped_rect_ucs2(new_text) },
+                Msg::GetSizeBounds(size_bounds) => *size_bounds = window.subclass_data().abs_size_bounds,
+                Msg::User(DerinMsg::SetRect(rect)) => window.set_rect(rect),
+                _ => ()
+            }
         }
         ret
     }
@@ -248,11 +259,12 @@ impl<W> Subclass<W> for ProgbarSubclass
         where W: ProgressBarWindow + WindowMut
 {
     type UserMsg = DerinMsg;
-    fn subclass_proc(window: &mut ProcWindowRef<W, Self>, msg: Msg<DerinMsg>) -> i64 {
-        match msg {
-            Msg::User(DerinMsg::SetRect(rect)) => {window.set_rect(rect); 0},
-            mut msg => window.default_window_proc(&mut msg)
+    fn subclass_proc(mut window: ProcWindowRef<W, Self>) -> i64 {
+        if let Some((window, Msg::User(DerinMsg::SetRect(rect)))) = window.msg() {
+            window.set_rect(rect);
+            return 0;
         }
+        window.default_window_proc()
     }
 }
 
@@ -279,30 +291,34 @@ impl<W, C> Subclass<W> for SliderSubclass<C>
               C: EventActionMap<RangeEvent>
 {
     type UserMsg = DerinMsg;
-    fn subclass_proc(window: &mut ProcWindowRef<W, Self>, mut msg: Msg<DerinMsg>) -> i64 {
-        match msg {
-            Msg::Notify(Notification {
-                notify_type: NotifyType::TrackbarThumbPosChanging(new_pos, reason),
-                ..
-            }) => {
-                let event = match reason {
-                    ThumbReason::EndTrack       |
-                    ThumbReason::ThumbPosition => RangeEvent::Drop(new_pos),
-                    _                          => RangeEvent::Move(new_pos)
-                };
-                let action_opt = window.subclass_data().range_action_map.on_event(event);
-                if let Some(action) = action_opt {
-                    unsafe{ window.subclass_data().action_fn.as_ref().expect("No Action Function").borrow_mut().call_fn(action) };
-                }
-                0
-            },
-            Msg::User(DerinMsg::SetRect(rect)) => {
-                window.set_rect(rect);
-                window.subclass_data().slider_window.set_rect(OriginRect::from(rect).into());
-                0
-            },
-            _ => window.default_window_proc(&mut msg)
+    fn subclass_proc(mut window: ProcWindowRef<W, Self>) -> i64 {
+        if let Some((window, msg)) = window.msg() {
+            match msg {
+                Msg::Notify(Notification {
+                    notify_type: NotifyType::TrackbarThumbPosChanging(new_pos, reason),
+                    ..
+                }) => {
+                    let event = match reason {
+                        ThumbReason::EndTrack       |
+                        ThumbReason::ThumbPosition => RangeEvent::Drop(new_pos),
+                        _                          => RangeEvent::Move(new_pos)
+                    };
+                    let action_opt = window.subclass_data().range_action_map.on_event(event);
+                    if let Some(action) = action_opt {
+                        unsafe{ window.subclass_data().action_fn.as_ref().expect("No Action Function").borrow_mut().call_fn(action) };
+                    }
+                    return 0;
+                },
+                Msg::User(DerinMsg::SetRect(rect)) => {
+                    window.set_rect(rect);
+                    window.subclass_data().slider_window.set_rect(OriginRect::from(rect).into());
+                    return 0;
+                },
+                _ => ()
+            }
         }
+
+        window.default_window_proc()
     }
 }
 
@@ -311,15 +327,24 @@ pub struct ToplevelSubclass(pub UnsafeSubclassRef<'static, DerinMsg>);
 
 impl Subclass<ToplevelWindowBase> for ToplevelSubclass {
     type UserMsg = ();
-    fn subclass_proc(window: &mut ProcWindowRef<ToplevelWindowBase, Self>, mut msg: Msg<()>) -> i64 {
-        match msg {
-            Msg::GetSizeBounds(size_bounds) => {*size_bounds = window.subclass_data().0.size_bounds(); 0},
-            Msg::Size(rect) => {
-                window.subclass_data().0.post_user_msg(DerinMsg::SetRect(OffsetRect::from(rect)));
-                0
-            },
-            _ => window.default_window_proc(&mut msg)
+    fn subclass_proc(mut window: ProcWindowRef<ToplevelWindowBase, Self>) -> i64 {
+        if let Some((window, msg)) = window.msg() {
+            match msg {
+                Msg::GetSizeBounds(size_bounds) => {
+                    *size_bounds = window.subclass_data().0.size_bounds();
+                    size_bounds.min = window.adjust_window_rect(size_bounds.min);
+                    size_bounds.max = window.adjust_window_rect(size_bounds.max);
+                    return 0;
+                },
+                Msg::Size(rect) => {
+                    window.subclass_data().0.post_user_msg(DerinMsg::SetRect(OffsetRect::from(rect)));
+                    return 0;
+                },
+                _ => ()
+            }
         }
+
+        window.default_window_proc()
     }
 }
 

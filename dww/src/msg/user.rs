@@ -24,6 +24,13 @@ impl UserMsg for () {
             where C: UserMsgConverter<()> {}
 }
 
+impl UserMsg for ! {
+    fn discriminant(&self) -> u16 {*self}
+    unsafe fn empty(_: u16) -> ! {panic!("Cannot create user msg for !")}
+    fn register_conversion<C>(_: u16, _: &mut C)
+                where C: UserMsgConverter<!> {}
+}
+
 pub struct ParamLock<'a, T>( T, PhantomData<&'a ()> );
 impl<'a, T> ParamLock<'a, T> {
     pub fn read(self) -> T {

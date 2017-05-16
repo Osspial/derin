@@ -92,7 +92,9 @@ impl From<OriginRect> for OffsetRect {
     }
 }
 
+// This is #[repr(C)] because of stupid evil pointer hacks in dww.
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
 pub struct OriginRect {
     pub width: Px,
     pub height: Px

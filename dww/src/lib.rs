@@ -1,3 +1,5 @@
+#![feature(never_type)]
+
 extern crate winapi;
 #[macro_use]
 extern crate kernel32 as _kernel32;
