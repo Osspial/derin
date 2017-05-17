@@ -4,8 +4,9 @@ pub mod vs;
 
 use self::vs::{Part, ThemeClass};
 use self::text::*;
+use self::img::*;
 
-use dct::geometry::{Px, OriginRect, OffsetRect};
+use dct::geometry::{Px, Point, OriginRect, OffsetRect, Rect};
 
 use winapi::*;
 use user32;
@@ -14,14 +15,37 @@ use uxtheme;
 
 use std::{mem, ptr, char};
 use std::marker::PhantomData;
+use std::io::{Result, Error};
 
 use ucs2::{UCS2_CONVERTER, WithString, Ucs2Str};
 
+macro_rules! context_wrapper {
+    ($(pub struct $context_name:ident;)+) => {$(
+        #[derive(Debug)]
+        pub struct $context_name( HDC, HWND );
+
+        unsafe impl DeviceContext for $context_name {
+            fn hdc(&self) -> HDC {
+                self.0
+            }
+
+            fn hwnd(&self) -> HWND {
+                self.1
+            }
+        }
+    )*}
+}
+
 #[derive(Debug)]
 pub struct PaintInit<'a>( HWND, PhantomData<&'a ()> );
+
+context_wrapper!{
+    pub struct RetrievedContext;
+    pub struct BufferedContext;
+    pub struct MemoryContext;
+}
+#[derive(Debug)]
 pub struct PaintContext( PAINTSTRUCT, HWND );
-pub struct RetrievedContext( HDC, HWND );
-pub struct BufferedContext( HDC, HWND );
 
 thread_local!{
     /// See ThreadBufferedPaint docs for details
@@ -32,6 +56,7 @@ pub unsafe trait DeviceContext {
     fn hdc(&self) -> HDC;
     fn hwnd(&self) -> HWND;
 
+    #[inline]
     fn with_font<F, R>(&self, font: &Font, run: F) -> R
             where F: FnOnce(&Self) -> R
     {
@@ -43,12 +68,61 @@ pub unsafe trait DeviceContext {
         }
     }
 
+    #[inline]
+    fn with_bmp<F, R>(&self, bmp: &Bitmap, run: F) -> R
+            where F: FnOnce(&Self) -> R
+    {
+        unsafe {
+            let old_bmp = gdi32::SelectObject(self.hdc(), bmp.hbitmap() as HGDIOBJ);
+            if old_bmp == ptr::null_mut() {
+                panic!("Bitmaps can only be selected by one DC at a time");
+            }
+
+            let ret = run(self);
+            gdi32::SelectObject(self.hdc(), old_bmp);
+            ret
+        }
+    }
+
+    /// Create a `MemoryContext` that is compatible with this context.
+    #[inline]
+    fn create_compatible_dc(&self) -> MemoryContext {
+        let dc = unsafe{ gdi32::CreateCompatibleDC(self.hdc()) };
+        MemoryContext(dc, self.hwnd())
+    }
+
+    /// Blit the contents of the given rectangle in the source DC to the location `dest` in the
+    /// `self` dc.
+    #[inline]
+    fn bit_blt<C: DeviceContext>(&self, src_dc: &C, src_rect: OffsetRect, dest: Point) -> Result<()> {
+        let (width, height) = (src_rect.width(), src_rect.height());
+        let result = unsafe{ gdi32::BitBlt(
+            self.hdc(),
+            dest.x,
+            dest.y,
+            width,
+            height,
+            src_dc.hdc(),
+            src_rect.topleft.x,
+            src_rect.topleft.y,
+            SRCCOPY
+        ) };
+
+        if result == FALSE {
+            Ok(())
+        } else {
+            Err(Error::last_os_error())
+        }
+    }
+
+    #[inline]
     fn draw_text(&self, text: &str, rect: OffsetRect, text_format: TextFormat) -> OffsetRect {
         UCS2_CONVERTER.with_string(text, |text_ucs2| unsafe {
             self.draw_text_ucs2(text_ucs2, rect, text_format)
         })
     }
 
+    #[inline]
     fn calc_text_rect(&self, text: &str, text_format: TextFormat) -> OriginRect {
         UCS2_CONVERTER.with_string(text, |text_ucs2| unsafe {
             self.calc_text_rect_ucs2(text_ucs2, text_format)
@@ -410,6 +484,21 @@ impl PaintContext {
     }
 }
 
+impl RetrievedContext {
+    pub unsafe fn retrieve_dc(hwnd: HWND) -> Option<RetrievedContext> {
+        let hdc = user32::GetDC(hwnd);
+        if ptr::null_mut() != hdc {
+            Some(RetrievedContext(hdc, hwnd))
+        } else {
+            None
+        }
+    }
+
+    pub fn screen_dc() -> Option<RetrievedContext> {
+        unsafe{ RetrievedContext::retrieve_dc(ptr::null_mut()) }
+    }
+}
+
 unsafe impl DeviceContext for PaintContext {
     fn hdc(&self) -> HDC {
         self.0.hdc
@@ -428,28 +517,6 @@ impl Drop for PaintContext {
     }
 }
 
-
-impl RetrievedContext {
-    pub unsafe fn retrieve_dc(hwnd: HWND) -> Option<RetrievedContext> {
-        let hdc = user32::GetDC(hwnd);
-        if ptr::null_mut() != hdc {
-            Some(RetrievedContext(hdc, hwnd))
-        } else {
-            None
-        }
-    }
-}
-
-unsafe impl DeviceContext for RetrievedContext {
-    fn hdc(&self) -> HDC {
-        self.0
-    }
-
-    fn hwnd(&self) -> HWND {
-        self.1
-    }
-}
-
 impl Drop for RetrievedContext {
     fn drop(&mut self) {
         unsafe {
@@ -458,13 +525,11 @@ impl Drop for RetrievedContext {
     }
 }
 
-unsafe impl DeviceContext for BufferedContext {
-    fn hdc(&self) -> HDC {
-        self.0
-    }
-
-    fn hwnd(&self) -> HWND {
-        self.1
+impl Drop for MemoryContext {
+    fn drop(&mut self) {
+        unsafe {
+            gdi32::DeleteDC(self.0);
+        }
     }
 }
 
