@@ -13,6 +13,9 @@ uxtheme-sys = {path = "./winapi-rs/lib/uxtheme"}
 lazy_static = "0.2"
 dct = {path = "../dct"}
 
+[dev-dependencies]
+quickcheck = "0.4"
+
 [dev-dependencies.dww_macros]
 path = "../dww_macros"
 features = ["inside_dww"]

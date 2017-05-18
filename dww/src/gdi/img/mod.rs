@@ -1,9 +1,13 @@
+pub mod iter;
+
 use user32;
 use gdi32;
 use winapi::*;
 
 use ucs2::{WithString, UCS2_CONVERTER};
 use dct::geometry::{Px, Rect, OriginRect};
+
+use self::iter::*;
 
 use std::{ptr, mem, cmp, slice};
 use std::path::Path;
@@ -37,19 +41,6 @@ pub enum ColorFormat {
     FullColor16,
     FullColor24,
     FullColor32
-}
-
-impl ColorFormat {
-    pub fn bits_per_pixel(self) -> u8 {
-        match self {
-            ColorFormat::BlackWhite  => 1,
-            ColorFormat::Paletted4   => 4,
-            ColorFormat::Paletted8   => 8,
-            ColorFormat::FullColor16 => 16,
-            ColorFormat::FullColor24 => 24,
-            ColorFormat::FullColor32 => 32
-        }
-    }
 }
 
 
@@ -86,7 +77,34 @@ pub trait Bitmap {
             slice::from_raw_parts(bitmap_struct.bmBits as *const u8, (bitmap_struct.bmHeight * bitmap_struct.bmWidthBytes) as usize)
         }
     }
+
+    fn bitmap_data(&self) -> (BitmapInfo, &[u8]) {
+        unsafe {
+            let mut bitmap_struct: BITMAP = mem::zeroed();
+            gdi32::GetObjectW(
+                self.hbitmap() as HGDIOBJ,
+                mem::size_of::<BITMAP>() as c_int,
+                &mut bitmap_struct as *mut _ as *mut c_void
+            );
+
+            (
+                BitmapInfo {
+                    width: bitmap_struct.bmWidth,
+                    height: bitmap_struct.bmHeight,
+                    width_bytes: bitmap_struct.bmWidthBytes as usize,
+                    bits_per_pixel: bitmap_struct.bmBitsPixel as u8
+                },
+                slice::from_raw_parts(bitmap_struct.bmBits as *const u8, (bitmap_struct.bmHeight * bitmap_struct.bmWidthBytes) as usize)
+            )
+        }
+    }
+
+    fn image_lines(&self) -> ImageLineIter {
+        let (bmi, bits) = self.bitmap_data();
+        ImageLineIter::new(bits, bmi.width * bmi.bits_per_pixel as Px / 8, bmi.width_bytes)
+    }
 }
+
 
 impl DDBitmap {
     pub fn open<P: AsRef<Path>>(path: P) -> Result<DDBitmap> {
@@ -101,12 +119,6 @@ impl DDBitmap {
                 Err(Error::last_os_error())
             }
         })
-    }
-}
-impl Bitmap for DDBitmap {
-    #[inline]
-    fn hbitmap(&self) -> HBITMAP {
-        self.0
     }
 }
 
@@ -124,12 +136,6 @@ impl DIBitmap {
                 Err(Error::last_os_error())
             }
         })
-    }
-}
-impl Bitmap for DIBitmap {
-    #[inline]
-    fn hbitmap(&self) -> HBITMAP {
-        self.0
     }
 }
 
@@ -185,14 +191,15 @@ impl DIBSection {
         }
     }
 
+    #[inline]
     pub fn bits_mut(&mut self) -> &mut [u8] {
         unsafe{ &mut *self.bits }
     }
-}
-impl Bitmap for DIBSection {
+
     #[inline]
-    fn hbitmap(&self) -> HBITMAP {
-        self.handle
+    pub fn image_lines_mut(&mut self) -> ImageLineIterMut {
+        let bmi = self.bitmap_info();
+        ImageLineIterMut::new(self.bits_mut(), bmi.width * bmi.bits_per_pixel as Px / 8, bmi.width_bytes)
     }
 }
 
@@ -218,6 +225,39 @@ impl Icon {
     }
 }
 
+impl ColorFormat {
+    pub fn bits_per_pixel(self) -> u8 {
+        match self {
+            ColorFormat::BlackWhite  => 1,
+            ColorFormat::Paletted4   => 4,
+            ColorFormat::Paletted8   => 8,
+            ColorFormat::FullColor16 => 16,
+            ColorFormat::FullColor24 => 24,
+            ColorFormat::FullColor32 => 32
+        }
+    }
+}
+
+
+impl Bitmap for DDBitmap {
+    #[inline]
+    fn hbitmap(&self) -> HBITMAP {
+        self.0
+    }
+}
+impl Bitmap for DIBitmap {
+    #[inline]
+    fn hbitmap(&self) -> HBITMAP {
+        self.0
+    }
+}
+impl Bitmap for DIBSection {
+    #[inline]
+    fn hbitmap(&self) -> HBITMAP {
+        self.handle
+    }
+}
+
 impl Drop for DDBitmap {
     fn drop(&mut self) {
         unsafe{ gdi32::DeleteObject(self.0 as HGDIOBJ) };
@@ -233,7 +273,6 @@ impl Drop for DIBSection {
         unsafe{ gdi32::DeleteObject(self.handle as HGDIOBJ) };
     }
 }
-
 impl Drop for Icon {
     fn drop(&mut self) {
         unsafe{ user32::DestroyIcon(self.0) };

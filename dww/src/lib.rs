@@ -16,6 +16,9 @@ extern crate dct;
 #[cfg(test)]
 #[cfg_attr(test, macro_use)]
 extern crate dww_macros;
+#[cfg(test)]
+#[cfg_attr(test, macro_use)]
+extern crate quickcheck;
 
 pub mod msg;
 pub mod gdi;
@@ -75,7 +78,7 @@ mod comctl32 {isolation_aware_comctl32!{kernel32}}
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use msg::user::{self, UserMsg};
     use std::fmt::Debug;
 
     #[derive(UserMsg, PartialEq, Debug, Eq, Clone, Copy)]
@@ -120,6 +123,6 @@ mod tests {
     fn test_encoding<U: UserMsg + Debug + Eq + Copy>(msg: U) {
         let discriminant = msg.discriminant();
 
-        assert_eq!(msg, unsafe{ user_msg::decode(discriminant, user_msg::encode(msg)) });
+        assert_eq!(msg, unsafe{ user::decode(discriminant, user::encode(msg)) });
     }
 }
