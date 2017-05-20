@@ -10,6 +10,9 @@ use dct::geometry::*;
 use std::marker::PhantomData;
 use std::mem;
 
+// Honestly, ParentRef and WindowRef *should* have lifetimes. However, them outliving the window
+// shouldn't pose any safety concerns, and giving them lifetimes opens up a whole can of worms in
+// derin that I don't really want to deal with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ParentRef( HWND );
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

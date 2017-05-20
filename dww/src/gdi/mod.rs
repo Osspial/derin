@@ -15,7 +15,7 @@ use uxtheme;
 
 use std::{mem, ptr, char};
 use std::marker::PhantomData;
-use std::io::{Result, Error};
+use std::io;
 
 use ucs2::{UCS2_CONVERTER, WithString, Ucs2Str};
 
@@ -94,7 +94,7 @@ pub unsafe trait DeviceContext {
     /// Blit the contents of the given rectangle in the source DC to the location `dest` in the
     /// `self` dc.
     #[inline]
-    fn bit_blt<C: DeviceContext>(&self, src_dc: &C, src_rect: OffsetRect, dest: Point) -> Result<()> {
+    fn bit_blt<C: DeviceContext>(&self, src_dc: &C, src_rect: OffsetRect, dest: Point) -> io::Result<()> {
         let (width, height) = (src_rect.width(), src_rect.height());
         let result = unsafe{ gdi32::BitBlt(
             self.hdc(),
@@ -108,10 +108,42 @@ pub unsafe trait DeviceContext {
             SRCCOPY
         ) };
 
-        if result == FALSE {
+        if result != 0 {
             Ok(())
         } else {
-            Err(Error::last_os_error())
+            Err(io::Error::last_os_error())
+        }
+    }
+
+    #[inline]
+    fn alpha_blend<C: DeviceContext>(
+        &self, src_dc: &C, src_rect: OffsetRect, dest_rect: OffsetRect, const_alpha: u8,
+        alpha_format: AlphaFormat
+    ) -> Result<(), ()> {
+        let blend_function = BLENDFUNCTION {
+            BlendOp: 0, // AC_SRC_OVER
+            BlendFlags: 0,
+            SourceConstantAlpha: const_alpha,
+            AlphaFormat: unsafe{ mem::transmute(alpha_format) }
+        };
+        let result = unsafe{ gdi32::GdiAlphaBlend(
+            self.hdc(),
+            dest_rect.topleft().x,
+            dest_rect.topleft().y,
+            dest_rect.width(),
+            dest_rect.height(),
+            src_dc.hdc(),
+            src_rect.topleft().x,
+            src_rect.topleft().y,
+            src_rect.width(),
+            src_rect.height(),
+            blend_function
+        ) };
+
+        if result == TRUE {
+            Ok(())
+        } else {
+            Err(())
         }
     }
 
@@ -539,6 +571,14 @@ pub enum AnimStyle {
     Linear,
     Cubic,
     Sine
+}
+
+const AC_SRC_ALPHA: BYTE = 0x01;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum AlphaFormat {
+    PerPixel = AC_SRC_ALPHA,
+    Opaque = 0
 }
 
 /// Handles initializing and uninitializing thread buffered painting.
