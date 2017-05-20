@@ -94,7 +94,12 @@ pub unsafe trait DeviceContext {
     /// Blit the contents of the given rectangle in the source DC to the location `dest` in the
     /// `self` dc.
     #[inline]
-    fn bit_blt<C: DeviceContext>(&self, src_dc: &C, src_rect: OffsetRect, dest: Point) -> io::Result<()> {
+    fn bit_copy<C: DeviceContext>(&self, src_dc: &C, src_rect: OffsetRect, dest: Point) -> io::Result<()> {
+        self.bit_blt(src_dc, src_rect, dest, RopCode::SrcCopy)
+    }
+
+    #[inline]
+    fn bit_blt<C: DeviceContext>(&self, src_dc: &C, src_rect: OffsetRect, dest: Point, rop: RopCode) -> io::Result<()> {
         let (width, height) = (src_rect.width(), src_rect.height());
         let result = unsafe{ gdi32::BitBlt(
             self.hdc(),
@@ -105,7 +110,7 @@ pub unsafe trait DeviceContext {
             src_dc.hdc(),
             src_rect.topleft.x,
             src_rect.topleft.y,
-            SRCCOPY
+            mem::transmute(rop)
         ) };
 
         if result != 0 {
@@ -563,6 +568,27 @@ impl Drop for MemoryContext {
             gdi32::DeleteDC(self.0);
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub enum RopCode {
+    Blackness = BLACKNESS,
+    CaptureBlt = CAPTUREBLT,
+    DstInvert = DSTINVERT,
+    MergeCopy = MERGECOPY,
+    MergePaint = MERGEPAINT,
+    NotSrcCopy = NOTSRCCOPY,
+    NotSrcErase = NOTSRCERASE,
+    PatCopy = PATCOPY,
+    PatInvert = PATINVERT,
+    PatPaint = PATPAINT,
+    SrcAnd = SRCAND,
+    SrcCopy = SRCCOPY,
+    SrcErase = SRCERASE,
+    SrcInvert = SRCINVERT,
+    SrcPaint = SRCPAINT,
+    Whiteness = WHITENESS
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
