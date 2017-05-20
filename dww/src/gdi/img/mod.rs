@@ -6,6 +6,7 @@ use winapi::*;
 
 use ucs2::{WithString, UCS2_CONVERTER};
 use dct::geometry::{Px, Rect, OriginRect};
+use dct::color::Color24;
 
 use self::iter::*;
 
@@ -34,10 +35,13 @@ pub struct BitmapInfo {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ColorFormat {
-    BlackWhite,
-    Paletted4,
-    Paletted8,
+pub enum ColorFormat<'a> {
+    /// A monochrome color format, containing a (black_color, white_color) pair.
+    Monochrome(Color24, Color24),
+    /// 4-bit color paletted format. Palette slice can contain up to 16 colors.
+    Paletted4(&'a [Color24]),
+    /// 8-bit color paletted format. Palette slice can contain up to 256 colors.
+    Paletted8(&'a [Color24]),
     FullColor16,
     FullColor24,
     FullColor32
@@ -145,32 +149,156 @@ impl DIBSection {
             let (width, height, x_ppm, y_ppm) =
                 (cmp::max(0, width), cmp::max(0, height), cmp::max(0, x_ppm), cmp::max(0, y_ppm));
 
-            let bmp_info = BITMAPINFO {
-                bmiHeader: BITMAPINFOHEADER  {
-                    biSize: ::std::mem::size_of::<BITMAPINFO>() as u32,
-                    biWidth: width,
-                    biHeight: height,
-                    biPlanes: 1,
-                    biBitCount: format.bits_per_pixel() as u16,
-                    biCompression: BI_RGB,
-                    biSizeImage: 0,
-                    biXPelsPerMeter: x_ppm,
-                    biYPelsPerMeter: y_ppm,
-                    biClrUsed: 0,
-                    biClrImportant: 0
+            let bmi_header = BITMAPINFOHEADER  {
+                biSize: ::std::mem::size_of::<BITMAPINFO>() as u32,
+                biWidth: width,
+                biHeight: height,
+                biPlanes: 1,
+                biBitCount: format.bits_per_pixel() as u16,
+                biCompression: BI_RGB,
+                biSizeImage: 0,
+                biXPelsPerMeter: x_ppm,
+                biYPelsPerMeter: y_ppm,
+                biClrUsed: 0,
+                biClrImportant: 0
+            };
+            let mut pbits = ptr::null_mut();
+
+            let hbitmap = match format {
+                ColorFormat::Monochrome(b, w) => {
+                    #[repr(C)]
+                    struct BitmapInfoMonochrome {
+                        header: BITMAPINFOHEADER,
+                        colors: [RGBQUAD; 2]
+                    }
+
+                    let bmp_info = BitmapInfoMonochrome {
+                        header: BITMAPINFOHEADER {
+                            biClrUsed: 2,
+                            ..bmi_header
+                        },
+                        colors: [
+                            RGBQUAD {
+                                rgbRed: b.red,
+                                rgbGreen: b.green,
+                                rgbBlue: b.blue,
+                                rgbReserved: 0
+                            },
+                            RGBQUAD {
+                                rgbRed: w.red,
+                                rgbGreen: w.green,
+                                rgbBlue: w.blue,
+                                rgbReserved: 0
+                            }
+                        ]
+                    };
+
+                    gdi32::CreateDIBSection(
+                        ptr::null_mut(),
+                        &bmp_info as *const _ as *const BITMAPINFO,
+                        DIB_RGB_COLORS,
+                        &mut pbits,
+                        ptr::null_mut(),
+                        0
+                    )
+                }
+                ColorFormat::Paletted4(palette) => {
+                    #[repr(C)]
+                    struct BitmapInfoPaletted4 {
+                        header: BITMAPINFOHEADER,
+                        colors: [RGBQUAD; 16]
+                    }
+
+                    let mut bmp_info = BitmapInfoPaletted4 {
+                        header: BITMAPINFOHEADER {
+                            biClrUsed: palette.len() as DWORD,
+                            ..bmi_header
+                        },
+                        colors: [
+                            RGBQUAD {
+                                rgbRed: 0,
+                                rgbGreen: 0,
+                                rgbBlue: 0,
+                                rgbReserved: 0
+                            }; 16
+                        ]
+                    };
+
+                    for (index, color) in palette.iter().enumerate() {
+                        bmp_info.colors[index] = RGBQUAD {
+                            rgbRed: color.red,
+                            rgbGreen: color.green,
+                            rgbBlue: color.blue,
+                            rgbReserved: 0
+                        };
+                    }
+
+                    gdi32::CreateDIBSection(
+                        ptr::null_mut(),
+                        &bmp_info as *const _ as *const BITMAPINFO,
+                        DIB_RGB_COLORS,
+                        &mut pbits,
+                        ptr::null_mut(),
+                        0
+                    )
                 },
-                bmiColors: []
+                ColorFormat::Paletted8(palette) => {
+                    #[repr(C)]
+                    struct BitmapInfoPaletted8 {
+                        header: BITMAPINFOHEADER,
+                        colors: [RGBQUAD; 256]
+                    }
+
+                    let mut bmp_info = BitmapInfoPaletted8 {
+                        header: BITMAPINFOHEADER {
+                            biClrUsed: palette.len() as DWORD,
+                            ..bmi_header
+                        },
+                        colors: [
+                            RGBQUAD {
+                                rgbRed: 0,
+                                rgbGreen: 0,
+                                rgbBlue: 0,
+                                rgbReserved: 0
+                            }; 256
+                        ]
+                    };
+
+                    for (index, color) in palette.iter().enumerate() {
+                        bmp_info.colors[index] = RGBQUAD {
+                            rgbRed: color.red,
+                            rgbGreen: color.green,
+                            rgbBlue: color.blue,
+                            rgbReserved: 0
+                        };
+                    }
+
+                    gdi32::CreateDIBSection(
+                        ptr::null_mut(),
+                        &bmp_info as *const _ as *const BITMAPINFO,
+                        DIB_RGB_COLORS,
+                        &mut pbits,
+                        ptr::null_mut(),
+                        0
+                    )
+                }
+                _ => {
+                    let bmp_info = BITMAPINFO {
+                        bmiHeader: bmi_header,
+                        bmiColors: []
+                    };
+
+                    gdi32::CreateDIBSection(
+                        ptr::null_mut(),
+                        &bmp_info,
+                        DIB_RGB_COLORS,
+                        &mut pbits,
+                        ptr::null_mut(),
+                        0
+                    )
+                }
             };
 
-            let mut pbits = ptr::null_mut();
-            let hbitmap = gdi32::CreateDIBSection(
-                ptr::null_mut(),
-                &bmp_info,
-                DIB_RGB_COLORS,
-                &mut pbits,
-                ptr::null_mut(),
-                0
-            );
             // This should only fail if there's an invalid parameter, which shouldn't happen if the
             // infrastructure code has been written properly.
             debug_assert_ne!(hbitmap, ptr::null_mut());
@@ -225,15 +353,15 @@ impl Icon {
     }
 }
 
-impl ColorFormat {
+impl<'a> ColorFormat<'a> {
     pub fn bits_per_pixel(self) -> u8 {
         match self {
-            ColorFormat::BlackWhite  => 1,
-            ColorFormat::Paletted4   => 4,
-            ColorFormat::Paletted8   => 8,
-            ColorFormat::FullColor16 => 16,
-            ColorFormat::FullColor24 => 24,
-            ColorFormat::FullColor32 => 32
+            ColorFormat::Monochrome(_, _) => 1,
+            ColorFormat::Paletted4(_)     => 4,
+            ColorFormat::Paletted8(_)     => 8,
+            ColorFormat::FullColor16      => 16,
+            ColorFormat::FullColor24      => 24,
+            ColorFormat::FullColor32      => 32
         }
     }
 }
