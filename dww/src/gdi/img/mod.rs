@@ -347,6 +347,60 @@ impl Icon {
         })
     }
 
+    pub fn from_masks(width: Px, height: Px, and_mask: &[u8], xor_mask: &[u8]) -> Result<Icon> {
+        assert_eq!(width * height / 8, and_mask.len() as Px);
+        assert_eq!(width * height / 8, xor_mask.len() as Px);
+
+        let icon = unsafe{ user32::CreateIcon(
+            ptr::null_mut(),
+            width,
+            height,
+            1, 1,
+            and_mask.as_ptr(),
+            xor_mask.as_ptr()
+        ) };
+
+        if icon != ptr::null_mut() {
+            Ok(Icon(icon))
+        } else {
+            Err(Error::last_os_error())
+        }
+    }
+
+    pub fn from_mask_bmp<M>(mask: &M) -> Result<Icon>
+            where M: Bitmap
+    {
+        let mut icon_info = ICONINFO {
+            fIcon: TRUE,
+            xHotspot: 0, yHotspot: 0,
+            hbmMask: mask.hbitmap(),
+            hbmColor: ptr::null_mut()
+        };
+        let icon = unsafe{ user32::CreateIconIndirect(&mut icon_info) };
+        if icon != ptr::null_mut() {
+            Ok(Icon(icon))
+        } else {
+            Err(Error::last_os_error())
+        }
+    }
+
+    pub fn new_color<M, C>(mask: &M, color: &C) -> Result<Icon>
+            where M: Bitmap, C: Bitmap
+    {
+        let mut icon_info = ICONINFO {
+            fIcon: TRUE,
+            xHotspot: 0, yHotspot: 0,
+            hbmMask: mask.hbitmap(),
+            hbmColor: color.hbitmap()
+        };
+        let icon = unsafe{ user32::CreateIconIndirect(&mut icon_info) };
+        if icon != ptr::null_mut() {
+            Ok(Icon(icon))
+        } else {
+            Err(Error::last_os_error())
+        }
+    }
+
     #[inline]
     pub fn hicon(&self) -> HICON {
         self.0

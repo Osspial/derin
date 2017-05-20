@@ -9,7 +9,7 @@ use std::mem;
 use std::borrow::Borrow;
 use std::cell::UnsafeCell;
 
-pub struct IconWrapper<W: WindowBase, I: Borrow<WindowIcon>> {
+pub struct IconWrapper<W: WindowBase, I: Borrow<WindowIcon> = WindowIcon> {
     pub(super) window: W,
     pub(super) icon: I
 }

@@ -144,6 +144,12 @@ pub struct WindowIcon {
     pub small: Option<Icon>
 }
 
+impl WindowIcon {
+    pub fn new(big: Option<Icon>, small: Option<Icon>) -> WindowIcon {
+        WindowIcon{big, small}
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct WindowBuilder<'a> {
     pub pos: Option<Point>,
