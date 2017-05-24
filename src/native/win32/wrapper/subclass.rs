@@ -223,7 +223,7 @@ impl<S: AsRef<str>> TextLabelSubclass<S> {
 }
 
 impl<W, S> Subclass<W> for TextLabelSubclass<S>
-        where W: TextLabelWindow + MutWindow,
+        where W: StaticTextWindow + MutWindow,
               S: AsRef<str>
 {
     type UserMsg = DerinMsg;

@@ -310,7 +310,7 @@ impl_window_traits!{
         OrphanableWindow,
         ParentWindow,
         ButtonWindow,
-        TextLabelWindow,
+        StaticTextWindow,
         ProgressBarWindow,
         TrackbarWindow
     for ProcWindowRef<'a, W, S>
@@ -357,7 +357,7 @@ impl_window_traits!{
         OrphanableWindow,
         ParentWindow,
         ButtonWindow,
-        TextLabelWindow,
+        StaticTextWindow,
         ProgressBarWindow,
         TrackbarWindow
     for ProcWindowRefNoMsg<'a, W, S>

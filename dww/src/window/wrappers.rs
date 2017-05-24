@@ -35,7 +35,7 @@ impl_window_traits!{
         OrphanableWindow,
         ParentWindow,
         ButtonWindow,
-        TextLabelWindow,
+        StaticTextWindow,
         ProgressBarWindow,
         TrackbarWindow
     for IconWrapper<W, S, L>
@@ -85,7 +85,7 @@ impl_window_traits!{
         OrphanableWindow,
         ParentWindow,
         ButtonWindow,
-        TextLabelWindow,
+        StaticTextWindow,
         ProgressBarWindow,
         TrackbarWindow,
         IconWindow
@@ -162,7 +162,7 @@ impl_window_traits!{
         OrphanableWindow,
         ParentWindow,
         ButtonWindow,
-        TextLabelWindow,
+        StaticTextWindow,
         ProgressBarWindow,
         TrackbarWindow,
         IconWindow
@@ -241,7 +241,7 @@ impl_window_traits!{
         OrphanableWindow,
         ParentWindow,
         ButtonWindow,
-        TextLabelWindow,
+        StaticTextWindow,
         ProgressBarWindow,
         TrackbarWindow,
         IconWindow

@@ -290,7 +290,7 @@ subclass_node_data!{
     pub struct TextLabelNodeData<S>
             where S: trait AsRef<str>
     {
-        subclass: UnsafeSubclassWrapper<TextLabelBase<&'static Font>, TextLabelSubclass<S>>,
+        subclass: UnsafeSubclassWrapper<StaticTextBase<&'static Font>, TextLabelSubclass<S>>,
         needs_widget_update: bool
     }
     impl {
@@ -299,7 +299,7 @@ subclass_node_data!{
 
         fn from_node_data(_: (), text: S) -> UnsafeSubclassWrapper<_, _> {
             HOLDING_PARENT.with(|hp| {
-                let label_window = WindowBuilder::default().build_text_label_with_font(hp, &*CAPTION_FONT);
+                let label_window = WindowBuilder::default().build_static_text_with_font(hp, &*CAPTION_FONT);
                 let subclass = TextLabelSubclass::new(text);
 
                 unsafe{ UnsafeSubclassWrapper::new(label_window, subclass) }

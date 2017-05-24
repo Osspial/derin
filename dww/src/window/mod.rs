@@ -207,14 +207,14 @@ impl<'a> WindowBuilder<'a> {
         window
     }
 
-    pub fn build_text_label<P: ParentWindow>(self, parent: &P) -> TextLabelBase {
-        self.build_text_label_with_font(parent, DefaultFont)
+    pub fn build_static_text<P: ParentWindow>(self, parent: &P) -> StaticTextBase {
+        self.build_static_text_with_font(parent, DefaultFont)
     }
 
-    pub fn build_text_label_with_font<P: ParentWindow, F: Borrow<Font>>(self, parent: &P, font: F) -> TextLabelBase<F> {
+    pub fn build_static_text_with_font<P: ParentWindow, F: Borrow<Font>>(self, parent: &P, font: F) -> StaticTextBase<F> {
         let window_handle = self.build(0, 0, Some(parent.hwnd()), &STATIC_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
-        let mut window = TextLabelBase(window_handle, unsafe{ mem::uninitialized() });
+        let mut window = StaticTextBase(window_handle, unsafe{ mem::uninitialized() });
         window.set_font(font);
         window
     }
@@ -322,7 +322,7 @@ base_window! {
     pub struct BlankBase;
     pub struct PushButtonBase<F>;
     pub struct GroupBoxBase<F>;
-    pub struct TextLabelBase<F>;
+    pub struct StaticTextBase<F>;
     pub struct ProgressBarBase;
     pub struct TrackbarBase;
 }
@@ -331,7 +331,7 @@ unsafe impl ParentWindow for BlankBase {}
 unsafe impl OrphanableWindow for BlankBase {}
 
 unsafe impl<F: Borrow<Font>> ButtonWindow for PushButtonBase<F> {}
-unsafe impl<F: Borrow<Font>> TextLabelWindow for TextLabelBase<F> {}
+unsafe impl<F: Borrow<Font>> StaticTextWindow for StaticTextBase<F> {}
 unsafe impl ProgressBarWindow for ProgressBarBase {}
 unsafe impl TrackbarWindow for TrackbarBase {}
 
@@ -856,7 +856,7 @@ pub unsafe trait ButtonWindow: MutWindow {
     }
 }
 
-pub unsafe trait TextLabelWindow: BaseWindow {
+pub unsafe trait StaticTextWindow: BaseWindow {
     fn min_unclipped_rect(&self) -> OriginRect {
         let text_len = unsafe{ user32::GetWindowTextLengthW(self.hwnd()) };
         UCS2_CONVERTER.with_ucs2_buffer(text_len as usize, |text_buf| unsafe {
