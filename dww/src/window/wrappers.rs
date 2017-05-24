@@ -6,7 +6,7 @@ use winapi::*;
 use std::mem;
 use std::cell::UnsafeCell;
 
-pub struct IconWrapper<W: BaseWindow, S: Icon, L: Icon>{
+pub struct IconWrapper<W: BaseWindow, S: Icon, L: Icon = S>{
     pub(super) window: W,
     pub(super) icon_sm: Option<S>,
     pub(super) icon_lg: Option<L>
@@ -44,18 +44,22 @@ unsafe impl<W: OwnedWindow, S: Icon, L: Icon> IconWindow for IconWrapper<W, S, L
     type IconSm = S;
     type IconLg = L;
 
-    fn set_icon_sm(&mut self, icon: Option<Self::IconSm>) {
+    fn set_icon_sm(&mut self, icon: Option<Self::IconSm>) -> Option<Self::IconSm> {
         if let Some(ic) = icon.as_ref() {unsafe {
             user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_SMALL as WPARAM, ic.hicon() as LPARAM);
         }}
+        let ret = self.icon_sm.take();
         self.icon_sm = icon;
+        ret
     }
 
-    fn set_icon_lg(&mut self, icon: Option<Self::IconLg>) {
+    fn set_icon_lg(&mut self, icon: Option<Self::IconLg>) -> Option<Self::IconLg> {
         if let Some(ic) = icon.as_ref() {unsafe {
             user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_BIG as WPARAM, ic.hicon() as LPARAM);
         }}
+        let ret = self.icon_lg.take();
         self.icon_lg = icon;
+        ret
     }
 }
 unsafe impl<W: OwnedWindow, S: Icon, L: Icon> WrapperWindow for IconWrapper<W, S, L> {

@@ -35,11 +35,11 @@ macro_rules! impl_window_traits {
             type IconSm = W::IconSm;
             type IconLg = W::IconLg;
 
-            fn set_icon_sm(&mut self, icon: Option<Self::IconSm>) {
-                self.inner_mut().set_icon_sm(icon);
+            fn set_icon_sm(&mut self, icon: Option<Self::IconSm>) -> Option<Self::IconSm> {
+                self.inner_mut().set_icon_sm(icon)
             }
-            fn set_icon_lg(&mut self, icon: Option<Self::IconLg>) {
-                self.inner_mut().set_icon_lg(icon);
+            fn set_icon_lg(&mut self, icon: Option<Self::IconLg>) -> Option<Self::IconLg> {
+                self.inner_mut().set_icon_lg(icon)
             }
         }
         impl_window_traits!{
@@ -720,7 +720,13 @@ pub unsafe trait WrapperWindow: OwnedWindow {
 }
 
 pub unsafe trait OwnedWindow: MutWindow {
-    fn with_icon<S, L>(self, icon_sm: Option<S>, icon_lg: Option<L>) -> IconWrapper<Self, S, L>
+    fn with_icons<I>(self, icon_sm: Option<I>, icon_lg: Option<I>) -> IconWrapper<Self, I>
+            where I: Icon
+    {
+        self.with_icons_dif_types(icon_sm, icon_lg)
+    }
+
+    fn with_icons_dif_types<S, L>(self, icon_sm: Option<S>, icon_lg: Option<L>) -> IconWrapper<Self, S, L>
             where S: Icon, L: Icon
     {
         let mut icon_window = IconWrapper {
@@ -806,8 +812,8 @@ pub unsafe trait IconWindow: OwnedWindow {
     type IconSm: Icon;
     type IconLg: Icon;
 
-    fn set_icon_sm(&mut self, icon: Option<Self::IconSm>);
-    fn set_icon_lg(&mut self, icon: Option<Self::IconLg>);
+    fn set_icon_sm(&mut self, icon: Option<Self::IconSm>) -> Option<Self::IconSm>;
+    fn set_icon_lg(&mut self, icon: Option<Self::IconLg>) -> Option<Self::IconLg>;
 }
 
 pub unsafe trait ParentWindow: BaseWindow {
