@@ -1,7 +1,7 @@
 use winapi::*;
 use uxtheme;
 
-use window::{WindowBase, WindowBuilder, BlankBase};
+use window::{BaseWindow, WindowBuilder, BlankBase};
 use std::ptr;
 use std::marker::{Send, Sync};
 

@@ -11,7 +11,7 @@ use dle::{GridContainer, GridEngine, GridConstraintSolver, SolveError};
 use ui::hints::{WidgetHints, GridSize, TrackHints, SizeBounds, Margins};
 use ui::geometry::{OriginRect, OffsetRect};
 
-use super::{DerinMsg, SharedFn, ToplevelWindowBase, NativeDataWrapper};
+use super::{DerinMsg, SharedFn, ToplevelBaseWindow, NativeDataWrapper};
 
 enum ButtonState {
     Released,
@@ -98,7 +98,7 @@ impl<I: Parent<!>> GroupSubclass<I> {
 }
 
 impl<W, I> Subclass<W> for GroupSubclass<I>
-        where W: ParentWindow + WindowMut,
+        where W: ParentWindow + MutWindow,
               I: Parent<!>
 {
     type UserMsg = DerinMsg;
@@ -108,7 +108,7 @@ impl<W, I> Subclass<W> for GroupSubclass<I>
 }
 
 impl<W, I> Subclass<W> for GroupSubclass<I>
-        where W: ParentWindow + WindowMut,
+        where W: ParentWindow + MutWindow,
       for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>>
 {
     fn subclass_proc(mut window: ProcWindowRef<W, Self>) -> i64 {
@@ -161,7 +161,7 @@ impl<S: AsRef<str>, I: Parent<!>> LabelGroupSubclass<S, I> {
 }
 
 impl<W, S, I> Subclass<W> for LabelGroupSubclass<S, I>
-        where W: ParentWindow + WindowMut,
+        where W: ParentWindow + MutWindow,
               S: AsRef<str>,
               I: Parent<!>
 {
@@ -172,7 +172,7 @@ impl<W, S, I> Subclass<W> for LabelGroupSubclass<S, I>
 }
 
 impl<W, S, I> Subclass<W> for LabelGroupSubclass<S, I>
-        where W: ParentWindow + WindowMut,
+        where W: ParentWindow + MutWindow,
               S: AsRef<str>,
       for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>>
 {
@@ -223,7 +223,7 @@ impl<S: AsRef<str>> TextLabelSubclass<S> {
 }
 
 impl<W, S> Subclass<W> for TextLabelSubclass<S>
-        where W: TextLabelWindow + WindowMut,
+        where W: TextLabelWindow + MutWindow,
               S: AsRef<str>
 {
     type UserMsg = DerinMsg;
@@ -256,7 +256,7 @@ impl ProgbarSubclass {
 }
 
 impl<W> Subclass<W> for ProgbarSubclass
-        where W: ProgressBarWindow + WindowMut
+        where W: ProgressBarWindow + MutWindow
 {
     type UserMsg = DerinMsg;
     fn subclass_proc(mut window: ProcWindowRef<W, Self>) -> i64 {
@@ -287,7 +287,7 @@ impl<C: EventActionMap<RangeEvent>> SliderSubclass<C> {
 }
 
 impl<W, C> Subclass<W> for SliderSubclass<C>
-        where W: WindowMut,
+        where W: MutWindow,
               C: EventActionMap<RangeEvent>
 {
     type UserMsg = DerinMsg;
@@ -325,9 +325,9 @@ impl<W, C> Subclass<W> for SliderSubclass<C>
 /// A top-level window subclass, with a reference to its child.
 pub struct ToplevelSubclass(pub UnsafeSubclassRef<'static, DerinMsg>);
 
-impl Subclass<ToplevelWindowBase> for ToplevelSubclass {
+impl Subclass<ToplevelBaseWindow> for ToplevelSubclass {
     type UserMsg = ();
-    fn subclass_proc(mut window: ProcWindowRef<ToplevelWindowBase, Self>) -> i64 {
+    fn subclass_proc(mut window: ProcWindowRef<ToplevelBaseWindow, Self>) -> i64 {
         if let Some((window, msg)) = window.msg() {
             match msg {
                 Msg::GetSizeBounds(size_bounds) => {

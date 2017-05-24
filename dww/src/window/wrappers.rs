@@ -3,37 +3,34 @@ use window::*;
 use window::refs::*;
 use winapi::*;
 
-use gdi::text::Font;
-
 use std::mem;
-use std::borrow::Borrow;
 use std::cell::UnsafeCell;
 
-pub struct IconWrapper<W: WindowBase, S: Icon, L: Icon>{
+pub struct IconWrapper<W: BaseWindow, S: Icon, L: Icon>{
     pub(super) window: W,
     pub(super) icon_sm: Option<S>,
     pub(super) icon_lg: Option<L>
 }
 
-pub struct OverlapWrapper<W: WindowBase>( pub(super) W );
+pub struct OverlapWrapper<W: BaseWindow>( pub(super) W );
 
-pub struct SubclassWrapper<W: WindowBase, S: Subclass<W>> {
+pub struct SubclassWrapper<W: BaseWindow, S: Subclass<W>> {
     window: W,
     data: Box<UnsafeCell<S>>
 }
 
-pub struct UnsafeSubclassWrapper<W: WindowBase, S: Subclass<W>> {
+pub struct UnsafeSubclassWrapper<W: BaseWindow, S: Subclass<W>> {
     window: W,
     data: UnsafeCell<S>
 }
 
 // IconWrapper impls
 impl_window_traits!{
-    unsafe impl<W: WindowOwned, S: Icon, L: Icon>
-        WindowBase,
-        WindowMut,
-        WindowOwned,
-        WindowFont,
+    unsafe impl<W: OwnedWindow, S: Icon, L: Icon>
+        BaseWindow,
+        MutWindow,
+        OwnedWindow,
+        FontWindow,
         OverlappedWindow,
         OrphanableWindow,
         ParentWindow,
@@ -43,7 +40,7 @@ impl_window_traits!{
         TrackbarWindow
     for IconWrapper<W, S, L>
 }
-unsafe impl<W: WindowOwned, S: Icon, L: Icon> IconWindow for IconWrapper<W, S, L> {
+unsafe impl<W: OwnedWindow, S: Icon, L: Icon> IconWindow for IconWrapper<W, S, L> {
     type IconSm = S;
     type IconLg = L;
 
@@ -61,7 +58,7 @@ unsafe impl<W: WindowOwned, S: Icon, L: Icon> IconWindow for IconWrapper<W, S, L
         self.icon_lg = icon;
     }
 }
-unsafe impl<W: WindowOwned, S: Icon, L: Icon> WindowWrapper for IconWrapper<W, S, L> {
+unsafe impl<W: OwnedWindow, S: Icon, L: Icon> WrapperWindow for IconWrapper<W, S, L> {
     type Inner = W;
 
     fn inner(&self) -> &W {
@@ -74,13 +71,13 @@ unsafe impl<W: WindowOwned, S: Icon, L: Icon> WindowWrapper for IconWrapper<W, S
 
 
 // OverlapWrapper impls
-unsafe impl<W: WindowOwned> OverlappedWindow for OverlapWrapper<W> {}
+unsafe impl<W: OwnedWindow> OverlappedWindow for OverlapWrapper<W> {}
 impl_window_traits!{
-    unsafe impl<W: WindowOwned>
-        WindowBase,
-        WindowMut,
-        WindowOwned,
-        WindowFont,
+    unsafe impl<W: OwnedWindow>
+        BaseWindow,
+        MutWindow,
+        OwnedWindow,
+        FontWindow,
         OrphanableWindow,
         ParentWindow,
         ButtonWindow,
@@ -90,7 +87,7 @@ impl_window_traits!{
         IconWindow
     for OverlapWrapper<W>
 }
-unsafe impl<W: WindowOwned> WindowWrapper for OverlapWrapper<W> {
+unsafe impl<W: OwnedWindow> WrapperWindow for OverlapWrapper<W> {
     type Inner = W;
 
     fn inner(&self) -> &W {
@@ -103,7 +100,7 @@ unsafe impl<W: WindowOwned> WindowWrapper for OverlapWrapper<W> {
 
 
 // SubclassWrapper impls
-impl<W: WindowOwned, S: Subclass<W>> SubclassWrapper<W, S> {
+impl<W: OwnedWindow, S: Subclass<W>> SubclassWrapper<W, S> {
     pub fn new(window: W, data: S) -> SubclassWrapper<W, S> {
         let wrapper = SubclassWrapper {
             window: window,
@@ -152,11 +149,11 @@ impl<W: WindowOwned, S: Subclass<W>> SubclassWrapper<W, S> {
     }
 }
 impl_window_traits!{
-    unsafe impl<W: WindowOwned, S: Subclass<W>>
-        WindowBase,
-        WindowMut,
-        WindowOwned,
-        WindowFont,
+    unsafe impl<W: OwnedWindow, S: Subclass<W>>
+        BaseWindow,
+        MutWindow,
+        OwnedWindow,
+        FontWindow,
         OverlappedWindow,
         OrphanableWindow,
         ParentWindow,
@@ -167,7 +164,7 @@ impl_window_traits!{
         IconWindow
     for SubclassWrapper<W, S>
 }
-unsafe impl<W: WindowOwned, S: Subclass<W>> WindowWrapper for SubclassWrapper<W, S> {
+unsafe impl<W: OwnedWindow, S: Subclass<W>> WrapperWindow for SubclassWrapper<W, S> {
     type Inner = W;
 
     fn inner(&self) -> &W {
@@ -180,7 +177,7 @@ unsafe impl<W: WindowOwned, S: Subclass<W>> WindowWrapper for SubclassWrapper<W,
 
 
 // UnsafeSubclassWrapper impls
-impl<W: WindowOwned, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
+impl<W: OwnedWindow, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
     pub unsafe fn new(window: W, data: S) -> UnsafeSubclassWrapper<W, S> {
         UnsafeSubclassWrapper {
             window: window,
@@ -231,11 +228,11 @@ impl<W: WindowOwned, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
     }
 }
 impl_window_traits!{
-    unsafe impl<W: WindowOwned, S: Subclass<W>>
-        WindowBase,
-        WindowMut,
-        WindowOwned,
-        WindowFont,
+    unsafe impl<W: OwnedWindow, S: Subclass<W>>
+        BaseWindow,
+        MutWindow,
+        OwnedWindow,
+        FontWindow,
         OverlappedWindow,
         OrphanableWindow,
         ParentWindow,
@@ -246,7 +243,7 @@ impl_window_traits!{
         IconWindow
     for UnsafeSubclassWrapper<W, S>
 }
-unsafe impl<W: WindowOwned, S: Subclass<W>> WindowWrapper for UnsafeSubclassWrapper<W, S> {
+unsafe impl<W: OwnedWindow, S: Subclass<W>> WrapperWindow for UnsafeSubclassWrapper<W, S> {
     type Inner = W;
 
     fn inner(&self) -> &W {

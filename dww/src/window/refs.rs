@@ -22,8 +22,8 @@ pub struct WindowRefMut<'a>( HWND, PhantomData<&'a mut ()> );
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct UnsafeSubclassRef<'a, U: UserMsg>( HWND, PhantomData<(U, PhantomData<&'a mut ()>)> );
 
-pub struct ProcWindowRef<'a, W: WindowBase, S: 'a + Subclass<W> + ?Sized>( ProcWindowRefNoMsg<'a, W, S> );
-pub struct ProcWindowRefNoMsg<'a, W: WindowBase, S: 'a + Subclass<W> + ?Sized> {
+pub struct ProcWindowRef<'a, W: BaseWindow, S: 'a + Subclass<W> + ?Sized>( ProcWindowRefNoMsg<'a, W, S> );
+pub struct ProcWindowRefNoMsg<'a, W: BaseWindow, S: 'a + Subclass<W> + ?Sized> {
     hwnd: HWND,
     msg: UINT,
     wparam: WPARAM,
@@ -38,7 +38,7 @@ impl ParentRef {
         ParentRef(hwnd)
     }
 }
-unsafe impl WindowBase for ParentRef {
+unsafe impl BaseWindow for ParentRef {
     #[inline]
     fn hwnd(&self) -> HWND {
         self.0
@@ -53,7 +53,7 @@ impl WindowRef {
         WindowRef(hwnd)
     }
 }
-unsafe impl WindowBase for WindowRef {
+unsafe impl BaseWindow for WindowRef {
     fn hwnd(&self) -> HWND {
         self.0
     }
@@ -65,7 +65,7 @@ impl<'a> WindowRefMut<'a> {
         WindowRefMut(hwnd, PhantomData)
     }
 }
-unsafe impl<'a> WindowBase for WindowRefMut<'a> {
+unsafe impl<'a> BaseWindow for WindowRefMut<'a> {
     fn hwnd(&self) -> HWND {
         self.0
     }
@@ -98,15 +98,15 @@ impl<'a, U: UserMsg> UnsafeSubclassRef<'a, U> {
         }
     }
 }
-unsafe impl<'a, U: UserMsg> WindowBase for UnsafeSubclassRef<'a, U> {
+unsafe impl<'a, U: UserMsg> BaseWindow for UnsafeSubclassRef<'a, U> {
     fn hwnd(&self) -> HWND {
         self.0
     }
 }
-unsafe impl<'a, U: UserMsg> WindowMut for UnsafeSubclassRef<'a, U> {}
+unsafe impl<'a, U: UserMsg> MutWindow for UnsafeSubclassRef<'a, U> {}
 
 // ProcWindowRef impls
-impl<'a, W: WindowBase, S: Subclass<W>> ProcWindowRef<'a, W, S> {
+impl<'a, W: BaseWindow, S: Subclass<W>> ProcWindowRef<'a, W, S> {
     pub(super) unsafe fn new(hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM, subclass_data: &'a mut S) -> ProcWindowRef<'a, W, S> {
         ProcWindowRef(ProcWindowRefNoMsg {
             hwnd: hwnd,
@@ -297,15 +297,15 @@ impl<'a, W: WindowBase, S: Subclass<W>> ProcWindowRef<'a, W, S> {
         unsafe{ comctl32::DefSubclassProc(self.hwnd, self.msg, self.wparam, self.lparam) as i64 }
     }
 }
-unsafe impl<'a, W: WindowBase, S: Subclass<W>> WindowBase for ProcWindowRef<'a, W, S> {
+unsafe impl<'a, W: BaseWindow, S: Subclass<W>> BaseWindow for ProcWindowRef<'a, W, S> {
     #[inline]
     fn hwnd(&self) -> HWND {
         self.hwnd
     }
 }
 impl_window_traits!{
-    unsafe impl<lifetime 'a, W: WindowBase, S: Subclass<W>>
-        WindowMut,
+    unsafe impl<lifetime 'a, W: BaseWindow, S: Subclass<W>>
+        MutWindow,
         OverlappedWindow,
         OrphanableWindow,
         ParentWindow,
@@ -315,21 +315,21 @@ impl_window_traits!{
         TrackbarWindow
     for ProcWindowRef<'a, W, S>
 }
-impl<'a, W: WindowBase, S: Subclass<W>> Deref for ProcWindowRef<'a, W, S> {
+impl<'a, W: BaseWindow, S: Subclass<W>> Deref for ProcWindowRef<'a, W, S> {
     type Target = ProcWindowRefNoMsg<'a, W, S>;
 
     fn deref(&self) -> &ProcWindowRefNoMsg<'a, W, S> {
         &self.0
     }
 }
-impl<'a, W: WindowBase, S: Subclass<W>> DerefMut for ProcWindowRef<'a, W, S> {
+impl<'a, W: BaseWindow, S: Subclass<W>> DerefMut for ProcWindowRef<'a, W, S> {
     fn deref_mut(&mut self) -> &mut ProcWindowRefNoMsg<'a, W, S> {
         &mut self.0
     }
 }
 
 // ProcWindowRefNoMsg impls
-impl<'a, W: WindowBase, S: Subclass<W>> ProcWindowRefNoMsg<'a, W, S> {
+impl<'a, W: BaseWindow, S: Subclass<W>> ProcWindowRefNoMsg<'a, W, S> {
     pub fn subclass_data(&mut self) -> &mut S {
         self.subclass_data
     }
@@ -344,15 +344,15 @@ impl<'a, W: WindowBase, S: Subclass<W>> ProcWindowRefNoMsg<'a, W, S> {
         }
     }
 }
-unsafe impl<'a, W: WindowBase, S: Subclass<W>> WindowBase for ProcWindowRefNoMsg<'a, W, S> {
+unsafe impl<'a, W: BaseWindow, S: Subclass<W>> BaseWindow for ProcWindowRefNoMsg<'a, W, S> {
     #[inline]
     fn hwnd(&self) -> HWND {
         self.hwnd
     }
 }
 impl_window_traits!{
-    unsafe impl<lifetime 'a, W: WindowBase, S: Subclass<W>>
-        WindowMut,
+    unsafe impl<lifetime 'a, W: BaseWindow, S: Subclass<W>>
+        MutWindow,
         OverlappedWindow,
         OrphanableWindow,
         ParentWindow,

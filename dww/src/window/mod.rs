@@ -8,11 +8,11 @@ macro_rules! impl_window_traits {
 
     (
         unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
-            WindowBase
+            BaseWindow
             $(, $trait_rest:ident)*
         for $window:ty
     ) => (
-        unsafe impl<$($lt,)* W: $($window_bound +)* $(, $gen: $gen_bound)*> WindowBase for $window {
+        unsafe impl<$($lt,)* W: $($window_bound +)* $(, $gen: $gen_bound)*> BaseWindow for $window {
             #[inline]
             fn hwnd(&self) -> HWND {
                 self.inner().hwnd()
@@ -51,12 +51,13 @@ macro_rules! impl_window_traits {
 
     (
         unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
-            WindowFont
+            FontWindow
             $(, $trait_rest:ident)*
         for $window:ty
     ) => {
-        unsafe impl<$($lt,)* F: Borrow<Font>, W: WindowFont<F> $(+ $window_bound)* $(, $gen: $gen_bound)*> WindowFont<F> for $window {
-            fn set_font(&mut self, font: F) {
+        unsafe impl<$($lt,)* W: FontWindow $(+ $window_bound)* $(, $gen: $gen_bound)*> FontWindow for $window {
+            type Font = W::Font;
+            fn set_font(&mut self, font: W::Font) {
                 self.inner_mut().set_font(font)
             }
         }
@@ -291,14 +292,15 @@ macro_rules! base_window {
     () => ();
     (pub struct $name:ident$(<$font_generic:ident>)*; $($rest:tt)*) => {
         pub struct $name$(<$font_generic: Borrow<Font> = DefaultFont>)*( HWND $(, $font_generic)* );
-        unsafe impl$(<$font_generic: Borrow<Font>>)* WindowBase for $name$(<$font_generic>)* {
+        unsafe impl$(<$font_generic: Borrow<Font>>)* BaseWindow for $name$(<$font_generic>)* {
             #[inline]
             fn hwnd(&self) -> HWND {self.0}
         }
-        unsafe impl$(<$font_generic: Borrow<Font>>)* WindowMut for $name$(<$font_generic>)* {}
-        unsafe impl$(<$font_generic: Borrow<Font>>)* WindowOwned for $name$(<$font_generic>)* {}
+        unsafe impl$(<$font_generic: Borrow<Font>>)* MutWindow for $name$(<$font_generic>)* {}
+        unsafe impl$(<$font_generic: Borrow<Font>>)* OwnedWindow for $name$(<$font_generic>)* {}
         $(
-            unsafe impl<$font_generic: Borrow<Font>> WindowFont<$font_generic> for $name<$font_generic> {
+            unsafe impl<$font_generic: Borrow<Font>> FontWindow for $name<$font_generic> {
+                type Font = $font_generic;
                 fn set_font(&mut self, font: F) {
                     unsafe{
                         user32::SendMessageW(self.hwnd(), WM_SETFONT, font.borrow().hfont() as WPARAM, TRUE as LPARAM);
@@ -338,7 +340,7 @@ const SUBCLASS_ID: UINT_PTR = 0;
 
 lazy_static!{
     static ref BLANK_WINDOW_CLASS: Ucs2String = unsafe {
-        let class_name: Ucs2String = ucs2_str("Blank WindowBase Class").collect();
+        let class_name: Ucs2String = ucs2_str("Blank BaseWindow Class").collect();
 
         let window_class = WNDCLASSEXW {
             cbSize: mem::size_of::<WNDCLASSEXW>() as UINT,
@@ -366,13 +368,13 @@ lazy_static!{
 
 /// A trait representing a subclass on a window. Note that, if multiple subclasses are applied,
 /// only the outermost subclass is used.
-pub trait Subclass<W: WindowBase> {
+pub trait Subclass<W: BaseWindow> {
     type UserMsg: UserMsg;
 
     fn subclass_proc(window: ProcWindowRef<W, Self>) -> i64;
 }
 
-impl<W: WindowBase> Subclass<W> for () {
+impl<W: BaseWindow> Subclass<W> for () {
     type UserMsg = !;
     fn subclass_proc(mut window: ProcWindowRef<W, ()>) -> i64 {
         window.default_window_proc()
@@ -380,7 +382,7 @@ impl<W: WindowBase> Subclass<W> for () {
 }
 
 impl<W, F> Subclass<W> for F
-        where W: WindowBase,
+        where W: BaseWindow,
               F: for<'a> FnMut(ProcWindowRef<W, ()>) -> i64
 {
     type UserMsg = !;
@@ -390,7 +392,7 @@ impl<W, F> Subclass<W> for F
     }
 }
 
-pub unsafe trait WindowBase: Sized {
+pub unsafe trait BaseWindow: Sized {
     fn hwnd(&self) -> HWND;
 
     fn window_ref(&self) -> WindowRef {
@@ -441,7 +443,7 @@ pub unsafe trait WindowBase: Sized {
     }
 
     #[inline]
-    fn move_before<W: WindowBase>(&self, window: &W) -> Result<()> {
+    fn move_before<W: BaseWindow>(&self, window: &W) -> Result<()> {
         unsafe {
             // Windows only provides functions for moving windows after other windows, so we need
             // to get the window before the provided window and then move this window after that
@@ -466,7 +468,7 @@ pub unsafe trait WindowBase: Sized {
     }
 
     #[inline]
-    fn move_after<W: WindowBase>(&self, window: &W) -> Result<()> {
+    fn move_after<W: BaseWindow>(&self, window: &W) -> Result<()> {
         unsafe {
             let result = user32::SetWindowPos(
                 self.hwnd(),
@@ -618,7 +620,7 @@ pub unsafe trait WindowBase: Sized {
     }
 }
 
-pub unsafe trait WindowMut: WindowBase {
+pub unsafe trait MutWindow: BaseWindow {
     fn window_ref_mut(&mut self) -> WindowRefMut {
         unsafe{ WindowRefMut::from_raw(self.hwnd()) }
     }
@@ -710,14 +712,14 @@ pub unsafe trait WindowMut: WindowBase {
     }
 }
 
-pub unsafe trait WindowWrapper: WindowOwned {
-    type Inner: WindowOwned;
+pub unsafe trait WrapperWindow: OwnedWindow {
+    type Inner: OwnedWindow;
 
     fn inner(&self) -> &Self::Inner;
     fn inner_mut(&mut self) -> &mut Self::Inner;
 }
 
-pub unsafe trait WindowOwned: WindowMut {
+pub unsafe trait OwnedWindow: MutWindow {
     fn with_icon<S, L>(self, icon_sm: Option<S>, icon_lg: Option<L>) -> IconWrapper<Self, S, L>
             where S: Icon, L: Icon
     {
@@ -738,11 +740,12 @@ pub unsafe trait WindowOwned: WindowMut {
     }
 }
 
-pub unsafe trait WindowFont<F: Borrow<Font>>: WindowOwned {
-    fn set_font(&mut self, font: F);
+pub unsafe trait FontWindow: OwnedWindow {
+    type Font: Borrow<Font>;
+    fn set_font(&mut self, font: Self::Font);
 }
 
-pub unsafe trait OverlappedWindow: WindowBase {
+pub unsafe trait OverlappedWindow: BaseWindow {
     /// Set all of the overlapped window properties (i.e. all the other functions in this struct)
     /// to either true or false.
     fn overlapped(&self, overlapped: bool) {
@@ -799,7 +802,7 @@ pub unsafe trait OverlappedWindow: WindowBase {
     }
 }
 
-pub unsafe trait IconWindow: WindowOwned {
+pub unsafe trait IconWindow: OwnedWindow {
     type IconSm: Icon;
     type IconLg: Icon;
 
@@ -807,7 +810,7 @@ pub unsafe trait IconWindow: WindowOwned {
     fn set_icon_lg(&mut self, icon: Option<Self::IconLg>);
 }
 
-pub unsafe trait ParentWindow: WindowBase {
+pub unsafe trait ParentWindow: BaseWindow {
     fn parent_ref(&self) -> ParentRef {
         unsafe{ ParentRef::from_raw(self.hwnd()) }
     }
@@ -820,7 +823,7 @@ pub unsafe trait ParentWindow: WindowBase {
         unsafe{ self.set_style(new_style) };
     }
 
-    fn add_child_window<W: WindowBase>(&self, child: &W) {
+    fn add_child_window<W: BaseWindow>(&self, child: &W) {
         unsafe {
             let child_style = child.get_style() | WS_CHILD;
             child.set_style(child_style);
@@ -829,7 +832,7 @@ pub unsafe trait ParentWindow: WindowBase {
     }
 }
 
-pub unsafe trait OrphanableWindow: WindowBase {
+pub unsafe trait OrphanableWindow: BaseWindow {
     fn orphan(&self) {
         unsafe {
             let child_style = self.get_style() & !WS_CHILD;
@@ -839,7 +842,7 @@ pub unsafe trait OrphanableWindow: WindowBase {
     }
 }
 
-pub unsafe trait ButtonWindow: WindowMut {
+pub unsafe trait ButtonWindow: MutWindow {
     fn get_ideal_size(&self) -> OriginRect {
         let mut size = SIZE{ cx: 0, cy: 0 };
         unsafe{ user32::SendMessageW(self.hwnd(), BCM_GETIDEALSIZE, 0, &mut size as *mut SIZE as LPARAM) };
@@ -847,7 +850,7 @@ pub unsafe trait ButtonWindow: WindowMut {
     }
 }
 
-pub unsafe trait TextLabelWindow: WindowBase {
+pub unsafe trait TextLabelWindow: BaseWindow {
     fn min_unclipped_rect(&self) -> OriginRect {
         let text_len = unsafe{ user32::GetWindowTextLengthW(self.hwnd()) };
         UCS2_CONVERTER.with_ucs2_buffer(text_len as usize, |text_buf| unsafe {
@@ -861,7 +864,7 @@ pub unsafe trait TextLabelWindow: WindowBase {
     }
 }
 
-pub unsafe trait ProgressBarWindow: WindowBase {
+pub unsafe trait ProgressBarWindow: BaseWindow {
     fn set_range(&mut self, min: WORD, max: WORD) {
         let lparam = min as LPARAM | ((max as LPARAM) << 16);
         unsafe{ user32::SendMessageW(self.hwnd(), PBM_SETRANGE, 0, lparam) };
@@ -925,7 +928,7 @@ pub unsafe trait ProgressBarWindow: WindowBase {
     }
 }
 
-pub unsafe trait TrackbarWindow: WindowBase {
+pub unsafe trait TrackbarWindow: BaseWindow {
     fn set_pos(&mut self, pos: u32) {
         unsafe{ user32::SendMessageW(self.hwnd(), TBM_SETPOS, TRUE as WPARAM, pos as LPARAM) };
     }
@@ -1072,7 +1075,7 @@ impl Iterator for WindowIterBottomUp {
     }
 }
 
-unsafe extern "system" fn subclass_proc<W: WindowBase, S: Subclass<W>>
+unsafe extern "system" fn subclass_proc<W: BaseWindow, S: Subclass<W>>
                                        (hwnd: HWND, msg: UINT, wparam: WPARAM, lparam: LPARAM,
                                         _: UINT_PTR, subclass_data: DWORD_PTR) -> LRESULT
 {

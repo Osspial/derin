@@ -3,7 +3,7 @@ mod wrapper;
 use self::wrapper::*;
 use super::WindowConfig;
 use dww::msg;
-use dww::window::{WindowOwned, WindowBase, ParentWindow, OverlappedWindow, WindowBuilder};
+use dww::window::{OwnedWindow, BaseWindow, ParentWindow, OverlappedWindow, WindowBuilder};
 use dww::window::refs::WindowRef;
 
 use std::rc::Rc;

@@ -433,11 +433,11 @@ impl ParentChildAdder for GroupAdder {
 }
 
 
-type ToplevelWindowBase = OverlapWrapper<BlankBase>;
-pub struct ToplevelWindow( UnsafeSubclassWrapper<ToplevelWindowBase, ToplevelSubclass> );
+type ToplevelBaseWindow = OverlapWrapper<BlankBase>;
+pub struct ToplevelWindow( UnsafeSubclassWrapper<ToplevelBaseWindow, ToplevelSubclass> );
 
 impl ToplevelWindow {
-    pub unsafe fn new<'a>(window: ToplevelWindowBase, node_ref: UnsafeSubclassRef<'a, DerinMsg>) -> ToplevelWindow {
+    pub unsafe fn new<'a>(window: ToplevelBaseWindow, node_ref: UnsafeSubclassRef<'a, DerinMsg>) -> ToplevelWindow {
         // Expand child window lifetime to 'static with transmute. This is safe because the toplevel
         // window struct will only exist for the length of the child, and even if the child is
         // destroyed any messages sent won't be processed.
