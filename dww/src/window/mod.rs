@@ -1,27 +1,32 @@
+/// Window trait helper macro. This is here instead of in a submodule because two submodules need
+/// to use it.
 macro_rules! impl_window_traits {
     (
         unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
-            ;
         for $window:ty
     ) => ();
 
     (
         unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
-            WindowBase($self_ident:ident) => $window_expr:expr;
+            WindowBase
+            $(, $trait_rest:ident)*
         for $window:ty
     ) => (
         unsafe impl<$($lt,)* W: $($window_bound +)* $(, $gen: $gen_bound)*> WindowBase for $window {
             #[inline]
             fn hwnd(&self) -> HWND {
-                let $self_ident = self;
-                $window_expr.hwnd()
+                self.inner().hwnd()
             }
+        }
+        impl_window_traits!{
+            unsafe impl<$(lifetime $lt,)* W$(: $window_bound)* $(, $gen: $gen_bound)*>
+                $($trait_rest),*
+            for $window
         }
     );
 
     (
         unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
-            WindowBase($self_ident:ident) => $window_expr:expr;
             IconWindow
             $(, $trait_rest:ident)*
         for $window:ty
@@ -39,7 +44,6 @@ macro_rules! impl_window_traits {
         }
         impl_window_traits!{
             unsafe impl<$(lifetime $lt,)* W$(: $window_bound)* $(, $gen: $gen_bound)*>
-                WindowBase($self_ident) => $window_expr;
                 $($trait_rest),*
             for $window
         }
@@ -47,20 +51,17 @@ macro_rules! impl_window_traits {
 
     (
         unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
-            WindowBase($self_ident:ident) => $window_expr:expr;
             WindowFont
             $(, $trait_rest:ident)*
         for $window:ty
     ) => {
         unsafe impl<$($lt,)* F: Borrow<Font>, W: WindowFont<F> $(+ $window_bound)* $(, $gen: $gen_bound)*> WindowFont<F> for $window {
-            unsafe fn font_mut(&mut self) -> &mut F {
-                let $self_ident = self;
-                $window_expr.font_mut()
+            fn set_font(&mut self, font: F) {
+                self.inner_mut().set_font(font)
             }
         }
         impl_window_traits!{
             unsafe impl<$(lifetime $lt,)* W$(: $window_bound)* $(, $gen: $gen_bound)*>
-                WindowBase($self_ident) => $window_expr;
                 $($trait_rest),*
             for $window
         }
@@ -68,7 +69,6 @@ macro_rules! impl_window_traits {
 
     (
         unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
-            $(WindowBase($self_ident:ident) => $window_expr:expr)*;
             $trait_name:ident
             $(, $trait_rest:ident)*
         for $window:ty
@@ -76,7 +76,6 @@ macro_rules! impl_window_traits {
         unsafe impl<$($lt,)* W: $trait_name $(+ $window_bound)* $(, $gen: $gen_bound)*> $trait_name for $window {}
         impl_window_traits!{
             unsafe impl<$(lifetime $lt,)* W$(: $window_bound)* $(, $gen: $gen_bound)*>
-                $(WindowBase($self_ident) => $window_expr)*;
                 $($trait_rest),*
             for $window
         }
@@ -300,8 +299,11 @@ macro_rules! base_window {
         unsafe impl$(<$font_generic: Borrow<Font>>)* WindowOwned for $name$(<$font_generic>)* {}
         $(
             unsafe impl<$font_generic: Borrow<Font>> WindowFont<$font_generic> for $name<$font_generic> {
-                unsafe fn font_mut(&mut self) -> &mut $font_generic {
-                    &mut self.1
+                fn set_font(&mut self, font: F) {
+                    unsafe{
+                        user32::SendMessageW(self.hwnd(), WM_SETFONT, font.borrow().hfont() as WPARAM, TRUE as LPARAM);
+                        self.1 = font;
+                    }
                 }
             }
         )*
@@ -736,14 +738,8 @@ pub unsafe trait WindowOwned: WindowMut {
     }
 }
 
-pub unsafe trait WindowFont<F: Borrow<Font>>: WindowBase {
-    unsafe fn font_mut(&mut self) -> &mut F;
-    fn set_font(&mut self, font: F) {
-        unsafe{
-            user32::SendMessageW(self.hwnd(), WM_SETFONT, font.borrow().hfont() as WPARAM, TRUE as LPARAM);
-            *self.font_mut() = font;
-        }
-    }
+pub unsafe trait WindowFont<F: Borrow<Font>>: WindowOwned {
+    fn set_font(&mut self, font: F);
 }
 
 pub unsafe trait OverlappedWindow: WindowBase {

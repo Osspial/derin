@@ -30,7 +30,7 @@ pub struct UnsafeSubclassWrapper<W: WindowBase, S: Subclass<W>> {
 // IconWrapper impls
 impl_window_traits!{
     unsafe impl<W: WindowOwned, S: Icon, L: Icon>
-        WindowBase(this) => this.window;
+        WindowBase,
         WindowMut,
         WindowOwned,
         WindowFont,
@@ -77,7 +77,7 @@ unsafe impl<W: WindowOwned, S: Icon, L: Icon> WindowWrapper for IconWrapper<W, S
 unsafe impl<W: WindowOwned> OverlappedWindow for OverlapWrapper<W> {}
 impl_window_traits!{
     unsafe impl<W: WindowOwned>
-        WindowBase(this) => this.0;
+        WindowBase,
         WindowMut,
         WindowOwned,
         WindowFont,
@@ -153,7 +153,7 @@ impl<W: WindowOwned, S: Subclass<W>> SubclassWrapper<W, S> {
 }
 impl_window_traits!{
     unsafe impl<W: WindowOwned, S: Subclass<W>>
-        WindowBase(this) => this.window;
+        WindowBase,
         WindowMut,
         WindowOwned,
         WindowFont,
@@ -232,7 +232,7 @@ impl<W: WindowOwned, S: Subclass<W>> UnsafeSubclassWrapper<W, S> {
 }
 impl_window_traits!{
     unsafe impl<W: WindowOwned, S: Subclass<W>>
-        WindowBase(this) => this.window;
+        WindowBase,
         WindowMut,
         WindowOwned,
         WindowFont,

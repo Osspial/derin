@@ -305,7 +305,7 @@ unsafe impl<'a, W: WindowBase, S: Subclass<W>> WindowBase for ProcWindowRef<'a, 
 }
 impl_window_traits!{
     unsafe impl<lifetime 'a, W: WindowBase, S: Subclass<W>>
-        ;WindowMut,
+        WindowMut,
         OverlappedWindow,
         OrphanableWindow,
         ParentWindow,
@@ -352,7 +352,7 @@ unsafe impl<'a, W: WindowBase, S: Subclass<W>> WindowBase for ProcWindowRefNoMsg
 }
 impl_window_traits!{
     unsafe impl<lifetime 'a, W: WindowBase, S: Subclass<W>>
-        ;WindowMut,
+        WindowMut,
         OverlappedWindow,
         OrphanableWindow,
         ParentWindow,
