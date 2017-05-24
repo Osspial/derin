@@ -9,9 +9,10 @@ use std::mem;
 use std::borrow::Borrow;
 use std::cell::UnsafeCell;
 
-pub struct IconWrapper<W: WindowBase, I: Borrow<WindowIcon> = WindowIcon> {
+pub struct IconWrapper<W: WindowBase, S: Icon, L: Icon>{
     pub(super) window: W,
-    pub(super) icon: I
+    pub(super) icon_sm: Option<S>,
+    pub(super) icon_lg: Option<L>
 }
 
 pub struct OverlapWrapper<W: WindowBase>( pub(super) W );
@@ -28,7 +29,7 @@ pub struct UnsafeSubclassWrapper<W: WindowBase, S: Subclass<W>> {
 
 // IconWrapper impls
 impl_window_traits!{
-    unsafe impl<W: WindowOwned, I: Borrow<WindowIcon>>
+    unsafe impl<W: WindowOwned, S: Icon, L: Icon>
         WindowBase(this) => this.window;
         WindowMut,
         WindowOwned,
@@ -40,14 +41,34 @@ impl_window_traits!{
         TextLabelWindow,
         ProgressBarWindow,
         TrackbarWindow
-    for IconWrapper<W, I>
+    for IconWrapper<W, S, L>
 }
-unsafe impl<W: WindowOwned, I: Borrow<WindowIcon>> IconWindow for IconWrapper<W, I> {
-    type I = I;
-    #[inline]
-    fn set_icon(&mut self, icon: I) {
-        unsafe{ self.set_window_icon(icon.borrow()) };
-        self.icon = icon;
+unsafe impl<W: WindowOwned, S: Icon, L: Icon> IconWindow for IconWrapper<W, S, L> {
+    type IconSm = S;
+    type IconLg = L;
+
+    fn set_icon_sm(&mut self, icon: Option<Self::IconSm>) {
+        if let Some(ic) = icon.as_ref() {unsafe {
+            user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_SMALL as WPARAM, ic.hicon() as LPARAM);
+        }}
+        self.icon_sm = icon;
+    }
+
+    fn set_icon_lg(&mut self, icon: Option<Self::IconLg>) {
+        if let Some(ic) = icon.as_ref() {unsafe {
+            user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_BIG as WPARAM, ic.hicon() as LPARAM);
+        }}
+        self.icon_lg = icon;
+    }
+}
+unsafe impl<W: WindowOwned, S: Icon, L: Icon> WindowWrapper for IconWrapper<W, S, L> {
+    type Inner = W;
+
+    fn inner(&self) -> &W {
+        &self.window
+    }
+    fn inner_mut(&mut self) -> &mut W {
+        &mut self.window
     }
 }
 
@@ -68,6 +89,16 @@ impl_window_traits!{
         TrackbarWindow,
         IconWindow
     for OverlapWrapper<W>
+}
+unsafe impl<W: WindowOwned> WindowWrapper for OverlapWrapper<W> {
+    type Inner = W;
+
+    fn inner(&self) -> &W {
+        &self.0
+    }
+    fn inner_mut(&mut self) -> &mut W {
+        &mut self.0
+    }
 }
 
 
@@ -135,6 +166,16 @@ impl_window_traits!{
         TrackbarWindow,
         IconWindow
     for SubclassWrapper<W, S>
+}
+unsafe impl<W: WindowOwned, S: Subclass<W>> WindowWrapper for SubclassWrapper<W, S> {
+    type Inner = W;
+
+    fn inner(&self) -> &W {
+        &self.window
+    }
+    fn inner_mut(&mut self) -> &mut W {
+        &mut self.window
+    }
 }
 
 
@@ -204,4 +245,14 @@ impl_window_traits!{
         TrackbarWindow,
         IconWindow
     for UnsafeSubclassWrapper<W, S>
+}
+unsafe impl<W: WindowOwned, S: Subclass<W>> WindowWrapper for UnsafeSubclassWrapper<W, S> {
+    type Inner = W;
+
+    fn inner(&self) -> &W {
+        &self.window
+    }
+    fn inner_mut(&mut self) -> &mut W {
+        &mut self.window
+    }
 }

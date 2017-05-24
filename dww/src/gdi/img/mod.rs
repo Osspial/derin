@@ -24,7 +24,7 @@ pub struct DIBSection {
     bits: *mut [u8]
 }
 #[derive(Debug)]
-pub struct Icon( HICON );
+pub struct IconOwned( HICON );
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct BitmapInfo {
@@ -107,6 +107,10 @@ pub trait Bitmap {
         let (bmi, bits) = self.bitmap_data();
         ImageLineIter::new(bits, bmi.width * bmi.bits_per_pixel as Px / 8, bmi.width_bytes)
     }
+}
+
+pub trait Icon {
+    fn hicon(&self) -> HICON;
 }
 
 
@@ -331,8 +335,8 @@ impl DIBSection {
     }
 }
 
-impl Icon {
-    pub fn open<P: AsRef<Path>>(path: P, size: OriginRect) -> Result<Icon> {
+impl IconOwned {
+    pub fn open<P: AsRef<Path>>(path: P, size: OriginRect) -> Result<IconOwned> {
         UCS2_CONVERTER.with_string(path.as_ref(), |path| {
             let icon = unsafe{ user32::LoadImageW(
                 ptr::null_mut(), path.as_ptr(), IMAGE_ICON, size.width() as c_int,
@@ -340,14 +344,14 @@ impl Icon {
             )};
 
             if icon != ptr::null_mut() {
-                Ok(Icon(icon as HICON))
+                Ok(IconOwned(icon as HICON))
             } else {
                 Err(Error::last_os_error())
             }
         })
     }
 
-    pub fn from_masks(width: Px, height: Px, and_mask: &[u8], xor_mask: &[u8]) -> Result<Icon> {
+    pub fn from_masks(width: Px, height: Px, and_mask: &[u8], xor_mask: &[u8]) -> Result<IconOwned> {
         assert_eq!(width * height / 8, and_mask.len() as Px);
         assert_eq!(width * height / 8, xor_mask.len() as Px);
 
@@ -361,13 +365,13 @@ impl Icon {
         ) };
 
         if icon != ptr::null_mut() {
-            Ok(Icon(icon))
+            Ok(IconOwned(icon))
         } else {
             Err(Error::last_os_error())
         }
     }
 
-    pub fn from_mask_bmp<M>(mask: &M) -> Result<Icon>
+    pub fn from_mask_bmp<M>(mask: &M) -> Result<IconOwned>
             where M: Bitmap
     {
         let mut icon_info = ICONINFO {
@@ -378,13 +382,13 @@ impl Icon {
         };
         let icon = unsafe{ user32::CreateIconIndirect(&mut icon_info) };
         if icon != ptr::null_mut() {
-            Ok(Icon(icon))
+            Ok(IconOwned(icon))
         } else {
             Err(Error::last_os_error())
         }
     }
 
-    pub fn new_color<M, C>(mask: &M, color: &C) -> Result<Icon>
+    pub fn new_color<M, C>(mask: &M, color: &C) -> Result<IconOwned>
             where M: Bitmap, C: Bitmap
     {
         let mut icon_info = ICONINFO {
@@ -395,15 +399,16 @@ impl Icon {
         };
         let icon = unsafe{ user32::CreateIconIndirect(&mut icon_info) };
         if icon != ptr::null_mut() {
-            Ok(Icon(icon))
+            Ok(IconOwned(icon))
         } else {
             Err(Error::last_os_error())
         }
     }
+}
 
-    #[inline]
-    pub fn hicon(&self) -> HICON {
-        self.0
+impl Clone for IconOwned {
+    fn clone(&self) -> IconOwned {
+        IconOwned(unsafe{ user32::CopyIcon(self.0) })
     }
 }
 
@@ -440,6 +445,12 @@ impl Bitmap for DIBSection {
     }
 }
 
+impl Icon for IconOwned {
+    fn hicon(&self) -> HICON {
+        self.0
+    }
+}
+
 impl Drop for DDBitmap {
     fn drop(&mut self) {
         unsafe{ gdi32::DeleteObject(self.0 as HGDIOBJ) };
@@ -455,7 +466,7 @@ impl Drop for DIBSection {
         unsafe{ gdi32::DeleteObject(self.handle as HGDIOBJ) };
     }
 }
-impl Drop for Icon {
+impl Drop for IconOwned {
     fn drop(&mut self) {
         unsafe{ user32::DestroyIcon(self.0) };
     }

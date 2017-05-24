@@ -27,12 +27,14 @@ macro_rules! impl_window_traits {
         for $window:ty
     ) => {
         unsafe impl<$($lt,)* W: IconWindow $(+ $window_bound)* $(, $gen: $gen_bound)*> IconWindow for $window {
-            type I = <W as IconWindow>::I;
-            #[inline]
-            fn set_icon(&mut self, icon: <W as IconWindow>::I) {
-                let $self_ident = self;
-                unsafe{ $window_expr.set_window_icon(icon.borrow()) };
-                $window_expr.set_icon(icon);
+            type IconSm = W::IconSm;
+            type IconLg = W::IconLg;
+
+            fn set_icon_sm(&mut self, icon: Option<Self::IconSm>) {
+                self.inner_mut().set_icon_sm(icon);
+            }
+            fn set_icon_lg(&mut self, icon: Option<Self::IconLg>) {
+                self.inner_mut().set_icon_lg(icon);
             }
         }
         impl_window_traits!{
@@ -136,17 +138,6 @@ pub enum TickPosition {
 impl Default for TickPosition {
     fn default() -> TickPosition {
         TickPosition::BottomRight
-    }
-}
-
-pub struct WindowIcon {
-    pub big: Option<Icon>,
-    pub small: Option<Icon>
-}
-
-impl WindowIcon {
-    pub fn new(big: Option<Icon>, small: Option<Icon>) -> WindowIcon {
-        WindowIcon{big, small}
     }
 }
 
@@ -717,13 +708,24 @@ pub unsafe trait WindowMut: WindowBase {
     }
 }
 
+pub unsafe trait WindowWrapper: WindowOwned {
+    type Inner: WindowOwned;
+
+    fn inner(&self) -> &Self::Inner;
+    fn inner_mut(&mut self) -> &mut Self::Inner;
+}
+
 pub unsafe trait WindowOwned: WindowMut {
-    fn as_icon<I: Borrow<WindowIcon>>(self, icon: I) -> IconWrapper<Self, I> {
+    fn with_icon<S, L>(self, icon_sm: Option<S>, icon_lg: Option<L>) -> IconWrapper<Self, S, L>
+            where S: Icon, L: Icon
+    {
         let mut icon_window = IconWrapper {
             window: self,
-            icon: unsafe{ mem::uninitialized() }
+            icon_sm: unsafe{ mem::uninitialized() },
+            icon_lg: unsafe{ mem::uninitialized() }
         };
-        icon_window.set_icon(icon);
+        icon_window.set_icon_sm(icon_sm);
+        icon_window.set_icon_lg(icon_lg);
         icon_window
     }
 
@@ -802,16 +804,11 @@ pub unsafe trait OverlappedWindow: WindowBase {
 }
 
 pub unsafe trait IconWindow: WindowOwned {
-    type I: Borrow<WindowIcon>;
+    type IconSm: Icon;
+    type IconLg: Icon;
 
-    fn set_icon(&mut self, icon: Self::I);
-    unsafe fn set_window_icon(&self, icon: &WindowIcon) {
-        let big_icon = icon.big.as_ref().map(|icon| icon.hicon()).unwrap_or(ptr::null_mut());
-        let small_icon = icon.small.as_ref().map(|icon| icon.hicon()).unwrap_or(ptr::null_mut());
-
-        user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_BIG as WPARAM, big_icon as LPARAM);
-        user32::SendMessageW(self.hwnd(), WM_SETICON, ICON_SMALL as WPARAM, small_icon as LPARAM);
-    }
+    fn set_icon_sm(&mut self, icon: Option<Self::IconSm>);
+    fn set_icon_lg(&mut self, icon: Option<Self::IconLg>);
 }
 
 pub unsafe trait ParentWindow: WindowBase {
