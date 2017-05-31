@@ -35,10 +35,12 @@ macro_rules! impl_window_traits {
             type IconSm = W::IconSm;
             type IconLg = W::IconLg;
 
-            fn set_icon_sm(&mut self, icon: Option<Self::IconSm>) -> Option<Self::IconSm> {
+            #[inline]
+            fn set_icon_sm(&mut self, icon: Option<W::IconSm>) -> Option<W::IconSm> {
                 self.inner_mut().set_icon_sm(icon)
             }
-            fn set_icon_lg(&mut self, icon: Option<Self::IconLg>) -> Option<Self::IconLg> {
+            #[inline]
+            fn set_icon_lg(&mut self, icon: Option<W::IconLg>) -> Option<W::IconLg> {
                 self.inner_mut().set_icon_lg(icon)
             }
         }
@@ -59,6 +61,36 @@ macro_rules! impl_window_traits {
             type Font = W::Font;
             fn set_font(&mut self, font: W::Font) {
                 self.inner_mut().set_font(font)
+            }
+        }
+        impl_window_traits!{
+            unsafe impl<$(lifetime $lt,)* W$(: $window_bound)* $(, $gen: $gen_bound)*>
+                $($trait_rest),*
+            for $window
+        }
+    };
+
+    (
+        unsafe impl<$(lifetime $lt:tt,)* W$(: $window_bound:path)* $(, $gen:ident: $gen_bound:path)*>
+            StaticBitmapWindow
+            $(, $trait_rest:ident)*
+        for $window:ty
+    ) => {
+        unsafe impl<$($lt,)* W: StaticBitmapWindow $(+ $window_bound)* $(, $gen: $gen_bound)*> StaticBitmapWindow for $window {
+            type Bitmap = W::Bitmap;
+            #[inline]
+            fn set_bitmap(&mut self, bitmap: W::Bitmap) -> W::Bitmap {
+                self.inner_mut().set_bitmap(bitmap)
+            }
+
+            #[inline]
+            fn bitmap_ref(&self) -> &W::Bitmap {
+                self.inner().bitmap_ref()
+            }
+
+            #[inline]
+            unsafe fn bitmap_mut(&mut self) -> &mut W::Bitmap {
+                self.inner_mut().bitmap_mut()
             }
         }
         impl_window_traits!{
@@ -92,7 +124,7 @@ use self::refs::*;
 use winapi::*;
 use {comctl32, user32, kernel32, vkey};
 use gdi::{DeviceContext, RetrievedContext};
-use gdi::img::Icon;
+use gdi::img::{Bitmap, Icon};
 use gdi::text::{Font, DefaultFont, TextFormat};
 use ucs2::{ucs2_str, ucs2_str_from_ptr, Ucs2Str, Ucs2String, WithString, UCS2_CONVERTER};
 use msg::user::UserMsg;
@@ -187,35 +219,21 @@ impl<'a> WindowBuilder<'a> {
         self.build_push_button_with_font(parent, DefaultFont)
     }
 
-    pub fn build_push_button_with_font<P: ParentWindow, F: Borrow<Font>>(self, parent: &P, font: F) -> PushButtonBase<F> {
-        let window_handle = self.build(BS_PUSHBUTTON, 0, Some(parent.hwnd()), &BUTTON_CLASS);
-        assert_ne!(window_handle, ptr::null_mut());
-        let mut window = PushButtonBase(window_handle, unsafe{ mem::uninitialized() });
-        window.set_font(font);
-        window
-    }
 
     pub fn build_group_box<P: ParentWindow>(self, parent: &P) -> GroupBoxBase {
         self.build_group_box_with_font(parent, DefaultFont)
     }
 
-    pub fn build_group_box_with_font<P: ParentWindow, F: Borrow<Font>>(self, parent: &P, font: F) -> GroupBoxBase<F> {
-        let window_handle = self.build(BS_GROUPBOX, 0, Some(parent.hwnd()), &BUTTON_CLASS);
-        assert_ne!(window_handle, ptr::null_mut());
-        let mut window = GroupBoxBase(window_handle, unsafe{ mem::uninitialized() });
-        window.set_font(font);
-        window
-    }
 
     pub fn build_static_text<P: ParentWindow>(self, parent: &P) -> StaticTextBase {
         self.build_static_text_with_font(parent, DefaultFont)
     }
 
-    pub fn build_static_text_with_font<P: ParentWindow, F: Borrow<Font>>(self, parent: &P, font: F) -> StaticTextBase<F> {
-        let window_handle = self.build(0, 0, Some(parent.hwnd()), &STATIC_CLASS);
+    pub fn build_static_bitmap<P: ParentWindow, B: Bitmap>(self, parent: &P, bitmap: B) -> StaticBitmapBase<B> {
+        let window_handle = self.build(SS_BITMAP, 0, Some(parent.hwnd()), &STATIC_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
-        let mut window = StaticTextBase(window_handle, unsafe{ mem::uninitialized() });
-        window.set_font(font);
+        let mut window = StaticBitmapBase(window_handle, unsafe{ mem::uninitialized() });
+        window.set_bitmap(bitmap);
         window
     }
 
@@ -230,6 +248,31 @@ impl<'a> WindowBuilder<'a> {
         let window_handle = self.build(TBS_NOTIFYBEFOREMOVE, 0, Some(parent.hwnd()), &TRACKBAR_CLASS);
         assert_ne!(window_handle, ptr::null_mut());
         TrackbarBase(window_handle)
+    }
+
+
+    pub fn build_push_button_with_font<P: ParentWindow, F: Borrow<Font>>(self, parent: &P, font: F) -> PushButtonBase<F> {
+        let window_handle = self.build(BS_PUSHBUTTON, 0, Some(parent.hwnd()), &BUTTON_CLASS);
+        assert_ne!(window_handle, ptr::null_mut());
+        let mut window = PushButtonBase(window_handle, unsafe{ mem::uninitialized() });
+        window.set_font(font);
+        window
+    }
+
+    pub fn build_group_box_with_font<P: ParentWindow, F: Borrow<Font>>(self, parent: &P, font: F) -> GroupBoxBase<F> {
+        let window_handle = self.build(BS_GROUPBOX, 0, Some(parent.hwnd()), &BUTTON_CLASS);
+        assert_ne!(window_handle, ptr::null_mut());
+        let mut window = GroupBoxBase(window_handle, unsafe{ mem::uninitialized() });
+        window.set_font(font);
+        window
+    }
+
+    pub fn build_static_text_with_font<P: ParentWindow, F: Borrow<Font>>(self, parent: &P, font: F) -> StaticTextBase<F> {
+        let window_handle = self.build(0, 0, Some(parent.hwnd()), &STATIC_CLASS);
+        assert_ne!(window_handle, ptr::null_mut());
+        let mut window = StaticTextBase(window_handle, unsafe{ mem::uninitialized() });
+        window.set_font(font);
+        window
     }
 
     fn build(self, style: DWORD, style_ex: DWORD, parent: Option<HWND>, class: &Ucs2Str) -> HWND {
@@ -290,26 +333,42 @@ impl<'a> Default for WindowBuilder<'a> {
 
 macro_rules! base_window {
     () => ();
-    (pub struct $name:ident$(<$font_generic:ident>)*; $($rest:tt)*) => {
-        pub struct $name$(<$font_generic: Borrow<Font> = DefaultFont>)*( HWND $(, $font_generic)* );
-        unsafe impl$(<$font_generic: Borrow<Font>>)* BaseWindow for $name$(<$font_generic>)* {
+    (
+        pub font($font_ty:ty) struct $name:ident$(<$($generic:ident$(: $($bound:path)|+)* $(= $default:ty)*),+>)*
+            $(($($extra_param:ty),+))*;
+        $($rest:tt)*
+    ) => {
+        unsafe impl$(<$($generic$(: $($bound+)+)*),+>)* FontWindow for $name$(<$($generic),+>)* {
+            type Font = $font_ty;
+            fn set_font(&mut self, font: F) {
+                unsafe{
+                    user32::SendMessageW(self.hwnd(), WM_SETFONT, font.borrow().hfont() as WPARAM, TRUE as LPARAM);
+                    self.1 = font;
+                }
+            }
+        }
+
+        base_window!{
+            pub struct $name$(<$($generic$(: $($bound)|+)* $(= $default)*),+>)*
+                $(($($extra_param),+))*;
+            $($rest)*
+        }
+    };
+
+    (
+        pub struct $name:ident$(<$($generic:ident$(: $($bound:path)|+)* $(= $default:ty)*),+>)*
+            $(($($extra_param:ty),+))*;
+        $($rest:tt)*
+    ) => {
+        pub struct $name$(<$($generic$(: $($bound+)+)* $(= $default)*),+>)*
+            ( HWND, $($($extra_param),+)* );
+        unsafe impl$(<$($generic$(: $($bound+)+)*),+>)* BaseWindow for $name$(<$($generic),+>)* {
             #[inline]
             fn hwnd(&self) -> HWND {self.0}
         }
-        unsafe impl$(<$font_generic: Borrow<Font>>)* MutWindow for $name$(<$font_generic>)* {}
-        unsafe impl$(<$font_generic: Borrow<Font>>)* OwnedWindow for $name$(<$font_generic>)* {}
-        $(
-            unsafe impl<$font_generic: Borrow<Font>> FontWindow for $name<$font_generic> {
-                type Font = $font_generic;
-                fn set_font(&mut self, font: F) {
-                    unsafe{
-                        user32::SendMessageW(self.hwnd(), WM_SETFONT, font.borrow().hfont() as WPARAM, TRUE as LPARAM);
-                        self.1 = font;
-                    }
-                }
-            }
-        )*
-        impl$(<$font_generic: Borrow<Font>>)* Drop for $name$(<$font_generic>)* {
+        unsafe impl$(<$($generic$(: $($bound+)+)*),+>)* MutWindow for $name$(<$($generic),+>)* {}
+        unsafe impl$(<$($generic$(: $($bound+)+)*),+>)* OwnedWindow for $name$(<$($generic),+>)* {}
+        impl$(<$($generic$(: $($bound+)+)*),+>)* Drop for $name$(<$($generic),+>)* {
             fn drop(&mut self) {
                 unsafe{ user32::DestroyWindow(self.0) };
             }
@@ -320,9 +379,10 @@ macro_rules! base_window {
 
 base_window! {
     pub struct BlankBase;
-    pub struct PushButtonBase<F>;
-    pub struct GroupBoxBase<F>;
-    pub struct StaticTextBase<F>;
+    pub font(F) struct PushButtonBase<F: Borrow<Font> = DefaultFont>(F);
+    pub font(F) struct GroupBoxBase<F: Borrow<Font> = DefaultFont>(F);
+    pub font(F) struct StaticTextBase<F: Borrow<Font> = DefaultFont>(F);
+    pub struct StaticBitmapBase<B: Bitmap>(B);
     pub struct ProgressBarBase;
     pub struct TrackbarBase;
 }
@@ -334,6 +394,21 @@ unsafe impl<F: Borrow<Font>> ButtonWindow for PushButtonBase<F> {}
 unsafe impl<F: Borrow<Font>> StaticTextWindow for StaticTextBase<F> {}
 unsafe impl ProgressBarWindow for ProgressBarBase {}
 unsafe impl TrackbarWindow for TrackbarBase {}
+unsafe impl<B: Bitmap> StaticBitmapWindow for StaticBitmapBase<B> {
+    type Bitmap = B;
+    fn set_bitmap(&mut self, bitmap: B) -> B {
+        unsafe{ user32::SendMessageW(self.hwnd(), STM_SETIMAGE, IMAGE_BITMAP as WPARAM, bitmap.hbitmap() as LPARAM) };
+        mem::replace(&mut self.1, bitmap)
+    }
+
+    fn bitmap_ref(&self) -> &B {
+        &self.1
+    }
+
+    unsafe fn bitmap_mut(&mut self) -> &mut B {
+        &mut self.1
+    }
+}
 
 
 const SUBCLASS_ID: UINT_PTR = 0;
@@ -868,6 +943,15 @@ pub unsafe trait StaticTextWindow: BaseWindow {
     unsafe fn min_unclipped_rect_ucs2(&self, text: &Ucs2Str) -> OriginRect {
         self.get_dc().expect("Could not get DC").calc_text_rect_ucs2(text, TextFormat::default())
     }
+}
+
+pub unsafe trait StaticBitmapWindow: OwnedWindow {
+    type Bitmap: Bitmap;
+    fn set_bitmap(&mut self, bitmap: Self::Bitmap) -> Self::Bitmap;
+    fn bitmap_ref(&self) -> &Self::Bitmap;
+    /// Get mutable reference to inner bitmap. Unsafe because swapping out the bitmap with another
+    /// bitmap without performing proper cleanup could cause use-after-free bugs.
+    unsafe fn bitmap_mut(&mut self) -> &mut Self::Bitmap;
 }
 
 pub unsafe trait ProgressBarWindow: BaseWindow {

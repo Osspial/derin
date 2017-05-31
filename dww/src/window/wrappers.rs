@@ -36,6 +36,7 @@ impl_window_traits!{
         ParentWindow,
         ButtonWindow,
         StaticTextWindow,
+        StaticBitmapWindow,
         ProgressBarWindow,
         TrackbarWindow
     for IconWrapper<W, S, L>
@@ -86,6 +87,7 @@ impl_window_traits!{
         ParentWindow,
         ButtonWindow,
         StaticTextWindow,
+        StaticBitmapWindow,
         ProgressBarWindow,
         TrackbarWindow,
         IconWindow
@@ -163,6 +165,7 @@ impl_window_traits!{
         ParentWindow,
         ButtonWindow,
         StaticTextWindow,
+        StaticBitmapWindow,
         ProgressBarWindow,
         TrackbarWindow,
         IconWindow
@@ -242,6 +245,7 @@ impl_window_traits!{
         ParentWindow,
         ButtonWindow,
         StaticTextWindow,
+        StaticBitmapWindow,
         ProgressBarWindow,
         TrackbarWindow,
         IconWindow
