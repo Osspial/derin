@@ -35,7 +35,7 @@ pub struct BitmapInfo {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ColorFormat<'a> {
+pub enum BitmapFormat<'a> {
     /// A monochrome color format, containing a (black_color, white_color) pair.
     Monochrome(Color24, Color24),
     /// 4-bit color paletted format. Palette slice can contain up to 16 colors.
@@ -148,7 +148,7 @@ impl DIBitmap {
 }
 
 impl DIBSection {
-    pub fn new(width: Px, height: Px, format: ColorFormat, x_ppm: Px, y_ppm: Px) -> DIBSection {
+    pub fn new(width: Px, height: Px, format: BitmapFormat, x_ppm: Px, y_ppm: Px) -> DIBSection {
         unsafe {
             let (width, height, x_ppm, y_ppm) =
                 (cmp::max(0, width), cmp::max(0, height), cmp::max(0, x_ppm), cmp::max(0, y_ppm));
@@ -169,7 +169,7 @@ impl DIBSection {
             let mut pbits = ptr::null_mut();
 
             let hbitmap = match format {
-                ColorFormat::Monochrome(b, w) => {
+                BitmapFormat::Monochrome(b, w) => {
                     #[repr(C)]
                     struct BitmapInfoMonochrome {
                         header: BITMAPINFOHEADER,
@@ -206,7 +206,7 @@ impl DIBSection {
                         0
                     )
                 }
-                ColorFormat::Paletted4(palette) => {
+                BitmapFormat::Paletted4(palette) => {
                     #[repr(C)]
                     struct BitmapInfoPaletted4 {
                         header: BITMAPINFOHEADER,
@@ -246,7 +246,7 @@ impl DIBSection {
                         0
                     )
                 },
-                ColorFormat::Paletted8(palette) => {
+                BitmapFormat::Paletted8(palette) => {
                     #[repr(C)]
                     struct BitmapInfoPaletted8 {
                         header: BITMAPINFOHEADER,
@@ -412,15 +412,15 @@ impl Clone for OwnedIcon {
     }
 }
 
-impl<'a> ColorFormat<'a> {
+impl<'a> BitmapFormat<'a> {
     pub fn bits_per_pixel(self) -> u8 {
         match self {
-            ColorFormat::Monochrome(_, _) => 1,
-            ColorFormat::Paletted4(_)     => 4,
-            ColorFormat::Paletted8(_)     => 8,
-            ColorFormat::FullColor16      => 16,
-            ColorFormat::FullColor24      => 24,
-            ColorFormat::FullColor32      => 32
+            BitmapFormat::Monochrome(_, _) => 1,
+            BitmapFormat::Paletted4(_)     => 4,
+            BitmapFormat::Paletted8(_)     => 8,
+            BitmapFormat::FullColor16      => 16,
+            BitmapFormat::FullColor24      => 24,
+            BitmapFormat::FullColor32      => 32
         }
     }
 }
