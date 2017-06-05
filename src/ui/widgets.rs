@@ -239,16 +239,16 @@ intrinsics!{
         pub content_mut fn children_mut(&mut self) -> _;
     }
 
-    pub struct LabelGroup<S><I>((), LabelGroupContents<S, I>)
+    pub struct GroupBox<S><I>((), GroupBoxContents<S, I>)
             where S: AsRef<str>,
                   I: Parent<!>;
-    impl LabelGroup {
+    impl GroupBox {
         type Map = PhantomData<I::ChildAction>;
         type Event = !;
 
         pub fn new(text: S, children: I) -> Self {
-            LabelGroup {
-                wrapper: R::NodeDataWrapper::from_node_data(PhantomData, LabelGroupContents{text, children})
+            GroupBox {
+                wrapper: R::NodeDataWrapper::from_node_data(PhantomData, GroupBoxContents{text, children})
             }
         }
 
@@ -300,7 +300,7 @@ pub mod content {
     use std::borrow::{Borrow, BorrowMut};
     use ui::Parent;
 
-    pub struct LabelGroupContents<S, I>
+    pub struct GroupBoxContents<S, I>
             where S: AsRef<str>,
                   I: Parent<!>
     {
@@ -308,7 +308,7 @@ pub mod content {
         pub children: I
     }
 
-    impl<S, I> Borrow<I> for LabelGroupContents<S, I>
+    impl<S, I> Borrow<I> for GroupBoxContents<S, I>
             where S: AsRef<str>,
                   I: Parent<!>
     {
@@ -317,7 +317,7 @@ pub mod content {
         }
     }
 
-    impl<S, I> BorrowMut<I> for LabelGroupContents<S, I>
+    impl<S, I> BorrowMut<I> for GroupBoxContents<S, I>
             where S: AsRef<str>,
                   I: Parent<!>
     {

@@ -11,7 +11,7 @@ use std::ptr;
 use std::cell::RefCell;
 
 use ui::*;
-use ui::widgets::{TextButton, TextLabel, Group, LabelGroup, Progbar, Slider, MouseEvent, RangeEvent};
+use ui::widgets::{TextButton, TextLabel, Group, GroupBox, Progbar, Slider, MouseEvent, RangeEvent};
 use ui::hints::{WidgetHints, GridSize, TrackHints, NodeSpan};
 
 pub struct Window<N>
@@ -212,7 +212,7 @@ impl<'a, P, A, I> NodeProcessorGridMut<Group<I>> for NativeNodeProcessor<'a, P, 
     }
 }
 
-impl<'a, P, A, S, I> NodeProcessorGridMut<LabelGroup<S, I>> for NativeNodeProcessor<'a, P, A>
+impl<'a, P, A, S, I> NodeProcessorGridMut<GroupBox<S, I>> for NativeNodeProcessor<'a, P, A>
         where P: ParentChildAdder,
               S: AsRef<str>,
       for<'b> I: Parent<!> +
@@ -220,7 +220,7 @@ impl<'a, P, A, S, I> NodeProcessorGridMut<LabelGroup<S, I>> for NativeNodeProces
                  Parent<GridWidgetProcessor<'b>> +
                  Parent<EngineTypeHarvester<'b>>
 {
-    fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, group: &'b mut LabelGroup<S, I>) -> Result<(), !> {
+    fn add_child_mut<'b>(&'b mut self, _: ChildId, _: WidgetHints, group: &'b mut GroupBox<S, I>) -> Result<(), !> {
         let group_wrapper = group.wrapper_mut();
         group_wrapper.update_window();
 
@@ -304,11 +304,11 @@ impl<I> NodeDataRegistry<Group<I>> for NativeWrapperRegistry
 {
     type NodeDataWrapper = GroupNodeData<I>;
 }
-impl<S, I> NodeDataRegistry<LabelGroup<S, I>> for NativeWrapperRegistry
+impl<S, I> NodeDataRegistry<GroupBox<S, I>> for NativeWrapperRegistry
         where S: AsRef<str>,
               for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>> + Parent<EngineTypeHarvester<'a>>
 {
-    type NodeDataWrapper = LabelGroupNodeData<S, I>;
+    type NodeDataWrapper = GroupBoxNodeData<S, I>;
 }
 impl NodeDataRegistry<Progbar> for NativeWrapperRegistry {
     type NodeDataWrapper = ProgbarNodeData;

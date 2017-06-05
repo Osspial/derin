@@ -4,7 +4,7 @@ pub use self::subclass::GridWidgetProcessor;
 
 use ui::{Parent, ParentMut, Node, NodeDataWrapper, NodeProcessorInit, EventActionMap};
 use ui::widgets::{MouseEvent, RangeEvent};
-use ui::widgets::content::{SliderStatus, ProgbarStatus, LabelGroupContents,  Completion, Orientation, TickPosition as SliderTickPosition};
+use ui::widgets::content::{SliderStatus, ProgbarStatus, GroupBoxContents,  Completion, Orientation, TickPosition as SliderTickPosition};
 use ui::hints::{GridSize, TrackHints};
 
 use dww::window::*;
@@ -246,11 +246,11 @@ subclass_node_data!{
         }
     }
 
-    pub struct LabelGroupNodeData<S><I>
+    pub struct GroupBoxNodeData<S><I>
             where S: trait AsRef<str>,
                   I: trait Parent<!>
     {
-        subclass: UnsafeSubclassWrapper<BlankBase, LabelGroupSubclass<S, I>>,
+        subclass: UnsafeSubclassWrapper<BlankBase, GroupBoxSubclass<S, I>>,
         needs_widget_update: bool
     }
     impl where I: for<'a> trait Parent<GridWidgetProcessor<'a>> | for<'a> trait Parent<EngineTypeHarvester<'a>> {
@@ -261,18 +261,18 @@ subclass_node_data!{
 
         fn from_node_data(
             _: PhantomData<<I as ParentMut<!>>::ChildAction>,
-            content_data: LabelGroupContents<S, I>
+            content_data: GroupBoxContents<S, I>
         ) -> UnsafeSubclassWrapper<_, _> {
             HOLDING_PARENT.with(|hp| {
                 let wrapper_window = WindowBuilder::default().build_blank();
                 hp.add_child_window(&wrapper_window);
-                let subclass = LabelGroupSubclass::new(content_data, &wrapper_window);
+                let subclass = GroupBoxSubclass::new(content_data, &wrapper_window);
 
                 unsafe{ UnsafeSubclassWrapper::new(wrapper_window, subclass) }
             })
         }
         fn update_widget(subclass: _) {
-            let LabelGroupSubclass {
+            let GroupBoxSubclass {
                 ref mut layout_engine,
                 ref mut contents,
                 ref mut groupbox_window
@@ -401,7 +401,7 @@ impl<I> ParentDataWrapper for GroupNodeData<I>
     }
 }
 
-impl<S, I> LabelGroupNodeData<S, I>
+impl<S, I> GroupBoxNodeData<S, I>
         where S: AsRef<str>,
               for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>>
 {
@@ -410,7 +410,7 @@ impl<S, I> LabelGroupNodeData<S, I>
     }
 }
 
-impl<S, I> ParentDataWrapper for LabelGroupNodeData<S, I>
+impl<S, I> ParentDataWrapper for GroupBoxNodeData<S, I>
         where S: AsRef<str>,
               for<'a> I: Parent<!> + Parent<GridWidgetProcessor<'a>>
 {

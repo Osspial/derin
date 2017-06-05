@@ -56,7 +56,7 @@ struct BasicParent {
     label: TextLabel<&'static str>,
     bar: Progbar,
     slider: Slider<BasicSlider>,
-    nested_parent: LabelGroup<&'static str, NestedParent>,
+    nested_parent: GroupBox<&'static str, NestedParent>,
     #[derin(layout)]
     layout: BasicParentLayout
 }
@@ -67,7 +67,7 @@ impl BasicParent {
             label: TextLabel::new("A Label"),
             bar: Progbar::new(ProgbarStatus::new(Completion::Frac(0.5), Orientation::Horizontal)),
             slider: Slider::new(BasicSlider, SliderStatus::default()),
-            nested_parent: LabelGroup::new("Hello World", NestedParent {
+            nested_parent: GroupBox::new("Hello World", NestedParent {
                 del_button: TextButton::new(DelButton, "Delete Button"),
                 add_button: TextButton::new(AddButton, "Add Button"),
                 button_vec: Vec::new(),
