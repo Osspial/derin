@@ -1,4 +1,5 @@
 pub mod widgets;
+pub mod image;
 
 pub use dct::{geometry, buttons, hints};
 use self::hints::{WidgetHints, GridSize, TrackHints};
