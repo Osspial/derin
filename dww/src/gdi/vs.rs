@@ -30,9 +30,6 @@ macro_rules! theme_class {
             $(part $part_name:ident = $part_id:tt $({
                 $($state:ident = $state_id:tt),+
             })*),+
-            $(subclass $subcl_enum:ident {
-                $($subcl:ident),+
-            })*
         })+
     ) => {$(
         pub struct $class_name( HTHEME );
@@ -73,13 +70,6 @@ macro_rules! theme_class {
             }}
         )+}
 
-        $(
-            #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-            pub enum $subcl_enum {
-                $($subcl),+
-            }
-        )*
-
         impl $class_name {
             pub fn new() -> Option<$class_name> {
                 use ucs2::{self, Ucs2String};
@@ -97,29 +87,28 @@ macro_rules! theme_class {
             }
 
 
-            $(
-                #[allow(non_upper_case_globals)]
-                pub fn new_subclass(subclass: $subcl_enum) -> Option<$class_name> {
-                    use ucs2::{self, Ucs2String};
+            #[allow(non_upper_case_globals)]
+            pub fn new_subclass(subclass_name: &str) -> Option<$class_name> {
+                use ucs2::{self, ucs2_str, WithString};
 
-                    lazy_static!{$(
-                        static ref $subcl: Ucs2String = ucs2::ucs2_str(
-                                concat!(stringify!($subcl), "::", stringify!($class_name))
-                            ).collect();
-                    )+}
+                let class_name = stringify!($class_name);
+                // Include space for the class name, subclass name, and "::"
+                let full_class_name_len = class_name.len() + subclass_name.len() + 2;
 
-                    let class_name = match subclass {
-                        $($subcl_enum::$subcl => {&*$subcl}),+
-                    };
+                ucs2::UCS2_CONVERTER.with_ucs2_buffer(full_class_name_len, |buf| {
+                    let full_class_name_iter = ucs2_str(subclass_name).chain(ucs2_str("::").chain(ucs2_str(class_name)));
+                    for (buf_entry, ucs2_char) in buf.iter_mut().zip(full_class_name_iter) {
+                        *buf_entry = ucs2_char;
+                    }
 
-                    let theme_handle = unsafe{ uxtheme::OpenThemeData(THEME_HWND.0.hwnd(), class_name.as_ptr()) };
+                    let theme_handle = unsafe{ uxtheme::OpenThemeData(THEME_HWND.0.hwnd(), buf.as_ptr()) };
                     if theme_handle != ptr::null_mut() {
                         Some($class_name(theme_handle))
                     } else {
                         None
                     }
-                }
-            )*
+                })
+            }
         }
 
         $(
@@ -250,17 +239,6 @@ theme_class!{
             Hot = 2,
             Normal = 1,
             Pressed = 3
-        }
-
-        subclass ComboBoxSub {
-            Address,
-            AddressComposited,
-            InactiveAddress,
-            InactiveAddressComposited,
-            MaxAddress,
-            MaxAddressComposited,
-            MaxInactiveAddress,
-            MaxInactiveAddressComposited
         }
     }
     pub class Communications
@@ -418,25 +396,6 @@ theme_class!{
             Selected = 3
         },
         part EpPassword = 4
-
-        subclass EditSub {
-            Address,
-            AddressComposited,
-            InactiveAddress,
-            InactiveAddressComposited,
-            InactiveSearchBoxEdit,
-            InactiveSearchBoxEditComposited,
-            MaxAddress,
-            MaxAddressComposited,
-            MaxInactiveAddress,
-            MaxInactiveAddressComposited,
-            MaxInactiveSearchBoxEdit,
-            MaxInactiveSearchBoxEditComposited,
-            MaxSearchBoxEdit,
-            MaxSearchBoxEditComposited,
-            SearchBoxEdit,
-            SearchBoxEditComposited
-        }
     }
     pub class ExplorerBar
             where mod parts = explorer_bar_parts
@@ -839,19 +798,6 @@ theme_class!{
             Normal = 1,
             Pressed = 3
         }
-
-        subclass RebarSub {
-            BrowserTabBar,
-            InactiveNavbar,
-            InactiveNavbarComposited,
-            MaxInactiveNavbar,
-            MaxInactiveNavbarComposited,
-            MaxNavbar,
-            MaxNavbarComposited,
-            Navbar,
-            NavbarComposited,
-            NavbarNonTopmost
-        }
     }
     pub class ScrollBar
             where mod parts = scroll_bar_parts
@@ -1065,10 +1011,6 @@ theme_class!{
             Normal = 1,
             Selected = 3
         }
-
-        subclass TabSub {
-            BrowserTab
-        }
     }
     pub class TaskBand
             where mod parts = task_band_parts
@@ -1215,21 +1157,6 @@ theme_class!{
             Normal = 1,
             OtherSideHot = 8,
             Pressed = 3
-        }
-
-        subclass ToolBarSub {
-            Go,
-            GoComposited,
-            InactiveGo,
-            InactiveGoComposited,
-            MaxGo,
-            MaxGoComposited,
-            MaxInactiveGo,
-            MaxInactiveGoComposited,
-            SearchButton,
-            SearchButtonComposited,
-            Travel,
-            TravelComposited
         }
     }
     pub class Tooltip
