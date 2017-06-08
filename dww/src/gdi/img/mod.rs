@@ -13,6 +13,7 @@ use self::iter::*;
 use std::{ptr, mem, cmp, slice};
 use std::path::Path;
 use std::io::{Result, Error};
+use std::marker::PhantomData;
 
 #[derive(Debug)]
 pub struct DDBitmap( HBITMAP );
@@ -23,6 +24,8 @@ pub struct DIBSection {
     handle: HBITMAP,
     bits: *mut [u8]
 }
+#[derive(Debug)]
+pub struct BitmapRef<'a>( HBITMAP, PhantomData<&'a ()> );
 #[derive(Debug)]
 pub struct OwnedIcon( HICON );
 
@@ -335,6 +338,12 @@ impl DIBSection {
     }
 }
 
+impl<'a> BitmapRef<'a> {
+    pub unsafe fn from_raw(hbitmap: HBITMAP) -> BitmapRef<'a> {
+        BitmapRef(hbitmap, PhantomData)
+    }
+}
+
 impl OwnedIcon {
     pub fn open<P: AsRef<Path>>(path: P, size: OriginRect) -> Result<OwnedIcon> {
         UCS2_CONVERTER.with_string(path.as_ref(), |path| {
@@ -442,6 +451,12 @@ impl Bitmap for DIBSection {
     #[inline]
     fn hbitmap(&self) -> HBITMAP {
         self.handle
+    }
+}
+impl<'a> Bitmap for BitmapRef<'a> {
+    #[inline]
+    fn hbitmap(&self) -> HBITMAP {
+        self.0
     }
 }
 

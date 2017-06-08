@@ -1,9 +1,15 @@
 use winapi::*;
 use uxtheme;
+use gdi32;
 
 use window::{BaseWindow, WindowBuilder, BlankBase};
-use std::ptr;
+use std::{ptr, mem};
 use std::marker::{Send, Sync};
+use gdi::img::BitmapRef;
+use gdi::text::Font;
+use dct::color::Color24;
+use dct::hints::Margins;
+use dct::geometry::{Point, OffsetRect};
 
 struct ThemeWindow(BlankBase);
 unsafe impl Send for ThemeWindow {}
@@ -15,6 +21,214 @@ lazy_static!{
 
 pub unsafe trait ThemeClass<P: Part> {
     fn htheme(&self) -> HTHEME;
+
+    #[inline]
+    fn get_theme_bitmap(&self, part: P) -> Option<BitmapRef> {
+        let mut bitmap_handle = ptr::null_mut();
+        unsafe{ uxtheme::GetThemeBitmap(
+            self.htheme(),
+            part.part_id(),
+            part.state_id(),
+            0,
+            1,
+            &mut bitmap_handle
+        ) };
+
+        if bitmap_handle != ptr::null_mut() {
+            unsafe{ Some(BitmapRef::from_raw(bitmap_handle)) }
+        } else {
+            None
+        }
+    }
+
+    #[inline]
+    fn get_theme_bool(&self, part: P, prop: BoolProp) -> Option<bool> {
+        unsafe {
+            let prop_int: c_int = mem::transmute(prop);
+            let mut theme_bool = FALSE;
+            let result = uxtheme::GetThemeBool(
+                self.htheme(),
+                part.part_id(),
+                part.state_id(),
+                prop_int,
+                &mut theme_bool
+            );
+
+            if result == S_OK {
+                Some(theme_bool == TRUE)
+            } else {
+                None
+            }
+        }
+    }
+
+    #[inline]
+    fn get_theme_sys_bool(&self, prop: SysBoolProp) -> bool {
+        unsafe {
+            let prop_int: c_int = mem::transmute(prop);
+            TRUE == uxtheme::GetThemeSysBool(
+                self.htheme(),
+                prop_int
+            )
+        }
+    }
+
+    #[inline]
+    fn get_theme_color(&self, part: P, prop: ColorProp) -> Option<Color24> {
+        unsafe {
+            let prop_int: c_int = mem::transmute(prop);
+            let mut theme_color = 0;
+            let result = uxtheme::GetThemeColor(
+                self.htheme(),
+                part.part_id(),
+                part.state_id(),
+                prop_int,
+                &mut theme_color
+            );
+
+            if result == S_OK {
+                Some(Color24 {
+                    red: (theme_color & 0xFF) as u8,
+                    green: ((theme_color >> 2) & 0xFF) as u8,
+                    blue: ((theme_color >> 4) & 0xFF) as u8
+                })
+            } else {
+                None
+            }
+        }
+    }
+
+    #[inline]
+    fn get_theme_font(&self, part: P, prop: FontProp) -> Option<Font> {
+        unsafe {
+            let prop_int: c_int = mem::transmute(prop);
+            let mut log_font = mem::uninitialized();
+            let result = uxtheme::GetThemeFont(
+                self.htheme(),
+                ptr::null_mut(),
+                part.part_id(),
+                part.state_id(),
+                prop_int,
+                &mut log_font
+            );
+
+            if result == S_OK {
+                Some(Font::from_raw(gdi32::CreateFontIndirectW(&log_font)))
+            } else {
+                None
+            }
+        }
+    }
+
+    #[inline]
+    fn get_theme_sys_font(&self, prop: SysFontProp) -> Option<Font> {
+        unsafe {
+            let prop_int: c_int = mem::transmute(prop);
+            let mut log_font = mem::uninitialized();
+            let result = uxtheme::GetThemeSysFont(
+                self.htheme(),
+                prop_int,
+                &mut log_font
+            );
+
+            if result == S_OK {
+                Some(Font::from_raw(gdi32::CreateFontIndirectW(&log_font)))
+            } else {
+                None
+            }
+        }
+    }
+
+    #[inline]
+    fn get_theme_int(&self, part: P, prop: IntProp) -> Option<i32> {
+        unsafe {
+            let prop_int: c_int = mem::transmute(prop);
+            let mut int = 0;
+            let result = uxtheme::GetThemeInt(
+                self.htheme(),
+                part.part_id(),
+                part.state_id(),
+                prop_int,
+                &mut int
+            );
+
+            if result == S_OK {
+                Some(int)
+            } else {
+                None
+            }
+        }
+    }
+
+    #[inline]
+    fn get_theme_margins(&self, part: P, prop: MarginsProp) -> Option<Margins> {
+        unsafe {
+            let prop_int: c_int = mem::transmute(prop);
+            let mut margins = mem::uninitialized();
+            let result = uxtheme::GetThemeMargins(
+                self.htheme(),
+                ptr::null_mut(),
+                part.part_id(),
+                part.state_id(),
+                prop_int,
+                ptr::null_mut(),
+                &mut margins
+            );
+
+            if result == S_OK {
+                Some(Margins {
+                    left: margins.cxLeftWidth,
+                    top: margins.cyTopHeight,
+                    right: margins.cxRightWidth,
+                    bottom: margins.cyBottomHeight
+                })
+            } else {
+                None
+            }
+        }
+    }
+
+    #[inline]
+    fn get_theme_position(&self, part: P, prop: PositionProp) -> Option<Point> {
+        unsafe {
+            let prop_int: c_int = mem::transmute(prop);
+            let mut point = mem::uninitialized();
+            let result = uxtheme::GetThemePosition(
+                self.htheme(),
+                part.part_id(),
+                part.state_id(),
+                prop_int,
+                &mut point
+            );
+
+            if result == S_OK {
+                Some(Point::new(point.x, point.y))
+            } else {
+                None
+            }
+        }
+    }
+
+    #[inline]
+    fn get_theme_rect(&self, part: P, prop: RectProp) -> Option<OffsetRect> {
+        unsafe {
+            let prop_int: c_int = mem::transmute(prop);
+            let mut rect = mem::uninitialized();
+            let result = uxtheme::GetThemeRect(
+                self.htheme(),
+                part.part_id(),
+                part.state_id(),
+                prop_int,
+                &mut rect
+            );
+
+            if result == S_OK {
+                Some(OffsetRect::new(rect.left, rect.top, rect.right, rect.bottom))
+            } else {
+                None
+            }
+        }
+    }
 }
 
 pub unsafe trait Part: Copy {
@@ -119,6 +333,12 @@ macro_rules! theme_class {
                 }
             }
         )+
+
+        impl Drop for $class_name {
+            fn drop(&mut self) {
+                unsafe{ uxtheme::CloseThemeData(self.0) };
+            }
+        }
     )+}
 }
 
@@ -1387,3 +1607,268 @@ theme_class!{
         }
     }
 }
+
+#[repr(i32)]
+pub enum BoolProp {
+    Transparent = TMT_TRANSPARENT,
+    AutoSize = TMT_AUTOSIZE,
+    BorderOnly = TMT_BORDERONLY,
+    Composited = TMT_COMPOSITED,
+    BGFill = TMT_BGFILL,
+    GlyphTransparent = TMT_GLYPHTRANSPARENT,
+    GlyphOnly = TMT_GLYPHONLY,
+    AlwaysShowSizingBar = TMT_ALWAYSSHOWSIZINGBAR,
+    MirrorImage = TMT_MIRRORIMAGE,
+    UniformSizing = TMT_UNIFORMSIZING,
+    IntegralSizing = TMT_INTEGRALSIZING,
+    SourceGrow = TMT_SOURCEGROW,
+    SourceShrink = TMT_SOURCESHRINK,
+    UserPicture = TMT_USERPICTURE
+}
+
+#[repr(i32)]
+pub enum SysBoolProp {
+    FlatMenus = TMT_FLATMENUS
+}
+
+#[repr(i32)]
+pub enum ColorProp {
+    AccentColorHint = TMT_ACCENTCOLORHINT,
+    ActiveBorder = TMT_ACTIVEBORDER,
+    ActiveCaption = TMT_ACTIVECAPTION,
+    AppWorkspace = TMT_APPWORKSPACE,
+    Background = TMT_BACKGROUND,
+    BlendColor = TMT_BLENDCOLOR,
+    BodyTextColor = TMT_BODYTEXTCOLOR,
+    BorderColor = TMT_BORDERCOLOR,
+    BorderColorHint = TMT_BORDERCOLORHINT,
+    BtnFace = TMT_BTNFACE,
+    BtnHighlight = TMT_BTNHIGHLIGHT,
+    BtnShadow = TMT_BTNSHADOW,
+    BtnText = TMT_BTNTEXT,
+    ButtonAlternateFace = TMT_BUTTONALTERNATEFACE,
+    CaptionText = TMT_CAPTIONTEXT,
+    DkShadow3d = TMT_DKSHADOW3D,
+    EdgeDkShadowColor = TMT_EDGEDKSHADOWCOLOR,
+    EdgeFillColor = TMT_EDGEFILLCOLOR,
+    EdgeHighlightColor = TMT_EDGEHIGHLIGHTCOLOR,
+    EdgeLightColor = TMT_EDGELIGHTCOLOR,
+    EdgeShadowColor = TMT_EDGESHADOWCOLOR,
+    FillColor = TMT_FILLCOLOR,
+    FillColorHint = TMT_FILLCOLORHINT,
+    FromColor1 = TMT_FROMCOLOR1,
+    FromColor2 = TMT_FROMCOLOR2,
+    FromColor3 = TMT_FROMCOLOR3,
+    FromColor4 = TMT_FROMCOLOR4,
+    FromColor5 = TMT_FROMCOLOR5,
+    GlowColor = TMT_GLOWCOLOR,
+    GlyphTextColor = TMT_GLYPHTEXTCOLOR,
+    GlyphTransparentColor = TMT_GLYPHTRANSPARENTCOLOR,
+    GradientActiveCaption = TMT_GRADIENTACTIVECAPTION,
+    GradientColor1 = TMT_GRADIENTCOLOR1,
+    GradientColor2 = TMT_GRADIENTCOLOR2,
+    GradientColor3 = TMT_GRADIENTCOLOR3,
+    GradientColor4 = TMT_GRADIENTCOLOR4,
+    GradientColor5 = TMT_GRADIENTCOLOR5,
+    GradientInactiveCaption = TMT_GRADIENTINACTIVECAPTION,
+    GrayText = TMT_GRAYTEXT,
+    Heading1TextColor = TMT_HEADING1TEXTCOLOR,
+    Heading2TextColor = TMT_HEADING2TEXTCOLOR,
+    Highlight = TMT_HIGHLIGHT,
+    HighlightText = TMT_HIGHLIGHTTEXT,
+    HotTracking = TMT_HOTTRACKING,
+    InactiveBorder = TMT_INACTIVEBORDER,
+    InactiveCaption = TMT_INACTIVECAPTION,
+    InactiveCaptionText = TMT_INACTIVECAPTIONTEXT,
+    InfoBk = TMT_INFOBK,
+    InfoText = TMT_INFOTEXT,
+    Light3d = TMT_LIGHT3D,
+    Menu = TMT_MENU,
+    MenuBar = TMT_MENUBAR,
+    MenuHilight = TMT_MENUHILIGHT,
+    MenuText = TMT_MENUTEXT,
+    ScrollBar = TMT_SCROLLBAR,
+    ShadowColor = TMT_SHADOWCOLOR,
+    TextBorderColor = TMT_TEXTBORDERCOLOR,
+    TextColor = TMT_TEXTCOLOR,
+    TextColorHint = TMT_TEXTCOLORHINT,
+    TextShadowColor = TMT_TEXTSHADOWCOLOR,
+    TransparentColor = TMT_TRANSPARENTCOLOR,
+    Window = TMT_WINDOW,
+    WindowFrame = TMT_WINDOWFRAME,
+    WindowText = TMT_WINDOWTEXT
+}
+
+// diskstream
+// AtlasImage = TMT_ATLASIMAGE
+
+// enum
+// TMT_BGTYPE
+// TMT_BORDERTYPE
+// TMT_CONTENTALIGNMENT
+// TMT_FILLTYPE
+// TMT_GLYPHTYPE
+// TMT_GLYPHFONTSIZINGTYPE
+// TMT_HALIGN
+// TMT_ICONEFFECT
+// TMT_IMAGELAYOUT
+// TMT_IMAGESELECTTYPE
+// TMT_OFFSETTYPE
+// TMT_SIZINGTYPE
+// TMT_TEXTSHADOWTYPE
+// TMT_TRUESIZESCALINGTYPE
+// TMT_VALIGN
+
+// #[repr(i32)]
+// pub enum FileNameProp {
+//     GlyphImageFile = TMT_GLYPHIMAGEFILE,
+//     ImageFile = TMT_IMAGEFILE,
+//     ImageFile1 = TMT_IMAGEFILE1,
+//     ImageFile2 = TMT_IMAGEFILE2,
+//     ImageFile3 = TMT_IMAGEFILE3,
+//     ImageFile4 = TMT_IMAGEFILE4,
+//     ImageFile5 = TMT_IMAGEFILE5
+// }
+
+#[repr(i32)]
+pub enum FontProp {
+    BodyFont = TMT_BODYFONT,
+    CaptionFont = TMT_CAPTIONFONT,
+    GlyphFont = TMT_GLYPHFONT,
+    Heading1Font = TMT_HEADING1FONT,
+    Heading2Font = TMT_HEADING2FONT,
+    IconTitleFont = TMT_ICONTITLEFONT,
+    MenuFont = TMT_MENUFONT,
+    MsgBoxFont = TMT_MSGBOXFONT,
+    SmallCaptionFont = TMT_SMALLCAPTIONFONT,
+    StatusFont = TMT_STATUSFONT
+}
+
+#[repr(i32)]
+pub enum SysFontProp {
+    CaptionFont = TMT_CAPTIONFONT,
+    SmallCaptionFont = TMT_SMALLCAPTIONFONT,
+    MenuFont = TMT_MENUFONT,
+    StatusFont = TMT_STATUSFONT,
+    MsgBoxFont = TMT_MSGBOXFONT,
+    IconTitleFont = TMT_ICONTITLEFONT
+}
+
+#[repr(i32)]
+pub enum IntProp {
+    AlphaLevel = TMT_ALPHALEVEL,
+    AlphaThreshold = TMT_ALPHATHRESHOLD,
+    AnimationDelay = TMT_ANIMATIONDELAY,
+    AnimationDuration = TMT_ANIMATIONDURATION,
+    BorderSize = TMT_BORDERSIZE,
+    CharSet = TMT_CHARSET,
+    ColorizationColor = TMT_COLORIZATIONCOLOR,
+    ColorizationOpacity = TMT_COLORIZATIONOPACITY,
+    FramesPerSecond = TMT_FRAMESPERSECOND,
+    FromHue1 = TMT_FROMHUE1,
+    FromHue2 = TMT_FROMHUE2,
+    FromHue3 = TMT_FROMHUE3,
+    FromHue4 = TMT_FROMHUE4,
+    FromHue5 = TMT_FROMHUE5,
+    GlowIntensity = TMT_GLOWINTENSITY,
+    GlyphIndex = TMT_GLYPHINDEX,
+    GradientRatio1 = TMT_GRADIENTRATIO1,
+    GradientRatio2 = TMT_GRADIENTRATIO2,
+    GradientRatio3 = TMT_GRADIENTRATIO3,
+    GradientRatio4 = TMT_GRADIENTRATIO4,
+    GradientRatio5 = TMT_GRADIENTRATIO5,
+    Height = TMT_HEIGHT,
+    ImageCount = TMT_IMAGECOUNT,
+    MinColorDepth = TMT_MINCOLORDEPTH,
+    MinDPI1 = TMT_MINDPI1,
+    MinDPI2 = TMT_MINDPI2,
+    MinDPI3 = TMT_MINDPI3,
+    MinDPI4 = TMT_MINDPI4,
+    MinDPI5 = TMT_MINDPI5,
+    Opacity = TMT_OPACITY,
+    PixelsPerFrame = TMT_PIXELSPERFRAME,
+    ProgressChunkSize = TMT_PROGRESSCHUNKSIZE,
+    ProgressSpaceSize = TMT_PROGRESSSPACESIZE,
+    RoundCornerHeight = TMT_ROUNDCORNERHEIGHT,
+    RoundCornerWidth = TMT_ROUNDCORNERWIDTH,
+    Saturation = TMT_SATURATION,
+    TextBorderSize = TMT_TEXTBORDERSIZE,
+    TextGlowSize = TMT_TEXTGLOWSIZE,
+    ToColor1 = TMT_TOCOLOR1,
+    ToColor2 = TMT_TOCOLOR2,
+    ToColor3 = TMT_TOCOLOR3,
+    ToColor4 = TMT_TOCOLOR4,
+    ToColor5 = TMT_TOCOLOR5,
+    ToHue1 = TMT_TOHUE1,
+    ToHue2 = TMT_TOHUE2,
+    ToHue3 = TMT_TOHUE3,
+    ToHue4 = TMT_TOHUE4,
+    ToHue5 = TMT_TOHUE5,
+    TrueSizeStretchMark = TMT_TRUESIZESTRETCHMARK,
+    Width = TMT_WIDTH
+}
+
+// intlist
+// TransitionDurations = TMT_TRANSITIONDURATIONS
+
+#[repr(i32)]
+pub enum MarginsProp {
+    CaptionMargins = TMT_CAPTIONMARGINS,
+    ContentMargins = TMT_CONTENTMARGINS,
+    SizingMargins = TMT_SIZINGMARGINS
+}
+
+#[repr(i32)]
+pub enum PositionProp {
+    MinSize = TMT_MINSIZE,
+    MinSize1 = TMT_MINSIZE1,
+    MinSize2 = TMT_MINSIZE2,
+    MinSize3 = TMT_MINSIZE3,
+    MinSize4 = TMT_MINSIZE4,
+    MinSize5 = TMT_MINSIZE5,
+    NormalSize = TMT_NORMALSIZE,
+    Offset = TMT_OFFSET,
+    TextShadowOffset = TMT_TEXTSHADOWOFFSET
+}
+
+#[repr(i32)]
+pub enum RectProp {
+    AnimationButtonRect = TMT_ANIMATIONBUTTONRECT,
+    AtlasRect = TMT_ATLASRECT,
+    CustomSplitRect = TMT_CUSTOMSPLITRECT,
+    DefaultPaneSize = TMT_DEFAULTPANESIZE
+}
+
+// #[repr(i32)]
+// pub enum SizeProp {
+//     CaptionBarHeight = TMT_CAPTIONBARHEIGHT,
+//     CaptionBarWidth = TMT_CAPTIONBARWIDTH,
+//     MenuBarHeight = TMT_MENUBARHEIGHT,
+//     MenuBarWidth = TMT_MENUBARWIDTH,
+//     PaddedBorderWidth = TMT_PADDEDBORDERWIDTH,
+//     ScrollBarHeight = TMT_SCROLLBARHEIGHT,
+//     ScrollBarWidth = TMT_SCROLLBARWIDTH,
+//     SizingBorderWidth = TMT_SIZINGBORDERWIDTH,
+//     SmCaptionBarHeight = TMT_SMCAPTIONBARHEIGHT,
+//     SmCaptionBarWidth = TMT_SMCAPTIONBARWIDTH
+// }
+
+// #[repr(i32)]
+// pub enum StringProp {
+//     Alias = TMT_ALIAS,
+//     AtlasInputImage = TMT_ATLASINPUTIMAGE,
+//     Author = TMT_AUTHOR,
+//     ClassicValue = TMT_CLASSICVALUE,
+//     ColorSchemes = TMT_COLORSCHEMES,
+//     Company = TMT_COMPANY,
+//     Copyright = TMT_COPYRIGHT,
+//     Description = TMT_DESCRIPTION,
+//     DisplayName = TMT_DISPLAYNAME,
+//     LastUpdated = TMT_LASTUPDATED,
+//     Sizes = TMT_SIZES,
+//     Text = TMT_TEXT,
+//     Tooltip = TMT_TOOLTIP,
+//     Url = TMT_URL,
+//     Version = TMT_VERSION,
+//     Name = TMT_NAME
+// }

@@ -10,30 +10,41 @@ use std::borrow::Borrow;
 pub struct Font( HFONT );
 
 impl Font {
+    #[inline]
+    pub unsafe fn from_raw(hfont: HFONT) -> Font {
+        Font( hfont )
+    }
+
+    #[inline]
     pub fn def_sys_font() -> Font {
         Font(ptr::null_mut())
     }
 
+    #[inline]
     pub fn sys_caption_font() -> Font {
         let non_client_metrics = ::non_client_metrics();
         Font(unsafe{ gdi32::CreateFontIndirectW(&non_client_metrics.lfCaptionFont) })
     }
 
+    #[inline]
     pub fn sys_small_caption_font() -> Font {
         let non_client_metrics = ::non_client_metrics();
         Font(unsafe{ gdi32::CreateFontIndirectW(&non_client_metrics.lfSmCaptionFont) })
     }
 
+    #[inline]
     pub fn sys_menu_font() -> Font {
         let non_client_metrics = ::non_client_metrics();
         Font(unsafe{ gdi32::CreateFontIndirectW(&non_client_metrics.lfMenuFont) })
     }
 
+    #[inline]
     pub fn sys_status_font() -> Font {
         let non_client_metrics = ::non_client_metrics();
         Font(unsafe{ gdi32::CreateFontIndirectW(&non_client_metrics.lfStatusFont) })
     }
 
+    #[inline]
     pub fn sys_message_font() -> Font {
         let non_client_metrics = ::non_client_metrics();
         Font(unsafe{ gdi32::CreateFontIndirectW(&non_client_metrics.lfMessageFont) })
