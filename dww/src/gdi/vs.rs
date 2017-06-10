@@ -353,57 +353,57 @@ theme_class!{
     pub class Button
             where mod parts = button_parts
     {
-        part BpCheckbox = 3 {
-            CheckedDisabled = 8,
-            CheckedHot = 6,
-            CheckedNormal = 5,
-            CheckedPressed = 7,
-            MixedDisabled = 12,
-            MixedHot = 10,
-            MixedNormal = 9,
-            MixedPressed = 11,
-            UnCheckedDisabled = 4,
-            UnCheckedHot = 2,
-            UnCheckedNormal = 1,
-            UnCheckedPressed = 3
-        },
-        part BpCommandLink = 6 {
-            Defaulted = 5,
-            DefaultedAnimating = 6,
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pressed = 3
-        },
-        part BpCommandLinkGlyph = 7 {
-            Defaulted = 5,
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pressed = 3
-        },
-        part BpGroupBox = 4 {
-            Disabled = 2,
-            Normal = 1
-        },
         part BpPushButton = 1 {
-            Defaulted = 5,
-            Disabled = 4,
-            Hot = 2,
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Defaulted = 5
         },
         part BpRadioButton = 2 {
-            CheckedDisabled = 8,
-            CheckedHot = 6,
+            UncheckedNormal = 1,
+            UncheckedHot = 2,
+            UncheckedPressed = 3,
+            UncheckedDisabled = 4,
             CheckedNormal = 5,
+            CheckedHot = 6,
             CheckedPressed = 7,
-            UnCheckedDisabled = 4,
-            UnCheckedHot = 2,
-            UnCheckedNormal = 1,
-            UnCheckedPressed = 3
+            CheckedDisabled = 8
         },
-        part BpUserButton = 5
+        part BpCheckbox = 3 {
+            UncheckedNormal = 1,
+            UncheckedHot = 2,
+            UncheckedPressed = 3,
+            UncheckedDisabled = 4,
+            CheckedNormal = 5,
+            CheckedHot = 6,
+            CheckedPressed = 7,
+            CheckedDisabled = 8,
+            MixedNormal = 9,
+            MixedHot = 10,
+            MixedPressed = 11,
+            MixedDisabled = 12
+        },
+        part BpGroupBox = 4 {
+            Normal = 1,
+            Disabled = 2
+        },
+        part BpUserButton = 5,
+        part BpCommandLink = 6 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Defaulted = 5,
+            DefaultedAnimating = 6
+        },
+        part BpCommandLinkGlyph = 7 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Defaulted = 5
+        }
     }
     pub class Clock
             where mod parts = clock_parts
@@ -417,120 +417,120 @@ theme_class!{
     pub class ComboBox
             where mod parts = combo_box_parts
     {
-        part CpBackground = 2,
-        part CpBorder = 4 {
-            Disabled = 4,
-            Focused = 3,
-            Hot = 2,
-            Normal = 1
-        },
-        part CpCueBanner = 8 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pressed = 3
-        },
         part CpDropdownButton = 1 {
-            Disabled = 4,
-            Hot = 2,
             Normal = 1,
-            Pressed = 3
-        },
-        part CpDropdownButtonLeft = 7 {
-            Disabled = 4,
             Hot = 2,
-            Normal = 1,
-            Pressed = 3
+            Pressed = 3,
+            Disabled = 4
         },
-        part CpDropdownButtonRight = 6 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pressed = 3
-        },
+        part CpBackground = 2,
         part CpTransparentBackground = 3 {
-            Disabled = 3,
-            Focused = 4,
+            Normal = 1,
             Hot = 2,
-            Normal = 1
+            Disabled = 3,
+            Focused = 4
+        },
+        part CpBorder = 4 {
+            Normal = 1,
+            Hot = 2,
+            Focused = 3,
+            Disabled = 4
         },
         part CpReadOnly = 5 {
-            Disabled = 4,
-            Hot = 2,
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4
+        },
+        part CpDropdownButtonRight = 6 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4
+        },
+        part CpDropdownButtonLeft = 7 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4
+        },
+        part CpCueBanner = 8 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4
         }
     }
     pub class Communications
             where mod parts = communications_parts
     {
         part CsstTab = 1 {
-            Hot = 2,
             Normal = 1,
+            Hot = 2,
             Selected = 3
         }
     }
     pub class ControlPanel
             where mod parts = control_panel_parts
     {
-        part CPanelBannerArea = 18,
-        part CPanelBodyText = 6,
-        part CPanelBodyTitle = 19,
-        part CPanelButton = 14,
-        part CPanelContentLink = 10 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pressed = 3
-        },
+        part CPanelNavigationPane = 1,
         part CPanelContentPane = 2,
+        part CPanelNavigationPaneLabel = 3,
         part CPanelContentPaneLabel = 4,
-        part CPanelContentPaneLine = 17,
-        part CPanelGroupText = 9,
+        part CPanelTitle = 5,
+        part CPanelBodyText = 6,
         part CPanelHelpLink = 7 {
-            Disabled = 4,
-            Hot = 2,
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4
+        },
+        part CPanelTaskLink = 8 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Page = 5
+        },
+        part CPanelGroupText = 9,
+        part CPanelContentLink = 10 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4
+        },
+        part CPanelSectionTitleLink = 11 {
+            Normal = 1,
+            Hot = 2
         },
         part CPanelLargeCommandArea = 12,
-        part CPanelMessageText = 15,
-        part CPanelNavigationPane = 1,
-        part CPanelNavigationPaneLabel = 3,
-        part CPanelNavigationPaneLine = 16,
-        part CPanelSectionTitleLink = 11 {
-            Hot = 2,
-            Normal = 1
-        },
         part CPanelSmallCommandArea = 13,
-        part CPanelTaskLink = 8 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Page = 5,
-            Pressed = 3
-        },
-        part CPanelTitle = 5
+        part CPanelButton = 14,
+        part CPanelMessageText = 15,
+        part CPanelNavigationPaneLine = 16,
+        part CPanelContentPaneLine = 17,
+        part CPanelBannerArea = 18,
+        part CPanelBodyTitle = 19
     }
     pub class DatePicker
             where mod parts = date_picker_parts
     {
-        part DpDateBorder = 2 {
-            Disabled = 4,
-            Focused = 3,
-            Hot = 2,
-            Normal = 1
-        },
         part DpDateText = 1 {
-            Disabled = 2,
             Normal = 1,
+            Disabled = 2,
             Selected = 3
         },
-        part DpShowCalendarButtonRight = 3 {
-            Disabled = 4,
-            Hot = 2,
+        part DpDateBorder = 2 {
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Focused = 3,
+            Disabled = 4
+        },
+        part DpShowCalendarButtonRight = 3 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4
         }
     }
     pub class DragDrop
@@ -540,12 +540,19 @@ theme_class!{
             Highlight = 1,
             NoHighlight = 2
         },
+        part DdMove = 2 {
+            Highlight = 1,
+            NoHighlight = 2
+        },
+        part DdUpdateMetadata = 3 {
+            Highlight = 1,
+            NoHighlight = 2
+        },
         part DdCreateLink = 4 {
             Highlight = 1,
             NoHighlight = 2
         },
-        part DdImageBG = 7,
-        part DdMove = 2 {
+        part DdWarning = 5 {
             Highlight = 1,
             NoHighlight = 2
         },
@@ -553,113 +560,106 @@ theme_class!{
             Highlight = 1,
             NoHighlight = 2
         },
-        part DdTextBG = 8,
-        part DdUpdateMetadata = 3 {
-            Highlight = 1,
-            NoHighlight = 2
-        },
-        part DdWarning = 5 {
-            Highlight = 1,
-            NoHighlight = 2
-        }
+        part DdImageBG = 7,
+        part DdTextBG = 8
     }
     pub class Edit
             where mod parts = edit_parts
     {
-        part EpBackground = 3 {
-            Assist = 6,
-            Disabled = 3,
-            Focused = 4,
-            Hot = 2,
-            Normal = 1,
-            ReadOnly = 5
-        },
-        part EpBackgroundWithBorder = 5 {
-            Disabled = 3,
-            Focused = 4,
-            Hot = 2,
-            Normal = 1
-        },
-        part EpCaret = 2,
-        part EpEditBorderHScroll = 7 {
-            Disabled = 4,
-            Focused = 3,
-            Hot = 2,
-            Normal = 1
-        },
-        part EpEditBorderHVScroll = 9 {
-            Disabled = 4,
-            Focused = 3,
-            Hot = 2,
-            Normal = 1
-        },
-        part EpEditBorderNoScroll = 6 {
-            Disabled = 4,
-            Focused = 3,
-            Hot = 2,
-            Normal = 1
-        },
-        part EpEditBorderVScroll = 8 {
-            Disabled = 4,
-            Focused = 3,
-            Hot = 2,
-            Normal = 1
-        },
         part EpEditText = 1 {
-            Assist = 7,
-            CueBanner = 8,
+            Normal = 1,
+            Hot = 2,
+            Selected = 3,
             Disabled = 4,
             Focused = 5,
-            Hot = 2,
-            Normal = 1,
             ReadOnly = 6,
-            Selected = 3
+            Assist = 7,
+            CueBanner = 8
         },
-        part EpPassword = 4
+        part EpCaret = 2,
+        part EpBackground = 3 {
+            Normal = 1,
+            Hot = 2,
+            Disabled = 3,
+            Focused = 4,
+            ReadOnly = 5,
+            Assist = 6
+        },
+        part EpPassword = 4,
+        part EpBackgroundWithBorder = 5 {
+            Normal = 1,
+            Hot = 2,
+            Disabled = 3,
+            Focused = 4
+        },
+        part EpEditBorderNoScroll = 6 {
+            Normal = 1,
+            Hot = 2,
+            Focused = 3,
+            Disabled = 4
+        },
+        part EpEditBorderHScroll = 7 {
+            Normal = 1,
+            Hot = 2,
+            Focused = 3,
+            Disabled = 4
+        },
+        part EpEditBorderVScroll = 8 {
+            Normal = 1,
+            Hot = 2,
+            Focused = 3,
+            Disabled = 4
+        },
+        part EpEditBorderHVScroll = 9 {
+            Normal = 1,
+            Hot = 2,
+            Focused = 3,
+            Disabled = 4
+        }
     }
     pub class ExplorerBar
             where mod parts = explorer_bar_parts
     {
         part EbpHeaderBackground = 1,
         part EbpHeaderClose = 2 {
-            Hot = 2,
             Normal = 1,
+            Hot = 2,
             Pressed = 3
         },
         part EbpHeaderPin = 3 {
-            Hot = 2,
             Normal = 1,
+            Hot = 2,
             Pressed = 3,
-            SelectedHot = 5,
             SelectedNormal = 4,
+            SelectedHot = 5,
             SelectedPressed = 6
         },
         part EbpIeBarMenu = 4 {
-            Hot = 2,
             Normal = 1,
+            Hot = 2,
             Pressed = 3
         },
         part EbpNormalGroupBackground = 5,
         part EbpNormalGroupCollapse = 6 {
-            Hot = 2,
             Normal = 1,
+            Hot = 2,
             Pressed = 3
         },
         part EbpNormalGroupExpand = 7 {
-            Hot = 2,
             Normal = 1,
+            Hot = 2,
             Pressed = 3
         },
         part EbpNormalGroupHead = 8,
         part EbpSpecialGroupBackground = 9,
         part EbpSpecialGroupCollapse = 10 {
-            Hot = 2,
             Normal = 1,
+            Hot = 2,
             Pressed = 3
         },
         part EbpSpecialGroupExpand = 11 {
-            Hot = 2,
             Normal = 1,
+            Hot = 2,
             Pressed = 3
         },
         part EbpSpecialGroupHead = 12
@@ -667,101 +667,101 @@ theme_class!{
     pub class Flyout
             where mod parts = flyout_parts
     {
-        part FlyoutBody = 2 {
-            Emphasized = 2,
-            Normal = 1
-        },
-        part FlyoutDivider = 5,
         part FlyoutHeader = 1,
-        part FlyoutLabel = 3 {
-            Disabled = 4,
-            Emphasized = 3,
+        part FlyoutBody = 2 {
             Normal = 1,
-            Selected = 2
+            Emphasized = 2
+        },
+        part FlyoutLabel = 3 {
+            Normal = 1,
+            Selected = 2,
+            Emphasized = 3,
+            Disabled = 4
         },
         part FlyoutLink = 4 {
-            Hover = 2,
-            Normal = 1
+            Normal = 1,
+            Hover = 2
         },
+        part FlyoutDivider = 5,
+        part FlyoutWindow = 6,
         part FlyoutLinkArea = 7,
         part FlyoutLinkHeader = 8 {
-            Hover = 2,
-            Normal = 1
-        },
-        part FlyoutWindow = 6
+            Normal = 1,
+            Hover = 2
+        }
     }
     pub class Header
             where mod parts = header_parts
     {
-        part HpHeaderDropdown = 5 {
-            Hot = 3,
-            Normal = 1,
-            SoftHot = 2
-        },
-        part HpHeaderDropdownFilter = 6 {
-            Hot = 3,
-            Normal = 1,
-            SoftHot = 2
-        },
         part HpHeaderItem = 1 {
-            Hot = 2,
-            IconHot = 8,
-            IconNormal = 7,
-            IconPressed = 9,
-            IconSortedHot = 11,
-            IconSortedNormal = 10,
-            IconSortedPressed = 12,
             Normal = 1,
+            Hot = 2,
             Pressed = 3,
             SortedNormal = 4,
             SortedHot = 5,
-            SortedPressed = 6
+            SortedPressed = 6,
+            IconNormal = 7,
+            IconHot = 8,
+            IconPressed = 9,
+            IconSortedNormal = 10,
+            IconSortedHot = 11,
+            IconSortedPressed = 12
         },
         part HpHeaderItemLeft = 2 {
-            Hot = 2,
             Normal = 1,
+            Hot = 2,
             Pressed = 3
         },
         part HpHeaderItemRight = 3 {
-            Hot = 2,
             Normal = 1,
+            Hot = 2,
             Pressed = 3
         },
-        part HpHeaderOverflow = 7 {
-            Hot = 2,
-            Normal = 1
-        },
         part HpHeaderSortArrow = 4 {
-            SortedDown = 2,
-            SortedUp = 1
+            SortedUp = 1,
+            SortedDown = 2
+        },
+        part HpHeaderDropdown = 5 {
+            Normal = 1,
+            SoftHot = 2,
+            Hot = 3
+        },
+        part HpHeaderDropdownFilter = 6 {
+            Normal = 1,
+            SoftHot = 2,
+            Hot = 3
+        },
+        part HpHeaderOverflow = 7 {
+            Normal = 1,
+            Hot = 2
         }
     }
     pub class ListBox
             where mod parts = list_box_parts
     {
         part LbcpBorderHScroll = 1 {
-            Disabled = 4,
+            Normal = 1,
             Focused = 2,
             Hot = 3,
-            Normal = 1
+            Disabled = 4
         },
         part LbcpBorderHVScroll = 2 {
-            Disabled = 4,
+            Normal = 1,
             Focused = 2,
             Hot = 3,
-            Normal = 1
+            Disabled = 4
         },
         part LbcpBorderNoScroll = 3 {
-            Disabled = 4,
+            Normal = 1,
             Focused = 2,
             Hot = 3,
-            Normal = 1
+            Disabled = 4
         },
         part LbcpBorderVScroll = 4 {
-            Disabled = 4,
+            Normal = 1,
             Focused = 2,
             Hot = 3,
-            Normal = 1
+            Disabled = 4
         },
         part LbcpItem = 5 {
             Hot = 1,
@@ -773,139 +773,139 @@ theme_class!{
     pub class ListView
             where mod parts = list_view_parts
     {
-        part LvpCollapseButton = 9 {
-            Hover = 2,
+        part LvpListItem = 1 {
             Normal = 1,
-            Pushed = 3
-        },
-        part LvpColumnDetail = 10,
-        part LvpEmptyText = 5,
-        part LvpExpandButton = 8 {
-            Hover = 2,
-            Normal = 1,
-            Pushed = 3
-        },
-        part LvpGroupHeader = 6 {
-            Close = 9,
-            CloseHot = 10,
-            CloseSelected = 11,
-            CloseSelectedHot = 12,
-            CloseSelectedNotFocused = 13,
-            CloseSelectedNotFocusedHot = 14,
-            CloseMixedSelection = 15,
-            CloseMixedSelectionHot = 16,
-            Open = 1,
-            OpenHot = 2,
-            OpenSelected = 3,
-            OpenSelectedHot = 4,
-            OpenSelectedNotFocused = 5,
-            OpenSelectedNotFocusedHot = 6,
-            OpenMixedSelection = 7,
-            OpenMixedSelectionHot = 8
-        },
-        part LvpGroupHeaderLine = 7 {
-            Close = 9,
-            CloseHot = 10,
-            CloseSelected = 11,
-            CloseSelectedHot = 12,
-            CloseSelectedNotFocused = 13,
-            CloseSelectedNotFocusedHot = 14,
-            CloseMixedSelection = 15,
-            CloseMixedSelectionHot = 16,
-            Open = 1,
-            OpenHot = 2,
-            OpenSelected = 3,
-            OpenSelectedHot = 4,
-            OpenSelectedNotFocused = 5,
-            OpenSelectedNotFocusedHot = 6,
-            OpenMixedSelection = 7,
-            OpenMixedSelectionHot = 8
+            Hot = 2,
+            Selected = 3,
+            Disabled = 4,
+            SelectedNotFocus = 5,
+            HotSelected = 6
         },
         part LvpListGroup = 2,
         part LvpListDetail = 3,
-        part LvpListItem = 1 {
-            Disabled = 4,
-            Hot = 2,
-            HotSelected = 6,
-            Normal = 1,
-            Selected = 3,
-            SelectedNotFocus = 5
+        part LvpListSortedDetail = 4,
+        part LvpEmptyText = 5,
+        part LvpGroupHeader = 6 {
+            Open = 1,
+            OpenHot = 2,
+            OpenSelected = 3,
+            OpenSelectedHot = 4,
+            OpenSelectedNotFocused = 5,
+            OpenSelectedNotFocusedHot = 6,
+            OpenMixedSelection = 7,
+            OpenMixedSelectionHot = 8,
+            Close = 9,
+            CloseHot = 10,
+            CloseSelected = 11,
+            CloseSelectedHot = 12,
+            CloseSelectedNotFocused = 13,
+            CloseSelectedNotFocusedHot = 14,
+            CloseMixedSelection = 15,
+            CloseMixedSelectionHot = 16
         },
-        part LvpListSortedDetail = 4
+        part LvpGroupHeaderLine = 7 {
+            Open = 1,
+            OpenHot = 2,
+            OpenSelected = 3,
+            OpenSelectedHot = 4,
+            OpenSelectedNotFocused = 5,
+            OpenSelectedNotFocusedHot = 6,
+            OpenMixedSelection = 7,
+            OpenMixedSelectionHot = 8,
+            Close = 9,
+            CloseHot = 10,
+            CloseSelected = 11,
+            CloseSelectedHot = 12,
+            CloseSelectedNotFocused = 13,
+            CloseSelectedNotFocusedHot = 14,
+            CloseMixedSelection = 15,
+            CloseMixedSelectionHot = 16
+        },
+        part LvpExpandButton = 8 {
+            Normal = 1,
+            Hover = 2,
+            Pushed = 3
+        },
+        part LvpCollapseButton = 9 {
+            Normal = 1,
+            Hover = 2,
+            Pushed = 3
+        },
+        part LvpColumnDetail = 10
     }
     pub class Menu
             where mod parts = menu_parts
     {
+        part MenuMenuItemTmSchema = 1,
+        part MenuMenuDropdownTmSchema = 2,
+        part MenuMenuBarItemTmSchema = 3,
+        part MenuMenuBarDropdownTmSchema = 4,
+        part MenuChevronTmSchema = 5,
+        part MenuSeparatorTmSchema = 6,
         part MenuBarBackground = 7 {
             Active = 1,
             Inactive = 2
         },
         part MenuBarItem = 8 {
+            Normal = 1,
+            Hot = 2,
+            Pushed = 3,
             Disabled = 4,
             DisabledHot = 5,
-            DisabledPushed = 6,
-            Hot = 2,
-            Normal = 1,
-            Pushed = 3
+            DisabledPushed = 6
         },
-        part MenuChevronTmSchema = 5,
-        part MenuMenuBarDropdownTmSchema = 4,
-        part MenuMenuBarItemTmSchema = 3,
-        part MenuMenuDropdownTmSchema = 2,
-        part MenuMenuItemTmSchema = 1,
         part MenuPopupBackground = 9,
         part MenuPopupBorders = 10,
         part MenuPopupCheck = 11 {
-            BulletDisabled = 4,
-            BulletNormal = 3,
+            CheckmarkNormal = 1,
             CheckmarkDisabled = 2,
-            CheckmarkNormal = 1
+            BulletNormal = 3,
+            BulletDisabled = 4
         },
         part MenuPopupCheckBackground = 12 {
-            Bitmap = 3,
             Disabled = 1,
-            Normal = 2
+            Normal = 2,
+            Bitmap = 3
         },
         part MenuPopupGutter = 13,
         part MenuPopupItem = 14 {
-            Disabled = 3,
-            DisabledHot = 4,
+            Normal = 1,
             Hot = 2,
-            Normal = 1
+            Disabled = 3,
+            DisabledHot = 4
         },
         part MenuPopupSeparator = 15,
         part MenuPopupSubmenu = 16 {
-            Disabled = 2,
-            Normal = 1
+            Normal = 1,
+            Disabled = 2
         },
-        part MenuSeparatorTmSchema = 6,
         part MenuSystemClose = 17 {
-            Disabled = 2,
-            Normal = 1
+            Normal = 1,
+            Disabled = 2
         },
         part MenuSystemMaximize = 18 {
-            Disabled = 2,
-            Normal = 1
+            Normal = 1,
+            Disabled = 2
         },
         part MenuSystemMinimize = 19 {
-            Disabled = 2,
-            Normal = 1
+            Normal = 1,
+            Disabled = 2
         },
         part MenuSystemRestore = 20 {
-            Disabled = 2,
-            Normal = 1
+            Normal = 1,
+            Disabled = 2
         }
     }
     pub class MenuBand
             where mod parts = menu_band_parts
     {
         part MdpNewAppButton = 1 {
-            Checked = 5,
-            Disabled = 4,
-            Hot = 2,
-            HotChecked = 6,
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Checked = 5,
+            HotChecked = 6
         },
         part MdpSeperator = 2
     }
@@ -913,50 +913,50 @@ theme_class!{
             where mod parts = navigation_parts
     {
         part NavBackButton = 1 {
-            BbDisabled = 4,
-            BbHot = 2,
             BbNormal = 1,
-            BbPressed = 3
+            BbHot = 2,
+            BbPressed = 3,
+            BbDisabled = 4
         },
         part NavForwardButton = 2 {
-            FbDisabled = 4,
-            FbHot = 2,
             FbNormal = 1,
-            FbPressed = 3
+            FbHot = 2,
+            FbPressed = 3,
+            FbDisabled = 4
         },
         part NavMenuButton = 3 {
-            MbDisabled = 4,
-            MbHot = 2,
             MbNormal = 1,
-            MbPressed = 3
+            MbHot = 2,
+            MbPressed = 3,
+            MbDisabled = 4
         }
     }
     pub class Page
             where mod parts = page_parts
     {
-        part PgrpDown = 2 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pressed = 3
-        },
-        part PgrpDownHorz = 4 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pressed = 3
-        },
         part PgrpUp = 1 {
-            Disabled = 4,
-            Hot = 2,
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4
+        },
+        part PgrpDown = 2 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4
         },
         part PgrpUpHorz = 3 {
-            Disabled = 4,
-            Hot = 2,
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4
+        },
+        part PgrpDownHorz = 4 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4
         }
     }
     pub class Progress
@@ -967,21 +967,21 @@ theme_class!{
         part PpChunk = 3,
         part PpChunkVert = 4,
         part PpFill = 5 {
-            Error = 2,
             Normal = 1,
-            Partial = 4,
-            Paused = 3
+            Error = 2,
+            Paused = 3,
+            Partial = 4
         },
         part PpFillVert = 6 {
-            Error = 2,
             Normal = 1,
-            Partial = 4,
-            Paused = 3
+            Error = 2,
+            Paused = 3,
+            Partial = 4
         },
-        part PpMoveOverlay = 8,
-        part PpMoveOverlayVert = 10,
         part PpPulseOverlay = 7,
+        part PpMoveOverlay = 8,
         part PpPulseOverlayVert = 9,
+        part PpMoveOverlayVert = 10,
         part PpTransparentBar = 11 {
             Normal = 1,
             Partial = 2
@@ -994,28 +994,28 @@ theme_class!{
     pub class Rebar
             where mod parts = rebar_parts
     {
-        part RpBackground = 6,
+        part RpGripper = 1,
+        part RpGripperVert = 2,
         part RpBand = 3,
         part RpChevron = 4 {
-            Hot = 2,
             Normal = 1,
+            Hot = 2,
             Pressed = 3
         },
         part RpChevronVert = 5 {
-            Hot = 2,
             Normal = 1,
+            Hot = 2,
             Pressed = 3
         },
-        part RpGripper = 1,
-        part RpGripperVert = 2,
+        part RpBackground = 6,
         part RpSplitter = 7 {
-            Hot = 2,
             Normal = 1,
+            Hot = 2,
             Pressed = 3
         },
         part RpSplitterVert = 8 {
-            Hot = 2,
             Normal = 1,
+            Hot = 2,
             Pressed = 3
         }
     }
@@ -1023,214 +1023,214 @@ theme_class!{
             where mod parts = scroll_bar_parts
     {
         part SbpArrowBtn = 1 {
-            DownDisabled = 8,
-            DownHot = 6,
-            DownNormal = 5,
-            DownPressed = 7,
-            DownHover = 18,
-            LeftDisabled = 12,
-            LeftHot = 10,
-            LeftHover = 19,
-            LeftNormal = 9,
-            LeftPressed = 11,
-            RightDisabled = 16,
-            RightHot = 14,
-            RightHover = 20,
-            RightNormal = 13,
-            RightPressed = 15,
-            UpDisabled = 4,
-            UpHot = 2,
-            UpHover = 17,
             UpNormal = 1,
-            UpPressed = 3
+            UpHot = 2,
+            UpPressed = 3,
+            UpDisabled = 4,
+            DownNormal = 5,
+            DownHot = 6,
+            DownPressed = 7,
+            DownDisabled = 8,
+            LeftNormal = 9,
+            LeftHot = 10,
+            LeftPressed = 11,
+            LeftDisabled = 12,
+            RightNormal = 13,
+            RightHot = 14,
+            RightPressed = 15,
+            RightDisabled = 16,
+            UpHover = 17,
+            DownHover = 18,
+            LeftHover = 19,
+            RightHover = 20
         },
-        part SbpGripperHorz = 8 {
-            Disabled = 4,
-            Hot = 2,
-            Hover = 5,
+        part SbpThumbBtnHorz = 2 {
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Hover = 5
         },
-        part SbpGripperVert = 9 {
-            Disabled = 4,
-            Hot = 2,
-            Hover = 5,
+        part SbpThumbBtnVert = 3 {
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Hover = 5
         },
         part SbpLowerTrackHorz = 4 {
-            Disabled = 4,
-            Hot = 2,
-            Hover = 5,
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Hover = 5
+        },
+        part SbpUpperTrackHorz = 5 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Hover = 5
         },
         part SbpLowerTrackVert = 6 {
-            Disabled = 4,
-            Hot = 2,
-            Hover = 5,
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Hover = 5
+        },
+        part SbpUpperTrackVert = 7 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Hover = 5
+        },
+        part SbpGripperHorz = 8 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Hover = 5
+        },
+        part SbpGripperVert = 9 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Hover = 5
         },
         part SbpSizeBox = 10 {
+            RightAlign = 1,
+            LeftAlign = 2,
+            TopRightAlign = 3,
+            TopLeftAlign = 4,
             HalfBottomRightAlign = 5,
             HalfBottomLeftAlign = 6,
             HalfTopRightAlign = 7,
-            HalfTopLeftAlign = 8,
-            LeftAlign = 2,
-            RightAlign = 1,
-            TopRightAlign = 3,
-            TopLeftAlign = 4
-        },
-        part SbpThumbBtnHorz = 2 {
-            Disabled = 4,
-            Hot = 2,
-            Hover = 5,
-            Normal = 1,
-            Pressed = 3
-        },
-        part SbpThumbBtnVert = 3 {
-            Disabled = 4,
-            Hot = 2,
-            Hover = 5,
-            Normal = 1,
-            Pressed = 3
-        },
-        part SbpUpperTrackHorz = 5 {
-            Disabled = 4,
-            Hot = 2,
-            Hover = 5,
-            Normal = 1,
-            Pressed = 3
-        },
-        part SbpUpperTrackVert = 7 {
-            Disabled = 4,
-            Hot = 2,
-            Hover = 5,
-            Normal = 1,
-            Pressed = 3
+            HalfTopLeftAlign = 8
         }
     }
     pub class Spin
             where mod parts = spin_parts
     {
-        part SpnpDown = 2 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pressed = 3
-        },
-        part SpnpDownHorz = 4 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pressed = 3
-        },
         part SpnpUp = 1 {
-            Disabled = 4,
-            Hot = 2,
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4
+        },
+        part SpnpDown = 2 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4
         },
         part SpnpUpHorz = 3 {
-            Disabled = 4,
-            Hot = 2,
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4
+        },
+        part SpnpDownHorz = 4 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4
         }
     }
     pub class StartPanel
             where mod parts = start_panel_parts
     {
-        part SppLogoff = 8,
-        part SppLogoffButtons = 9 {
-            Hot = 2,
-            Normal = 1,
-            Pressed = 3
-        },
+        part SppUserPane = 1,
         part SppMorePrograms = 2,
         part SppMoreProgramsArrow = 3 {
-            Hot = 2,
             Normal = 1,
+            Hot = 2,
             Pressed = 3
         },
-        part SppPlacesList = 6,
-        part SppPlacesListSeparator = 7,
-        part SppPreView = 11,
         part SppProgList = 4,
         part SppProgListSeparator = 5,
-        part SppUserPane = 1,
-        part SppUserpicture = 10
+        part SppPlacesList = 6,
+        part SppPlacesListSeparator = 7,
+        part SppLogoff = 8,
+        part SppLogoffButtons = 9 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3
+        },
+        part SppUserpicture = 10,
+        part SppPreView = 11
     }
     pub class Status
             where mod parts = status_parts
     {
-        part SpGripper = 3,
+        part SpPane = 1,
         part SpGripperPane = 2,
-        part SpPane = 1
+        part SpGripper = 3
     }
     pub class Tab
             where mod parts = tab_parts
     {
-        part TabpAeroWizardBody = 11,
-        part TabpBody = 10,
-        part TabpPane = 9,
         part TabpTabItem = 1 {
-            Disabled = 4,
-            Focused = 5,
-            Hot = 2,
             Normal = 1,
-            Selected = 3
-        },
-        part TabpTabItemBothEdge = 4 {
-            Disabled = 4,
-            Focused = 5,
             Hot = 2,
-            Normal = 1,
-            Selected = 3
+            Selected = 3,
+            Disabled = 4,
+            Focused = 5
         },
         part TabpTabItemLeftEdge = 2 {
-            Disabled = 4,
-            Focused = 5,
-            Hot = 2,
             Normal = 1,
-            Selected = 3
+            Hot = 2,
+            Selected = 3,
+            Disabled = 4,
+            Focused = 5
         },
         part TabpTabItemRightEdge = 3 {
-            Disabled = 4,
-            Focused = 5,
-            Hot = 2,
             Normal = 1,
-            Selected = 3
+            Hot = 2,
+            Selected = 3,
+            Disabled = 4,
+            Focused = 5
+        },
+        part TabpTabItemBothEdge = 4 {
+            Normal = 1,
+            Hot = 2,
+            Selected = 3,
+            Disabled = 4,
+            Focused = 5
         },
         part TabpTopTabItem = 5 {
-            Disabled = 4,
-            Focused = 5,
-            Hot = 2,
             Normal = 1,
-            Selected = 3
-        },
-        part TabpTopTabItemBothEdge = 8 {
-            Disabled = 4,
-            Focused = 5,
             Hot = 2,
-            Normal = 1,
-            Selected = 3
+            Selected = 3,
+            Disabled = 4,
+            Focused = 5
         },
         part TabpTopTabItemLeftEdge = 6 {
-            Disabled = 4,
-            Focused = 5,
-            Hot = 2,
             Normal = 1,
-            Selected = 3
+            Hot = 2,
+            Selected = 3,
+            Disabled = 4,
+            Focused = 5
         },
         part TabpTopTabItemRightEdge = 7 {
-            Disabled = 4,
-            Focused = 5,
-            Hot = 2,
             Normal = 1,
-            Selected = 3
-        }
+            Hot = 2,
+            Selected = 3,
+            Disabled = 4,
+            Focused = 5
+        },
+        part TabpTopTabItemBothEdge = 8 {
+            Normal = 1,
+            Hot = 2,
+            Selected = 3,
+            Disabled = 4,
+            Focused = 5
+        },
+        part TabpPane = 9,
+        part TabpBody = 10,
+        part TabpAeroWizardBody = 11
     }
     pub class TaskBand
             where mod parts = task_band_parts
@@ -1243,9 +1243,9 @@ theme_class!{
             where mod parts = task_bar_parts
     {
         part TbpBackgroundBottom = 1,
-        part TbpBackgroundLeft = 4,
         part TbpBackgroundRight = 2,
         part TbpBackgroundTop = 3,
+        part TbpBackgroundLeft = 4,
         part TbpSizingBarBottom = 5,
         part TbpSizingBarRight = 6,
         part TbpSizingBarTop = 7
@@ -1253,138 +1253,152 @@ theme_class!{
     pub class TaskDialog
             where mod parts = task_dialog_parts
     {
-        part TdlgButtonSection = 10,
-        part TdlgButtonWrapper = 11,
-        part TdlgCommandLinkPane = 7,
-        part TdlgContentIcon = 5,
+        part TdlgPrimaryPanel = 1,
+        part TdlgMainInstructionPane = 2,
+        part TdlgMainIcon = 3,
         part TdlgContentPane = 4 {
             Standalone = 1
         },
-        part TdlgControlPane = 9,
+        part TdlgContentIcon = 5,
         part TdlgExpandedcontent = 6,
-        part TdlgExpandedfooterArea = 18,
-        part TdlgExpandoButton = 13 {
-            ExpandedHover = 5,
-            ExpandedNormal = 4,
-            ExpandedPressed = 6,
-            Hover = 2,
-            Normal = 1,
-            Pressed = 3
-        },
-        part TdlgExpandoText = 12,
-        part TdlgFootNoteArea = 16,
-        part TdlgFootNotePane = 15,
-        part TdlgFootNoteSeparator = 17,
-        part TdlgImageAlignment = 20,
-        part TdlgMainIcon = 3,
-        part TdlgMainInstructionPane = 2,
-        part TdlgPrimaryPanel = 1,
-        part TdlgProgressBar = 19,
-        part TdlgRadioButtonPane = 21,
+        part TdlgCommandLinkPane = 7,
         part TdlgSecondaryPanel = 8,
-        part TdlgVerificationText = 14
+        part TdlgControlPane = 9,
+        part TdlgButtonSection = 10,
+        part TdlgButtonWrapper = 11,
+        part TdlgExpandoText = 12,
+        part TdlgExpandoButton = 13 {
+            Normal = 1,
+            Hover = 2,
+            Pressed = 3,
+            ExpandedNormal = 4,
+            ExpandedHover = 5,
+            ExpandedPressed = 6
+        },
+        part TdlgVerificationText = 14,
+        part TdlgFootNotePane = 15,
+        part TdlgFootNoteArea = 16,
+        part TdlgFootNoteSeparator = 17,
+        part TdlgExpandedfooterArea = 18,
+        part TdlgProgressBar = 19,
+        part TdlgImageAlignment = 20,
+        part TdlgRadioButtonPane = 21
     }
     pub class TextStyle
             where mod parts = text_style_parts
     {
+        part TextMainInstruction = 1,
+        part TextInstruction = 2,
         part TextBodyTitle = 3,
         part TextBodyText = 4,
-        part TextControlLabel = 9 {
-            ControlLabelDisabled = 2,
-            ControlLabelNormal = 1
+        part TextSecondaryText = 5,
+        part TextHyperLinkText = 6 {
+            HyperLinkNormal = 1,
+            HyperLinkHot = 2,
+            HyperLinkPressed = 3,
+            HyperLinkDisabled = 4
         },
         part TextExpanded = 7,
-        part TextHyperLinkText = 6 {
-            HyperLinkDisabled = 4,
-            HyperLinkHot = 2,
-            HyperLinkNormal = 1,
-            HyperLinkPressed = 3
-        },
-        part TextInstruction = 2,
         part TextLabel = 8,
-        part TextMainInstruction = 1,
-        part TextSecondaryText = 5
+        part TextControlLabel = 9 {
+            ControlLabelNormal = 1,
+            ControlLabelDisabled = 2
+        }
     }
     pub class ToolBar
             where mod parts = tool_bar_parts
     {
         part TpButton = 1 {
-            Checked = 5,
-            Disabled = 4,
+            Normal = 1,
             Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Checked = 5,
             HotChecked = 6,
             NearHot = 7,
-            Normal = 1,
-            OtherSideHot = 8,
-            Pressed = 3
+            OtherSideHot = 8
         },
         part TpDropdownButton = 2 {
-            Checked = 5,
-            Disabled = 4,
+            Normal = 1,
             Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Checked = 5,
             HotChecked = 6,
             NearHot = 7,
-            Normal = 1,
-            OtherSideHot = 8,
-            Pressed = 3
-        },
-        part TpDropdownButtonGlyph = 7 {
-            Checked = 5,
-            Disabled = 4,
-            Hot = 2,
-            HotChecked = 6,
-            NearHot = 7,
-            Normal = 1,
-            OtherSideHot = 8,
-            Pressed = 3
-        },
-        part TpSeparator = 5 {
-            Checked = 5,
-            Disabled = 4,
-            Hot = 2,
-            HotChecked = 6,
-            NearHot = 7,
-            Normal = 1,
-            OtherSideHot = 8,
-            Pressed = 3
-        },
-        part TpSeparatorVert = 6 {
-            Checked = 5,
-            Disabled = 4,
-            Hot = 2,
-            HotChecked = 6,
-            NearHot = 7,
-            Normal = 1,
-            OtherSideHot = 8,
-            Pressed = 3
+            OtherSideHot = 8
         },
         part TpSplitButton = 3 {
-            Checked = 5,
-            Disabled = 4,
+            Normal = 1,
             Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Checked = 5,
             HotChecked = 6,
             NearHot = 7,
-            Normal = 1,
-            OtherSideHot = 8,
-            Pressed = 3
+            OtherSideHot = 8
         },
         part TpSplitButtonDropdown = 4 {
-            Checked = 5,
-            Disabled = 4,
+            Normal = 1,
             Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Checked = 5,
             HotChecked = 6,
             NearHot = 7,
+            OtherSideHot = 8
+        },
+        part TpSeparator = 5 {
             Normal = 1,
-            OtherSideHot = 8,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Checked = 5,
+            HotChecked = 6,
+            NearHot = 7,
+            OtherSideHot = 8
+        },
+        part TpSeparatorVert = 6 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Checked = 5,
+            HotChecked = 6,
+            NearHot = 7,
+            OtherSideHot = 8
+        },
+        part TpDropdownButtonGlyph = 7 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Disabled = 4,
+            Checked = 5,
+            HotChecked = 6,
+            NearHot = 7,
+            OtherSideHot = 8
         }
     }
     pub class Tooltip
             where mod parts = tooltip_parts
     {
+        part TtpStandard = 1 {
+            Normal = 1,
+            Link = 2
+        },
+        part TtpStandardTitle = 2 {
+            Normal = 1,
+            Link = 2
+        },
         part TtpBalloon = 3 {
-            Link = 2,
-            Normal = 1
+            Normal = 1,
+            Link = 2
+        },
+        part TtpBalloonTitle = 4,
+        part TtpClose = 5 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3
         },
         part TtpBalloonStem = 6 {
             PointingUpLeftWall = 1,
@@ -1393,20 +1407,6 @@ theme_class!{
             PointingDownRightWall = 4,
             PointingDownCentered = 5,
             PointingDownLeftWall = 6
-        },
-        part TtpBalloonTitle = 4,
-        part TtpClose = 5 {
-            Hot = 2,
-            Normal = 1,
-            Pressed = 3
-        },
-        part TtpStandard = 1 {
-            Link = 2,
-            Normal = 1
-        },
-        part TtpStandardTitle = 2 {
-            Link = 2,
-            Normal = 1
         },
         part TtpWrench = 7 {
             Normal = 1,
@@ -1417,86 +1417,86 @@ theme_class!{
     pub class TrackBar
             where mod parts = track_bar_parts
     {
+        part TkpTrack = 1 {
+            Normal = 1
+        },
+        part TkpTrackVert = 2 {
+            Normal = 1
+        },
         part TkpThumb = 3 {
-            Disabled = 5,
-            Focused = 4,
-            Hot = 2,
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Focused = 4,
+            Disabled = 5
         },
         part TkpThumbBottom = 4 {
-            Disabled = 5,
-            Focused = 4,
-            Hot = 2,
             Normal = 1,
-            Pressed = 3
-        },
-        part TkpThumbLeft = 7 {
-            Disabled = 5,
-            Focused = 4,
             Hot = 2,
-            Normal = 1,
-            Pressed = 3
-        },
-        part TkpThumbRight = 8 {
-            Disabled = 5,
+            Pressed = 3,
             Focused = 4,
-            Hot = 2,
-            Normal = 1,
-            Pressed = 3
+            Disabled = 5
         },
         part TkpThumbTop = 5 {
-            Disabled = 5,
-            Focused = 4,
-            Hot = 2,
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Focused = 4,
+            Disabled = 5
         },
         part TkpThumbVert = 6 {
-            Disabled = 5,
-            Focused = 4,
-            Hot = 2,
             Normal = 1,
-            Pressed = 3
+            Hot = 2,
+            Pressed = 3,
+            Focused = 4,
+            Disabled = 5
+        },
+        part TkpThumbLeft = 7 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Focused = 4,
+            Disabled = 5
+        },
+        part TkpThumbRight = 8 {
+            Normal = 1,
+            Hot = 2,
+            Pressed = 3,
+            Focused = 4,
+            Disabled = 5
         },
         part TkpTics = 9 {
             Normal = 1
         },
         part TkpTicsVert = 10 {
             Normal = 1
-        },
-        part TkpTrack = 1 {
-            Normal = 1
-        },
-        part TkpTrackVert = 2 {
-            Normal = 1
         }
     }
     pub class TrayNotify
             where mod parts = tray_botify_parts
     {
-        part TnpAnimBackground = 2,
-        part TnpBackground = 1
+        part TnpBackground = 1,
+        part TnpAnimBackground = 2
     }
     pub class TreeView
             where mod parts = tree_view_parts
     {
-        part TvpBranch = 3,
+        part TvpTreeItem = 1 {
+            Normal = 1,
+            Hot = 2,
+            Selected = 3,
+            Disabled = 4,
+            SelectedNotFocus = 5,
+            HotSelected = 6
+        },
         part TvpGlyph = 2 {
             Closed = 1,
             Opened = 2
         },
+        part TvpBranch = 3,
         part TvpHotGlyph = 4 {
             Closed = 1,
             Opened = 2
-        },
-        part TvpTreeItem = 1 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Selected = 3,
-            SelectedNotFocus = 5,
-            HotSelected = 6
         }
     }
     pub class Window
@@ -1504,106 +1504,106 @@ theme_class!{
     {
         part WpCaption = 1 {
             Active = 1,
-            Disabled = 3,
-            Inactive = 2
+            Inactive = 2,
+            Disabled = 3
         },
-        part WpCaptionSizingTemplate = 30,
-        part WpCloseButton = 18 {
-            Disabled = 4,
-            Hot = 2,
+        part WpSmallCaption = 2,
+        part WpMinCaption = 3 {
+            Active = 1,
+            Inactive = 2,
+            Disabled = 3
+        },
+        part WpSmallMinCaption = 4,
+        part WpMaxCaption = 5 {
+            Active = 1,
+            Inactive = 2,
+            Disabled = 3
+        },
+        part WpSmallMaxCaption = 6,
+        part WpFrameLeft = 7,
+        part WpFrameRight = 8,
+        part WpFrameBottom = 9,
+        part WpSmallFrameLeft = 10,
+        part WpSmallFrameRight = 11,
+        part WpSmallFrameBottom = 12,
+        part WpSysButton = 13 {
             Normal = 1,
-            Pushed = 3
+            Hot = 2,
+            Pushed = 3,
+            Disabled = 4
+        },
+        part WpMdiSysButton = 14,
+        part WpMinButton = 15 {
+            Normal = 1,
+            Hot = 2,
+            Pushed = 3,
+            Disabled = 4
+        },
+        part WpMdiMinButton = 16,
+        part WpMaxButton = 17 {
+            Normal = 1,
+            Hot = 2,
+            Pushed = 3,
+            Disabled = 4
+        },
+        part WpCloseButton = 18 {
+            Normal = 1,
+            Hot = 2,
+            Pushed = 3,
+            Disabled = 4
+        },
+        part WpSmallCloseButton = 19,
+        part WpMdiCloseButton = 20,
+        part WpRestoreButton = 21 {
+            Normal = 1,
+            Hot = 2,
+            Pushed = 3,
+            Disabled = 4
+        },
+        part WpMdiRestoreButton = 22,
+        part WpHelpButton = 23 {
+            Normal = 1,
+            Hot = 2,
+            Pushed = 3,
+            Disabled = 4
+        },
+        part WpMdiHelpButton = 24,
+        part WpHorzScroll = 25 {
+            Normal = 1,
+            Hot = 2,
+            Pushed = 3,
+            Disabled = 4
+        },
+        part WpHorzThumb = 26 {
+            Normal = 1,
+            Hot = 2,
+            Pushed = 3,
+            Disabled = 4
+        },
+        part WpVertScroll = 27 {
+            Normal = 1,
+            Hot = 2,
+            Pushed = 3,
+            Disabled = 4
+        },
+        part WpVertThumb = 28 {
+            Normal = 1,
+            Hot = 2,
+            Pushed = 3,
+            Disabled = 4
         },
         part WpDialog = 29,
+        part WpCaptionSizingTemplate = 30,
+        part WpSmallCaptionSizingTemplate = 31,
+        part WpFrameLeftSizingTemplate = 32,
+        part WpSmallFrameLeftSizingTemplate = 33,
+        part WpFrameRightSizingTemplate = 34,
+        part WpSmallFrameRightSizingTemplate = 35,
+        part WpFrameBottomSizingTemplate = 36,
+        part WpSmallFrameBottomSizingTemplate = 37,
         part WpFrame = 38 {
             Active = 1,
             Inactive = 2
-        },
-        part WpFrameBottom = 9,
-        part WpFrameBottomSizingTemplate = 36,
-        part WpFrameLeft = 7,
-        part WpFrameLeftSizingTemplate = 32,
-        part WpFrameRight = 8,
-        part WpFrameRightSizingTemplate = 34,
-        part WpHelpButton = 23 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pushed = 3
-        },
-        part WpHorzScroll = 25 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pushed = 3
-        },
-        part WpHorzThumb = 26 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pushed = 3
-        },
-        part WpMaxButton = 17 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pushed = 3
-        },
-        part WpMaxCaption = 5 {
-            Active = 1,
-            Disabled = 3,
-            Inactive = 2
-        },
-        part WpMdiCloseButton = 20,
-        part WpMdiHelpButton = 24,
-        part WpMdiMinButton = 16,
-        part WpMdiRestoreButton = 22,
-        part WpMdiSysButton = 14,
-        part WpMinButton = 15 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pushed = 3
-        },
-        part WpMinCaption = 3 {
-            Active = 1,
-            Disabled = 3,
-            Inactive = 2
-        },
-        part WpRestoreButton = 21 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pushed = 3
-        },
-        part WpSmallCaption = 2,
-        part WpSmallCaptionSizingTemplate = 31,
-        part WpSmallCloseButton = 19,
-        part WpSmallFrameBottom = 12,
-        part WpSmallFrameBottomSizingTemplate = 37,
-        part WpSmallFrameLeft = 10,
-        part WpSmallFrameLeftSizingTemplate = 33,
-        part WpSmallFrameRight = 11,
-        part WpSmallFrameRightSizingTemplate = 35,
-        part WpSmallMaxCaption = 6,
-        part WpSmallMinCaption = 4,
-        part WpSysButton = 13 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pushed = 3
-        },
-        part WpVertScroll = 27 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pushed = 3
-        },
-        part WpVertThumb = 28 {
-            Disabled = 4,
-            Hot = 2,
-            Normal = 1,
-            Pushed = 3
         }
     }
 }
