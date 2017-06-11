@@ -23,21 +23,27 @@ pub unsafe trait ThemeClass<P: Part> {
     fn htheme(&self) -> HTHEME;
 
     #[inline]
-    fn get_theme_bitmap(&self, part: P) -> Option<BitmapRef> {
-        let mut bitmap_handle = ptr::null_mut();
-        unsafe{ uxtheme::GetThemeBitmap(
-            self.htheme(),
-            part.part_id(),
-            part.state_id(),
-            0,
-            1,
-            &mut bitmap_handle
-        ) };
+    fn get_theme_bitmap(&self, part: P, prop: Option<BitmapProp>) -> Option<BitmapRef> {
+        unsafe {
+            let prop_int: c_int = match prop {
+                Some(bitmap_prop) => mem::transmute(bitmap_prop),
+                None              => 0
+            };
+            let mut bitmap_handle = ptr::null_mut();
+            uxtheme::GetThemeBitmap(
+                self.htheme(),
+                part.part_id(),
+                part.state_id(),
+                prop_int,
+                1,
+                &mut bitmap_handle
+            );
 
-        if bitmap_handle != ptr::null_mut() {
-            unsafe{ Some(BitmapRef::from_raw(bitmap_handle)) }
-        } else {
-            None
+            if bitmap_handle != ptr::null_mut() {
+                Some(BitmapRef::from_raw(bitmap_handle))
+            } else {
+                None
+            }
         }
     }
 
@@ -1752,6 +1758,13 @@ pub enum SysFontProp {
     StatusFont = TMT_STATUSFONT,
     MsgBoxFont = TMT_MSGBOXFONT,
     IconTitleFont = TMT_ICONTITLEFONT
+}
+
+#[repr(i32)]
+pub enum BitmapProp {
+    DIBData = TMT_DIBDATA,
+    GlyphDIBData = TMT_GLYPHDIBDATA
+    // HBitmap = TMT_HBITMAP
 }
 
 #[repr(i32)]
