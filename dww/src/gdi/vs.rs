@@ -5,11 +5,12 @@ use gdi32;
 use window::{BaseWindow, WindowBuilder, BlankBase};
 use std::{ptr, mem};
 use std::marker::{Send, Sync};
+use gdi::DeviceContext;
 use gdi::img::BitmapRef;
 use gdi::text::Font;
 use dct::color::Color24;
 use dct::hints::Margins;
-use dct::geometry::{Point, OffsetRect};
+use dct::geometry::{Point, OffsetRect, OriginRect};
 
 struct ThemeWindow(BlankBase);
 unsafe impl Send for ThemeWindow {}
@@ -230,6 +231,45 @@ pub unsafe trait ThemeClass<P: Part> {
 
             if result == S_OK {
                 Some(OffsetRect::new(rect.left, rect.top, rect.right, rect.bottom))
+            } else {
+                None
+            }
+        }
+    }
+
+    #[inline]
+    fn get_theme_part_size<C: DeviceContext>(&self, dc: &C, part: P, part_rect: Option<OffsetRect>, size: ThemeSize) -> Option<OriginRect> {
+        unsafe {
+            let size_winapi = THEMESIZE(mem::transmute(size));
+            let mut size = mem::uninitialized();
+
+            let rect_cache: RECT;
+            let rect_ptr = if let Some(rect) = part_rect {
+                let topleft = rect.topleft();
+                let lowright = rect.lowright();
+                rect_cache = RECT {
+                    left: topleft.x,
+                    top: topleft.y,
+                    right: lowright.x,
+                    bottom: lowright.y
+                };
+                &rect_cache as *const RECT
+            } else {
+                ptr::null()
+            };
+
+            let result = uxtheme::GetThemePartSize(
+                self.htheme(),
+                dc.hdc(),
+                part.part_id(),
+                part.state_id(),
+                rect_ptr,
+                size_winapi,
+                &mut size
+            );
+
+            if result == S_OK {
+                Some(OriginRect::new(size.cx, size.cy))
             } else {
                 None
             }
@@ -1850,6 +1890,13 @@ pub enum RectProp {
     AtlasRect = TMT_ATLASRECT,
     CustomSplitRect = TMT_CUSTOMSPLITRECT,
     DefaultPaneSize = TMT_DEFAULTPANESIZE
+}
+
+#[repr(i32)]
+pub enum ThemeSize {
+    Min = 0,
+    True = 1,
+    Draw = 2
 }
 
 // #[repr(i32)]
