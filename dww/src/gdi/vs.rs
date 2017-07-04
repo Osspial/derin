@@ -10,7 +10,7 @@ use gdi::img::BitmapRef;
 use gdi::text::Font;
 use dct::color::Color24;
 use dct::hints::Margins;
-use dct::geometry::{Point, OffsetRect, OriginRect};
+use dct::geometry::{Point, OffsetRect, OriginRect, Rect};
 
 struct ThemeWindow(BlankBase);
 unsafe impl Send for ThemeWindow {}
