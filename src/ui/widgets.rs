@@ -3,7 +3,6 @@ use super::buttons::MouseButton;
 use self::content::*;
 
 use std::marker::PhantomData;
-use native::NativeWrapperRegistry;
 
 
 macro_rules! intrinsics {
@@ -37,7 +36,7 @@ macro_rules! intrinsics {
             () => (if_tokens!{($($map_ty_override)*) {$($map_ty_override)*} else {$map_ty}});
         }
 
-        pub struct $name<$($generic,)* R = NativeWrapperRegistry>
+        pub struct $name<$($generic,)* R>
                 where $($($where_ty: $($constraint + )+,)*)*
                       R: NodeDataRegistry<$name<$($generic,)* R>>,
                       R::NodeDataWrapper: NodeDataWrapper<event_action_map!(), ContentData = $content_data_ty>
