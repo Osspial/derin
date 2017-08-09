@@ -6,7 +6,7 @@ version = "0.1.0"
 [dependencies]
 dle = {path = "./dle"}
 dct = {path = "./dct"}
-dww = {path = "./dww"}
+# dww = {path = "./dww"}
 derin_core = {path = "./derin_core"}
 cgmath = "0.15"
 

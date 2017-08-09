@@ -7,9 +7,6 @@ extern crate cgmath;
 #[cfg_attr(test, macro_use)]
 extern crate quickcheck;
 
-#[cfg(target_os="windows")]
-extern crate dww;
-
 use derin_core::render::DVertex;
 use derin_core::tree::{DrawTag, RawEvent, Node};
 
