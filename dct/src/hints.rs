@@ -1,4 +1,6 @@
-use geometry::{Px, Rect, OriginRect};
+use Px;
+use num_traits::Bounded;
+use rect_cgmath::{DimsRect, Rectangle};
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 
 pub type Tr = u32;
@@ -142,12 +144,12 @@ impl Default for TrackHints {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 pub struct SizeBounds {
-    pub min: OriginRect,
-    pub max: OriginRect
+    pub min: DimsRect<Px>,
+    pub max: DimsRect<Px>
 }
 
 impl SizeBounds {
-    pub fn new(min: OriginRect, max: OriginRect) -> SizeBounds {
+    pub fn new(min: DimsRect<Px>, max: DimsRect<Px>) -> SizeBounds {
         SizeBounds {
             min: min,
             max: max
@@ -155,17 +157,17 @@ impl SizeBounds {
     }
 
     /// Bound a rectangle to be within the size bounds.
-    pub fn bound_rect(self, mut desired_size: OriginRect) -> OriginRect {
+    pub fn bound_rect(self, mut desired_size: DimsRect<Px>) -> DimsRect<Px> {
         if desired_size.width() < self.min.width() {
-            desired_size.width = self.min.width();
+            desired_size.dims.x = self.min.width();
         } else if desired_size.width() > self.max.width() {
-            desired_size.width = self.max.width();
+            desired_size.dims.x = self.max.width();
         }
 
         if desired_size.height() < self.min.height() {
-            desired_size.height = self.min.height();
+            desired_size.dims.y = self.min.height();
         } else if desired_size.height() > self.max.height() {
-            desired_size.height = self.max.height();
+            desired_size.dims.y = self.max.height();
         }
 
         desired_size
@@ -175,8 +177,8 @@ impl SizeBounds {
 impl Default for SizeBounds {
     fn default() -> SizeBounds {
         SizeBounds {
-            min: OriginRect::min(),
-            max: OriginRect::max()
+            min: DimsRect::min_value(),
+            max: DimsRect::max_value()
         }
     }
 }

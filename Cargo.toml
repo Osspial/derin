@@ -8,7 +8,7 @@ dle = {path = "./dle"}
 dct = {path = "./dct"}
 # dww = {path = "./dww"}
 derin_core = {path = "./derin_core"}
-cgmath = "0.15"
+cgmath = { git = "https://github.com/Osspial/cgmath.git", branch = "prs_merged" }
 
 [dev-dependencies]
 quickcheck = "0.4"

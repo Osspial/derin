@@ -1,5 +1,6 @@
 use Tr;
-use dct::geometry::{Px, Point};
+use dct::Px;
+use cgmath::Point2;
 use dct::hints::{GridSize, TrRange, TrackHints};
 
 use std::cmp;
@@ -324,13 +325,13 @@ impl<T> TrackVec<T> {
 
 impl TrackVec<GridTrack> {
     /// Get the given cell's offset from the origin point of the layout.
-    pub fn get_cell_offset(&self, column_num: Tr, row_num: Tr) -> Option<Point> {
+    pub fn get_cell_offset(&self, column_num: Tr, row_num: Tr) -> Option<Point2<Px>> {
         if column_num < self.num_cols &&
            row_num < self.num_rows
         {
             // Sum up the sizes of every column and row up to `column_num` and `row_num` variables. That sum
             // is the offset of the given column and row.
-            Some(Point::new(
+            Some(Point2::new(
                 (0..column_num).map(|c| self.get_col(c).unwrap().size()).sum(),
                 (0..row_num).map(|r| self.get_row(r).unwrap().size()).sum()
             ))

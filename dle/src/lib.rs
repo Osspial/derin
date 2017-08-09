@@ -1,18 +1,23 @@
 #[cfg(test)]
 #[cfg_attr(test, macro_use)]
 extern crate quickcheck;
+extern crate num_traits;
+extern crate cgmath;
+extern crate rect_cgmath;
 extern crate dct;
 
 mod grid;
 
-use dct::geometry::{Px, Rect, Point, OriginRect, OffsetRect};
+use dct::Px;
+use cgmath::{Vector2, EuclideanSpace};
+use rect_cgmath::{DimsRect, Rectangle, BoundRectTLO};
 use dct::hints::{Fr, Tr, PlaceInCell, Place, GridSize, WidgetHints, TrackHints, SizeBounds, Margins};
 use grid::{TrackVec, SizeResult};
 
 use std::cmp;
 
 pub trait Widget {
-    fn set_rect(&mut self, rect: OffsetRect);
+    fn set_rect(&mut self, rect: BoundRectTLO<Px>);
 }
 
 pub trait GridContainer {
@@ -31,10 +36,10 @@ pub struct UpdateHeapCache {
 pub struct GridEngine {
     grid: TrackVec,
     /// The pixel size of the layout engine, as requested by the programmer.
-    pub desired_size: OriginRect,
+    pub desired_size: DimsRect<Px>,
     /// The pixel size of the layout engine, accounting for the size bounds of the widgets and the size
     /// bounds of the engine.
-    actual_size: OriginRect,
+    actual_size: DimsRect<Px>,
     /// The size bounds of the engine, as requested by the programmer.
     pub desired_size_bounds: SizeBounds,
     /// The size bounds of the engine, accounting for the size bounds of the widgets.
@@ -47,8 +52,8 @@ impl GridEngine {
     pub fn new() -> GridEngine {
         GridEngine {
             grid: TrackVec::new(),
-            desired_size: OriginRect::min(),
-            actual_size: OriginRect::min(),
+            desired_size: DimsRect::new(0, 0),
+            actual_size: DimsRect::new(0, 0),
             desired_size_bounds: SizeBounds::default(),
             actual_size_bounds: SizeBounds::default(),
             grid_margins: Margins::default()
@@ -79,7 +84,7 @@ impl GridEngine {
         self.grid.get_col_mut(col).expect(&format!("Col {} out of range", col)).set_hints(hints).ok();
     }
 
-    pub fn actual_size(&self) -> OriginRect {
+    pub fn actual_size(&self) -> DimsRect<Px> {
         self.actual_size
     }
 
@@ -98,7 +103,7 @@ impl GridEngine {
     /// <sup>\* The only situation where some constraints may end up violated would be when the maximum
     /// size is less than the minimum size. In that case, minimum size overrides maximum size, as doing
     /// otherwise could cause rendering issues. </sup>
-    pub fn update_engine<C>(&mut self, grid_container: &mut C, heap_cache: &mut UpdateHeapCache) -> Result<(), OriginRect>
+    pub fn update_engine<C>(&mut self, grid_container: &mut C, heap_cache: &mut UpdateHeapCache) -> Result<(), DimsRect<Px>>
             where C: GridContainer
     {
         // We start out by setting the free space to its maximum possible value.
@@ -111,38 +116,38 @@ impl GridEngine {
 
         // Reset the actual size bounds to zero.
         self.actual_size_bounds = SizeBounds {
-            min: OriginRect::min(),
-            max: OriginRect::min()
+            min: DimsRect::new(0, 0),
+            max: DimsRect::new(0, 0)
         };
 
-        let mut frac_min_size = OriginRect::min();
+        let mut frac_min_size = DimsRect::new(0, 0);
 
-        let mut rigid_min_size = OriginRect::min();
+        let mut rigid_min_size = DimsRect::new(0, 0);
 
         // Next, we perform an iteration over the tracks, subtracting from the free space if the track is
         // rigid.
         macro_rules! first_track_pass {
-            ($rect_size:ident, $push_track:ident, $track_range_mut:ident, $free_size:expr, $fr_total:expr) => {
+            ($axis:ident, $push_track:ident, $track_range_mut:ident, $free_size:expr, $fr_total:expr) => {
                 if 0 == self.grid.$track_range_mut(..).unwrap().len() {
-                    self.actual_size_bounds.max.$rect_size = Px::max_value();
+                    self.actual_size_bounds.max.dims.$axis = Px::max_value();
                 } else {
                     for (index, track) in self.grid.$track_range_mut(..).unwrap().iter_mut().enumerate() {
                         let track_fr_size = track.hints().fr_size;
                         if track_fr_size <= 0.0 {
                             track.reset_shrink();
-                            rigid_min_size.$rect_size += track.min_size();
+                            rigid_min_size.dims.$axis += track.min_size();
                             // To make sure that the maximum size isn't below the minimum needed for this track,
                             // increase the engine maximum size by the rigid track minimum size.
-                            self.actual_size_bounds.max.$rect_size =
-                                self.actual_size_bounds.max.$rect_size.saturating_add(track.min_size());
+                            self.actual_size_bounds.max.dims.$axis =
+                                self.actual_size_bounds.max.dims.$axis.saturating_add(track.min_size());
                             $free_size = sub_px_bound_zero($free_size, track.size());
                         } else {
                             // The engine maximum size isn't expanded in a rigid track because the track won't
                             // expand when the rectangle of the engine is expanded.
-                            self.actual_size_bounds.max.$rect_size =
-                                self.actual_size_bounds.max.$rect_size.saturating_add(track.max_size());
+                            self.actual_size_bounds.max.dims.$axis =
+                                self.actual_size_bounds.max.dims.$axis.saturating_add(track.max_size());
                             track.reset_expand();
-                            frac_min_size.$rect_size += track.min_size();
+                            frac_min_size.dims.$axis += track.min_size();
                             $fr_total += track_fr_size;
                             heap_cache.frac_tracks.$push_track(index as Tr);
                         }
@@ -151,14 +156,14 @@ impl GridEngine {
             }
         }
 
-        first_track_pass!(width, push_col, col_range_mut, free_width, fr_total_width);
-        first_track_pass!(height, push_row, row_range_mut, free_height, fr_total_height);
+        first_track_pass!(x, push_col, col_range_mut, free_width, fr_total_width);
+        first_track_pass!(y, push_row, row_range_mut, free_height, fr_total_height);
 
 
         self.actual_size_bounds.max =
             self.desired_size_bounds.bound_rect(self.actual_size_bounds.max);
 
-        self.actual_size_bounds.min = OriginRect::new(
+        self.actual_size_bounds.min = DimsRect::new(
             frac_min_size.width() + rigid_min_size.width() + self.grid_margins.width(),
             frac_min_size.height() + rigid_min_size.height() + self.grid_margins.height()
         );
@@ -314,8 +319,8 @@ pub struct GridConstraintSolver<'a> {
     free_height: &'a mut Px,
     fr_total_width: &'a mut Fr,
     fr_total_height: &'a mut Fr,
-    rigid_min_size: &'a mut OriginRect,
-    frac_min_size: &'a mut OriginRect
+    rigid_min_size: &'a mut DimsRect<Px>,
+    frac_min_size: &'a mut DimsRect<Px>
 }
 
 impl<'a> GridConstraintSolver<'a> {
@@ -323,7 +328,7 @@ impl<'a> GridConstraintSolver<'a> {
         &mut self,
         widget_hints: WidgetHints,
         abs_size_bounds: SizeBounds
-    ) -> Result<OffsetRect, SolveError>
+    ) -> Result<BoundRectTLO<Px>, SolveError>
     {
         if *self.aborted {
             return Err(SolveError::Abort);
@@ -366,10 +371,10 @@ impl<'a> GridConstraintSolver<'a> {
                 let margins_x = widget_hints.margins.left + widget_hints.margins.right;
                 let margins_y = widget_hints.margins.top + widget_hints.margins.bottom;
 
-                wsb.min.width += margins_x;
-                wsb.max.width = wsb.max.width.saturating_add(margins_x);
-                wsb.min.height += margins_y;
-                wsb.max.height = wsb.max.height.saturating_add(margins_y);
+                wsb.min.dims.x += margins_x;
+                wsb.max.dims.x = wsb.max.dims.x.saturating_add(margins_x);
+                wsb.min.dims.y += margins_y;
+                wsb.max.dims.y = wsb.max.dims.y.saturating_add(margins_y);
                 wsb
             };
 
@@ -415,12 +420,12 @@ impl<'a> GridConstraintSolver<'a> {
                                     let new_size = track.min_size() + expansion;
 
                                     if let Err(expanded) = track.expand_widget_min_size(new_size) {
-                                        actual_size_bounds.max.$size =
+                                        actual_size_bounds.max.dims.$axis =
                                             actual_size_bounds.max.$size().saturating_add(expanded);
-                                        actual_size.$size += expanded;
+                                        actual_size.dims.$axis += expanded;
 
                                         $free_size = sub_px_bound_zero($free_size, expanded);
-                                        self.rigid_min_size.$size += expanded;
+                                        self.rigid_min_size.dims.$axis += expanded;
 
                                         grid_changed = true;
                                     }
@@ -432,12 +437,12 @@ impl<'a> GridConstraintSolver<'a> {
 
                                     let track_max_size = track.max_size();
                                     if let Err(expanded) = track.expand_widget_min_size(track_max_size) {
-                                        actual_size_bounds.max.$size =
+                                        actual_size_bounds.max.dims.$axis =
                                             actual_size_bounds.max.$size().saturating_add(expanded);
-                                        actual_size.$size += expanded;
+                                        actual_size.dims.$axis += expanded;
 
                                         $free_size = sub_px_bound_zero($free_size, expanded);
-                                        self.rigid_min_size.$size += track.max_size() - track.min_size();
+                                        self.rigid_min_size.dims.$axis += track.max_size() - track.min_size();
 
                                         grid_changed = true;
                                     }
@@ -451,7 +456,7 @@ impl<'a> GridConstraintSolver<'a> {
                             if 0 == min_size_debt {break}
                         }
 
-                        self.frac_min_size.$size = cmp::max(
+                        self.frac_min_size.dims.$axis = cmp::max(
                             (widget_size_bounds.min.$size() as Fr * $fr_axis / fr_widget).ceil() as Px,
                             self.frac_min_size.$size()
                         );
@@ -462,10 +467,10 @@ impl<'a> GridConstraintSolver<'a> {
                             solvable.$axis = SolveAxis::Unsolvable;
                         }
 
-                        actual_size_bounds.min.$size = self.frac_min_size.$size() + self.rigid_min_size.$size() + self.engine.grid_margins.$size();
+                        actual_size_bounds.min.dims.$axis = self.frac_min_size.$size() + self.rigid_min_size.$size() + self.engine.grid_margins.$size();
                         if actual_size.$size() < actual_size_bounds.min.$size() {
                             grid_changed = true;
-                            actual_size.$size = actual_size_bounds.min.$size();
+                            actual_size.dims.$axis = actual_size_bounds.min.$size();
                         }
 
                         rigid_tracks_widget.clear();
@@ -488,19 +493,19 @@ impl<'a> GridConstraintSolver<'a> {
             let size_y = widget_scale!(y, height, row_range, row_range_mut, *self.free_height, *self.fr_total_height);
 
             // Perform cell hinting and set
-            let widget_origin_rect = OriginRect::new(size_x, size_y);
+            let widget_origin_rect = DimsRect::new(size_x, size_y);
 
             if let Some(offset) = grid.get_cell_offset(
                 widget_hints.node_span.x.start.unwrap_or(0),
                 widget_hints.node_span.y.start.unwrap_or(0)
             ) {
-                let outer_rect = widget_origin_rect.offset(offset);
+                let outer_rect = BoundRectTLO::from(widget_origin_rect) + offset.to_vec();
                 let cell_hinter = CellHinter::new(outer_rect, widget_hints.place_in_cell);
 
                 self.solvable_index += 1;
-                let grid_margin_offset = Point::new(self.engine.grid_margins.left, self.engine.grid_margins.top);
+                let grid_margin_offset = Vector2::new(self.engine.grid_margins.left, self.engine.grid_margins.top);
                 cell_hinter.hint(widget_size_bounds_nomargin, widget_hints.margins)
-                    .map(|rect| rect.offset(grid_margin_offset))
+                    .map(|rect| BoundRectTLO::from(rect) + grid_margin_offset)
                     .map_err(|_| SolveError::WidgetUnsolvable)
             } else {
                 Err(SolveError::CellOutOfBounds)
@@ -575,19 +580,19 @@ impl Default for SolveAxis {
 
 #[derive(Debug, Clone, Copy)]
 struct CellHinter {
-    outer_rect: OffsetRect,
+    outer_rect: BoundRectTLO<Px>,
     place_in_or: PlaceInCell
 }
 
 impl CellHinter {
-    pub fn new(outer_rect: OffsetRect, place_in_or: PlaceInCell) -> CellHinter {
+    pub fn new(outer_rect: BoundRectTLO<Px>, place_in_or: PlaceInCell) -> CellHinter {
         CellHinter {
             outer_rect: outer_rect,
             place_in_or: place_in_or,
         }
     }
 
-    pub fn hint(&self, bounds: SizeBounds, margins: Margins) -> Result<OffsetRect, HintError> {
+    pub fn hint(&self, bounds: SizeBounds, margins: Margins) -> Result<BoundRectTLO<Px>, HintError> {
         let margins_x = margins.left + margins.right;
         let margins_y = margins.top + margins.bottom;
 
@@ -597,48 +602,48 @@ impl CellHinter {
             return Err(HintError::ORTooSmall)
         }
 
-        let mut inner_rect = OffsetRect::default();
+        let mut inner_rect = BoundRectTLO::new(0, 0, 0, 0);
 
         macro_rules! place_on_axis {
             ($axis:ident, $size:ident, $front_margin:expr, $back_margin:expr) => {
                 match self.place_in_or.$axis {
                     Place::Stretch => {
-                        inner_rect.topleft.$axis = self.outer_rect.topleft.$axis + $front_margin;
-                        inner_rect.lowright.$axis = self.outer_rect.lowright.$axis - $back_margin;
+                        inner_rect.tl.$axis = self.outer_rect.tl.$axis + $front_margin;
+                        inner_rect.br.$axis = self.outer_rect.br.$axis - $back_margin;
 
                         if inner_rect.$size() > bounds.max.$size() {
                             let size_diff = inner_rect.$size() - bounds.max.$size();
 
-                            inner_rect.topleft.$axis += size_diff / 2 + size_diff % 2;
-                            inner_rect.lowright.$axis -= size_diff / 2;
+                            inner_rect.tl.$axis += size_diff / 2 + size_diff % 2;
+                            inner_rect.br.$axis -= size_diff / 2;
                         }
                     },
                     Place::Start => {
-                        inner_rect.topleft.$axis = self.outer_rect.topleft.$axis + $front_margin + $front_margin;
-                        inner_rect.lowright.$axis = self.outer_rect.topleft.$axis + bounds.min.$size() + $front_margin;
+                        inner_rect.tl.$axis = self.outer_rect.tl.$axis + $front_margin + $front_margin;
+                        inner_rect.br.$axis = self.outer_rect.tl.$axis + bounds.min.$size() + $front_margin;
                     },
                     Place::End => {
-                        inner_rect.lowright.$axis = self.outer_rect.lowright.$axis - $back_margin;
-                        inner_rect.topleft.$axis = self.outer_rect.lowright.$axis - bounds.min.$size() - $back_margin;
+                        inner_rect.br.$axis = self.outer_rect.br.$axis - $back_margin;
+                        inner_rect.tl.$axis = self.outer_rect.br.$axis - bounds.min.$size() - $back_margin;
                     },
                     Place::Center => {
-                        let center = (self.outer_rect.topleft.$axis + self.outer_rect.lowright.$axis) / 2;
-                        inner_rect.topleft.$axis = center - bounds.min.$size() / 2;
-                        inner_rect.lowright.$axis = center + bounds.min.$size() / 2;
+                        let center = (self.outer_rect.tl.$axis + self.outer_rect.br.$axis) / 2;
+                        inner_rect.tl.$axis = center - bounds.min.$size() / 2;
+                        inner_rect.br.$axis = center + bounds.min.$size() / 2;
 
                         if inner_rect.$size() > bounds.max.$size() {
                             let size_diff = inner_rect.$size() - bounds.max.$size();
 
-                            inner_rect.topleft.$axis += size_diff / 2 + size_diff % 2;
-                            inner_rect.lowright.$axis -= size_diff / 2;
+                            inner_rect.tl.$axis += size_diff / 2 + size_diff % 2;
+                            inner_rect.br.$axis -= size_diff / 2;
                         }
 
-                        let front_margin_shift = sub_px_bound_zero($front_margin, inner_rect.topleft.$axis - self.outer_rect.topleft.$axis);
-                        let back_margin_shift = sub_px_bound_zero($back_margin, self.outer_rect.lowright.$axis - inner_rect.lowright.$axis);
-                        inner_rect.topleft.$axis += front_margin_shift;
-                        inner_rect.lowright.$axis += front_margin_shift;
-                        inner_rect.topleft.$axis -= back_margin_shift;
-                        inner_rect.lowright.$axis -= back_margin_shift;
+                        let front_margin_shift = sub_px_bound_zero($front_margin, inner_rect.tl.$axis - self.outer_rect.tl.$axis);
+                        let back_margin_shift = sub_px_bound_zero($back_margin, self.outer_rect.br.$axis - inner_rect.br.$axis);
+                        inner_rect.tl.$axis += front_margin_shift;
+                        inner_rect.br.$axis += front_margin_shift;
+                        inner_rect.tl.$axis -= back_margin_shift;
+                        inner_rect.br.$axis -= back_margin_shift;
                     }
                 }
             }
@@ -702,10 +707,10 @@ mod tests {
         }
     }
 
-    impl Arbitrary for OffsetRect {
-        fn arbitrary<G: Gen>(g: &mut G) -> OffsetRect {
-            let mut topleft = Point::arbitrary(g);
-            let mut lowright = Point::arbitrary(g);
+    impl Arbitrary for BoundRectTLO {
+        fn arbitrary<G: Gen>(g: &mut G) -> BoundRectTLO {
+            let mut topleft = Point2::arbitrary(g);
+            let mut lowright = Point2::arbitrary(g);
 
             // Make sure that topleft is above and to the left of lowright.
             if lowright.x < topleft.x {
@@ -715,16 +720,16 @@ mod tests {
                 mem::swap(&mut lowright.y, &mut topleft.y);
             }
 
-            OffsetRect {
+            BoundRectTLO {
                 topleft: topleft,
                 lowright: lowright
             }
         }
     }
 
-    impl Arbitrary for Point {
-        fn arbitrary<G: Gen>(g: &mut G) -> Point {
-            Point::new(g.next_u32(), g.next_u32())
+    impl Arbitrary for Point2 {
+        fn arbitrary<G: Gen>(g: &mut G) -> Point2 {
+            Point2::new(g.next_u32(), g.next_u32())
         }
     }
 }
