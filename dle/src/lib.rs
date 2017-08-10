@@ -10,14 +10,14 @@ mod grid;
 
 use dct::Px;
 use cgmath::{Vector2, EuclideanSpace};
-use rect_cgmath::{DimsRect, Rectangle, BoundRectTLO};
+use rect_cgmath::{DimsRect, Rectangle, BoundRect};
 use dct::hints::{Fr, Tr, PlaceInCell, Place, GridSize, WidgetHints, TrackHints, SizeBounds, Margins};
 use grid::{TrackVec, SizeResult};
 
 use std::cmp;
 
 pub trait Widget {
-    fn set_rect(&mut self, rect: BoundRectTLO<Px>);
+    fn set_rect(&mut self, rect: BoundRect<Px>);
 }
 
 pub trait GridContainer {
@@ -328,7 +328,7 @@ impl<'a> GridConstraintSolver<'a> {
         &mut self,
         widget_hints: WidgetHints,
         abs_size_bounds: SizeBounds
-    ) -> Result<BoundRectTLO<Px>, SolveError>
+    ) -> Result<BoundRect<Px>, SolveError>
     {
         if *self.aborted {
             return Err(SolveError::Abort);
@@ -499,13 +499,13 @@ impl<'a> GridConstraintSolver<'a> {
                 widget_hints.node_span.x.start.unwrap_or(0),
                 widget_hints.node_span.y.start.unwrap_or(0)
             ) {
-                let outer_rect = BoundRectTLO::from(widget_origin_rect) + offset.to_vec();
+                let outer_rect = BoundRect::from(widget_origin_rect) + offset.to_vec();
                 let cell_hinter = CellHinter::new(outer_rect, widget_hints.place_in_cell);
 
                 self.solvable_index += 1;
                 let grid_margin_offset = Vector2::new(self.engine.grid_margins.left, self.engine.grid_margins.top);
                 cell_hinter.hint(widget_size_bounds_nomargin, widget_hints.margins)
-                    .map(|rect| BoundRectTLO::from(rect) + grid_margin_offset)
+                    .map(|rect| BoundRect::from(rect) + grid_margin_offset)
                     .map_err(|_| SolveError::WidgetUnsolvable)
             } else {
                 Err(SolveError::CellOutOfBounds)
@@ -580,19 +580,19 @@ impl Default for SolveAxis {
 
 #[derive(Debug, Clone, Copy)]
 struct CellHinter {
-    outer_rect: BoundRectTLO<Px>,
+    outer_rect: BoundRect<Px>,
     place_in_or: PlaceInCell
 }
 
 impl CellHinter {
-    pub fn new(outer_rect: BoundRectTLO<Px>, place_in_or: PlaceInCell) -> CellHinter {
+    pub fn new(outer_rect: BoundRect<Px>, place_in_or: PlaceInCell) -> CellHinter {
         CellHinter {
             outer_rect: outer_rect,
             place_in_or: place_in_or,
         }
     }
 
-    pub fn hint(&self, bounds: SizeBounds, margins: Margins) -> Result<BoundRectTLO<Px>, HintError> {
+    pub fn hint(&self, bounds: SizeBounds, margins: Margins) -> Result<BoundRect<Px>, HintError> {
         let margins_x = margins.left + margins.right;
         let margins_y = margins.top + margins.bottom;
 
@@ -602,48 +602,48 @@ impl CellHinter {
             return Err(HintError::ORTooSmall)
         }
 
-        let mut inner_rect = BoundRectTLO::new(0, 0, 0, 0);
+        let mut inner_rect = BoundRect::new(0, 0, 0, 0);
 
         macro_rules! place_on_axis {
             ($axis:ident, $size:ident, $front_margin:expr, $back_margin:expr) => {
                 match self.place_in_or.$axis {
                     Place::Stretch => {
-                        inner_rect.tl.$axis = self.outer_rect.tl.$axis + $front_margin;
-                        inner_rect.br.$axis = self.outer_rect.br.$axis - $back_margin;
+                        inner_rect.min.$axis = self.outer_rect.min.$axis + $front_margin;
+                        inner_rect.max.$axis = self.outer_rect.max.$axis - $back_margin;
 
                         if inner_rect.$size() > bounds.max.$size() {
                             let size_diff = inner_rect.$size() - bounds.max.$size();
 
-                            inner_rect.tl.$axis += size_diff / 2 + size_diff % 2;
-                            inner_rect.br.$axis -= size_diff / 2;
+                            inner_rect.min.$axis += size_diff / 2 + size_diff % 2;
+                            inner_rect.max.$axis -= size_diff / 2;
                         }
                     },
                     Place::Start => {
-                        inner_rect.tl.$axis = self.outer_rect.tl.$axis + $front_margin + $front_margin;
-                        inner_rect.br.$axis = self.outer_rect.tl.$axis + bounds.min.$size() + $front_margin;
+                        inner_rect.min.$axis = self.outer_rect.min.$axis + $front_margin + $front_margin;
+                        inner_rect.max.$axis = self.outer_rect.min.$axis + bounds.min.$size() + $front_margin;
                     },
                     Place::End => {
-                        inner_rect.br.$axis = self.outer_rect.br.$axis - $back_margin;
-                        inner_rect.tl.$axis = self.outer_rect.br.$axis - bounds.min.$size() - $back_margin;
+                        inner_rect.max.$axis = self.outer_rect.max.$axis - $back_margin;
+                        inner_rect.min.$axis = self.outer_rect.max.$axis - bounds.min.$size() - $back_margin;
                     },
                     Place::Center => {
-                        let center = (self.outer_rect.tl.$axis + self.outer_rect.br.$axis) / 2;
-                        inner_rect.tl.$axis = center - bounds.min.$size() / 2;
-                        inner_rect.br.$axis = center + bounds.min.$size() / 2;
+                        let center = (self.outer_rect.min.$axis + self.outer_rect.max.$axis) / 2;
+                        inner_rect.min.$axis = center - bounds.min.$size() / 2;
+                        inner_rect.max.$axis = center + bounds.min.$size() / 2;
 
                         if inner_rect.$size() > bounds.max.$size() {
                             let size_diff = inner_rect.$size() - bounds.max.$size();
 
-                            inner_rect.tl.$axis += size_diff / 2 + size_diff % 2;
-                            inner_rect.br.$axis -= size_diff / 2;
+                            inner_rect.min.$axis += size_diff / 2 + size_diff % 2;
+                            inner_rect.max.$axis -= size_diff / 2;
                         }
 
-                        let front_margin_shift = sub_px_bound_zero($front_margin, inner_rect.tl.$axis - self.outer_rect.tl.$axis);
-                        let back_margin_shift = sub_px_bound_zero($back_margin, self.outer_rect.br.$axis - inner_rect.br.$axis);
-                        inner_rect.tl.$axis += front_margin_shift;
-                        inner_rect.br.$axis += front_margin_shift;
-                        inner_rect.tl.$axis -= back_margin_shift;
-                        inner_rect.br.$axis -= back_margin_shift;
+                        let front_margin_shift = sub_px_bound_zero($front_margin, inner_rect.min.$axis - self.outer_rect.min.$axis);
+                        let back_margin_shift = sub_px_bound_zero($back_margin, self.outer_rect.max.$axis - inner_rect.max.$axis);
+                        inner_rect.min.$axis += front_margin_shift;
+                        inner_rect.max.$axis += front_margin_shift;
+                        inner_rect.min.$axis -= back_margin_shift;
+                        inner_rect.max.$axis -= back_margin_shift;
                     }
                 }
             }
@@ -707,8 +707,8 @@ mod tests {
         }
     }
 
-    impl Arbitrary for BoundRectTLO {
-        fn arbitrary<G: Gen>(g: &mut G) -> BoundRectTLO {
+    impl Arbitrary for BoundRect {
+        fn arbitrary<G: Gen>(g: &mut G) -> BoundRect {
             let mut topleft = Point2::arbitrary(g);
             let mut lowright = Point2::arbitrary(g);
 
@@ -720,7 +720,7 @@ mod tests {
                 mem::swap(&mut lowright.y, &mut topleft.y);
             }
 
-            BoundRectTLO {
+            BoundRect {
                 topleft: topleft,
                 lowright: lowright
             }
