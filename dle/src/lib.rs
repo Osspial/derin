@@ -3,14 +3,14 @@
 extern crate quickcheck;
 extern crate num_traits;
 extern crate cgmath;
-extern crate rect_cgmath;
+extern crate cgmath_geometry;
 extern crate dct;
 
 mod grid;
 
 use dct::Px;
 use cgmath::{Vector2, EuclideanSpace};
-use rect_cgmath::{DimsRect, Rectangle, BoundRect};
+use cgmath_geometry::{DimsRect, Rectangle, BoundRect};
 use dct::hints::{Fr, Tr, PlaceInCell, Place, GridSize, WidgetHints, TrackHints, SizeBounds, Margins};
 use grid::{TrackVec, SizeResult};
 

@@ -1,6 +1,6 @@
 use Px;
 use num_traits::Bounded;
-use rect_cgmath::{DimsRect, Rectangle};
+use cgmath_geometry::{DimsRect, Rectangle};
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 
 pub type Tr = u32;

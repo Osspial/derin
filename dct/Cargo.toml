@@ -6,4 +6,4 @@ authors = ["Osspial <osspial@gmail.com>"]
 [dependencies]
 cgmath = "0.15"
 num-traits = "0.1"
-rect-cgmath = { git = "https://github.com/Osspial/rect-cgmath.git" }
+cgmath-geometry = { git = "https://github.com/Osspial/cgmath-geometry.git" }

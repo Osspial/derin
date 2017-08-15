@@ -6,7 +6,7 @@ authors = ["Osspial <osspial@gmail.com>"]
 [dependencies]
 dct = {path = "../dct"}
 cgmath = {git = "https://github.com/Osspial/cgmath.git", branch = "prs_merged"}
-rect-cgmath = {git = "https://github.com/Osspial/rect-cgmath.git"}
+cgmath-geometry = {git = "https://github.com/Osspial/cgmath-geometry.git"}
 num-traits = "0.1"
 
 [dev-dependencies]

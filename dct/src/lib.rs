@@ -1,6 +1,6 @@
 extern crate cgmath;
 extern crate num_traits;
-extern crate rect_cgmath;
+extern crate cgmath_geometry;
 
 pub type Px = i32;
 
