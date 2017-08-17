@@ -8,7 +8,7 @@ extern crate cgmath;
 extern crate quickcheck;
 
 use derin_core::render::DVertex;
-use derin_core::tree::{DrawTag, RawEvent, Node};
+use derin_core::tree::{DrawTag, NodeEvent, Node};
 
 #[derive(Debug, Clone)]
 pub struct Button {
@@ -42,8 +42,8 @@ impl<A> Node<A> for Button {
 
     fn render<F: FnMut(DVertex)>(&self, _for_each_vertex: F) {}
 
-    fn on_raw_event(&mut self, event: RawEvent) -> Option<A> {
-        use self::RawEvent::*;
+    fn on_raw_event(&mut self, event: NodeEvent) -> Option<A> {
+        use self::NodeEvent::*;
 
         let new_state = match event {
             MouseEnter{..} => ButtonState::Hover,
