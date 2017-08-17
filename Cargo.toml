@@ -9,6 +9,7 @@ dct = {path = "./dct"}
 # dww = {path = "./dww"}
 derin_core = {path = "./derin_core"}
 cgmath = { git = "https://github.com/Osspial/cgmath.git", branch = "prs_merged" }
+cgmath-geometry = { git = "https://github.com/Osspial/cgmath-geometry.git" }
 
 [dev-dependencies]
 quickcheck = "0.4"

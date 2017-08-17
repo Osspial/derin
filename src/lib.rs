@@ -2,17 +2,20 @@ extern crate dle;
 extern crate dct;
 extern crate derin_core;
 extern crate cgmath;
+extern crate cgmath_geometry;
 
 #[cfg(test)]
 #[cfg_attr(test, macro_use)]
 extern crate quickcheck;
 
-use derin_core::render::DVertex;
-use derin_core::tree::{DrawTag, NodeEvent, Node};
+use derin_core::tree::{UpdateTag, NodeEvent, Renderer, Node};
+
+use cgmath_geometry::BoundRect;
 
 #[derive(Debug, Clone)]
 pub struct Button {
-    draw_tag: DrawTag,
+    update_tag: UpdateTag,
+    bounds: BoundRect<u32>,
     state: ButtonState
 }
 
@@ -28,36 +31,43 @@ pub enum ButtonState {
 impl Button {
     pub fn new() -> Button {
         Button {
-            draw_tag: DrawTag::new(),
+            update_tag: UpdateTag::new(),
+            bounds: BoundRect::new(0, 0, 0, 0),
             state: ButtonState::Normal
         }
     }
 }
 
-impl<A> Node<A> for Button {
+impl<A, R> Node<A, R> for Button
+    where R: Renderer
+{
     #[inline]
-    fn draw_tag(&self) -> &DrawTag {
-        &self.draw_tag
+    fn update_tag(&self) -> &UpdateTag {
+        &self.update_tag
     }
 
-    fn render<F: FnMut(DVertex)>(&self, _for_each_vertex: F) {}
+    fn bounds(&self) -> BoundRect<u32> {
+        self.bounds
+    }
 
-    fn on_raw_event(&mut self, event: NodeEvent) -> Option<A> {
+    fn render(&self, renderer: &mut R) {}
+
+    fn on_node_event(&mut self, event: NodeEvent) -> Option<A> {
         use self::NodeEvent::*;
 
         let new_state = match event {
             MouseEnter{..} => ButtonState::Hover,
             MouseExit{..} => ButtonState::Normal,
             MouseMove{..} => self.state,
-            MouseClick{..} => ButtonState::Clicked,
-            MouseRelease{in_node: true, ..} => ButtonState::Hover,
-            MouseRelease{in_node: false, ..} => ButtonState::Normal,
+            MouseDown{..} => ButtonState::Clicked,
+            MouseUp{in_node: true, ..} => ButtonState::Hover,
+            MouseUp{in_node: false, ..} => ButtonState::Normal,
             MouseEnterChild{..} |
             MouseExitChild{..} => unreachable!()
         };
 
         if new_state != self.state {
-            self.draw_tag.mark_draw_self();
+            self.update_tag.mark_update_this();
             self.state = new_state;
         }
 
