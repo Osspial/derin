@@ -84,6 +84,7 @@ fn main() {
                         GlutinWindowEvent::MouseMoved{position, ..} => Some(WindowEvent::MouseMove(Point2::new(position.0 as i32, position.1 as i32))),
                         GlutinWindowEvent::MouseEntered{..} => Some(WindowEvent::MouseEnter(Point2::new(0, 0))),
                         GlutinWindowEvent::MouseLeft{..} => Some(WindowEvent::MouseExit(Point2::new(0, 0))),
+                        GlutinWindowEvent::Resized(width, height) => Some(WindowEvent::WindowResize(DimsRect::new(width, height))),
                         GlutinWindowEvent::Closed => return ControlFlow::Break,
                         _ => None
                     };

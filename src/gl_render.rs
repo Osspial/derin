@@ -30,12 +30,13 @@ pub struct GLRenderer {
     context_state: Rc<ContextState>,
     fb: DefaultFramebuffer,
     program: Program<GLVertex, ()>,
-    vao: VertexArrayObj<GLVertex, ()>
+    vao: VertexArrayObj<GLVertex, ()>,
+    render_state: RenderState
 }
 
 pub struct GLFrame {
     vertices: Vec<GLVertex>,
-    window_dims: DimsRect<f32>
+    window_dims: DimsRect<f32>,
 }
 
 #[repr(C)]
@@ -73,6 +74,7 @@ impl GLRenderer {
             window,
             fb: DefaultFramebuffer::new(context_state.clone()),
             vao: VertexArrayObj::new_noindex(Buffer::with_size(BufferUsage::StreamDraw, 128 * 3, context_state.clone())),
+            render_state: RenderState::default(),
             program,
             context_state
         })
@@ -84,6 +86,7 @@ impl Renderer for GLRenderer {
     fn make_frame(&mut self) -> FrameRectStack<GLFrame> {
         self.frame.vertices.clear();
         let (width, height) = self.window.get_inner_size().unwrap();
+        self.render_state.viewport = DimsRect::new(width, height).into();
         self.frame.window_dims = DimsRect::new(width as f32, height as f32);
         FrameRectStack::new(&mut self.frame, BoundRect::new(0, 0, width, height))
     }
@@ -91,7 +94,7 @@ impl Renderer for GLRenderer {
     fn finish_frame(&mut self) {
         for verts in self.frame.vertices.chunks(self.vao.vertex_buffer().size()) {
             self.vao.vertex_buffer_mut().sub_data(0, verts);
-            self.fb.draw(DrawMode::Triangles, 0..verts.len(), &self.vao, &self.program, (), RenderState::default());
+            self.fb.draw(DrawMode::Triangles, 0..verts.len(), &self.vao, &self.program, (), self.render_state);
         }
         self.window.swap_buffers().ok();
     }

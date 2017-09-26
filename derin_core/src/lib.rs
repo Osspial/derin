@@ -25,6 +25,7 @@ pub struct Root<A, N, F>
     state: RootState<A>,
     active_node_stack: Vec<*mut Node<A, F>>,
     active_node_offset: Vector2<i32>,
+    force_full_redraw: bool,
     pub root_node: N,
     _marker: PhantomData<*const F>
 }
@@ -42,6 +43,7 @@ pub enum WindowEvent {
         pos: Point2<i32>,
         button: MouseButton
     },
+    WindowResize(DimsRect<u32>)
     // KeyDown {
     //     key:
     // }
@@ -94,9 +96,45 @@ impl<A, N, F> Root<A, N, F>
             },
             active_node_stack: Vec::new(),
             active_node_offset: Vector2::new(0, 0),
+            force_full_redraw: true,
             root_node,
             _marker: PhantomData
         }
+    }
+
+    fn draw<R: Renderer<Frame=F>>(&mut self, renderer: &mut R) {
+        let root_update = match self.force_full_redraw {
+            false => self.root_node.update_tag().needs_update(self.id),
+            true => Update{ render_self: true, update_child: true, update_layout: true }
+        };
+
+        if root_update.render_self || root_update.update_child {
+            {
+                let mut frame = renderer.make_frame();
+                if let NodeSubtraitMut::Parent(root_as_parent) = self.root_node.subtrait_mut() {
+                    if root_update.update_layout {
+                        root_as_parent.update_child_layout();
+                    }
+                }
+                if root_update.render_self {
+                    self.root_node.render(&mut frame);
+                }
+                if root_update.update_child {
+                    if let NodeSubtraitMut::Parent(root_as_parent) = self.root_node.subtrait_mut() {
+                        NodeRenderer {
+                            root_id: self.id,
+                            frame,
+                            force_full_redraw: self.force_full_redraw
+                        }.render_node_children(root_as_parent)
+                    }
+                }
+            }
+
+            renderer.finish_frame();
+            self.root_node.update_tag().mark_updated(self.id);
+        }
+
+        self.force_full_redraw = false;
     }
 
     pub fn run_forever<E, AF, R, G>(&mut self, mut gen_events: E, mut on_action: AF, renderer: &mut R) -> Option<G>
@@ -112,10 +150,17 @@ impl<A, N, F> Root<A, N, F>
             }}
         }
         self.active_node_stack.clear();
+        self.draw(renderer);
 
         gen_events(&mut |event| {
             let mut mark_active_nodes_redraw = false;
             match event {
+                WindowEvent::WindowResize(new_size) => {
+                    self.active_node_stack.clear();
+                    self.state.dims = new_size;
+                    self.force_full_redraw = true;
+                    *self.root_node.bounds_mut() = new_size.into();
+                }
                 WindowEvent::MouseEnter(enter_pos) => {
                     try_push_action!{
                         self.root_node.on_node_event(NodeEvent::MouseEnter {
@@ -303,33 +348,7 @@ impl<A, N, F> Root<A, N, F>
                 }
             }
 
-            let root_update = self.root_node.update_tag().needs_update(self.id);
-
-            if root_update.render_self || root_update.update_child {
-                {
-                    let mut frame = renderer.make_frame();
-                    if let NodeSubtraitMut::Parent(root_as_parent) = self.root_node.subtrait_mut() {
-                        if root_update.update_layout {
-                            root_as_parent.update_child_layout();
-                        }
-                    }
-                    if root_update.render_self {
-                        self.root_node.render(&mut frame);
-                    }
-                    if root_update.update_child {
-                        if let NodeSubtraitMut::Parent(root_as_parent) = self.root_node.subtrait_mut() {
-                            NodeRenderer {
-                                root_id: self.id,
-                                frame,
-                            }.render_node_children(root_as_parent)
-                        }
-                    }
-                }
-
-                renderer.finish_frame();
-                self.root_node.update_tag().mark_updated(self.id);
-            }
-
+            self.draw(renderer);
 
             return_flow
         })
@@ -340,7 +359,8 @@ struct NodeRenderer<'a, F>
     where F: 'a + RenderFrame
 {
     root_id: RootID,
-    frame: FrameRectStack<'a, F>
+    frame: FrameRectStack<'a, F>,
+    force_full_redraw: bool
 }
 
 impl<'a, F> NodeRenderer<'a, F>
@@ -360,7 +380,10 @@ impl<'a, F> NodeRenderer<'a, F>
                     render_self,
                     update_child,
                     update_layout
-                } = update_tag.needs_update(self.root_id);
+                } = match self.force_full_redraw {
+                    false => update_tag.needs_update(self.root_id),
+                    true => Update{ render_self: true, update_child: true, update_layout: true }
+                };
 
                 match child_node.subtrait_mut() {
                     NodeSubtraitMut::Parent(child_node_as_parent) => {
@@ -375,7 +398,8 @@ impl<'a, F> NodeRenderer<'a, F>
                         if update_child {
                             NodeRenderer {
                                 root_id: self.root_id,
-                                frame: child_frame
+                                frame: child_frame,
+                                force_full_redraw: self.force_full_redraw
                             }.render_node_children(child_node_as_parent);
                         }
                     },
