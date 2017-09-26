@@ -2,7 +2,7 @@ extern crate cgmath;
 extern crate num_traits;
 extern crate cgmath_geometry;
 
-pub type Px = i32;
+pub type Px = u32;
 
 #[macro_use]
 mod macros;

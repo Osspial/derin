@@ -2,18 +2,31 @@
 authors = ["Osspial <osspial@gmail.com>"]
 name = "derin"
 version = "0.1.0"
-
 [dependencies]
-dle = {path = "./dle"}
-dct = {path = "./dct"}
-# dww = {path = "./dww"}
-derin_core = {path = "./derin_core"}
-cgmath = { git = "https://github.com/Osspial/cgmath.git", branch = "prs_merged" }
-cgmath-geometry = { git = "https://github.com/Osspial/cgmath-geometry.git" }
+arrayvec = "0.4"
+glutin = "0.9"
 
-[dev-dependencies]
-quickcheck = "0.4"
-derin_macros = {path = "./derin_macros"}
+[dependencies.cgmath]
+branch = "prs_merged"
+git = "https://github.com/Osspial/cgmath.git"
+
+[dependencies.cgmath-geometry]
+git = "https://github.com/Osspial/cgmath-geometry.git"
+
+[dependencies.dct]
+path = "./dct"
+
+[dependencies.derin_core]
+path = "./derin_core"
+
+[dependencies.dle]
+path = "./dle"
+
+[dependencies.gl_raii]
+git = "https://github.com/Osspial/gl_raii.git"
+
+[dependencies.gl_raii_macros]
+git = "https://github.com/Osspial/gl_raii.git"
 
 [workspace]
 members = ["./dct", "./dle", "./dww", "./dww_macros", "./derin_macros", "./derin_core"]

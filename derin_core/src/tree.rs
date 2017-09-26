@@ -3,7 +3,6 @@ use std::cell::Cell;
 use cgmath::Point2;
 use cgmath_geometry::BoundRect;
 
-use LoopFlow;
 use dct::buttons::MouseButton;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -14,16 +13,26 @@ pub enum NodeIdent {
     NumCollection(u32, u32)
 }
 
-pub(crate) enum Update {
-    This,
-    Child,
-    All,
-    None
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Update {
+    pub render_self: bool,
+    pub update_child: bool,
+    pub update_layout: bool
 }
 
 #[derive(Debug, Clone)]
 pub struct UpdateTag {
-    last_root: Cell<u32>
+    last_root: Cell<u32>,
+    pub(crate) child_event_recv: Cell<RecvEventType>
+}
+
+bitflags! {
+    #[doc(hidden)]
+    pub struct RecvEventType: u8 {
+        const MOUSE = 0b01;
+        const KEYS = 0b10;
+        const ALL = Self::MOUSE.bits | Self::KEYS.bits;
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,80 +75,107 @@ pub enum NodeEvent<'a> {
     }
 }
 
-pub trait Renderer {
-    type Primitive: Copy;
-    fn upload_primitives<I>(&mut self, prim_iter: I)
-        where I: Iterator<Item=Self::Primitive>;
+macro_rules! subtrait_enums {
+    (subtraits {
+        $( $Variant:ident($SubTrait:ty) ),+
+    }) => {
+        pub enum NodeSubtrait<'a, A: 'a, F: 'a + RenderFrame> {
+            $( $Variant(&'a $SubTrait) ),+
+        }
+
+        pub enum NodeSubtraitMut<'a, A: 'a, F: 'a + RenderFrame> {
+            $( $Variant(&'a mut $SubTrait) ),+
+        }
+    }
 }
 
-pub trait Node<A, R: Renderer> {
+subtrait_enums! {subtraits {
+    Parent(Parent<A, F>),
+    Node(Node<A, F>)
+}}
+
+pub trait Renderer {
+    type Frame: RenderFrame;
+    fn make_frame(&mut self) -> FrameRectStack<Self::Frame>;
+    fn finish_frame(&mut self);
+}
+
+pub trait RenderFrame {
+    type Transform;
+    type Primitive: Copy;
+
+    fn upload_primitives<I>(&mut self, transform: &Self::Transform, prim_iter: I)
+        where I: Iterator<Item=Self::Primitive>;
+    fn child_rect_transform(self_transform: &Self::Transform, child_rect: BoundRect<u32>) -> Self::Transform;
+}
+
+pub struct FrameRectStack<'a, F: 'a + RenderFrame> {
+    frame: &'a mut F,
+    transform: F::Transform
+}
+
+pub trait Node<A, F: RenderFrame> {
     fn update_tag(&self) -> &UpdateTag;
     fn bounds(&self) -> BoundRect<u32>;
-    fn render(&self, renderer: &mut R);
+    fn bounds_mut(&mut self) -> &mut BoundRect<u32>;
+    fn render(&self, frame: &mut FrameRectStack<F>);
     fn on_node_event(&mut self, event: NodeEvent) -> Option<A>;
+    fn subtrait(&self) -> NodeSubtrait<A, F>;
+    fn subtrait_mut(&mut self) -> NodeSubtraitMut<A, F>;
 }
 
-pub trait Parent<A, R: Renderer>: Node<A, R> {
-    fn child<C>(&self, node_ident: NodeIdent, _: C) -> C::Ret
-        where C: NodeViewer<A, R>;
-    fn child_mut<C>(&mut self, node_ident: NodeIdent, _: C) -> C::Ret
-        where C: NodeUpdater<A, R>;
-
-    fn children<C>(&self, _: C) -> Option<R>
-        where C: NodeSeqViewer<A, R, Ret=LoopFlow<R>>;
-    fn children_mut<C>(&mut self, _: C) -> Option<R>
-        where C: NodeSeqUpdater<A, R, Ret=LoopFlow<R>>;
-
-    fn find_child(&self, point: Point2<u32>) -> Option<(NodeIdent, BoundRect<u32>)>;
+#[derive(Debug, Clone)]
+pub struct NodeSummary<N> {
+    pub node: N,
+    pub ident: NodeIdent,
+    pub rect: BoundRect<u32>,
+    pub update_tag: UpdateTag
 }
 
-pub trait NodeViewer<A, R: Renderer> {
-    type Ret;
-    fn view_node<N>(self, node: &N) -> Self::Ret
-        where N: Node<A, R>;
+pub trait Parent<A, F: RenderFrame>: Node<A, F> {
+    fn child(&self, node_ident: NodeIdent) -> Option<NodeSummary<&Node<A, F>>>;
+    fn child_mut(&mut self, node_ident: NodeIdent) -> Option<NodeSummary<&mut Node<A, F>>>;
+
+    fn children<'a>(&'a self, for_each: &mut FnMut(&[NodeSummary<&'a Node<A, F>>]));
+    fn children_mut<'a>(&'a mut self, for_each: &mut FnMut(&mut [NodeSummary<&'a mut Node<A, F>>]));
+
+    fn update_child_layout(&mut self);
+
+    fn child_by_point(&self, point: Point2<u32>) -> Option<NodeSummary<&Node<A, F>>>;
+    fn child_by_point_mut(&mut self, point: Point2<u32>) -> Option<NodeSummary<&mut Node<A, F>>>;
 }
 
-pub trait NodeUpdater<A, R: Renderer> {
-    type Ret;
-    fn update_node<N>(self, node: &mut N) -> Self::Ret
-        where N: Node<A, R>;
-}
-
-/// A type which can view a sequence of immutable nodes
-pub trait NodeSeqViewer<A, R: Renderer> {
-    type Ret;
-    fn view_node<N>(&mut self, node: &N, node_ident: NodeIdent) -> LoopFlow<Self::Ret>
-        where N: Node<A, R>;
-}
-
-/// A type which can view a sequence of mutable nodes
-pub trait NodeSeqUpdater<A, R: Renderer> {
-    type Ret;
-    fn update_node<N>(&mut self, node: &mut N, node_ident: NodeIdent) -> LoopFlow<Self::Ret>
-        where N: Node<A, R>;
-}
-
-const UPDATE_THIS: u32 = 1 << 31;
+const RENDER_SELF: u32 = 1 << 31;
 const UPDATE_CHILD: u32 = 1 << 30;
-const UPDATE_ALL: u32 = UPDATE_THIS | UPDATE_CHILD;
+const RENDER_ALL: u32 = RENDER_SELF | UPDATE_CHILD;
+const UPDATE_LAYOUT: u32 = (1 << 29);
+
+const UPDATE_MASK: u32 = RENDER_SELF | UPDATE_CHILD | RENDER_ALL | UPDATE_LAYOUT;
 
 impl UpdateTag {
     #[inline]
     pub fn new() -> UpdateTag {
         UpdateTag {
-            last_root: Cell::new(UPDATE_ALL)
+            last_root: Cell::new(UPDATE_MASK),
+            child_event_recv: Cell::new(RecvEventType::empty())
         }
     }
 
     #[inline]
-    pub fn mark_update_this(&mut self) -> &mut UpdateTag {
-        self.last_root.set((self.last_root.get() & UPDATE_ALL) | UPDATE_THIS);
+    pub fn mark_render_self(&mut self) -> &mut UpdateTag {
+        self.last_root.set(self.last_root.get() | RENDER_SELF);
         self
     }
 
     #[inline]
     pub fn mark_update_child(&mut self) -> &mut UpdateTag {
-        self.last_root.set((self.last_root.get() & UPDATE_ALL) | UPDATE_CHILD);
+        self.last_root.set(self.last_root.get() | UPDATE_CHILD);
+        self
+    }
+
+    #[inline]
+    pub fn mark_update_layout(&mut self) -> &mut UpdateTag {
+        self.last_root.set(self.last_root.get() | UPDATE_LAYOUT);
         self
     }
 
@@ -148,13 +184,23 @@ impl UpdateTag {
         self.last_root.set(root_id.0);
     }
 
+    pub(crate) fn mark_update_child_immutable(&self) {
+        self.last_root.set(self.last_root.get() | UPDATE_CHILD);
+    }
+
     #[inline]
     pub(crate) fn needs_update(&self, root_id: RootID) -> Update {
         match self.last_root.get() {
-            r if r == root_id.0  => Update::None,
-            r if r == UPDATE_THIS  => Update::This,
-            r if r == UPDATE_CHILD => Update::Child,
-            _                    => Update::All
+            r if r == root_id.0 => Update {
+                render_self: false,
+                update_child: false,
+                update_layout: false
+            },
+            r => Update {
+                render_self: r & UPDATE_MASK & RENDER_SELF != 0,
+                update_child: r & UPDATE_MASK & UPDATE_CHILD != 0,
+                update_layout: r & UPDATE_MASK & UPDATE_LAYOUT != 0
+            },
         }
     }
 }
@@ -166,8 +212,33 @@ impl RootID {
 
         static ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
         let id = ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32;
-        assert!(id < UPDATE_ALL);
+        assert!(id < UPDATE_MASK);
 
         RootID(id as u32)
+    }
+}
+
+impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
+    #[inline]
+    pub fn new(frame: &'a mut F, base_transform: F::Transform) -> FrameRectStack<'a, F> {
+        FrameRectStack {
+            frame,
+            transform: base_transform
+        }
+    }
+
+    #[inline]
+    pub fn upload_primitives<I>(&mut self, prim_iter: I)
+        where I: Iterator<Item=F::Primitive>
+    {
+        self.frame.upload_primitives(&self.transform, prim_iter)
+    }
+
+    #[inline]
+    pub fn enter_child_rect<'b>(&'b mut self, child_rect: BoundRect<u32>) -> FrameRectStack<'b, F> {
+        FrameRectStack {
+            frame: self.frame,
+            transform: F::child_rect_transform(&self.transform, child_rect)
+        }
     }
 }

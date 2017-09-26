@@ -3,7 +3,8 @@ pub enum MouseButton {
     Left,
     Right,
     Middle,
-    Other(u8)
+    X1,
+    X2
 }
 
 #[repr(u8)]

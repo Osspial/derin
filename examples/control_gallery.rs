@@ -1,197 +1,173 @@
 #![feature(never_type)]
 
 extern crate derin;
-#[macro_use]
-extern crate derin_macros;
+extern crate derin_core;
+extern crate dct;
+extern crate cgmath;
+extern crate cgmath_geometry;
+extern crate glutin;
 
-use derin::ui::*;
-use derin::ui::widgets::*;
-use derin::ui::widgets::content::{Orientation, Completion, ProgbarStatus, SliderStatus};
-use derin::ui::hints::*;
+use dct::hints::{WidgetHints, NodeSpan, GridSize, Margins};
+use derin::{ButtonHandler, NodeContainer, NodeLayout, Button, Group};
+use derin::gl_render::{GLRenderer, GLFrame};
+use derin_core::{LoopFlow, Root, WindowEvent};
+use derin_core::tree::{Node, NodeSummary, NodeIdent};
 
-use derin::native::{Window, WindowConfig};
+use glutin::{Event, ControlFlow, WindowEvent as GlutinWindowEvent};
 
-use std::iter;
+use cgmath::Point2;
+use cgmath_geometry::{DimsRect, Rectangle};
 
-enum GalleryEvent {
-    AddButton,
-    DelButton,
-    SliderMoved(u32)
+enum GalleryEvent {}
+
+struct BasicContainer {
+    button0: Button<BasicHandler>,
+    button1: Button<BasicHandler>
 }
 
-struct AddButton;
-impl EventActionMap<MouseEvent> for AddButton {
+struct BasicHandler;
+struct BasicLayout;
+
+impl ButtonHandler for BasicHandler {
     type Action = GalleryEvent;
 
-    fn on_event(&self, _: MouseEvent) -> Option<GalleryEvent> {
-        Some(GalleryEvent::AddButton)
+    fn on_click(&mut self) -> Option<GalleryEvent> {
+        None
     }
 }
 
-struct DelButton;
-impl EventActionMap<MouseEvent> for DelButton {
-    type Action = GalleryEvent;
-
-    fn on_event(&self, _: MouseEvent) -> Option<GalleryEvent> {
-        Some(GalleryEvent::DelButton)
-    }
-}
-
-struct BasicSlider;
-impl EventActionMap<RangeEvent> for BasicSlider {
-    type Action = GalleryEvent;
-
-    fn on_event(&self, event: RangeEvent) -> Option<GalleryEvent> {
-        if let RangeEvent::Move(moved_to) = event {
-            Some(GalleryEvent::SliderMoved(moved_to))
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Parent)]
-#[derin(child_action = "GalleryEvent")]
-struct BasicParent {
-    label: TextLabel<&'static str>,
-    bar: Progbar,
-    slider: Slider<BasicSlider>,
-    nested_parent: GroupBox<&'static str, NestedParent>,
-    #[derin(layout)]
-    layout: BasicParentLayout
-}
-
-impl BasicParent {
-    fn new() -> BasicParent {
-        BasicParent {
-            label: TextLabel::new("A Label"),
-            bar: Progbar::new(ProgbarStatus::new(Completion::Frac(0.5), Orientation::Horizontal)),
-            slider: Slider::new(BasicSlider, SliderStatus::default()),
-            nested_parent: GroupBox::new("Hello World", NestedParent {
-                del_button: TextButton::new(DelButton, "Delete Button"),
-                add_button: TextButton::new(AddButton, "Add Button"),
-                button_vec: Vec::new(),
-                layout: NestedParentLayout
-            }),
-            layout: BasicParentLayout
-        }
-    }
-}
-
-#[derive(Parent)]
-#[derin(child_action = "GalleryEvent")]
-struct NestedParent {
-    del_button: TextButton<DelButton, &'static str>,
-    add_button: TextButton<AddButton, &'static str>,
-    #[derin(collection)]
-    button_vec: Vec<TextButton<AddButton, &'static str>>,
-    #[derin(layout)]
-    layout: NestedParentLayout
-}
-
-struct BasicParentLayout;
-struct NestedParentLayout;
-
-impl<'a> GridLayout<'a> for BasicParentLayout {
-    type ColHints = iter::Repeat<TrackHints>;
-    type RowHints = iter::Repeat<TrackHints>;
-
-    fn grid_size(&self) -> GridSize {
-        GridSize::new(1, 4)
-    }
-
-    fn col_hints(&'a self) -> Self::ColHints {
-        iter::repeat(TrackHints::default())
-    }
-
-    fn row_hints(&'a self) -> Self::RowHints {
-        iter::repeat(TrackHints {
-            fr_size: 1.0,
-            ..TrackHints::default()
-        })
-    }
-
-    fn get_hints(&self, id: ChildId) -> Option<WidgetHints> {
-        match id {
-            ChildId::Str("label") => Some(WidgetHints {
+impl NodeLayout for BasicLayout {
+    fn hints(&self, node_ident: NodeIdent) -> Option<WidgetHints> {
+        match node_ident {
+            NodeIdent::Str("button0") => Some(WidgetHints {
                 node_span: NodeSpan::new(0, 0),
+                margins: Margins::new(16, 16, 16, 16),
                 ..WidgetHints::default()
             }),
-            ChildId::Str("bar") => Some(WidgetHints {
-                node_span: NodeSpan::new(0, 1),
-                ..WidgetHints::default()
-            }),
-            ChildId::Str("slider") => Some(WidgetHints {
-                node_span: NodeSpan::new(0, 2),
-                ..WidgetHints::default()
-            }),
-            ChildId::Str("nested_parent") => Some(WidgetHints {
-                node_span: NodeSpan::new(0, 3),
-                ..WidgetHints::default()
-            }),
-            _ => None
-        }
-    }
-}
-
-impl<'a> GridLayout<'a> for NestedParentLayout {
-    type ColHints = iter::Repeat<TrackHints>;
-    type RowHints = iter::Repeat<TrackHints>;
-
-    fn grid_size(&self) -> GridSize {
-        GridSize::new(6, 1)
-    }
-
-    fn col_hints(&'a self) -> Self::ColHints {
-        iter::repeat(TrackHints::default())
-    }
-
-    fn row_hints(&'a self) -> Self::RowHints {
-        iter::repeat(TrackHints {
-            fr_size: 1.0,
-            ..TrackHints::default()
-        })
-    }
-
-    fn get_hints(&self, id: ChildId) -> Option<WidgetHints> {
-        match id {
-            ChildId::Str("add_button") => Some(WidgetHints {
-                node_span: NodeSpan::new(0, 0),
-                ..WidgetHints::default()
-            }),
-            ChildId::Str("del_button") => Some(WidgetHints {
+            NodeIdent::Str("button1") => Some(WidgetHints {
                 node_span: NodeSpan::new(1, 0),
-                ..WidgetHints::default()
-            }),
-            ChildId::StrCollection("button_vec", num) => Some(WidgetHints {
-                node_span: NodeSpan::new(2 + num, 0),
+                margins: Margins::new(16, 16, 16, 16),
                 ..WidgetHints::default()
             }),
             _ => None
         }
+    }
+    fn grid_size(&self) -> GridSize {
+        GridSize::new(2, 1)
     }
 }
 
 fn main() {
-    let mut window = Window::new(Group::new(BasicParent::new()), &WindowConfig::new().name("Derin Window".to_string()));
-    let mut button_buf = Vec::new();
+    let group = Group::new(
+        BasicContainer {
+            button0: Button::new(BasicHandler),
+            button1: Button::new(BasicHandler)
+        },
+        BasicLayout
+    );
 
-    loop {
-        let mut action = None;
-        window.wait_actions(|new_act| {action = Some(new_act); false}).unwrap();
-        match action.unwrap() {
-            GalleryEvent::AddButton =>
-                window.root.children_mut()
-                      .nested_parent.children_mut()
-                      .button_vec.push(TextButton::new(AddButton, "Another Button")),
-            GalleryEvent::DelButton => {
-                window.root.children_mut()
-                      .nested_parent.children_mut()
-                      .button_vec.pop().map(|button| button_buf.push(button));
-            },
-            GalleryEvent::SliderMoved(moved_to) =>
-                window.root.children_mut()
-                      .bar.status_mut().completion = Completion::Frac(moved_to as f32 / 128.0)
+    let dims = DimsRect::new(512, 512);
+    let mut events_loop = glutin::EventsLoop::new();
+    let window_builder = glutin::WindowBuilder::new()
+        .with_dimensions(dims.width(), dims.height())
+        .with_title("Derin Control Gallery");
+
+    let mut renderer = unsafe{ GLRenderer::new(&events_loop, window_builder).unwrap() };
+
+    let mut root = Root::new(group, dims);
+    root.run_forever(|for_each_event| {
+        let mut ret: Option<()> = None;
+        events_loop.run_forever(|glutin_event| {
+            match glutin_event {
+                Event::WindowEvent{event, ..} => {
+                    let derin_event_opt: Option<WindowEvent> = match event {
+                        GlutinWindowEvent::MouseMoved{position, ..} => Some(WindowEvent::MouseMove(Point2::new(position.0 as i32, position.1 as i32))),
+                        GlutinWindowEvent::MouseEntered{..} => Some(WindowEvent::MouseEnter(Point2::new(0, 0))),
+                        GlutinWindowEvent::MouseLeft{..} => Some(WindowEvent::MouseExit(Point2::new(0, 0))),
+                        GlutinWindowEvent::Closed => return ControlFlow::Break,
+                        _ => None
+                    };
+
+                    if let Some(derin_event) = derin_event_opt {
+                        match for_each_event(derin_event) {
+                            LoopFlow::Break(b) => {
+                                ret = Some(b);
+                                return ControlFlow::Break;
+                            },
+                            LoopFlow::Continue => ()
+                        }
+                    }
+                },
+                Event::Awakened |
+                Event::DeviceEvent{..} => ()
+            }
+
+            ControlFlow::Continue
+        });
+
+        ret
+    }, |_| {LoopFlow::Continue}, &mut renderer);
+}
+
+impl NodeContainer for BasicContainer {
+    type Action = GalleryEvent;
+    type Frame = GLFrame;
+
+    fn children<'a, G, R>(&'a self, mut for_each_child: G) -> Option<R>
+        where G: FnMut(NodeSummary<&'a Node<Self::Action, Self::Frame>>) -> LoopFlow<R>,
+              Self::Action: 'a,
+              Self::Frame: 'a
+    {
+        let mut flow;
+        flow = for_each_child(NodeSummary {
+            ident: NodeIdent::Str("button0"),
+            rect: <Button<_> as Node<Self::Action, Self::Frame>>::bounds(&self.button0),
+            update_tag: <Button<_> as Node<Self::Action, Self::Frame>>::update_tag(&self.button0).clone(),
+            node: &self.button0
+        });
+        if let LoopFlow::Break(b) = flow {
+            return Some(b);
         }
+
+        flow = for_each_child(NodeSummary {
+            ident: NodeIdent::Str("button1"),
+            rect: <Button<_> as Node<Self::Action, Self::Frame>>::bounds(&self.button1),
+            update_tag: <Button<_> as Node<Self::Action, Self::Frame>>::update_tag(&self.button1).clone(),
+            node: &self.button1
+        });
+        if let LoopFlow::Break(b) = flow {
+            return Some(b);
+        }
+
+        None
+    }
+
+    fn children_mut<'a, G, R>(&'a mut self, mut for_each_child: G) -> Option<R>
+        where G: FnMut(NodeSummary<&'a mut Node<Self::Action, Self::Frame>>) -> LoopFlow<R>,
+              Self::Action: 'a,
+              Self::Frame: 'a
+    {
+        let mut flow;
+        flow = for_each_child(NodeSummary {
+            ident: NodeIdent::Str("button0"),
+            rect: <Button<_> as Node<Self::Action, Self::Frame>>::bounds(&self.button0),
+            update_tag: <Button<_> as Node<Self::Action, Self::Frame>>::update_tag(&self.button0).clone(),
+            node: &mut self.button0
+        });
+        if let LoopFlow::Break(b) = flow {
+            return Some(b);
+        }
+
+        flow = for_each_child(NodeSummary {
+            ident: NodeIdent::Str("button1"),
+            rect: <Button<_> as Node<Self::Action, Self::Frame>>::bounds(&self.button1),
+            update_tag: <Button<_> as Node<Self::Action, Self::Frame>>::update_tag(&self.button1).clone(),
+            node: &mut self.button1
+        });
+        if let LoopFlow::Break(b) = flow {
+            return Some(b);
+        }
+
+        None
     }
 }

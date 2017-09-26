@@ -1,33 +1,39 @@
-#![feature(specialization)]
-
 extern crate cgmath;
 extern crate cgmath_geometry;
+#[macro_use]
+extern crate bitflags;
 extern crate dct;
 
 pub mod tree;
 
-use cgmath::{Point2, Vector2, EuclideanSpace};
-use cgmath_geometry::{Rectangle, BoundRect, DimsRect, Segment};
+use cgmath::{Point2, Vector2, Bounded};
+use cgmath_geometry::{Rectangle, DimsRect, Segment};
 
-use std::mem;
-use std::collections::{VecDeque, HashMap};
+use std::marker::PhantomData;
+use std::collections::VecDeque;
 
-use tree::{Node, Parent, Renderer, RootID, NodeIdent, NodeEvent, NodeUpdater};
+use tree::{Node, Parent, Renderer, NodeSummary, RenderFrame, FrameRectStack, RootID, NodeEvent, Update, NodeSubtraitMut};
 use dct::buttons::MouseButton;
 
-pub struct Root<A, N, R>
-    where N: Node<A, R>,
-          R: Renderer
+pub struct Root<A, N, F>
+    where N: Node<A, F> + 'static,
+          F: RenderFrame,
+          A: 'static,
+          F: 'static
 {
     id: RootID,
     state: RootState<A>,
+    active_node_stack: Vec<*mut Node<A, F>>,
+    active_node_offset: Vector2<i32>,
     pub root_node: N,
-    renderer: R
+    _marker: PhantomData<*const F>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RootEvent {
+pub enum WindowEvent {
     MouseMove(Point2<i32>),
+    MouseEnter(Point2<i32>),
+    MouseExit(Point2<i32>),
     MouseDown {
         pos: Point2<i32>,
         button: MouseButton
@@ -35,6 +41,25 @@ pub enum RootEvent {
     MouseUp {
         pos: Point2<i32>,
         button: MouseButton
+    },
+    // KeyDown {
+    //     key:
+    // }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ActiveNode {
+    Click(ButtonsDown),
+    Keyboard
+}
+
+bitflags!{
+    struct ButtonsDown: u8 {
+        const BUTTON_L  = 0b00001;
+        const BUTTON_R  = 0b00010;
+        const BUTTON_M  = 0b00100;
+        const BUTTON_X1 = 0b01000;
+        const BUTTON_X2 = 0b10000;
     }
 }
 
@@ -42,9 +67,6 @@ struct RootState<A> {
     dims: DimsRect<u32>,
     mouse_pos: Point2<i32>,
     mouse_buttons_down: Vec<MouseButton>,
-    mouse_hover_node: Vec<NodeIdent>,
-    mouse_click_nodes: HashMap<MouseButton, NodeIdent>,
-    keyboard_node: Vec<NodeIdent>,
     actions: VecDeque<A>
 }
 
@@ -55,234 +77,318 @@ pub enum LoopFlow<R> {
     Break(R)
 }
 
-impl<A, N, R> Root<A, N, R>
-    where N: Node<A, R>,
-          R: Renderer
+impl<A, N, F> Root<A, N, F>
+    where N: Node<A, F>,
+          F: RenderFrame
 {
     #[inline]
-    pub fn new(root_node: N, renderer: R, dims: DimsRect<u32>) -> Root<A, N, R> {
+    pub fn new(mut root_node: N, dims: DimsRect<u32>) -> Root<A, N, F> {
+        *root_node.bounds_mut() = dims.into();
         Root {
             id: RootID::new(),
             state: RootState {
                 dims,
                 mouse_pos: Point2::new(-1, -1),
                 mouse_buttons_down: Vec::new(),
-                mouse_hover_node: Vec::new(),
-                mouse_click_nodes: HashMap::new(),
-                keyboard_node: Vec::new(),
-                actions: VecDeque::new(),
+                actions: VecDeque::new()
             },
+            active_node_stack: Vec::new(),
+            active_node_offset: Vector2::new(0, 0),
             root_node,
-            renderer
+            _marker: PhantomData
         }
     }
 
-    pub fn run_forever<I, F, G>(&mut self, mut event_iter: I, mut on_action: F) -> G
-        where I: Iterator<Item=RootEvent>,
-              F: FnMut(A) -> LoopFlow<G>
+    pub fn run_forever<E, AF, R, G>(&mut self, mut gen_events: E, mut on_action: AF, renderer: &mut R) -> Option<G>
+        where E: FnMut(&mut FnMut(WindowEvent) -> LoopFlow<G>) -> Option<G>,
+              AF: FnMut(A) -> LoopFlow<G>,
+              R: Renderer<Frame=F>
     {
-        'main_loop: loop {
-            let _ = NodeEventPump {
-                root_id: self.id,
-                node_rect: self.state.dims.into(),
-                root_state: &mut self.state,
-                event_iter: &mut event_iter,
-            }.update_node(&mut self.root_node);
+        macro_rules! try_push_action {
+            ($action_opt:expr) => {{
+                if let Some(action) = $action_opt {
+                    self.state.actions.push_back(action);
+                }
+            }}
+        }
+        self.active_node_stack.clear();
 
+        gen_events(&mut |event| {
+            let mut mark_active_nodes_redraw = false;
+            match event {
+                WindowEvent::MouseEnter(enter_pos) => {
+                    try_push_action!{
+                        self.root_node.on_node_event(NodeEvent::MouseEnter {
+                            enter_pos,
+                            buttons_down: &self.state.mouse_buttons_down
+                        })
+                    }
+                    assert_eq!(self.active_node_stack.len(), 0);
+                    let root_node_ptr = &mut self.root_node as *mut Node<A, F>;
+                    self.active_node_stack.push(root_node_ptr);
+                },
+                WindowEvent::MouseExit(exit_pos) => {
+                    assert_ne!(self.active_node_stack.len(), 0);
+
+                    for node in self.active_node_stack.drain(..).rev().map(|node_ptr| unsafe{ &mut *node_ptr }) {
+                        try_push_action!{
+                            node.on_node_event(NodeEvent::MouseExit {
+                                exit_pos,
+                                buttons_down: &self.state.mouse_buttons_down
+                            })
+                        }
+                    }
+                },
+
+                WindowEvent::MouseMove(mut move_to) => {
+                    let mut old_pos = self.state.mouse_pos - self.active_node_offset;
+                    self.state.mouse_pos = move_to;
+                    move_to -= self.active_node_offset;
+
+                    if self.root_node.bounds().cast().map(|r| r.contains(move_to)).unwrap_or(false) {
+                        loop {
+                            let active_node = unsafe{ &mut **self.active_node_stack.last_mut().unwrap() };
+
+                            let node_bounds = active_node.bounds().cast::<i32>().unwrap();
+                            let move_line = Segment {
+                                start: old_pos,
+                                end: move_to
+                            };
+
+
+                            let (_, exit_pos) = node_bounds.intersects_int(move_line);
+
+                            macro_rules! mark_if_needs_update {
+                                ($node:expr) => {{
+                                    let node_update_tag = $node.update_tag();
+                                    let node_update = node_update_tag.needs_update(self.id);
+                                    let no_update = Update{ render_self: false, update_child: false, update_layout: false };
+                                    if node_update != no_update {
+                                        mark_active_nodes_redraw = true;
+                                    }
+                                    if mark_active_nodes_redraw {
+                                        node_update_tag.mark_update_child_immutable();
+                                    }
+                                }}
+                            }
+
+                            match exit_pos {
+                                Some(exit) => {
+                                    try_push_action!{
+                                        active_node.on_node_event(NodeEvent::MouseMove {
+                                            old: old_pos,
+                                            new: exit_pos.unwrap_or(move_to),
+                                            in_node: true,
+                                            buttons_down: &self.state.mouse_buttons_down
+                                        })
+                                    }
+                                    try_push_action!{
+                                        active_node.on_node_event(NodeEvent::MouseExit {
+                                            exit_pos: exit,
+                                            buttons_down: &self.state.mouse_buttons_down
+                                        })
+                                    }
+
+                                    mark_if_needs_update!(active_node);
+
+                                    self.active_node_stack.pop();
+                                    old_pos = exit;
+
+                                    continue;
+                                },
+                                None => {
+                                    match active_node.subtrait_mut() {
+                                        NodeSubtraitMut::Parent(active_node_as_parent) => {
+                                            let child_ident_and_rect = active_node_as_parent
+                                                .child_by_point_mut(move_to.cast().unwrap_or(Point2::max_value()))
+                                                .map(|s| (s.ident, s.rect));
+
+                                            match child_ident_and_rect {
+                                                None => {
+                                                    try_push_action!{
+                                                        active_node_as_parent.on_node_event(NodeEvent::MouseMove {
+                                                            old: old_pos,
+                                                            new: exit_pos.unwrap_or(move_to),
+                                                            in_node: true,
+                                                            buttons_down: &self.state.mouse_buttons_down
+                                                        })
+                                                    }
+
+                                                    mark_if_needs_update!(active_node_as_parent);
+                                                },
+                                                Some((child_ident, child_rect)) => {
+                                                    let (child_enter_pos, _) = child_rect.cast()
+                                                        .map(|rect| rect.intersects_int(move_line))
+                                                        .unwrap_or((None, None));
+
+
+                                                    if let Some(child_enter) = child_enter_pos {
+                                                        try_push_action!{
+                                                            active_node_as_parent.on_node_event(NodeEvent::MouseMove {
+                                                                old: old_pos,
+                                                                new: child_enter,
+                                                                in_node: true,
+                                                                buttons_down: &self.state.mouse_buttons_down
+                                                            })
+                                                        }
+                                                        try_push_action!{
+                                                            active_node_as_parent.on_node_event(NodeEvent::MouseEnterChild {
+                                                                enter_pos: child_enter,
+                                                                buttons_down: &self.state.mouse_buttons_down,
+                                                                child: child_ident
+                                                            })
+                                                        }
+                                                    }
+
+                                                    mark_if_needs_update!(active_node_as_parent);
+
+
+                                                    let child_node = active_node_as_parent.child_mut(child_ident).unwrap().node;
+                                                    if let Some(child_enter) = child_enter_pos {
+                                                        try_push_action!{
+                                                            child_node.on_node_event(NodeEvent::MouseEnter {
+                                                                enter_pos: child_enter,
+                                                                buttons_down: &self.state.mouse_buttons_down
+                                                            })
+                                                        }
+                                                    }
+                                                    mark_if_needs_update!(child_node);
+
+                                                    self.active_node_stack.push(child_node);
+
+                                                    continue;
+                                                }
+                                            }
+                                        },
+                                        NodeSubtraitMut::Node(active_node) => {
+                                            try_push_action!{
+                                                active_node.on_node_event(NodeEvent::MouseMove {
+                                                    old: old_pos,
+                                                    new: exit_pos.unwrap_or(move_to),
+                                                    in_node: true,
+                                                    buttons_down: &self.state.mouse_buttons_down
+                                                })
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            break;
+                        }
+                    }
+                },
+                WindowEvent::MouseDown{..} => (),
+                WindowEvent::MouseUp{..} => ()
+            }
+
+            if mark_active_nodes_redraw {
+                for node_ptr in &self.active_node_stack {
+                    let node = unsafe{ &**node_ptr };
+                    node.update_tag().mark_update_child_immutable();
+                }
+            }
+            if 0 < self.state.actions.len() {
+                self.active_node_stack.clear();
+            }
+
+            let mut return_flow = LoopFlow::Continue;
             while let Some(action) = self.state.actions.pop_front() {
                 match on_action(action) {
                     LoopFlow::Continue => (),
-                    LoopFlow::Break(ret) => break 'main_loop ret
+                    LoopFlow::Break(ret) => {
+                        return_flow = LoopFlow::Break(ret);
+                        break;
+                    }
                 }
             }
-        }
+
+            let root_update = self.root_node.update_tag().needs_update(self.id);
+
+            if root_update.render_self || root_update.update_child {
+                {
+                    let mut frame = renderer.make_frame();
+                    if let NodeSubtraitMut::Parent(root_as_parent) = self.root_node.subtrait_mut() {
+                        if root_update.update_layout {
+                            root_as_parent.update_child_layout();
+                        }
+                    }
+                    if root_update.render_self {
+                        self.root_node.render(&mut frame);
+                    }
+                    if root_update.update_child {
+                        if let NodeSubtraitMut::Parent(root_as_parent) = self.root_node.subtrait_mut() {
+                            NodeRenderer {
+                                root_id: self.id,
+                                frame,
+                            }.render_node_children(root_as_parent)
+                        }
+                    }
+                }
+
+                renderer.finish_frame();
+                self.root_node.update_tag().mark_updated(self.id);
+            }
+
+
+            return_flow
+        })
     }
 }
 
-#[must_use]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TraverserRet {
-    /// The traverser returned because the mouse exited the node. Contains the point, in root
-    /// space, at which the exit occured.
-    Exit(Point2<i32>),
-    Unwind(Unwind)
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Unwind {
-    Continue,
-    Break
-}
-
-struct NodeEventPump<'a, A, I>
-    where A: 'a,
-          I: 'a + Iterator<Item=RootEvent>
+struct NodeRenderer<'a, F>
+    where F: 'a + RenderFrame
 {
     root_id: RootID,
-    root_state: &'a mut RootState<A>,
-    event_iter: &'a mut I,
-    node_rect: BoundRect<u32>
+    frame: FrameRectStack<'a, F>
 }
 
-impl<'a, A, I, R> NodeUpdater<A, R> for NodeEventPump<'a, A, I>
-    where I: Iterator<Item=RootEvent>,
-          R: Renderer
+impl<'a, F> NodeRenderer<'a, F>
+    where F: 'a + RenderFrame
 {
-    type Ret = TraverserRet;
-    fn update_node<C>(mut self, node: &mut C) -> TraverserRet
-        where C: Node<A, R>
-    {
-        trait ParentSwitch<A, C, R>
-            where C: Node<A, R>,
-                  R: Renderer
-        {
-            fn move_event(&mut self, node: &mut C, in_node: bool, move_line: Segment<i32>, node_coord_offset: Vector2<i32>) -> Option<Unwind>;
-        }
-        impl<'a, A, I, C, R> ParentSwitch<A, C, R> for NodeEventPump<'a, A, I>
-            where I: Iterator<Item=RootEvent>,
-                  C: Node<A, R>,
-                  R: Renderer
-        {
-            default fn move_event(&mut self, node: &mut C, in_node: bool, move_line: Segment<i32>, node_coord_offset: Vector2<i32>) -> Option<Unwind> {
-                node.on_node_event(NodeEvent::MouseMove {
-                    old: move_line.start + node_coord_offset,
-                    new: move_line.end + node_coord_offset,
-                    in_node,
-                    buttons_down: &self.root_state.mouse_buttons_down
-                }).map(|action| self.root_state.actions.push_back(action));
-                None
-            }
-        }
-        impl<'a, A, I, P, R> ParentSwitch<A, P, R> for NodeEventPump<'a, A, I>
-            where I: Iterator<Item=RootEvent>,
-                  P: Parent<A, R>,
-                  R: Renderer
-        {
-            fn move_event(&mut self, node: &mut P, in_node: bool, move_line: Segment<i32>, node_coord_offset: Vector2<i32>) -> Option<Unwind> {
-                let child_search_result = (move_line.end - node_coord_offset).cast().and_then(|p| node.find_child(p));
+    fn render_node_children<A>(&mut self, parent: &mut Parent<A, F>) {
+        parent.children_mut(&mut |children_summaries| {
+            for summary in children_summaries {
+                let NodeSummary {
+                    node: ref mut child_node,
+                    ident: _,
+                    rect: child_rect,
+                    ref update_tag
+                } = *summary;
 
-                match child_search_result {
-                    // If a child wasn't found, send a standard move event and return
-                    None => {
-                        node.on_node_event(NodeEvent::MouseMove {
-                            old: move_line.start + node_coord_offset,
-                            new: move_line.end + node_coord_offset,
-                            in_node,
-                            buttons_down: &self.root_state.mouse_buttons_down
-                        }).map(|action| self.root_state.actions.push_back(action));
-                        None
+                let Update {
+                    render_self,
+                    update_child,
+                    update_layout
+                } = update_tag.needs_update(self.root_id);
+
+                match child_node.subtrait_mut() {
+                    NodeSubtraitMut::Parent(child_node_as_parent) => {
+                        let mut child_frame = self.frame.enter_child_rect(child_rect);
+
+                        if update_layout {
+                            child_node_as_parent.update_child_layout();
+                        }
+                        if render_self {
+                            child_node_as_parent.render(&mut child_frame);
+                        }
+                        if update_child {
+                            NodeRenderer {
+                                root_id: self.root_id,
+                                frame: child_frame
+                            }.render_node_children(child_node_as_parent);
+                        }
                     },
-
-                    // If a child *was* found, send the relevant events to this node and hand control
-                    // flow over to the child.
-                    Some((child_id, child_rect)) => {
-                        let enter_pos = child_rect.cast().unwrap().intersects_int(move_line).0.unwrap();
-                        // If an action is pushed to the action buffer here, the child handles unwinding
-                        // the stack.
-                        node.on_node_event(NodeEvent::MouseEnterChild {
-                            enter_pos,
-                            buttons_down: &self.root_state.mouse_buttons_down,
-                            child: child_id
-                        }).map(|action| self.root_state.actions.push_back(action));
-
-                        self.root_state.mouse_hover_node.push(child_id);
-                        let child_ret = node.child_mut(child_id, NodeEventPump {
-                            root_id: self.root_id,
-                            root_state: self.root_state,
-                            event_iter: self.event_iter,
-                            node_rect: child_rect
-                        });
-
-                        match child_ret {
-                            // The child node has been exited, so send an exit node to this node (the
-                            // child's parent) and continue executing the event loop as the parent.
-                            TraverserRet::Exit(exit_pos) => {
-                                node.on_node_event(NodeEvent::MouseExitChild {
-                                    exit_pos,
-                                    buttons_down: &self.root_state.mouse_buttons_down,
-                                    child: child_id
-                                }).map(|action| self.root_state.actions.push_back(action));
-                                None
-                            },
-                            // The child triggered an unwind, so propagate the unwind
-                            TraverserRet::Unwind(unwind) => Some(unwind)
+                    NodeSubtraitMut::Node(child_node) => {
+                        if render_self {
+                            child_node.render(&mut self.frame.enter_child_rect(child_rect));
                         }
                     }
                 }
+
+                child_node.update_tag().mark_updated(self.root_id);
             }
-        }
-
-
-        loop {
-            // The action check is before the main body of the loop so we can unwinding from actions
-            // created by the parent node.
-            if 0 < self.root_state.actions.len() {
-                // There are actions to be processed, so unwind the traverser stack, run the action
-                // function, and then rebuild the stack.
-                return TraverserRet::Unwind(Unwind::Continue);
-            }
-
-            let mut exit_pos_opt = None;
-            match self.event_iter.next() {
-                None => return TraverserRet::Unwind(Unwind::Break),
-                Some(RootEvent::MouseMove(new)) => {
-                    let old = mem::replace(&mut self.root_state.mouse_pos, new);
-                    let node_coord_offset = self.node_rect.min.to_vec().cast::<i32>().unwrap();
-
-                    let move_line = Segment {
-                        start: old,
-                        end: new
-                    };
-
-                    let in_node: bool;
-                    let (mut enter_pos, mut exit_pos) = (None, None);
-                    let node_rect_i = self.node_rect.cast::<i32>().unwrap();
-                    match node_rect_i.intersects_int(move_line) {
-                        (None, None) => {
-                            in_node = node_rect_i.contains(new);
-                        },
-                        (None, Some(exit)) => {
-                            exit_pos = Some(exit);
-                            in_node = false;
-                        },
-                        (Some(enter), None) => {
-                            enter_pos = Some(enter);
-                            in_node = true;
-                        },
-                        (Some(enter), Some(exit)) => {
-                            enter_pos = Some(enter);
-                            exit_pos = Some(exit);
-                            in_node = false;
-                        }
-                    }
-
-                    if let Some(enter) = enter_pos {
-                        node.on_node_event(NodeEvent::MouseEnter {
-                            enter_pos: enter + node_coord_offset,
-                            buttons_down: &self.root_state.mouse_buttons_down
-                        }).map(|action| self.root_state.actions.push_back(action));
-                    }
-                    if let Some(exit) = exit_pos {
-                        node.on_node_event(NodeEvent::MouseExit {
-                            exit_pos: exit + node_coord_offset,
-                            buttons_down: &self.root_state.mouse_buttons_down
-                        }).map(|action| self.root_state.actions.push_back(action));
-                        exit_pos_opt = Some(exit);
-                    }
-
-                    self.move_event(node, in_node, move_line, node_coord_offset)
-                        .map(|unwind| return TraverserRet::Unwind(unwind));
-
-                    // TODO: DRAW IF DRAWING IS NEEDED
-                },
-                _ => unimplemented!()
-            }
-
-            if let Some(exit_pos) = exit_pos_opt {
-                self.root_state.mouse_hover_node.pop();
-                return TraverserRet::Exit(exit_pos);
-            }
-        }
+        });
     }
 }
 

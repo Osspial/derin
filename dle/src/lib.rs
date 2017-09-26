@@ -25,6 +25,7 @@ pub struct UpdateHeapCache {
     solvable_widgets: Vec<Solvable>
 }
 
+#[derive(Debug, Clone)]
 pub struct GridEngine {
     grid: TrackVec,
     /// The pixel size of the layout engine, as requested by the programmer.
@@ -38,6 +39,13 @@ pub struct GridEngine {
     actual_size_bounds: SizeBounds,
     /// The margins that appear around the outside of the widget grid
     pub grid_margins: Margins
+}
+
+impl UpdateHeapCache {
+    #[inline]
+    pub fn new() -> UpdateHeapCache {
+        UpdateHeapCache::default()
+    }
 }
 
 impl GridEngine {
