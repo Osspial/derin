@@ -7,13 +7,14 @@ extern crate cgmath;
 extern crate cgmath_geometry;
 extern crate glutin;
 
+use dct::buttons::MouseButton;
 use dct::hints::{WidgetHints, NodeSpan, GridSize, Margins};
 use derin::{ButtonHandler, NodeContainer, NodeLayout, Button, Group};
 use derin::gl_render::{GLRenderer, GLFrame};
 use derin_core::{LoopFlow, Root, WindowEvent};
 use derin_core::tree::{Node, NodeSummary, NodeIdent};
 
-use glutin::{Event, ControlFlow, WindowEvent as GlutinWindowEvent};
+use glutin::{Event, ControlFlow, WindowEvent as GWindowEvent, MouseButton as GMouseButton, ElementState};
 
 use cgmath::Point2;
 use cgmath_geometry::{DimsRect, Rectangle};
@@ -81,11 +82,25 @@ fn main() {
             match glutin_event {
                 Event::WindowEvent{event, ..} => {
                     let derin_event_opt: Option<WindowEvent> = match event {
-                        GlutinWindowEvent::MouseMoved{position, ..} => Some(WindowEvent::MouseMove(Point2::new(position.0 as i32, position.1 as i32))),
-                        GlutinWindowEvent::MouseEntered{..} => Some(WindowEvent::MouseEnter(Point2::new(0, 0))),
-                        GlutinWindowEvent::MouseLeft{..} => Some(WindowEvent::MouseExit(Point2::new(0, 0))),
-                        GlutinWindowEvent::Resized(width, height) => Some(WindowEvent::WindowResize(DimsRect::new(width, height))),
-                        GlutinWindowEvent::Closed => return ControlFlow::Break,
+                        GWindowEvent::MouseMoved{position, ..} => Some(WindowEvent::MouseMove(Point2::new(position.0 as i32, position.1 as i32))),
+                        GWindowEvent::MouseEntered{..} => Some(WindowEvent::MouseEnter(Point2::new(0, 0))),
+                        GWindowEvent::MouseLeft{..} => Some(WindowEvent::MouseExit(Point2::new(0, 0))),
+                        GWindowEvent::MouseInput{state, button: g_button, ..} => {
+                            let button = match g_button {
+                                GMouseButton::Left => Some(MouseButton::Left),
+                                GMouseButton::Right => Some(MouseButton::Right),
+                                GMouseButton::Middle => Some(MouseButton::Middle),
+                                GMouseButton::Other(1) => Some(MouseButton::X1),
+                                GMouseButton::Other(2) => Some(MouseButton::X2),
+                                GMouseButton::Other(_) => None
+                            };
+                            button.map(|b| match state {
+                                ElementState::Pressed => WindowEvent::MouseDown(b),
+                                ElementState::Released => WindowEvent::MouseUp(b)
+                            })
+                        }
+                        GWindowEvent::Resized(width, height) => Some(WindowEvent::WindowResize(DimsRect::new(width, height))),
+                        GWindowEvent::Closed => return ControlFlow::Break,
                         _ => None
                     };
 

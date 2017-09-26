@@ -1,11 +1,24 @@
+#[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MouseButton {
-    Left,
-    Right,
-    Middle,
-    X1,
-    X2
+    Left = MOUSE_L,
+    Right = MOUSE_R,
+    Middle = MOUSE_M,
+    X1 = MOUSE_X1,
+    X2 = MOUSE_X2
 }
+
+const MOUSE_L: u8  = 0b001;
+const MOUSE_R: u8  = 0b010;
+const MOUSE_M: u8  = 0b011;
+const MOUSE_X1: u8 = 0b100;
+const MOUSE_X2: u8 = 0b101;
+
+#[doc(hidden)]
+pub const MOUSE_INT_MASK: u16 = 0b111;
+#[doc(hidden)]
+pub const MOUSE_INT_MASK_LEN: u16 = 3;
+pub const NUM_MOUSE_BUTTONS: usize = 5;
 
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -190,4 +203,28 @@ pub enum Key {
     Shift,
     Control,
     Menu
+}
+
+impl From<MouseButton> for u8 {
+    #[inline]
+    fn from(button: MouseButton) -> u8 {
+        use std::mem;
+
+        unsafe{ mem::transmute(button) }
+    }
+}
+
+impl MouseButton {
+    #[inline]
+    pub fn from_u8(u: u8) -> Option<MouseButton> {
+        use self::MouseButton::*;
+        match u {
+            MOUSE_L  => Some(Left),
+            MOUSE_R  => Some(Right),
+            MOUSE_M  => Some(Middle),
+            MOUSE_X1 => Some(X1),
+            MOUSE_X2 => Some(X2),
+            _        => None
+        }
+    }
 }

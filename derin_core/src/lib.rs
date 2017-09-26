@@ -3,16 +3,21 @@ extern crate cgmath_geometry;
 #[macro_use]
 extern crate bitflags;
 extern crate dct;
+extern crate arrayvec;
 
 pub mod tree;
+mod mbseq;
 
-use cgmath::{Point2, Vector2, Bounded};
+use arrayvec::ArrayVec;
+
+use cgmath::{EuclideanSpace, Point2, Vector2, Bounded, Array};
 use cgmath_geometry::{Rectangle, DimsRect, Segment};
 
 use std::marker::PhantomData;
 use std::collections::VecDeque;
 
 use tree::{Node, Parent, Renderer, NodeSummary, RenderFrame, FrameRectStack, RootID, NodeEvent, Update, NodeSubtraitMut};
+use mbseq::MouseButtonSequence;
 use dct::buttons::MouseButton;
 
 pub struct Root<A, N, F>
@@ -22,7 +27,9 @@ pub struct Root<A, N, F>
           F: 'static
 {
     id: RootID,
-    state: RootState<A>,
+    mouse_pos: Point2<i32>,
+    mouse_buttons_down: MouseButtonSequence,
+    actions: VecDeque<A>,
     active_node_stack: Vec<*mut Node<A, F>>,
     active_node_offset: Vector2<i32>,
     force_full_redraw: bool,
@@ -35,18 +42,9 @@ pub enum WindowEvent {
     MouseMove(Point2<i32>),
     MouseEnter(Point2<i32>),
     MouseExit(Point2<i32>),
-    MouseDown {
-        pos: Point2<i32>,
-        button: MouseButton
-    },
-    MouseUp {
-        pos: Point2<i32>,
-        button: MouseButton
-    },
+    MouseDown(MouseButton),
+    MouseUp(MouseButton),
     WindowResize(DimsRect<u32>)
-    // KeyDown {
-    //     key:
-    // }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,13 +63,6 @@ bitflags!{
     }
 }
 
-struct RootState<A> {
-    dims: DimsRect<u32>,
-    mouse_pos: Point2<i32>,
-    mouse_buttons_down: Vec<MouseButton>,
-    actions: VecDeque<A>
-}
-
 #[must_use]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoopFlow<R> {
@@ -88,12 +79,9 @@ impl<A, N, F> Root<A, N, F>
         *root_node.bounds_mut() = dims.into();
         Root {
             id: RootID::new(),
-            state: RootState {
-                dims,
-                mouse_pos: Point2::new(-1, -1),
-                mouse_buttons_down: Vec::new(),
-                actions: VecDeque::new()
-            },
+            mouse_pos: Point2::new(-1, -1),
+            mouse_buttons_down: MouseButtonSequence::new(),
+            actions: VecDeque::new(),
             active_node_stack: Vec::new(),
             active_node_offset: Vector2::new(0, 0),
             force_full_redraw: true,
@@ -137,35 +125,77 @@ impl<A, N, F> Root<A, N, F>
         self.force_full_redraw = false;
     }
 
+    fn build_active_stack(&mut self) {
+        if self.active_node_stack.len() == 0 {
+            self.active_node_stack.push(&mut self.root_node);
+        }
+
+        loop {
+            let active_node = unsafe{ &mut **self.active_node_stack.last_mut().unwrap() };
+            match active_node.subtrait_mut() {
+                NodeSubtraitMut::Node(_) => break,
+                NodeSubtraitMut::Parent(parent) => {
+                    match parent.child_by_point_mut(self.mouse_pos.cast().unwrap_or(Point2::from_value(!0))) {
+                        Some(summary) => self.active_node_stack.push(summary.node),
+                        None          => break
+                    }
+                }
+            }
+        }
+    }
+
     pub fn run_forever<E, AF, R, G>(&mut self, mut gen_events: E, mut on_action: AF, renderer: &mut R) -> Option<G>
         where E: FnMut(&mut FnMut(WindowEvent) -> LoopFlow<G>) -> Option<G>,
               AF: FnMut(A) -> LoopFlow<G>,
               R: Renderer<Frame=F>
     {
-        macro_rules! try_push_action {
-            ($action_opt:expr) => {{
-                if let Some(action) = $action_opt {
-                    self.state.actions.push_back(action);
-                }
-            }}
-        }
+
         self.active_node_stack.clear();
         self.draw(renderer);
 
         gen_events(&mut |event| {
             let mut mark_active_nodes_redraw = false;
+
+            macro_rules! try_push_action {
+                ($action_opt:expr) => {{
+                    if let Some(action) = $action_opt {
+                        self.actions.push_back(action);
+                    }
+                }};
+
+                ($mbd_array:ident; $action_opt:expr) => {{
+                    let $mbd_array = self.mouse_buttons_down.into_iter().collect::<ArrayVec<[_; 5]>>();
+                    if let Some(action) = $action_opt {
+                        self.actions.push_back(action);
+                    }
+                }}
+            }
+
+            macro_rules! mark_if_needs_update {
+                ($node:expr) => {{
+                    let node_update_tag = $node.update_tag();
+                    let node_update = node_update_tag.needs_update(self.id);
+                    let no_update = Update{ render_self: false, update_child: false, update_layout: false };
+                    if node_update != no_update {
+                        mark_active_nodes_redraw = true;
+                    }
+                    if mark_active_nodes_redraw {
+                        node_update_tag.mark_update_child_immutable();
+                    }
+                }}
+            }
+
             match event {
                 WindowEvent::WindowResize(new_size) => {
                     self.active_node_stack.clear();
-                    self.state.dims = new_size;
                     self.force_full_redraw = true;
                     *self.root_node.bounds_mut() = new_size.into();
                 }
                 WindowEvent::MouseEnter(enter_pos) => {
                     try_push_action!{
-                        self.root_node.on_node_event(NodeEvent::MouseEnter {
+                        mbd_array; self.root_node.on_node_event(NodeEvent::MouseEnter {
                             enter_pos,
-                            buttons_down: &self.state.mouse_buttons_down
+                            buttons_down: &mbd_array
                         })
                     }
                     assert_eq!(self.active_node_stack.len(), 0);
@@ -177,17 +207,19 @@ impl<A, N, F> Root<A, N, F>
 
                     for node in self.active_node_stack.drain(..).rev().map(|node_ptr| unsafe{ &mut *node_ptr }) {
                         try_push_action!{
-                            node.on_node_event(NodeEvent::MouseExit {
+                            mbd_array; node.on_node_event(NodeEvent::MouseExit {
                                 exit_pos,
-                                buttons_down: &self.state.mouse_buttons_down
+                                buttons_down: &mbd_array
                             })
                         }
                     }
                 },
 
                 WindowEvent::MouseMove(mut move_to) => {
-                    let mut old_pos = self.state.mouse_pos - self.active_node_offset;
-                    self.state.mouse_pos = move_to;
+                    self.build_active_stack();
+
+                    let mut old_pos = self.mouse_pos - self.active_node_offset;
+                    self.mouse_pos = move_to;
                     move_to -= self.active_node_offset;
 
                     if self.root_node.bounds().cast().map(|r| r.contains(move_to)).unwrap_or(false) {
@@ -203,34 +235,20 @@ impl<A, N, F> Root<A, N, F>
 
                             let (_, exit_pos) = node_bounds.intersects_int(move_line);
 
-                            macro_rules! mark_if_needs_update {
-                                ($node:expr) => {{
-                                    let node_update_tag = $node.update_tag();
-                                    let node_update = node_update_tag.needs_update(self.id);
-                                    let no_update = Update{ render_self: false, update_child: false, update_layout: false };
-                                    if node_update != no_update {
-                                        mark_active_nodes_redraw = true;
-                                    }
-                                    if mark_active_nodes_redraw {
-                                        node_update_tag.mark_update_child_immutable();
-                                    }
-                                }}
-                            }
-
                             match exit_pos {
                                 Some(exit) => {
                                     try_push_action!{
-                                        active_node.on_node_event(NodeEvent::MouseMove {
+                                        mbd_array; active_node.on_node_event(NodeEvent::MouseMove {
                                             old: old_pos,
                                             new: exit_pos.unwrap_or(move_to),
                                             in_node: true,
-                                            buttons_down: &self.state.mouse_buttons_down
+                                            buttons_down: &mbd_array
                                         })
                                     }
                                     try_push_action!{
-                                        active_node.on_node_event(NodeEvent::MouseExit {
+                                        mbd_array; active_node.on_node_event(NodeEvent::MouseExit {
                                             exit_pos: exit,
-                                            buttons_down: &self.state.mouse_buttons_down
+                                            buttons_down: &mbd_array
                                         })
                                     }
 
@@ -251,11 +269,11 @@ impl<A, N, F> Root<A, N, F>
                                             match child_ident_and_rect {
                                                 None => {
                                                     try_push_action!{
-                                                        active_node_as_parent.on_node_event(NodeEvent::MouseMove {
+                                                        mbd_array; active_node_as_parent.on_node_event(NodeEvent::MouseMove {
                                                             old: old_pos,
                                                             new: exit_pos.unwrap_or(move_to),
                                                             in_node: true,
-                                                            buttons_down: &self.state.mouse_buttons_down
+                                                            buttons_down: &mbd_array
                                                         })
                                                     }
 
@@ -269,17 +287,17 @@ impl<A, N, F> Root<A, N, F>
 
                                                     if let Some(child_enter) = child_enter_pos {
                                                         try_push_action!{
-                                                            active_node_as_parent.on_node_event(NodeEvent::MouseMove {
+                                                            mbd_array; active_node_as_parent.on_node_event(NodeEvent::MouseMove {
                                                                 old: old_pos,
                                                                 new: child_enter,
                                                                 in_node: true,
-                                                                buttons_down: &self.state.mouse_buttons_down
+                                                                buttons_down: &mbd_array
                                                             })
                                                         }
                                                         try_push_action!{
-                                                            active_node_as_parent.on_node_event(NodeEvent::MouseEnterChild {
+                                                            mbd_array; active_node_as_parent.on_node_event(NodeEvent::MouseEnterChild {
                                                                 enter_pos: child_enter,
-                                                                buttons_down: &self.state.mouse_buttons_down,
+                                                                buttons_down: &mbd_array,
                                                                 child: child_ident
                                                             })
                                                         }
@@ -291,9 +309,9 @@ impl<A, N, F> Root<A, N, F>
                                                     let child_node = active_node_as_parent.child_mut(child_ident).unwrap().node;
                                                     if let Some(child_enter) = child_enter_pos {
                                                         try_push_action!{
-                                                            child_node.on_node_event(NodeEvent::MouseEnter {
+                                                            mbd_array; child_node.on_node_event(NodeEvent::MouseEnter {
                                                                 enter_pos: child_enter,
-                                                                buttons_down: &self.state.mouse_buttons_down
+                                                                buttons_down: &mbd_array
                                                             })
                                                         }
                                                     }
@@ -307,11 +325,11 @@ impl<A, N, F> Root<A, N, F>
                                         },
                                         NodeSubtraitMut::Node(active_node) => {
                                             try_push_action!{
-                                                active_node.on_node_event(NodeEvent::MouseMove {
+                                                mbd_array; active_node.on_node_event(NodeEvent::MouseMove {
                                                     old: old_pos,
                                                     new: exit_pos.unwrap_or(move_to),
                                                     in_node: true,
-                                                    buttons_down: &self.state.mouse_buttons_down
+                                                    buttons_down: &mbd_array
                                                 })
                                             }
                                         }
@@ -323,8 +341,35 @@ impl<A, N, F> Root<A, N, F>
                         }
                     }
                 },
-                WindowEvent::MouseDown{..} => (),
-                WindowEvent::MouseUp{..} => ()
+                WindowEvent::MouseDown(button) => {
+                    self.build_active_stack();
+
+                    let active_node = unsafe{ &mut **self.active_node_stack.last_mut().unwrap() };
+                    let active_node_offset = active_node.bounds().min().cast().unwrap_or(Point2::new(0, 0)).to_vec();
+                    try_push_action!{
+                        active_node.on_node_event(NodeEvent::MouseDown {
+                            pos: self.mouse_pos + active_node_offset,
+                            button
+                        })
+                    }
+                    mark_if_needs_update!(active_node);
+                    self.mouse_buttons_down.push_button(button);
+                },
+                WindowEvent::MouseUp(button) => {
+                    self.build_active_stack();
+
+                    let active_node = unsafe{ &mut **self.active_node_stack.last_mut().unwrap() };
+                    let active_node_offset = active_node.bounds().min().cast().unwrap_or(Point2::new(0, 0)).to_vec();
+                    try_push_action!{
+                        active_node.on_node_event(NodeEvent::MouseUp {
+                            pos: self.mouse_pos + active_node_offset,
+                            in_node: true,
+                            button
+                        })
+                    }
+                    mark_if_needs_update!(active_node);
+                    self.mouse_buttons_down.release_button(button);
+                }
             }
 
             if mark_active_nodes_redraw {
@@ -333,12 +378,12 @@ impl<A, N, F> Root<A, N, F>
                     node.update_tag().mark_update_child_immutable();
                 }
             }
-            if 0 < self.state.actions.len() {
+            if 0 < self.actions.len() {
                 self.active_node_stack.clear();
             }
 
             let mut return_flow = LoopFlow::Continue;
-            while let Some(action) = self.state.actions.pop_front() {
+            while let Some(action) = self.actions.pop_front() {
                 match on_action(action) {
                     LoopFlow::Continue => (),
                     LoopFlow::Break(ret) => {
