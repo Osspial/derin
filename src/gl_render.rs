@@ -83,6 +83,7 @@ impl GLRenderer {
 
 impl Renderer for GLRenderer {
     type Frame = GLFrame;
+    fn force_full_redraw(&self) -> bool {true}
     fn make_frame(&mut self) -> FrameRectStack<GLFrame> {
         self.frame.vertices.clear();
         let (width, height) = self.window.get_inner_size().unwrap();
@@ -103,6 +104,7 @@ impl Renderer for GLRenderer {
 impl RenderFrame for GLFrame {
     type Transform = BoundRect<u32>;
     type Primitive = [Vertex; 3];
+
     fn upload_primitives<I>(&mut self, transform: &BoundRect<u32>, prim_iter: I)
         where I: Iterator<Item=[Vertex; 3]>
     {

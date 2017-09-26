@@ -33,6 +33,7 @@ pub struct Root<A, N, F>
     active_node_stack: Vec<*mut Node<A, F>>,
     active_node_offset: Vector2<i32>,
     force_full_redraw: bool,
+    force_full_relayout: bool,
     pub root_node: N,
     _marker: PhantomData<*const F>
 }
@@ -85,16 +86,19 @@ impl<A, N, F> Root<A, N, F>
             active_node_stack: Vec::new(),
             active_node_offset: Vector2::new(0, 0),
             force_full_redraw: true,
+            force_full_relayout: true,
             root_node,
             _marker: PhantomData
         }
     }
 
     fn draw<R: Renderer<Frame=F>>(&mut self, renderer: &mut R) {
-        let root_update = match self.force_full_redraw {
-            false => self.root_node.update_tag().needs_update(self.id),
-            true => Update{ render_self: true, update_child: true, update_layout: true }
-        };
+        let force_full_redraw = self.force_full_redraw || renderer.force_full_redraw();
+
+        let mut root_update = self.root_node.update_tag().needs_update(self.id);
+        root_update.render_self |= force_full_redraw;
+        root_update.update_child |= force_full_redraw;
+        root_update.update_layout |= self.force_full_relayout;
 
         if root_update.render_self || root_update.update_child {
             {
@@ -112,7 +116,8 @@ impl<A, N, F> Root<A, N, F>
                         NodeRenderer {
                             root_id: self.id,
                             frame,
-                            force_full_redraw: self.force_full_redraw
+                            force_full_redraw: force_full_redraw,
+                            force_full_relayout: self.force_full_relayout
                         }.render_node_children(root_as_parent)
                     }
                 }
@@ -189,6 +194,7 @@ impl<A, N, F> Root<A, N, F>
                 WindowEvent::WindowResize(new_size) => {
                     self.active_node_stack.clear();
                     self.force_full_redraw = true;
+                    self.force_full_relayout = true;
                     *self.root_node.bounds_mut() = new_size.into();
                 }
                 WindowEvent::MouseEnter(enter_pos) => {
@@ -405,7 +411,8 @@ struct NodeRenderer<'a, F>
 {
     root_id: RootID,
     frame: FrameRectStack<'a, F>,
-    force_full_redraw: bool
+    force_full_redraw: bool,
+    force_full_relayout: bool
 }
 
 impl<'a, F> NodeRenderer<'a, F>
@@ -421,14 +428,15 @@ impl<'a, F> NodeRenderer<'a, F>
                     ref update_tag
                 } = *summary;
 
+                let mut root_update = child_node.update_tag().needs_update(self.root_id);
+                root_update.render_self |= self.force_full_redraw;
+                root_update.update_child |= self.force_full_redraw;
+                root_update.update_layout |= self.force_full_relayout;
                 let Update {
                     render_self,
                     update_child,
                     update_layout
-                } = match self.force_full_redraw {
-                    false => update_tag.needs_update(self.root_id),
-                    true => Update{ render_self: true, update_child: true, update_layout: true }
-                };
+                } = root_update;
 
                 match child_node.subtrait_mut() {
                     NodeSubtraitMut::Parent(child_node_as_parent) => {
@@ -444,7 +452,8 @@ impl<'a, F> NodeRenderer<'a, F>
                             NodeRenderer {
                                 root_id: self.root_id,
                                 frame: child_frame,
-                                force_full_redraw: self.force_full_redraw
+                                force_full_redraw: self.force_full_redraw,
+                                force_full_relayout: self.force_full_relayout
                             }.render_node_children(child_node_as_parent);
                         }
                     },

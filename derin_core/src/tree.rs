@@ -96,6 +96,7 @@ subtrait_enums! {subtraits {
 
 pub trait Renderer {
     type Frame: RenderFrame;
+    fn force_full_redraw(&self) -> bool {false}
     fn make_frame(&mut self) -> FrameRectStack<Self::Frame>;
     fn finish_frame(&mut self);
 }
