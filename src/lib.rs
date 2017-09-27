@@ -168,10 +168,16 @@ impl<F, H> Node<H::Action, F> for Button<H>
 
     fn on_node_event(&mut self, event: NodeEvent) -> Option<H::Action> {
         use self::NodeEvent::*;
+        match event {
+            MouseDown{..} |
+            MouseUp{..} => println!("{:?}", event),
+            _ => ()
+        }
 
         let new_state = match event {
             MouseEnter{..} => ButtonState::Hover,
-            MouseExit{..} => ButtonState::Normal,
+            MouseExit{buttons_down_in_node, ..} if buttons_down_in_node.is_empty() => ButtonState::Normal,
+            MouseExit{..}  |
             MouseMove{..} => self.state,
             MouseDown{..} => ButtonState::Clicked,
             MouseUp{in_node: true, ..} => ButtonState::Hover,
@@ -264,14 +270,17 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
         self.container.child_mut(node_ident)
     }
 
-    fn children<'a>(&'a self, for_each: &mut FnMut(&[NodeSummary<&'a Node<A, F>>])) {
+    fn children<'a>(&'a self, for_each: &mut FnMut(&[NodeSummary<&'a Node<A, F>>]) -> LoopFlow<()>) {
         let mut child_avec: ArrayVec<[_; CHILD_BATCH_SIZE]> = ArrayVec::new();
 
         self.container.children::<_, ()>(|summary| {
             match child_avec.try_push(summary) {
                 Ok(()) => (),
                 Err(caperr) => {
-                    for_each(&child_avec);
+                    match for_each(&child_avec) {
+                        LoopFlow::Break(_) => return LoopFlow::Break(()),
+                        LoopFlow::Continue => ()
+                    }
                     child_avec.clear();
                     child_avec.push(caperr.element());
                 }
@@ -281,18 +290,21 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
         });
 
         if child_avec.len() != 0 {
-            for_each(&child_avec);
+            let _ = for_each(&child_avec);
         }
     }
 
-    fn children_mut<'a>(&'a mut self, for_each: &mut FnMut(&mut [NodeSummary<&'a mut Node<A, F>>])) {
+    fn children_mut<'a>(&'a mut self, for_each: &mut FnMut(&mut [NodeSummary<&'a mut Node<A, F>>]) -> LoopFlow<()>) {
         let mut child_avec: ArrayVec<[_; CHILD_BATCH_SIZE]> = ArrayVec::new();
 
         self.container.children_mut::<_, ()>(|summary| {
             match child_avec.try_push(summary) {
                 Ok(()) => (),
                 Err(caperr) => {
-                    for_each(&mut child_avec);
+                    match for_each(&mut child_avec) {
+                        LoopFlow::Break(_) => return LoopFlow::Break(()),
+                        LoopFlow::Continue => ()
+                    }
                     child_avec.clear();
                     child_avec.push(caperr.element());
                 }
@@ -302,7 +314,7 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
         });
 
         if child_avec.len() != 0 {
-            for_each(&mut child_avec);
+            let _ = for_each(&mut child_avec);
         }
     }
 

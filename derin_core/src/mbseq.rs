@@ -25,14 +25,15 @@ impl MouseButtonSequence {
         }
     }
 
-    pub fn push_button(&mut self, button: MouseButton) {
+    pub fn push_button(&mut self, button: MouseButton) -> &mut MouseButtonSequence {
         self.release_button(button);
 
         self.buttons |= (u8::from(button) as u16) << (self.len as u16 * MOUSE_INT_MASK_LEN);
         self.len += 1;
+        self
     }
 
-    pub fn release_button(&mut self, button: MouseButton) {
+    pub fn release_button(&mut self, button: MouseButton) -> &mut MouseButtonSequence {
         for (i, b) in self.into_iter().enumerate() {
             if b == button {
                 let postfix_bitmask = (!0) << ((i as u16 + 1) * MOUSE_INT_MASK_LEN);
@@ -44,22 +45,27 @@ impl MouseButtonSequence {
                 break;
             }
         }
+        self
     }
 
-    #[inline]
-    pub fn get(&mut self, index: u8) -> Option<MouseButton> {
-        if self.len < index {
-            let val = (self.buttons >> (index as u16 * MOUSE_INT_MASK_LEN)) & MOUSE_INT_MASK;
-            Some(MouseButton::from_u8(val as u8).unwrap())
-        } else {
-            None
-        }
+    pub fn contains(&self, button: MouseButton) -> bool {
+        self.into_iter().find(|b| *b == button).is_some()
     }
 
-    #[inline]
-    pub fn len(&self) -> u8 {
-        self.len
-    }
+    // #[inline]
+    // pub fn get(&mut self, index: u8) -> Option<MouseButton> {
+    //     if self.len < index {
+    //         let val = (self.buttons >> (index as u16 * MOUSE_INT_MASK_LEN)) & MOUSE_INT_MASK;
+    //         Some(MouseButton::from_u8(val as u8).unwrap())
+    //     } else {
+    //         None
+    //     }
+    // }
+
+    // #[inline]
+    // pub fn len(&self) -> u8 {
+    //     self.len
+    // }
 }
 
 impl IntoIterator for MouseButtonSequence {

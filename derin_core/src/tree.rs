@@ -1,8 +1,10 @@
 use std::cell::Cell;
 
+use LoopFlow;
 use cgmath::Point2;
 use cgmath_geometry::BoundRect;
 
+use mbseq::MouseButtonSequence;
 use dct::buttons::MouseButton;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -23,15 +25,26 @@ pub(crate) struct Update {
 #[derive(Debug, Clone)]
 pub struct UpdateTag {
     last_root: Cell<u32>,
-    pub(crate) child_event_recv: Cell<RecvEventType>
+    pub(crate) mouse_buttons_down_in_node: Cell<MouseButtonSequence>,
+    pub(crate) child_event_recv: Cell<ChildEventRecv>
 }
 
 bitflags! {
     #[doc(hidden)]
-    pub struct RecvEventType: u8 {
-        const MOUSE = 0b01;
-        const KEYS = 0b10;
-        const ALL = Self::MOUSE.bits | Self::KEYS.bits;
+    pub struct ChildEventRecv: u8 {
+        const MOUSE_L     = 1 << 0;
+        const MOUSE_R     = 1 << 1;
+        const MOUSE_M     = 1 << 2;
+        const MOUSE_X1    = 1 << 3;
+        const MOUSE_X2    = 1 << 4;
+        const KEYS        = 1 << 5;
+    }
+}
+
+impl ChildEventRecv {
+    #[inline]
+    pub(crate) fn mouse_button_mask(button: MouseButton) -> ChildEventRecv {
+        ChildEventRecv::from_bits_truncate(1 << (u8::from(button) - 1))
     }
 }
 
@@ -42,27 +55,32 @@ pub(crate) struct RootID(u32);
 pub enum NodeEvent<'a> {
     MouseEnter {
         enter_pos: Point2<i32>,
-        buttons_down: &'a [MouseButton]
+        buttons_down: &'a [MouseButton],
+        buttons_down_in_node: &'a [MouseButton]
     },
     MouseExit {
         exit_pos: Point2<i32>,
-        buttons_down: &'a [MouseButton]
+        buttons_down: &'a [MouseButton],
+        buttons_down_in_node: &'a [MouseButton]
     },
     MouseEnterChild {
         enter_pos: Point2<i32>,
         buttons_down: &'a [MouseButton],
+        buttons_down_in_node: &'a [MouseButton],
         child: NodeIdent
     },
     MouseExitChild {
         exit_pos: Point2<i32>,
         buttons_down: &'a [MouseButton],
+        buttons_down_in_node: &'a [MouseButton],
         child: NodeIdent
     },
     MouseMove {
         old: Point2<i32>,
         new: Point2<i32>,
         in_node: bool,
-        buttons_down: &'a [MouseButton]
+        buttons_down: &'a [MouseButton],
+        buttons_down_in_node: &'a [MouseButton]
     },
     MouseDown {
         pos: Point2<i32>,
@@ -137,8 +155,8 @@ pub trait Parent<A, F: RenderFrame>: Node<A, F> {
     fn child(&self, node_ident: NodeIdent) -> Option<NodeSummary<&Node<A, F>>>;
     fn child_mut(&mut self, node_ident: NodeIdent) -> Option<NodeSummary<&mut Node<A, F>>>;
 
-    fn children<'a>(&'a self, for_each: &mut FnMut(&[NodeSummary<&'a Node<A, F>>]));
-    fn children_mut<'a>(&'a mut self, for_each: &mut FnMut(&mut [NodeSummary<&'a mut Node<A, F>>]));
+    fn children<'a>(&'a self, for_each: &mut FnMut(&[NodeSummary<&'a Node<A, F>>]) -> LoopFlow<()>);
+    fn children_mut<'a>(&'a mut self, for_each: &mut FnMut(&mut [NodeSummary<&'a mut Node<A, F>>]) -> LoopFlow<()>);
 
     fn update_child_layout(&mut self);
 
@@ -158,7 +176,8 @@ impl UpdateTag {
     pub fn new() -> UpdateTag {
         UpdateTag {
             last_root: Cell::new(UPDATE_MASK),
-            child_event_recv: Cell::new(RecvEventType::empty())
+            mouse_buttons_down_in_node: Cell::new(MouseButtonSequence::new()),
+            child_event_recv: Cell::new(ChildEventRecv::empty())
         }
     }
 
