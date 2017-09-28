@@ -168,19 +168,21 @@ impl<F, H> Node<H::Action, F> for Button<H>
 
     fn on_node_event(&mut self, event: NodeEvent) -> Option<H::Action> {
         use self::NodeEvent::*;
-        match event {
-            MouseDown{..} |
-            MouseUp{..} => println!("{:?}", event),
-            _ => ()
-        }
 
+        let mut action = None;
         let new_state = match event {
-            MouseEnter{..} => ButtonState::Hover,
+            MouseEnter{buttons_down_in_node, ..} if buttons_down_in_node.is_empty() => ButtonState::Hover,
             MouseExit{buttons_down_in_node, ..} if buttons_down_in_node.is_empty() => ButtonState::Normal,
+            MouseEnter{..} |
             MouseExit{..}  |
             MouseMove{..} => self.state,
             MouseDown{..} => ButtonState::Clicked,
-            MouseUp{in_node: true, ..} => ButtonState::Hover,
+            MouseUp{in_node: true, pressed_in_node, ..} => {
+                if pressed_in_node {
+                    action = self.handler.on_click();
+                }
+                ButtonState::Hover
+            },
             MouseUp{in_node: false, ..} => ButtonState::Normal,
             MouseEnterChild{..} |
             MouseExitChild{..} => unreachable!()
@@ -191,7 +193,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
             self.state = new_state;
         }
 
-        None
+        action
     }
 
     #[inline]

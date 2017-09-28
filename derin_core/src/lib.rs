@@ -16,7 +16,7 @@ use cgmath_geometry::{Rectangle, DimsRect, Segment};
 use std::marker::PhantomData;
 use std::collections::VecDeque;
 
-use tree::{Node, Parent, Renderer, NodeSummary, RenderFrame, ChildEventRecv, FrameRectStack, RootID, NodeEvent, Update, NodeSubtraitMut};
+use tree::{Node, Parent, Renderer, NodeSummary, RenderFrame, ChildEventRecv, FrameRectStack, RootID, NodeEvent, Update, UpdateTag, NodeSubtraitMut};
 use mbseq::MouseButtonSequence;
 use dct::buttons::MouseButton;
 
@@ -133,6 +133,124 @@ impl<A, N, F> Root<A, N, F>
         }
     }
 
+    fn move_active_over_flags<G>(&mut self, flags: ChildEventRecv, for_each_flag: G)
+        where G: FnMut(&mut Node<A, F>) -> &UpdateTag
+    {
+        self.move_active_over_flags_inner(flags, for_each_flag);
+        self.move_active_over_flags_inner(ChildEventRecv::MOUSE_HOVER, |node| {
+            // TODO: HANDLE CHANGE IN NODE LOCATION
+            node.update_tag()
+        });
+    }
+
+    fn move_active_over_flags_inner<G>(&mut self, mut flags: ChildEventRecv, mut for_each_flag: G)
+        where G: FnMut(&mut Node<A, F>) -> &UpdateTag
+    {
+        let get_update_flags = |update: &UpdateTag| update.child_event_recv.get() | ChildEventRecv::from(update);
+        // Remove flags from the search set that aren't found at the root of the tree.
+        flags &= {
+            let root_update = self.root_node.update_tag();
+            get_update_flags(root_update)
+        };
+
+        let mut on_flag_trail = None;
+
+        while !flags.is_empty() {
+            if on_flag_trail.is_none() {
+                // The index and update tag of the closest flagged parent
+                let (cfp_index, cfp_update_tag) =
+                    self.active_node_stack.iter().enumerate().rev()
+                        .map(|(i, n)| (i, unsafe{ &**n }.update_tag()))
+                        .find(|&(_, u)| flags & (get_update_flags(u)) != ChildEventRecv::empty())
+                        .unwrap();
+
+                self.active_node_stack.truncate(cfp_index + 1);
+                on_flag_trail = Some(get_update_flags(cfp_update_tag) & flags);
+            }
+            let flag_trail_flags = on_flag_trail.unwrap();
+
+            let top_node = unsafe{ &mut **self.active_node_stack.last_mut().unwrap() };
+
+            macro_rules! call_fn {
+                ($node:expr) => {{
+                    let update_tag = for_each_flag($node);
+                    let flags_removed = flag_trail_flags - ChildEventRecv::from(update_tag);
+                    if flags_removed != ChildEventRecv::empty() {
+                        flags &= !flags_removed;
+
+                        for update_tag in self.active_node_stack.iter().map(|n| unsafe{ &**n }.update_tag()) {
+                            update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !flags_removed);
+                        }
+                    }
+                }}
+            }
+
+            match top_node.subtrait_mut() {
+                NodeSubtraitMut::Node(top_node) => {
+                    let node_tags = ChildEventRecv::from(top_node.update_tag());
+                    if node_tags & flag_trail_flags != ChildEventRecv::empty() {
+                        call_fn!(top_node);
+                    }
+
+                    flags &= !flag_trail_flags;
+                    on_flag_trail = None;
+                },
+                NodeSubtraitMut::Parent(top_node_as_parent) => {
+                    let mut child_found = false;
+
+                    top_node_as_parent.children_mut(&mut |children_summaries| {
+                        let mut run_on_index = None;
+
+                        for (index, child_summary) in children_summaries.iter_mut().enumerate() {
+                            let child_node_ptr = child_summary.node as *mut Node<A, F>;
+
+                            match child_summary.node.subtrait_mut() {
+                                NodeSubtraitMut::Node(_) => {
+                                    let node_tags = ChildEventRecv::from(&child_summary.update_tag);
+
+                                    if node_tags & flag_trail_flags != ChildEventRecv::empty() {
+                                        child_found = true;
+                                        flags &= !flag_trail_flags;
+                                        on_flag_trail = None;
+                                        self.active_node_stack.push(child_node_ptr);
+
+                                        run_on_index = Some(index);
+                                        break;
+                                    }
+                                },
+                                NodeSubtraitMut::Parent(_) => {
+                                    let child_flags = flags & child_summary.update_tag.child_event_recv.get();
+                                    if child_flags != ChildEventRecv::empty() {
+                                        child_found = true;
+                                        flags &= !flag_trail_flags;
+                                        on_flag_trail = Some(child_flags);
+                                        self.active_node_stack.push(child_node_ptr);
+
+                                        run_on_index = Some(index);
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        match run_on_index {
+                            None => LoopFlow::Continue,
+                            Some(index) => {
+                                call_fn!(children_summaries[index].node);
+                                LoopFlow::Break(())
+                            }
+                        }
+                    });
+
+                    if !child_found {
+                        flags &= !flag_trail_flags;
+                        on_flag_trail = None;
+                    }
+                }
+            }
+        }
+    }
+
     pub fn run_forever<E, AF, R, G>(&mut self, mut gen_events: E, mut on_action: AF, renderer: &mut R) -> Option<G>
         where E: FnMut(&mut FnMut(WindowEvent) -> LoopFlow<G>) -> Option<G>,
               AF: FnMut(A) -> LoopFlow<G>,
@@ -192,6 +310,7 @@ impl<A, N, F> Root<A, N, F>
                             buttons_down_in_node: &mbdin_array
                         })
                     }
+                    self.root_node.update_tag().mouse_hovering.set(true);
                     assert_eq!(self.active_node_stack.len(), 0);
                     let root_node_ptr = &mut self.root_node as *mut Node<A, F>;
                     self.active_node_stack.push(root_node_ptr);
@@ -200,7 +319,7 @@ impl<A, N, F> Root<A, N, F>
                     assert_ne!(self.active_node_stack.len(), 0);
 
                     for node in self.active_node_stack.drain(..).rev().map(|node_ptr| unsafe{ &mut *node_ptr }) {
-                    let (mbd_array, mbdin_array) = mouse_button_arrays!(node.update_tag());
+                        let (mbd_array, mbdin_array) = mouse_button_arrays!(node.update_tag());
                         try_push_action!{
                             node.on_node_event(NodeEvent::MouseExit {
                                 exit_pos,
@@ -208,6 +327,10 @@ impl<A, N, F> Root<A, N, F>
                                 buttons_down_in_node: &mbdin_array
                             })
                         }
+
+                        let update_tag = mark_if_needs_update!(node);
+                        update_tag.mouse_hovering.set(false);
+                        update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::MOUSE_HOVER);
                     }
                 },
 
@@ -233,7 +356,12 @@ impl<A, N, F> Root<A, N, F>
 
                             match exit_pos {
                                 Some(exit) => {
-                                    let (mbd_array, mbdin_array) = mouse_button_arrays!(active_node.update_tag());
+                                    let (mbd_array, mbdin_array) = {
+                                        let update_tag = active_node.update_tag();
+                                        update_tag.mouse_hovering.set(false);
+                                        mouse_button_arrays!(update_tag)
+                                    };
+
                                     try_push_action!{
                                         active_node.on_node_event(NodeEvent::MouseMove {
                                             old: old_pos,
@@ -251,18 +379,16 @@ impl<A, N, F> Root<A, N, F>
                                         })
                                     }
 
-                                    let active_update_tag = mark_if_needs_update!(active_node);
-                                    let active_update_mask = active_update_tag.mouse_buttons_down_in_node.get().into_iter()
-                                        .fold(ChildEventRecv::empty(), |r, b| r | ChildEventRecv::mouse_button_mask(b));
+                                    mark_if_needs_update!(active_node);
 
                                     self.active_node_stack.pop();
-                                    old_pos = exit;
-
-                                    for node in self.active_node_stack.iter().map(|n| unsafe{ &**n }) {
-                                        let node_update_tag = node.update_tag();
-                                        node_update_tag.child_event_recv.set(node_update_tag.child_event_recv.get() | active_update_mask);
+                                    if let Some(parent_node) = self.active_node_stack.last_mut().map(|n| unsafe{ &mut **n }) {
+                                        let parent_update_tag = parent_node.update_tag();
+                                        parent_update_tag.mouse_hovering.set(true);
+                                        parent_update_tag.child_event_recv.set(parent_update_tag.child_event_recv.get() & !ChildEventRecv::MOUSE_HOVER);
                                     }
 
+                                    old_pos = exit;
                                     continue;
                                 },
                                 None => {
@@ -314,7 +440,11 @@ impl<A, N, F> Root<A, N, F>
                                                         }
                                                     }
 
-                                                    mark_if_needs_update!(active_node_as_parent);
+                                                    {
+                                                        let update_tag = mark_if_needs_update!(active_node_as_parent);
+                                                        update_tag.mouse_hovering.set(false);
+                                                        update_tag.child_event_recv.set(update_tag.child_event_recv.get() | ChildEventRecv::MOUSE_HOVER);
+                                                    }
 
 
                                                     let child_node = active_node_as_parent.child_mut(child_ident).unwrap().node;
@@ -328,7 +458,11 @@ impl<A, N, F> Root<A, N, F>
                                                             })
                                                         }
                                                     }
-                                                    mark_if_needs_update!(child_node);
+
+                                                    {
+                                                        let child_update_tag = mark_if_needs_update!(child_node);
+                                                        child_update_tag.mouse_hovering.set(true);
+                                                    }
 
                                                     self.active_node_stack.push(child_node);
 
@@ -391,10 +525,12 @@ impl<A, N, F> Root<A, N, F>
                     {
                         let active_node = unsafe{ &mut **self.active_node_stack.last_mut().unwrap() };
                         let active_node_offset = active_node.bounds().min().cast().unwrap_or(Point2::new(0, 0)).to_vec();
+                        let pressed_in_node = active_node.update_tag().mouse_buttons_down_in_node.get().contains(button);
                         try_push_action!{
                             active_node.on_node_event(NodeEvent::MouseUp {
                                 pos: self.mouse_pos + active_node_offset,
                                 in_node: true,
+                                pressed_in_node,
                                 button
                             })
                         }
@@ -410,104 +546,29 @@ impl<A, N, F> Root<A, N, F>
                     }
 
                     if move_to_mouse_node && self.root_node.update_tag().child_event_recv.get().contains(button_mask) {
-                        // Find the last node in the node active node stack that has a child with the
-                        // mouse button down, and get its index.
-                        // TODO: HANDLE `mark_active_nodes_redraw`
-                        let mouse_node_parent_index = self.active_node_stack.iter().enumerate().rev()
-                            .map(|(i, n)| (i, unsafe{ &**n }))
-                            .find(|&(_, ref n)| n.update_tag().child_event_recv.get().contains(button_mask))
-                            .map(|(i, _)| i)
-                            .unwrap_or_else(|| {self.active_node_stack.push(&mut self.root_node); 0});
+                        let mouse_pos = self.mouse_pos;
+                        let mut action_opt = None;
+                        self.move_active_over_flags(button_mask, |node| {
+                            action_opt =
+                                node.on_node_event(NodeEvent::MouseUp {
+                                    pos: mouse_pos,
+                                    in_node: false,
+                                    pressed_in_node: true,
+                                    button
+                                });
 
-                        // Ensure the last parent node is the top of the active node stack.
-                        self.active_node_stack.truncate(mouse_node_parent_index + 1);
-
-                        loop {
-                            let top_node = unsafe{ &mut **self.active_node_stack.last_mut().unwrap() };
-                            let mut break_loop = false;
-                            let mut enter_child_ident = None;
-
-                            match top_node.subtrait_mut() {
-                                NodeSubtraitMut::Node(top_node) => {
-                                    println!("tn node");
-                                    let mut push_action = false;
-                                    {
-                                        let update_tag = top_node.update_tag();
-                                        if update_tag.mouse_buttons_down_in_node.get().contains(button) {
-                                            update_tag.mouse_buttons_down_in_node.set(
-                                                *update_tag.mouse_buttons_down_in_node.get().release_button(button)
-                                            );
-                                            push_action = true;
-                                        }
-                                    }
-                                    if push_action {
-                                        try_push_action!{
-                                            top_node.on_node_event(NodeEvent::MouseUp {
-                                                pos: self.mouse_pos,
-                                                in_node: false,
-                                                button
-                                            })
-                                        };
-                                    }
-                                    break_loop = true;
-                                }
-                                NodeSubtraitMut::Parent(top_node_as_parent) => {
-                                    println!("tn parent");
-                                    top_node_as_parent.children_mut(&mut |children| {
-                                        for child in children {
-                                            match child.update_tag.mouse_buttons_down_in_node.get().contains(button) {
-                                                true => {
-                                                    try_push_action!{
-                                                        child.node.on_node_event(NodeEvent::MouseUp {
-                                                            pos: self.mouse_pos,
-                                                            in_node: false,
-                                                            button
-                                                        })
-                                                    };
-                                                    let update_tag = child.node.update_tag();
-                                                    update_tag.mouse_buttons_down_in_node.set(
-                                                        *update_tag.mouse_buttons_down_in_node.get().release_button(button)
-                                                    );
-                                                    break_loop = true;
-                                                    return LoopFlow::Break(());
-                                                },
-                                                false => {
-                                                    if child.node.update_tag().child_event_recv.get().contains(button_mask) {
-                                                        enter_child_ident = Some(child.ident);
-                                                        break_loop = true;
-                                                        return LoopFlow::Break(());
-                                                    }
-                                                }
-                                            }
-                                        }
-
-                                        LoopFlow::Continue
-                                    });
-
-                                    // If we've gone through all the children and none of them are either the node
-                                    // we're looking for or have the node we're looking for as a child, break the
-                                    // loop. There's nothing to find.
-                                    if break_loop == false && enter_child_ident.is_none() {
-                                        break_loop = true;
-                                    }
-                                }
-                            }
-
-                            if let Some(ident) = enter_child_ident {
-                                if let NodeSubtraitMut::Parent(top_node_as_parent) = top_node.subtrait_mut() {
-                                    if let Some(child) = top_node_as_parent.child_mut(ident) {
-                                        self.active_node_stack.push(child.node);
-                                    }
-                                }
-                            }
-                            if break_loop {
-                                break;
-                            }
+                            let update_tag = node.update_tag();
+                            update_tag.mouse_buttons_down_in_node.set(
+                                *update_tag.mouse_buttons_down_in_node.get().release_button(button)
+                            );
+                            update_tag
+                        });
+                        try_push_action!(action_opt);
+                    } else {
+                        for node in self.active_node_stack.iter().map(|n| unsafe{ &**n }) {
+                            let update_tag = node.update_tag();
+                            update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !button_mask);
                         }
-                    }
-                    for node in self.active_node_stack.iter().map(|n| unsafe{ &**n }) {
-                        let update_tag = node.update_tag();
-                        update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !button_mask);
                     }
                 }
             }

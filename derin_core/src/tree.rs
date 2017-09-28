@@ -25,6 +25,7 @@ pub(crate) struct Update {
 #[derive(Debug, Clone)]
 pub struct UpdateTag {
     last_root: Cell<u32>,
+    pub(crate) mouse_hovering: Cell<bool>,
     pub(crate) mouse_buttons_down_in_node: Cell<MouseButtonSequence>,
     pub(crate) child_event_recv: Cell<ChildEventRecv>
 }
@@ -37,7 +38,8 @@ bitflags! {
         const MOUSE_M     = 1 << 2;
         const MOUSE_X1    = 1 << 3;
         const MOUSE_X2    = 1 << 4;
-        const KEYS        = 1 << 5;
+        const MOUSE_HOVER = 1 << 5;
+        // const KEYS        = 1 << 6;
     }
 }
 
@@ -45,6 +47,23 @@ impl ChildEventRecv {
     #[inline]
     pub(crate) fn mouse_button_mask(button: MouseButton) -> ChildEventRecv {
         ChildEventRecv::from_bits_truncate(1 << (u8::from(button) - 1))
+    }
+}
+
+impl From<MouseButtonSequence> for ChildEventRecv {
+    #[inline]
+    fn from(mbseq: MouseButtonSequence) -> ChildEventRecv {
+        mbseq.into_iter().fold(ChildEventRecv::empty(), |child_event_recv, mb| child_event_recv | ChildEventRecv::mouse_button_mask(mb))
+    }
+}
+
+impl<'a> From<&'a UpdateTag> for ChildEventRecv {
+    #[inline]
+    fn from(update_tag: &'a UpdateTag) -> ChildEventRecv {
+        let node_mb_flags = ChildEventRecv::from(update_tag.mouse_buttons_down_in_node.get());
+
+        node_mb_flags |
+        ChildEventRecv::from_bits_truncate(update_tag.mouse_hovering.get() as u8 * ChildEventRecv::MOUSE_HOVER.bits)
     }
 }
 
@@ -89,6 +108,7 @@ pub enum NodeEvent<'a> {
     MouseUp {
         pos: Point2<i32>,
         in_node: bool,
+        pressed_in_node: bool,
         button: MouseButton
     }
 }
@@ -176,6 +196,7 @@ impl UpdateTag {
     pub fn new() -> UpdateTag {
         UpdateTag {
             last_root: Cell::new(UPDATE_MASK),
+            mouse_hovering: Cell::new(false),
             mouse_buttons_down_in_node: Cell::new(MouseButtonSequence::new()),
             child_event_recv: Cell::new(ChildEventRecv::empty())
         }

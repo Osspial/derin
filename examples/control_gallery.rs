@@ -33,6 +33,7 @@ impl ButtonHandler for BasicHandler {
     type Action = GalleryEvent;
 
     fn on_click(&mut self) -> Option<GalleryEvent> {
+        println!("clicked!");
         None
     }
 }
