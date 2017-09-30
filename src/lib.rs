@@ -28,21 +28,20 @@ use cgmath_geometry::{BoundRect, DimsRect, Rectangle};
 use arrayvec::ArrayVec;
 
 
-pub trait NodeContainer {
+pub trait NodeContainer<F: RenderFrame> {
     type Action;
-    type Frame: RenderFrame;
 
     fn children<'a, G, R>(&'a self, for_each_child: G) -> Option<R>
-        where G: FnMut(NodeSummary<&'a Node<Self::Action, Self::Frame>>) -> LoopFlow<R>,
+        where G: FnMut(NodeSummary<&'a Node<Self::Action, F>>) -> LoopFlow<R>,
               Self::Action: 'a,
-              Self::Frame: 'a;
+              F: 'a;
 
     fn children_mut<'a, G, R>(&'a mut self, for_each_child: G) -> Option<R>
-        where G: FnMut(NodeSummary<&'a mut Node<Self::Action, Self::Frame>>) -> LoopFlow<R>,
+        where G: FnMut(NodeSummary<&'a mut Node<Self::Action, F>>) -> LoopFlow<R>,
               Self::Action: 'a,
-              Self::Frame: 'a;
+              F: 'a;
 
-    fn child(&self, node_ident: NodeIdent) -> Option<NodeSummary<&Node<Self::Action, Self::Frame>>> {
+    fn child(&self, node_ident: NodeIdent) -> Option<NodeSummary<&Node<Self::Action, F>>> {
         self.children(|summary| {
             if summary.ident == node_ident {
                 LoopFlow::Break(summary)
@@ -52,7 +51,7 @@ pub trait NodeContainer {
         })
     }
 
-    fn child_mut(&mut self, node_ident: NodeIdent) -> Option<NodeSummary<&mut Node<Self::Action, Self::Frame>>> {
+    fn child_mut(&mut self, node_ident: NodeIdent) -> Option<NodeSummary<&mut Node<Self::Action, F>>> {
         self.children_mut(|summary| {
             if summary.ident == node_ident {
                 LoopFlow::Break(summary)
@@ -84,8 +83,7 @@ pub struct Button<H: ButtonHandler> {
 
 #[derive(Debug, Clone)]
 pub struct Group<C, L>
-    where C: NodeContainer,
-          L: NodeLayout
+    where L: NodeLayout
 {
     update_tag: UpdateTag,
     bounds: BoundRect<u32>,
@@ -115,8 +113,7 @@ impl<H: ButtonHandler> Button<H> {
 }
 
 impl<C, L> Group<C, L>
-    where C: NodeContainer,
-          L: NodeLayout
+    where L: NodeLayout
 {
     pub fn new(container: C, layout: L) -> Group<C, L> {
         Group {
@@ -209,7 +206,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
 
 impl<A, F, C, L> Node<A, F> for Group<C, L>
     where F: RenderFrame<Primitive=[Vertex; 3]>,
-          C: NodeContainer<Action=A, Frame=F>,
+          C: NodeContainer<F, Action=A>,
           L: NodeLayout
 {
     #[inline]
@@ -261,7 +258,7 @@ const CHILD_BATCH_SIZE: usize = 24;
 
 impl<A, F, C, L> Parent<A, F> for Group<C, L>
     where F: RenderFrame<Primitive=[Vertex; 3]>,
-          C: NodeContainer<Action=A, Frame=F>,
+          C: NodeContainer<F, Action=A>,
           L: NodeLayout
 {
     fn child(&self, node_ident: NodeIdent) -> Option<NodeSummary<&Node<A, F>>> {

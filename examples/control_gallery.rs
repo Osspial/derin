@@ -10,9 +10,9 @@ extern crate glutin;
 use dct::buttons::MouseButton;
 use dct::hints::{WidgetHints, NodeSpan, GridSize, Margins};
 use derin::{ButtonHandler, NodeContainer, NodeLayout, Button, Group};
-use derin::gl_render::{GLRenderer, GLFrame};
+use derin::gl_render::GLRenderer;
 use derin_core::{LoopFlow, Root, WindowEvent};
-use derin_core::tree::{Node, NodeSummary, NodeIdent};
+use derin_core::tree::{Node, NodeSummary, NodeIdent, RenderFrame};
 
 use glutin::{Event, ControlFlow, WindowEvent as GWindowEvent, MouseButton as GMouseButton, ElementState};
 
@@ -126,20 +126,22 @@ fn main() {
     }, |_| {LoopFlow::Continue}, &mut renderer);
 }
 
-impl NodeContainer for BasicContainer {
+impl<F> NodeContainer<F> for BasicContainer
+    where F: RenderFrame,
+          Button<BasicHandler>: Node<GalleryEvent, F>
+{
     type Action = GalleryEvent;
-    type Frame = GLFrame;
 
     fn children<'a, G, R>(&'a self, mut for_each_child: G) -> Option<R>
-        where G: FnMut(NodeSummary<&'a Node<Self::Action, Self::Frame>>) -> LoopFlow<R>,
+        where G: FnMut(NodeSummary<&'a Node<Self::Action, F>>) -> LoopFlow<R>,
               Self::Action: 'a,
-              Self::Frame: 'a
+              F: 'a
     {
         let mut flow;
         flow = for_each_child(NodeSummary {
             ident: NodeIdent::Str("button0"),
-            rect: <Button<_> as Node<Self::Action, Self::Frame>>::bounds(&self.button0),
-            update_tag: <Button<_> as Node<Self::Action, Self::Frame>>::update_tag(&self.button0).clone(),
+            rect: <Button<_> as Node<Self::Action, F>>::bounds(&self.button0),
+            update_tag: <Button<_> as Node<Self::Action, F>>::update_tag(&self.button0).clone(),
             node: &self.button0
         });
         if let LoopFlow::Break(b) = flow {
@@ -148,8 +150,8 @@ impl NodeContainer for BasicContainer {
 
         flow = for_each_child(NodeSummary {
             ident: NodeIdent::Str("button1"),
-            rect: <Button<_> as Node<Self::Action, Self::Frame>>::bounds(&self.button1),
-            update_tag: <Button<_> as Node<Self::Action, Self::Frame>>::update_tag(&self.button1).clone(),
+            rect: <Button<_> as Node<Self::Action, F>>::bounds(&self.button1),
+            update_tag: <Button<_> as Node<Self::Action, F>>::update_tag(&self.button1).clone(),
             node: &self.button1
         });
         if let LoopFlow::Break(b) = flow {
@@ -160,15 +162,15 @@ impl NodeContainer for BasicContainer {
     }
 
     fn children_mut<'a, G, R>(&'a mut self, mut for_each_child: G) -> Option<R>
-        where G: FnMut(NodeSummary<&'a mut Node<Self::Action, Self::Frame>>) -> LoopFlow<R>,
+        where G: FnMut(NodeSummary<&'a mut Node<Self::Action, F>>) -> LoopFlow<R>,
               Self::Action: 'a,
-              Self::Frame: 'a
+              F: 'a
     {
         let mut flow;
         flow = for_each_child(NodeSummary {
             ident: NodeIdent::Str("button0"),
-            rect: <Button<_> as Node<Self::Action, Self::Frame>>::bounds(&self.button0),
-            update_tag: <Button<_> as Node<Self::Action, Self::Frame>>::update_tag(&self.button0).clone(),
+            rect: <Button<_> as Node<Self::Action, F>>::bounds(&self.button0),
+            update_tag: <Button<_> as Node<Self::Action, F>>::update_tag(&self.button0).clone(),
             node: &mut self.button0
         });
         if let LoopFlow::Break(b) = flow {
@@ -177,8 +179,8 @@ impl NodeContainer for BasicContainer {
 
         flow = for_each_child(NodeSummary {
             ident: NodeIdent::Str("button1"),
-            rect: <Button<_> as Node<Self::Action, Self::Frame>>::bounds(&self.button1),
-            update_tag: <Button<_> as Node<Self::Action, Self::Frame>>::update_tag(&self.button1).clone(),
+            rect: <Button<_> as Node<Self::Action, F>>::bounds(&self.button1),
+            update_tag: <Button<_> as Node<Self::Action, F>>::update_tag(&self.button1).clone(),
             node: &mut self.button1
         });
         if let LoopFlow::Break(b) = flow {
