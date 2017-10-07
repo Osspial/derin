@@ -15,19 +15,40 @@ pub enum NodeIdent {
     NumCollection(u32, u32)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Update {
     pub render_self: bool,
     pub update_child: bool,
     pub update_layout: bool
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum MouseState {
+    /// The mouse is hovering over the given node.
+    Hovering(Point2<i32>, MouseButtonSequence),
+    /// The mouse isn't hovering over the node, but the node is still receiving mouse events.
+    Tracking(Point2<i32>, MouseButtonSequence),
+    /// The node is not aware of the current mouse position and is receiving no events.
+    Untracked
+}
+
 #[derive(Debug, Clone)]
 pub struct UpdateTag {
     last_root: Cell<u32>,
-    pub(crate) mouse_hovering: Cell<bool>,
-    pub(crate) mouse_buttons_down_in_node: Cell<MouseButtonSequence>,
+    pub(crate) last_event_stamp: Cell<u32>,
+    pub(crate) mouse_state: Cell<MouseState>,
     pub(crate) child_event_recv: Cell<ChildEventRecv>
+}
+
+impl MouseState {
+    #[inline]
+    pub fn mouse_button_sequence(&self) -> MouseButtonSequence {
+        match *self {
+            MouseState::Untracked => MouseButtonSequence::new(),
+            MouseState::Hovering(_, mbseq) |
+            MouseState::Tracking(_, mbseq) => mbseq
+        }
+    }
 }
 
 bitflags! {
@@ -40,6 +61,13 @@ bitflags! {
         const MOUSE_X2    = 1 << 4;
         const MOUSE_HOVER = 1 << 5;
         // const KEYS        = 1 << 6;
+
+        const MOUSE_BUTTONS =
+            Self::MOUSE_L.bits  |
+            Self::MOUSE_R.bits  |
+            Self::MOUSE_M.bits  |
+            Self::MOUSE_X1.bits |
+            Self::MOUSE_X2.bits;
     }
 }
 
@@ -60,10 +88,14 @@ impl From<MouseButtonSequence> for ChildEventRecv {
 impl<'a> From<&'a UpdateTag> for ChildEventRecv {
     #[inline]
     fn from(update_tag: &'a UpdateTag) -> ChildEventRecv {
-        let node_mb_flags = ChildEventRecv::from(update_tag.mouse_buttons_down_in_node.get());
+        let node_mb_flags = ChildEventRecv::from(update_tag.mouse_state.get().mouse_button_sequence());
 
         node_mb_flags |
-        ChildEventRecv::from_bits_truncate(update_tag.mouse_hovering.get() as u8 * ChildEventRecv::MOUSE_HOVER.bits)
+        match update_tag.mouse_state.get() {
+            MouseState::Hovering(_, _) => ChildEventRecv::MOUSE_HOVER,
+            MouseState::Tracking(_, _)  |
+            MouseState::Untracked   => ChildEventRecv::empty()
+        }
     }
 }
 
@@ -196,8 +228,8 @@ impl UpdateTag {
     pub fn new() -> UpdateTag {
         UpdateTag {
             last_root: Cell::new(UPDATE_MASK),
-            mouse_hovering: Cell::new(false),
-            mouse_buttons_down_in_node: Cell::new(MouseButtonSequence::new()),
+            last_event_stamp: Cell::new(0),
+            mouse_state: Cell::new(MouseState::Untracked),
             child_event_recv: Cell::new(ChildEventRecv::empty())
         }
     }
@@ -223,6 +255,11 @@ impl UpdateTag {
     #[inline]
     pub(crate) fn mark_updated(&self, root_id: RootID) {
         self.last_root.set(root_id.0);
+    }
+
+    #[inline]
+    pub(crate) fn unmark_update_layout(&self) {
+        self.last_root.set(self.last_root.get() & !UPDATE_LAYOUT);
     }
 
     pub(crate) fn mark_update_child_immutable(&self) {

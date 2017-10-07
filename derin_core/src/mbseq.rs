@@ -62,10 +62,10 @@ impl MouseButtonSequence {
     //     }
     // }
 
-    // #[inline]
-    // pub fn len(&self) -> u8 {
-    //     self.len
-    // }
+    #[inline]
+    pub fn len(&self) -> u8 {
+        self.len
+    }
 }
 
 impl IntoIterator for MouseButtonSequence {

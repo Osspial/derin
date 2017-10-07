@@ -175,10 +175,13 @@ impl<F, H> Node<H::Action, F> for Button<H>
             MouseMove{..} => self.state,
             MouseDown{..} => ButtonState::Clicked,
             MouseUp{in_node: true, pressed_in_node, ..} => {
-                if pressed_in_node {
-                    action = self.handler.on_click();
+                match pressed_in_node {
+                    true => {
+                        action = self.handler.on_click();
+                        ButtonState::Hover
+                    },
+                    false => self.state
                 }
-                ButtonState::Hover
             },
             MouseUp{in_node: false, ..} => ButtonState::Normal,
             MouseEnterChild{..} |

@@ -157,5 +157,5 @@ fn main() {
         });
 
         ret
-    }, |_| {LoopFlow::Continue}, &mut renderer);
+    }, |_, _| {LoopFlow::Continue}, &mut renderer);
 }
