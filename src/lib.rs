@@ -1,6 +1,6 @@
 extern crate dct;
 extern crate dle;
-extern crate derin_core;
+pub extern crate derin_core as core;
 extern crate cgmath;
 extern crate cgmath_geometry;
 extern crate gl_raii;
@@ -17,8 +17,8 @@ use gl_render::Vertex;
 
 use dct::hints::{WidgetHints, GridSize};
 use dle::{GridEngine, UpdateHeapCache, SolveError};
-use derin_core::LoopFlow;
-use derin_core::tree::{NodeIdent, NodeSummary, UpdateTag, NodeEvent, NodeSubtrait, NodeSubtraitMut, RenderFrame, FrameRectStack, Node, Parent};
+use core::LoopFlow;
+use core::tree::{NodeIdent, NodeSummary, UpdateTag, NodeEvent, NodeSubtrait, NodeSubtraitMut, RenderFrame, FrameRectStack, Node, Parent};
 
 use gl_raii::glsl::{Nu8, Nu16};
 use gl_raii::colors::Rgba;

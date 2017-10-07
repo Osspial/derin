@@ -6,6 +6,9 @@ version = "0.1.0"
 arrayvec = "0.4"
 glutin = "0.9"
 
+[dev-dependencies]
+derin_macros = {path = "./derin_macros"}
+
 [dependencies.cgmath]
 branch = "prs_merged"
 git = "https://github.com/Osspial/cgmath.git"

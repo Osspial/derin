@@ -1,7 +1,7 @@
-#![feature(never_type)]
-
 extern crate derin;
 extern crate derin_core;
+#[macro_use]
+extern crate derin_macros;
 extern crate dct;
 extern crate cgmath;
 extern crate cgmath_geometry;
@@ -9,10 +9,10 @@ extern crate glutin;
 
 use dct::buttons::MouseButton;
 use dct::hints::{WidgetHints, NodeSpan, GridSize, Margins};
-use derin::{ButtonHandler, NodeContainer, NodeLayout, Button, Group};
+use derin::{ButtonHandler, NodeLayout, Button, Group};
 use derin::gl_render::GLRenderer;
 use derin_core::{LoopFlow, Root, WindowEvent};
-use derin_core::tree::{Node, NodeSummary, NodeIdent, RenderFrame};
+use derin_core::tree::NodeIdent;
 
 use glutin::{Event, ControlFlow, WindowEvent as GWindowEvent, MouseButton as GMouseButton, ElementState};
 
@@ -21,13 +21,23 @@ use cgmath_geometry::{DimsRect, Rectangle};
 
 enum GalleryEvent {}
 
+#[derive(NodeContainer)]
+#[derin(action = "GalleryEvent")]
 struct BasicContainer {
+    button: Button<BasicHandler>,
+    nested: Group<NestedContainer, BasicLayoutVertical>
+}
+
+#[derive(NodeContainer)]
+#[derin(action = "GalleryEvent")]
+struct NestedContainer {
     button0: Button<BasicHandler>,
     button1: Button<BasicHandler>
 }
 
 struct BasicHandler;
 struct BasicLayout;
+struct BasicLayoutVertical;
 
 impl ButtonHandler for BasicHandler {
     type Action = GalleryEvent;
@@ -41,12 +51,12 @@ impl ButtonHandler for BasicHandler {
 impl NodeLayout for BasicLayout {
     fn hints(&self, node_ident: NodeIdent) -> Option<WidgetHints> {
         match node_ident {
-            NodeIdent::Str("button0") => Some(WidgetHints {
+            NodeIdent::Str("button") => Some(WidgetHints {
                 node_span: NodeSpan::new(0, 0),
                 margins: Margins::new(16, 16, 16, 16),
                 ..WidgetHints::default()
             }),
-            NodeIdent::Str("button1") => Some(WidgetHints {
+            NodeIdent::Str("nested") => Some(WidgetHints {
                 node_span: NodeSpan::new(1, 0),
                 margins: Margins::new(16, 16, 16, 16),
                 ..WidgetHints::default()
@@ -59,11 +69,35 @@ impl NodeLayout for BasicLayout {
     }
 }
 
+impl NodeLayout for BasicLayoutVertical {
+    fn hints(&self, node_ident: NodeIdent) -> Option<WidgetHints> {
+        match node_ident {
+            NodeIdent::Str("button0") => Some(WidgetHints {
+                node_span: NodeSpan::new(0, 0),
+                margins: Margins::new(16, 16, 16, 16),
+                ..WidgetHints::default()
+            }),
+            NodeIdent::Str("button1") => Some(WidgetHints {
+                node_span: NodeSpan::new(0, 1),
+                margins: Margins::new(16, 16, 16, 16),
+                ..WidgetHints::default()
+            }),
+            _ => None
+        }
+    }
+    fn grid_size(&self) -> GridSize {
+        GridSize::new(1, 2)
+    }
+}
+
 fn main() {
     let group = Group::new(
         BasicContainer {
-            button0: Button::new(BasicHandler),
-            button1: Button::new(BasicHandler)
+            button: Button::new(BasicHandler),
+            nested: Group::new(NestedContainer {
+                button0: Button::new(BasicHandler),
+                button1: Button::new(BasicHandler)
+            }, BasicLayoutVertical)
         },
         BasicLayout
     );
@@ -124,69 +158,4 @@ fn main() {
 
         ret
     }, |_| {LoopFlow::Continue}, &mut renderer);
-}
-
-impl<F> NodeContainer<F> for BasicContainer
-    where F: RenderFrame,
-          Button<BasicHandler>: Node<GalleryEvent, F>
-{
-    type Action = GalleryEvent;
-
-    fn children<'a, G, R>(&'a self, mut for_each_child: G) -> Option<R>
-        where G: FnMut(NodeSummary<&'a Node<Self::Action, F>>) -> LoopFlow<R>,
-              Self::Action: 'a,
-              F: 'a
-    {
-        let mut flow;
-        flow = for_each_child(NodeSummary {
-            ident: NodeIdent::Str("button0"),
-            rect: <Button<_> as Node<Self::Action, F>>::bounds(&self.button0),
-            update_tag: <Button<_> as Node<Self::Action, F>>::update_tag(&self.button0).clone(),
-            node: &self.button0
-        });
-        if let LoopFlow::Break(b) = flow {
-            return Some(b);
-        }
-
-        flow = for_each_child(NodeSummary {
-            ident: NodeIdent::Str("button1"),
-            rect: <Button<_> as Node<Self::Action, F>>::bounds(&self.button1),
-            update_tag: <Button<_> as Node<Self::Action, F>>::update_tag(&self.button1).clone(),
-            node: &self.button1
-        });
-        if let LoopFlow::Break(b) = flow {
-            return Some(b);
-        }
-
-        None
-    }
-
-    fn children_mut<'a, G, R>(&'a mut self, mut for_each_child: G) -> Option<R>
-        where G: FnMut(NodeSummary<&'a mut Node<Self::Action, F>>) -> LoopFlow<R>,
-              Self::Action: 'a,
-              F: 'a
-    {
-        let mut flow;
-        flow = for_each_child(NodeSummary {
-            ident: NodeIdent::Str("button0"),
-            rect: <Button<_> as Node<Self::Action, F>>::bounds(&self.button0),
-            update_tag: <Button<_> as Node<Self::Action, F>>::update_tag(&self.button0).clone(),
-            node: &mut self.button0
-        });
-        if let LoopFlow::Break(b) = flow {
-            return Some(b);
-        }
-
-        flow = for_each_child(NodeSummary {
-            ident: NodeIdent::Str("button1"),
-            rect: <Button<_> as Node<Self::Action, F>>::bounds(&self.button1),
-            update_tag: <Button<_> as Node<Self::Action, F>>::update_tag(&self.button1).clone(),
-            node: &mut self.button1
-        });
-        if let LoopFlow::Break(b) = flow {
-            return Some(b);
-        }
-
-        None
-    }
 }

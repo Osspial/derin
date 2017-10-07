@@ -15,7 +15,7 @@ use cgmath_geometry::{BoundRect, DimsRect, Rectangle};
 
 use glutin::{GlWindow, GlContext, EventsLoop, WindowBuilder, ContextBuilder, GlRequest, CreationError};
 
-use derin_core::tree::{Renderer, RenderFrame, FrameRectStack};
+use core::tree::{Renderer, RenderFrame, FrameRectStack};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Vertex {
