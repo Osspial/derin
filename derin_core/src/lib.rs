@@ -95,6 +95,7 @@ impl<A, N, F> Root<A, N, F>
             ref mut event_stamp,
             ..
         } = *self;
+        // Initialize node stack to root.
         let mut node_stack = node_stack_base.use_stack(root_node);
 
         gen_events(&mut |event| {
@@ -135,10 +136,12 @@ impl<A, N, F> Root<A, N, F>
 
             match event {
                 WindowEvent::WindowResize(new_size) => {
+                    // Resize the window, forcing a full redraw.
+
                     node_stack.move_to_root();
                     *node_stack.top_mut().bounds_mut() = new_size.into();
                     *force_full_redraw = true;
-                }
+                },
                 WindowEvent::MouseEnter(enter_pos) => {
                     let root_node = node_stack.move_to_root();
 
@@ -180,195 +183,228 @@ impl<A, N, F> Root<A, N, F>
                 },
 
 
-                WindowEvent::MouseMove(new_pos_rootspace) => {
-                    *mouse_pos = new_pos_rootspace;
+                WindowEvent::MouseMove(new_pos_windowspace) => {
+                    // Update the stored mouse position
+                    *mouse_pos = new_pos_windowspace;
 
                     loop {
                         node_stack.move_to_hover();
 
-                        let top_bounds_rootspace = node_stack.top_bounds_offset().cast::<i32>().unwrap_or(
+                        // Calculate the bounds of the hovered node in window-space, and use that to get hovered
+                        // node's upper-right corner in window space (the offset).
+                        let top_bounds_windowspace = node_stack.top_bounds_offset().cast::<i32>().unwrap_or(
                             BoundRect::new(i32::max_value(), i32::max_value(), i32::max_value(), i32::max_value())
                         );
-                        let top_bounds_offset = top_bounds_rootspace.min().to_vec();
+                        let top_bounds_offset = top_bounds_windowspace.min().to_vec();
 
-                        let top_bounds = top_bounds_rootspace - top_bounds_offset;
-                        let new_pos = new_pos_rootspace - top_bounds_offset;
+                        // Use the position of the node's upper-right corner to turn the window-space coordinates
+                        // into node-space coordinates.
+                        let top_bounds = top_bounds_windowspace - top_bounds_offset;
+                        let new_pos = new_pos_windowspace - top_bounds_offset;
 
+                        // Get a read-only copy of the update tag.
                         let update_tag_copy = node_stack.top().update_tag().clone();
-                        match update_tag_copy.mouse_state.get() {
-                            MouseState::Hovering(node_old_pos, mbseq) => {
-                                let move_line = Segment {
-                                    start: node_old_pos,
-                                    end: new_pos
-                                };
 
-                                // SEND MOVE ACTION
-                                let (mbd_array, mbdin_array) = mouse_button_arrays!(update_tag_copy);
-                                try_push_action!{
-                                    node_stack.top_mut().on_node_event(NodeEvent::MouseMove {
-                                        old: node_old_pos,
-                                        new: new_pos,
-                                        in_node: true,
-                                        buttons_down: &mbd_array,
-                                        buttons_down_in_node: &mbdin_array
-                                    })
-                                }
-                                mark_if_needs_update!(node_stack.top_mut());
+                        if let MouseState::Hovering(node_old_pos, mbseq) = update_tag_copy.mouse_state.get() {
+                            let move_line = Segment {
+                                start: node_old_pos,
+                                end: new_pos
+                            };
 
-                                // Get the bounds of the node after the node has potentially been moved by the
-                                // move action.
-                                let new_top_bounds_rootspace = node_stack.top_bounds_offset().cast::<i32>().unwrap_or(
-                                    BoundRect::new(i32::max_value(), i32::max_value(), i32::max_value(), i32::max_value())
-                                );
-                                let new_top_bounds = new_top_bounds_rootspace - top_bounds_offset;
+                            // SEND MOVE ACTION
+                            let (mbd_array, mbdin_array) = mouse_button_arrays!(update_tag_copy);
+                            try_push_action!{
+                                node_stack.top_mut().on_node_event(NodeEvent::MouseMove {
+                                    old: node_old_pos,
+                                    new: new_pos,
+                                    in_node: true,
+                                    buttons_down: &mbd_array,
+                                    buttons_down_in_node: &mbdin_array
+                                })
+                            }
+                            mark_if_needs_update!(node_stack.top_mut());
 
-                                match new_top_bounds.contains(new_pos) {
-                                    true => {
-                                        let update_layout: bool;
-                                        {
-                                            let top_update_tag = node_stack.top().update_tag();
-                                            top_update_tag.mouse_state.set(MouseState::Hovering(new_pos, mbseq));
-                                            update_layout = top_update_tag.needs_update(root_id).update_layout;
-                                            top_update_tag.unmark_update_layout();
-                                        }
+                            // Get the bounds of the node after the node has potentially been moved by the
+                            // move action.
+                            let new_top_bounds_windowspace = node_stack.top_bounds_offset().cast::<i32>().unwrap_or(
+                                BoundRect::new(i32::max_value(), i32::max_value(), i32::max_value(), i32::max_value())
+                            );
+                            let new_top_bounds = new_top_bounds_windowspace - top_bounds_offset;
 
-                                        match node_stack.top_mut().subtrait_mut() {
-                                            NodeSubtraitMut::Parent(top_node_as_parent) => {
-                                                if update_layout {
-                                                    top_node_as_parent.update_child_layout();
+                            match new_top_bounds.contains(new_pos) {
+                                true => {
+                                    // Whether or not to update the child layout.
+                                    let update_layout: bool;
+                                    {
+                                        let top_update_tag = node_stack.top().update_tag();
+                                        top_update_tag.mouse_state.set(MouseState::Hovering(new_pos, mbseq));
+
+                                        // Store whether or not the layout needs to be updated. We can set that the layout
+                                        // no longer needs to be updated here because it's going to be updated in the subtrait
+                                        // match below.
+                                        update_layout = top_update_tag.needs_update(root_id).update_layout;
+                                        top_update_tag.unmark_update_layout();
+                                    }
+
+                                    // Send actions to the child node. If the hover node isn't a parent, there's
+                                    // nothing we need to do.
+                                    match node_stack.top_mut().subtrait_mut() {
+                                        NodeSubtraitMut::Node(_) => (),
+                                        NodeSubtraitMut::Parent(top_node_as_parent) => {
+                                            // Actually update the layout, if necessary.
+                                            if update_layout {
+                                                top_node_as_parent.update_child_layout();
+                                            }
+
+                                            if let Some(new_pos_unsigned) = new_pos.cast::<u32>() {
+                                                struct EnterChildData {
+                                                    child_ident: NodeIdent,
+                                                    enter_pos: Point2<i32>
+                                                }
+                                                let mut enter_child: Option<EnterChildData> = None;
+
+                                                // Figure out if the cursor has moved into a child node, and send the relevant events if
+                                                // we have.
+                                                if let Some(child_summary) = top_node_as_parent.child_by_point_mut(new_pos_unsigned) {
+                                                    let NodeSummary {
+                                                        node: child,
+                                                        rect: child_bounds,
+                                                        ident: child_ident,
+                                                        ..
+                                                    } = child_summary;
+
+                                                    let child_pos_offset = child_bounds.min().to_vec().cast::<i32>()
+                                                        .unwrap_or(Vector2::from_value(i32::max_value()));
+
+                                                    // Find the exact location where the cursor entered the child node. This is
+                                                    // done in the child's parent's coordinate space (i.e. the currently hovered
+                                                    // node), and is translated to the child's coordinate space when we enter the
+                                                    // child.
+                                                    let enter_pos = child_bounds.cast::<i32>()
+                                                        .and_then(|bounds| bounds.intersects_int(move_line).0)
+                                                        .unwrap_or(new_pos);
+
+                                                    // Get the mouse buttons already down in the child, and set the mouse
+                                                    // state to hover.
+                                                    let child_mbdin;
+                                                    {
+                                                        let child_update_tag = child.update_tag();
+                                                        child_mbdin = child_update_tag.mouse_state.get().mouse_button_sequence();
+                                                        child_update_tag.mouse_state.set(MouseState::Hovering(
+                                                            node_old_pos - child_pos_offset,
+                                                            child_mbdin
+                                                        ));
+                                                    }
+
+                                                    // SEND ENTER ACTION TO CHILD
+                                                    let child_mbdin_array: ArrayVec<[_; 5]> = child_mbdin.into_iter().collect();
+                                                    try_push_action!{
+                                                        child.on_node_event(NodeEvent::MouseEnter {
+                                                            enter_pos: enter_pos - child_pos_offset,
+                                                            buttons_down: &mbd_array,
+                                                            buttons_down_in_node: &child_mbdin_array
+                                                        })
+                                                    }
+
+                                                    // Store the information relating to the child we entered,
+                                                    enter_child = Some(EnterChildData{ child_ident, enter_pos });
+
+                                                    // We `continue` the loop after this, but the continue is handled by the
+                                                    // `enter_child` check below. `mark_if_needs_update` is called after the
+                                                    // continue.
                                                 }
 
-                                                if let Some(new_pos_unsigned) = new_pos.cast::<u32>() {
-                                                    struct EnterChildData {
-                                                        child_ident: NodeIdent,
-                                                        enter_pos: Point2<i32>
-                                                    }
-                                                    let mut enter_child: Option<EnterChildData> = None;
-
-                                                    match top_node_as_parent.child_by_point_mut(new_pos_unsigned) {
-                                                        Some(NodeSummary{node: child, rect: child_bounds, ident: child_ident, ..}) => {
-                                                            let child_pos_offset = child_bounds.min().to_vec().cast::<i32>()
-                                                                .unwrap_or(Vector2::from_value(i32::max_value()));
-
-                                                            let enter_pos = child_bounds.cast::<i32>().and_then(|bounds| bounds.intersects_int(move_line).0).unwrap_or(new_pos);
-
-                                                            let child_mbdin;
-                                                            {
-                                                                let child_update_tag = child.update_tag();
-                                                                child_mbdin = child_update_tag.mouse_state.get().mouse_button_sequence();
-                                                                child_update_tag.mouse_state.set(MouseState::Hovering(
-                                                                    node_old_pos - child_pos_offset,
-                                                                    child_mbdin
-                                                                ));
-                                                            }
-
-                                                            let child_mbdin_array: ArrayVec<[_; 5]> = child_mbdin.into_iter().collect();
-                                                            // SEND ENTER ACTION TO CHILD
-                                                            try_push_action!{
-                                                                child.on_node_event(NodeEvent::MouseEnter {
-                                                                    enter_pos: enter_pos - child_pos_offset,
-                                                                    buttons_down: &mbd_array,
-                                                                    buttons_down_in_node: &child_mbdin_array
-                                                                })
-                                                            }
-
-                                                            enter_child = Some(EnterChildData{ child_ident, enter_pos });
-
-
-                                                            // We `continue` the loop after this, but the continue is handled by the
-                                                            // `enter_child` check below. `mark_if_needs_update` is called after the
-                                                            // continue.
-                                                        },
-                                                        None => ()
+                                                if let Some(EnterChildData{child_ident, enter_pos}) = enter_child {
+                                                    // SEND CHILD ENTER ACTION
+                                                    try_push_action!{
+                                                        top_node_as_parent.on_node_event(NodeEvent::MouseEnterChild {
+                                                            enter_pos,
+                                                            buttons_down: &mbd_array,
+                                                            buttons_down_in_node: &mbdin_array,
+                                                            child: child_ident
+                                                        })
                                                     }
 
-                                                    if let Some(EnterChildData{child_ident, enter_pos}) = enter_child {
-                                                        // SEND CHILD ENTER ACTION
-                                                        try_push_action!{
-                                                            top_node_as_parent.on_node_event(NodeEvent::MouseEnterChild {
-                                                                enter_pos,
-                                                                buttons_down: &mbd_array,
-                                                                buttons_down_in_node: &mbdin_array,
-                                                                child: child_ident
-                                                            })
+                                                    // Update the layout again, if the events we've sent have triggered a
+                                                    // relayout.
+                                                    let update_layout: bool;
+                                                    {
+                                                        let top_update_tag = top_node_as_parent.update_tag();
+                                                        match mbseq.len() {
+                                                            0 => top_update_tag.mouse_state.set(MouseState::Untracked),
+                                                            _ => top_update_tag.mouse_state.set(MouseState::Tracking(new_pos, mbseq))
                                                         }
-
-                                                        let update_layout: bool;
-                                                        {
-                                                            let top_update_tag = top_node_as_parent.update_tag();
-                                                            match mbseq.len() {
-                                                                0 => top_update_tag.mouse_state.set(MouseState::Untracked),
-                                                                _ => top_update_tag.mouse_state.set(MouseState::Tracking(new_pos, mbseq))
-                                                            }
-                                                            top_update_tag.child_event_recv.set(top_update_tag.child_event_recv.get() | ChildEventRecv::MOUSE_HOVER);
-                                                            update_layout = top_update_tag.needs_update(root_id).update_layout;
-                                                        }
-
-                                                        mark_if_needs_update!(top_node_as_parent);
-                                                        if update_layout {
-                                                            top_node_as_parent.update_child_layout();
-                                                        }
-
-                                                        continue;
+                                                        top_update_tag.child_event_recv.set(top_update_tag.child_event_recv.get() | ChildEventRecv::MOUSE_HOVER);
+                                                        update_layout = top_update_tag.needs_update(root_id).update_layout;
                                                     }
+                                                    mark_if_needs_update!(top_node_as_parent);
+                                                    if update_layout {
+                                                        top_node_as_parent.update_child_layout();
+                                                    }
+
+                                                    continue;
                                                 }
-                                            },
-                                            NodeSubtraitMut::Node(_) => ()
+                                            }
                                         }
-                                    },
-                                    false => {
-                                        let mouse_exit = top_bounds.intersects_int(move_line).1.unwrap_or(new_pos);
+                                    }
+                                },
+                                // If the cursor is no longer in the node, send the exit events and move to the parent node.
+                                false => {
+                                    let mouse_exit = top_bounds.intersects_int(move_line).1.unwrap_or(new_pos);
 
+                                    try_push_action!{
+                                        node_stack.top_mut().on_node_event(NodeEvent::MouseExit {
+                                            exit_pos: mouse_exit,
+                                            buttons_down: &mbd_array,
+                                            buttons_down_in_node: &mbdin_array
+                                        })
+                                    }
+
+                                    mark_if_needs_update!(node_stack.top());
+
+                                    {
+                                        let top_update_tag = node_stack.top().update_tag();
+                                        match mbseq.len() {
+                                            0 => top_update_tag.mouse_state.set(MouseState::Untracked),
+                                            _ => top_update_tag.mouse_state.set(MouseState::Tracking(new_pos, mbseq))
+                                        }
+                                    }
+
+                                    // Send the exit action and mark the parent as hovered, as long as we aren't at the root.
+                                    if 0 < node_stack.depth() {
+                                        let child_exit_pos = mouse_exit - node_stack.top_parent_offset().cast::<i32>().unwrap_or(Vector2::from_value(i32::max_value()));
+                                        let child_ident = node_stack.top_ident();
+
+                                        node_stack.pop();
                                         try_push_action!{
-                                            node_stack.top_mut().on_node_event(NodeEvent::MouseExit {
-                                                exit_pos: mouse_exit,
+                                            node_stack.top_mut().on_node_event(NodeEvent::MouseExitChild {
+                                                exit_pos: child_exit_pos,
                                                 buttons_down: &mbd_array,
-                                                buttons_down_in_node: &mbdin_array
+                                                buttons_down_in_node: &mbdin_array,
+                                                child: child_ident
                                             })
                                         }
 
-                                        mark_if_needs_update!(node_stack.top());
+                                        let top_update_tag = node_stack.top().update_tag();
+                                        let top_mbseq = top_update_tag.mouse_state.get().mouse_button_sequence();
+                                        top_update_tag.mouse_state.set(MouseState::Hovering(child_exit_pos, top_mbseq));
+                                        top_update_tag.child_event_recv.set(top_update_tag.child_event_recv.get() & !ChildEventRecv::MOUSE_HOVER);
 
-                                        {
-                                            let top_update_tag = node_stack.top().update_tag();
-                                            match mbseq.len() {
-                                                0 => top_update_tag.mouse_state.set(MouseState::Untracked),
-                                                _ => top_update_tag.mouse_state.set(MouseState::Tracking(new_pos, mbseq))
-                                            }
-                                        }
-
-                                        // SEND EXIT ACTION
-                                        if 0 < node_stack.depth() {
-                                            let child_exit_pos = mouse_exit - node_stack.top_parent_offset().cast::<i32>().unwrap_or(Vector2::from_value(i32::max_value()));
-                                            let child_ident = node_stack.top_ident();
-
-                                            node_stack.pop();
-                                            try_push_action!{
-                                                node_stack.top_mut().on_node_event(NodeEvent::MouseExitChild {
-                                                    exit_pos: child_exit_pos,
-                                                    buttons_down: &mbd_array,
-                                                    buttons_down_in_node: &mbdin_array,
-                                                    child: child_ident
-                                                })
-                                            }
-
-                                            let top_update_tag = node_stack.top().update_tag();
-                                            let top_mbseq = top_update_tag.mouse_state.get().mouse_button_sequence();
-                                            top_update_tag.mouse_state.set(MouseState::Hovering(child_exit_pos, top_mbseq));
-                                            top_update_tag.child_event_recv.set(top_update_tag.child_event_recv.get() & !ChildEventRecv::MOUSE_HOVER);
-
-                                            // `mark_if_needs_update` called after continue.
-                                            continue;
-                                        }
+                                        // `mark_if_needs_update` called after continue.
+                                        continue;
                                     }
                                 }
-                            },
-                            s => panic!("unexpected mouse state: {:?}", s)
+                            }
+                        } else {
+                            // We told the stack to move to the hover node. If that's not where we are, something went
+                            // *very* wrong.
+                            panic!("unexpected mouse state: {:?}", update_tag_copy.mouse_state.get())
                         }
 
                         break;
                     }
 
+                    // Send move events to nodes that are being click-dragged but aren't being hovered.
                     node_stack.move_over_flags(ChildEventRecv::MOUSE_BUTTONS, |node, node_parent_offset| {
                         let new_pos: Point2<i32>;
                         let (mbd_array, mbdin_array);
@@ -377,7 +413,7 @@ impl<A, N, F> Root<A, N, F>
                         {
                             node_offset = (node_parent_offset + node.bounds().min().to_vec()).cast::<i32>().unwrap_or(Vector2::from_value(i32::max_value()));
                             let update_tag = node.update_tag();
-                            new_pos = new_pos_rootspace - node_offset;
+                            new_pos = new_pos_windowspace - node_offset;
 
                             node_needs_move_event = update_tag.last_event_stamp.get() != *event_stamp;
                             match update_tag.mouse_state.get() {
@@ -450,12 +486,15 @@ impl<A, N, F> Root<A, N, F>
                     let button_mask = ChildEventRecv::mouse_button_mask(button);
                     mouse_buttons_down.release_button(button);
 
+                    // Send the mouse up event to the hover node.
                     let mut move_to_tracked = true;
                     let mut hover_action_opt = None;
                     node_stack.move_over_flags(ChildEventRecv::MOUSE_HOVER, |node, top_parent_offset| {
                         let bounds = node.bounds() + top_parent_offset;
                         let in_node = mouse_pos.cast::<u32>().map(|p| bounds.contains(p)).unwrap_or(false);
                         let pressed_in_node = node.update_tag().mouse_state.get().mouse_button_sequence().contains(button);
+                        // If the hover node wasn't the one where the mouse was originally pressed, ensure that
+                        // we move to the node where it was pressed.
                         move_to_tracked = !pressed_in_node;
 
                         hover_action_opt =
@@ -481,6 +520,8 @@ impl<A, N, F> Root<A, N, F>
                         update_tag
                     });
 
+                    // If the hover node wasn't the node where the mouse button was originally pressed,
+                    // send the move event to original presser.
                     let mut button_action_opt = None;
                     if move_to_tracked {
                         node_stack.move_over_flags(button_mask, |node, top_parent_offset| {
@@ -513,6 +554,7 @@ impl<A, N, F> Root<A, N, F>
                         });
                     }
 
+                    // Push the actions we've collected to the action queue.
                     try_push_action!(hover_action_opt);
                     try_push_action!(button_action_opt);
 
@@ -552,6 +594,7 @@ impl<A, N, F> Root<A, N, F>
             }
 
 
+            // Draw the node tree.
             if mark_active_nodes_redraw || *force_full_redraw {
                 let root = node_stack.move_to_root();
 
