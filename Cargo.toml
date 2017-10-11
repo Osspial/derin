@@ -32,4 +32,4 @@ git = "https://github.com/Osspial/gl_raii.git"
 git = "https://github.com/Osspial/gl_raii.git"
 
 [workspace]
-members = ["./dct", "./dle", "./dww", "./dww_macros", "./derin_macros", "./derin_core"]
+members = ["./dat", "./dct", "./dle", "./dww", "./dww_macros", "./derin_macros", "./derin_core"]
