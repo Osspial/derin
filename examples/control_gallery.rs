@@ -1,23 +1,18 @@
 extern crate derin;
-extern crate derin_core;
 #[macro_use]
 extern crate derin_macros;
-extern crate dct;
-extern crate cgmath;
-extern crate cgmath_geometry;
 extern crate glutin;
 
-use dct::buttons::MouseButton;
-use dct::hints::{WidgetHints, NodeSpan, GridSize, Margins};
+use derin::dct::buttons::MouseButton;
+use derin::dct::hints::{WidgetHints, NodeSpan, GridSize, Margins};
 use derin::{ButtonHandler, NodeLayout, Button, Group};
 use derin::gl_render::GLRenderer;
-use derin_core::{LoopFlow, Root, WindowEvent};
-use derin_core::tree::NodeIdent;
+use derin::core::{LoopFlow, Root, WindowEvent};
+use derin::core::tree::NodeIdent;
 
 use glutin::{Event, ControlFlow, WindowEvent as GWindowEvent, MouseButton as GMouseButton, ElementState};
 
-use cgmath::Point2;
-use cgmath_geometry::{DimsRect, Rectangle};
+use derin::geometry::{Point2, DimsRect, Rectangle};
 
 enum GalleryEvent {}
 

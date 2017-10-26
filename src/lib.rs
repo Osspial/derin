@@ -1,4 +1,4 @@
-extern crate dct;
+pub extern crate dct;
 extern crate dle;
 pub extern crate derin_core as core;
 extern crate cgmath;
@@ -26,6 +26,11 @@ use cgmath::{Zero, One, Point2, Vector2};
 use cgmath_geometry::{BoundRect, DimsRect, Rectangle};
 
 use arrayvec::ArrayVec;
+
+pub mod geometry {
+    pub use cgmath::*;
+    pub use cgmath_geometry::*;
+}
 
 
 pub trait NodeContainer<F: RenderFrame> {
