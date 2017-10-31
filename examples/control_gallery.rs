@@ -2,11 +2,12 @@ extern crate derin;
 #[macro_use]
 extern crate derin_macros;
 extern crate glutin;
+extern crate png;
 
 use derin::dct::buttons::MouseButton;
 use derin::dct::hints::{WidgetHints, NodeSpan, GridSize, Margins};
 use derin::{ButtonHandler, NodeLayout, Button, Group};
-use derin::gl_render::GLRenderer;
+use derin::gl_render::{Border, GLRenderer};
 use derin::core::{LoopFlow, Root, WindowEvent};
 use derin::core::tree::NodeIdent;
 
@@ -105,7 +106,33 @@ fn main() {
 
     let mut renderer = unsafe{ GLRenderer::new(&events_loop, window_builder).unwrap() };
 
-    let mut root = Root::new(group, dims);
+    let mut atlas = derin::gl_render::IconAtlas::new();
+
+    macro_rules! upload_image {
+        ($name:expr, $path:expr, $dims:expr, $border:expr) => {{
+            let image_png = png::Decoder::new(std::io::Cursor::new(&include_bytes!($path)[..]));
+            let (info, mut reader) = image_png.read_info().unwrap();
+            // Allocate the output buffer.
+            let mut image = vec![0; info.buffer_size()];
+            // Read the next frame. Currently this function should only called once.
+            // The default options
+            reader.next_frame(&mut image).unwrap();
+            let bnorm_slice = unsafe{ std::slice::from_raw_parts(image.as_ptr() as *const _, image.len()/4) };
+            atlas.upload_icon(
+                $name.to_string(),
+                DimsRect::new($dims, $dims),
+                Border::new($border, $border, $border, $border),
+                &bnorm_slice
+            );
+        }}
+    }
+
+    upload_image!("Button::Normal", "../button.normal.png", 32, 4);
+    upload_image!("Button::Hover", "../button.hover.png", 32, 4);
+    upload_image!("Button::Clicked", "../button.clicked.png", 32, 4);
+
+
+    let mut root = Root::new(group, atlas, dims);
     root.run_forever(|for_each_event| {
         let mut ret: Option<()> = None;
         events_loop.run_forever(|glutin_event| {
@@ -152,5 +179,5 @@ fn main() {
         });
 
         ret
-    }, |_, _| {LoopFlow::Continue}, &mut renderer);
+    }, |_, _, _| {LoopFlow::Continue}, &mut renderer);
 }

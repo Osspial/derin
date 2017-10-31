@@ -26,9 +26,8 @@ use dct::buttons::MouseButton;
 
 pub struct Root<A, N, F>
     where N: Node<A, F> + 'static,
-          F: RenderFrame,
           A: 'static,
-          F: 'static
+          F: RenderFrame + 'static
 {
     id: RootID,
     mouse_pos: Point2<i32>,
@@ -38,6 +37,7 @@ pub struct Root<A, N, F>
     force_full_redraw: bool,
     event_stamp: u32,
     pub root_node: N,
+    pub theme: F::Theme,
     _marker: PhantomData<*const F>
 }
 
@@ -63,7 +63,7 @@ impl<A, N, F> Root<A, N, F>
           F: RenderFrame
 {
     #[inline]
-    pub fn new(mut root_node: N, dims: DimsRect<u32>) -> Root<A, N, F> {
+    pub fn new(mut root_node: N, theme: F::Theme, dims: DimsRect<u32>) -> Root<A, N, F> {
         // TODO: DRAW ROOT AND DO INITIAL LAYOUT
         *root_node.bounds_mut() = dims.into();
         Root {
@@ -74,14 +74,14 @@ impl<A, N, F> Root<A, N, F>
             node_stack_base: NodeStackBase::new(),
             force_full_redraw: false,
             event_stamp: 1,
-            root_node,
+            root_node, theme,
             _marker: PhantomData
         }
     }
 
     pub fn run_forever<E, AF, R, G>(&mut self, mut gen_events: E, mut on_action: AF, renderer: &mut R) -> Option<G>
         where E: FnMut(&mut FnMut(WindowEvent) -> LoopFlow<G>) -> Option<G>,
-              AF: FnMut(A, &mut N) -> LoopFlow<G>,
+              AF: FnMut(A, &mut N, &mut F::Theme) -> LoopFlow<G>,
               R: Renderer<Frame=F>
     {
         let Root {
@@ -92,6 +92,7 @@ impl<A, N, F> Root<A, N, F>
             ref mut node_stack_base,
             ref mut force_full_redraw,
             ref mut root_node,
+            ref mut theme,
             ref mut event_stamp,
             ..
         } = *self;
@@ -583,7 +584,7 @@ impl<A, N, F> Root<A, N, F>
             if 0 < actions.len() {
                 let root = node_stack.move_to_root();
                 while let Some(action) = actions.pop_front() {
-                    match on_action(action, root) {
+                    match on_action(action, root, theme) {
                         LoopFlow::Continue => (),
                         LoopFlow::Break(ret) => {
                             return_flow = LoopFlow::Break(ret);
@@ -613,7 +614,7 @@ impl<A, N, F> Root<A, N, F>
                             }
                         }
                         if root_update.render_self {
-                            root.render(&mut frame);
+                            root.render(&mut frame, theme);
                         }
                         if root_update.update_child {
                             if let NodeSubtraitMut::Parent(root_as_parent) = root.subtrait_mut() {
@@ -621,12 +622,13 @@ impl<A, N, F> Root<A, N, F>
                                     root_id: root_id,
                                     frame,
                                     force_full_redraw: force_full_redraw,
+                                    theme
                                 }.render_node_children(root_as_parent)
                             }
                         }
                     }
 
-                    renderer.finish_frame();
+                    renderer.finish_frame(theme);
                     root.update_tag().mark_updated(root_id);
                 }
             }
@@ -644,6 +646,7 @@ struct NodeRenderer<'a, F>
     root_id: RootID,
     frame: FrameRectStack<'a, F>,
     force_full_redraw: bool,
+    theme: &'a F::Theme
 }
 
 impl<'a, F> NodeRenderer<'a, F>
@@ -676,19 +679,20 @@ impl<'a, F> NodeRenderer<'a, F>
                             child_node_as_parent.update_child_layout();
                         }
                         if render_self {
-                            child_node_as_parent.render(&mut child_frame);
+                            child_node_as_parent.render(&mut child_frame, self.theme);
                         }
                         if update_child {
                             NodeRenderer {
                                 root_id: self.root_id,
                                 frame: child_frame,
                                 force_full_redraw: self.force_full_redraw,
+                                theme: self.theme
                             }.render_node_children(child_node_as_parent);
                         }
                     },
                     NodeSubtraitMut::Node(child_node) => {
                         if render_self {
-                            child_node.render(&mut self.frame.enter_child_rect(child_rect));
+                            child_node.render(&mut self.frame.enter_child_rect(child_rect), self.theme);
                         }
                     }
                 }

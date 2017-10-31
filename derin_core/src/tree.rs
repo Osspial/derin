@@ -166,18 +166,26 @@ subtrait_enums! {subtraits {
 
 pub trait Renderer {
     type Frame: RenderFrame;
+    #[inline]
     fn force_full_redraw(&self) -> bool {false}
     fn make_frame(&mut self) -> FrameRectStack<Self::Frame>;
-    fn finish_frame(&mut self);
+    fn finish_frame(&mut self, theme: &<Self::Frame as RenderFrame>::Theme);
 }
 
 pub trait RenderFrame {
     type Transform;
+    type Theme: Theme;
     type Primitive: Copy;
 
     fn upload_primitives<I>(&mut self, transform: &Self::Transform, prim_iter: I)
         where I: Iterator<Item=Self::Primitive>;
     fn child_rect_transform(self_transform: &Self::Transform, child_rect: BoundRect<u32>) -> Self::Transform;
+}
+
+pub trait Theme {
+    type Key: ?Sized;
+    type ThemeValue;
+    fn node_theme(&self, key: &Self::Key) -> Self::ThemeValue;
 }
 
 pub struct FrameRectStack<'a, F: 'a + RenderFrame> {
@@ -189,7 +197,7 @@ pub trait Node<A, F: RenderFrame> {
     fn update_tag(&self) -> &UpdateTag;
     fn bounds(&self) -> BoundRect<u32>;
     fn bounds_mut(&mut self) -> &mut BoundRect<u32>;
-    fn render(&self, frame: &mut FrameRectStack<F>);
+    fn render(&self, frame: &mut FrameRectStack<F>, theme: &F::Theme);
     fn on_node_event(&mut self, event: NodeEvent) -> Option<A>;
     fn subtrait(&self) -> NodeSubtrait<A, F>;
     fn subtrait_mut(&mut self) -> NodeSubtraitMut<A, F>;

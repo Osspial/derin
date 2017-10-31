@@ -1,4 +1,5 @@
 pub extern crate dct;
+extern crate dat;
 extern crate dle;
 pub extern crate derin_core as core;
 extern crate cgmath;
@@ -13,16 +14,16 @@ pub mod gl_render;
 
 use std::cell::RefCell;
 
-use gl_render::Vertex;
+use gl_render::{IconAtlas, Border, DrawImage};
 
 use dct::hints::{WidgetHints, GridSize};
 use dle::{GridEngine, UpdateHeapCache, SolveError};
 use core::LoopFlow;
-use core::tree::{NodeIdent, NodeSummary, UpdateTag, NodeEvent, NodeSubtrait, NodeSubtraitMut, RenderFrame, FrameRectStack, Node, Parent};
+use core::tree::{Theme, NodeIdent, NodeSummary, UpdateTag, NodeEvent, NodeSubtrait, NodeSubtraitMut, RenderFrame, FrameRectStack, Node, Parent};
 
-use gl_raii::glsl::{Nu8, Nu16};
+use gl_raii::glsl::Nu8;
 use gl_raii::colors::Rgba;
-use cgmath::{Zero, One, Point2, Vector2};
+use cgmath::Point2;
 use cgmath_geometry::{BoundRect, DimsRect, Rectangle};
 
 use arrayvec::ArrayVec;
@@ -131,7 +132,7 @@ impl<C, L> Group<C, L>
 }
 
 impl<F, H> Node<H::Action, F> for Button<H>
-    where F: RenderFrame<Primitive=[Vertex; 3]>,
+    where F: RenderFrame<Primitive=DrawImage, Theme=IconAtlas>,
           H: ButtonHandler
 {
     #[inline]
@@ -149,22 +150,24 @@ impl<F, H> Node<H::Action, F> for Button<H>
         &mut self.bounds
     }
 
-    fn render(&self, frame: &mut FrameRectStack<F>) {
-        let color = match self.state {
-            ButtonState::Normal    => Rgba::new(Nu8(128), Nu8(0)  , Nu8(0)  , Nu8(255)),
-            ButtonState::Hover     => Rgba::new(Nu8(255), Nu8(0)  , Nu8(0)  , Nu8(255)),
-            ButtonState::Clicked   => Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
-            ButtonState::Disabled  => Rgba::new(Nu8(0)  , Nu8(0)  , Nu8(0)  , Nu8(255)),
-            ButtonState::Defaulted => Rgba::new(Nu8(230), Nu8(230), Nu8(0)  , Nu8(255))
+    fn render(&self, frame: &mut FrameRectStack<F>, atlas: &IconAtlas) {
+        let image_str = match self.state {
+            ButtonState::Normal    => "Button::Normal",
+            ButtonState::Hover     => "Button::Hover",
+            ButtonState::Clicked   => "Button::Clicked",
+            ButtonState::Disabled  => "Button::Disabled",
+            ButtonState::Defaulted => "Button::Defaulted"
         };
 
-        let tl = Vertex::new(Point2::new(0, 0), Vector2::new(Nu16::zero(), Nu16::one()), color);
-        let bl = Vertex::new(Point2::new(0, 0), Vector2::new(Nu16::zero(), Nu16::zero()), color);
-        let tr = Vertex::new(Point2::new(0, 0), Vector2::new(Nu16::one(), Nu16::one()), color);
-        let br = Vertex::new(Point2::new(0, 0), Vector2::new(Nu16::one(), Nu16::zero()), color);
+        let atlas_image = atlas.node_theme(image_str);
+
         frame.upload_primitives([
-            [tl, bl, br],
-            [tl, tr, br]
+            DrawImage {
+                atlas_image,
+                rect_frac: BoundRect::new(0.0, 0.0, 1.0, 1.0),
+                tint: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                margins_px: Border::new(0, 0, 0, 0)
+            }
         ].iter().cloned());
     }
 
@@ -213,7 +216,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
 }
 
 impl<A, F, C, L> Node<A, F> for Group<C, L>
-    where F: RenderFrame<Primitive=[Vertex; 3]>,
+    where F: RenderFrame<Primitive=DrawImage, Theme=IconAtlas>,
           C: NodeContainer<F, Action=A>,
           L: NodeLayout
 {
@@ -233,16 +236,16 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
         &mut self.bounds
     }
 
-    fn render(&self, frame: &mut FrameRectStack<F>) {
-        let color = Rgba::new(Nu8(128), Nu8(128), Nu8(128), Nu8(255));
+    fn render(&self, frame: &mut FrameRectStack<F>, atlas: &IconAtlas) {
+        let atlas_image = atlas.node_theme("group");
 
-        let tl = Vertex::new(Point2::new(0, 0), Vector2::new(Nu16::zero(), Nu16::one() ), color);
-        let bl = Vertex::new(Point2::new(0, 0), Vector2::new(Nu16::zero(), Nu16::zero()), color);
-        let tr = Vertex::new(Point2::new(0, 0), Vector2::new(Nu16::one() , Nu16::one() ), color);
-        let br = Vertex::new(Point2::new(0, 0), Vector2::new(Nu16::one() , Nu16::zero()), color);
         frame.upload_primitives([
-            [tl, bl, br],
-            [tl, tr, br]
+            DrawImage {
+                atlas_image,
+                rect_frac: BoundRect::new(0.0, 0.0, 1.0, 1.0),
+                tint: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                margins_px: Border::new(0, 0, 0, 0)
+            }
         ].iter().cloned());
     }
 
@@ -265,7 +268,7 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
 const CHILD_BATCH_SIZE: usize = 24;
 
 impl<A, F, C, L> Parent<A, F> for Group<C, L>
-    where F: RenderFrame<Primitive=[Vertex; 3]>,
+    where F: RenderFrame<Primitive=DrawImage, Theme=IconAtlas>,
           C: NodeContainer<F, Action=A>,
           L: NodeLayout
 {
