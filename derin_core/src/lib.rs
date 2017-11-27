@@ -610,21 +610,22 @@ impl<A, N, F> Root<A, N, F>
 
                 if root_update.render_self || root_update.update_child {
                     {
-                        let mut frame = renderer.make_frame();
-                        frame.set_ident_vec(node_ident_stack);
+                        let (frame, base_transform) = renderer.make_frame();
+                        let mut frame_rect_stack = FrameRectStack::new(frame, base_transform, theme, node_ident_stack);
+
                         if let NodeSubtraitMut::Parent(root_as_parent) = root.subtrait_mut() {
                             if root_update.update_layout {
                                 root_as_parent.update_child_layout();
                             }
                         }
                         if root_update.render_self {
-                            root.render(&mut frame, theme);
+                            root.render(&mut frame_rect_stack);
                         }
                         if root_update.update_child {
                             if let NodeSubtraitMut::Parent(root_as_parent) = root.subtrait_mut() {
                                 NodeRenderer {
                                     root_id: root_id,
-                                    frame,
+                                    frame: frame_rect_stack,
                                     force_full_redraw: force_full_redraw,
                                     theme
                                 }.render_node_children(root_as_parent)
@@ -684,7 +685,7 @@ impl<'a, F> NodeRenderer<'a, F>
                             child_node_as_parent.update_child_layout();
                         }
                         if render_self {
-                            child_node_as_parent.render(&mut child_frame, self.theme);
+                            child_node_as_parent.render(&mut child_frame);
                         }
                         if update_child {
                             NodeRenderer {
@@ -700,7 +701,7 @@ impl<'a, F> NodeRenderer<'a, F>
                             let mut child_frame = self.frame.enter_child_node(ident);
                             let mut child_frame = child_frame.enter_child_rect(child_rect);
 
-                            child_node.render(&mut child_frame, self.theme);
+                            child_node.render(&mut child_frame);
                         }
                     }
                 }

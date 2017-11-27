@@ -168,7 +168,7 @@ pub trait Renderer {
     type Frame: RenderFrame;
     #[inline]
     fn force_full_redraw(&self) -> bool {false}
-    fn make_frame(&mut self) -> FrameRectStack<Self::Frame>;
+    fn make_frame(&mut self) -> (&mut Self::Frame, <Self::Frame as RenderFrame>::Transform);
     fn finish_frame(&mut self, theme: &<Self::Frame as RenderFrame>::Theme);
 }
 
@@ -177,7 +177,7 @@ pub trait RenderFrame {
     type Theme: Theme;
     type Primitive: Copy;
 
-    fn upload_primitives<I>(&mut self, from: &[NodeIdent], transform: &Self::Transform, prim_iter: I)
+    fn upload_primitives<I>(&mut self, node_ident: &[NodeIdent], theme: &Self::Theme, transform: &Self::Transform, prim_iter: I)
         where I: Iterator<Item=Self::Primitive>;
     fn child_rect_transform(self_transform: &Self::Transform, child_rect: BoundRect<u32>) -> Self::Transform;
 }
@@ -191,15 +191,18 @@ pub trait Theme {
 pub struct FrameRectStack<'a, F: 'a + RenderFrame> {
     frame: &'a mut F,
     transform: F::Transform,
-    node_ident: Option<&'a mut Vec<NodeIdent>>,
+
+    theme: &'a F::Theme,
+
     pop_node_ident: bool,
+    node_ident: &'a mut Vec<NodeIdent>,
 }
 
 pub trait Node<A, F: RenderFrame> {
     fn update_tag(&self) -> &UpdateTag;
     fn bounds(&self) -> BoundRect<u32>;
     fn bounds_mut(&mut self) -> &mut BoundRect<u32>;
-    fn render(&self, frame: &mut FrameRectStack<F>, theme: &F::Theme);
+    fn render(&self, frame: &mut FrameRectStack<F>);
     fn on_node_event(&mut self, event: NodeEvent) -> Option<A>;
     fn subtrait(&self) -> NodeSubtrait<A, F>;
     fn subtrait_mut(&mut self) -> NodeSubtraitMut<A, F>;
@@ -308,12 +311,21 @@ impl RootID {
 
 impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
     #[inline]
-    pub fn new(frame: &'a mut F, base_transform: F::Transform) -> FrameRectStack<'a, F> {
+    pub(crate) fn new(
+        frame: &'a mut F,
+        base_transform: F::Transform,
+        theme: &'a F::Theme,
+        node_ident_vec: &'a mut Vec<NodeIdent>
+    ) -> FrameRectStack<'a, F>
+    {
         FrameRectStack {
             frame,
-            node_ident: None,
+            transform: base_transform,
+
+            theme,
+
             pop_node_ident: false,
-            transform: base_transform
+            node_ident: node_ident_vec
         }
     }
 
@@ -321,8 +333,8 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
     pub fn upload_primitives<I>(&mut self, prim_iter: I)
         where I: Iterator<Item=F::Primitive>
     {
-        let node_ident = self.node_ident.as_ref().map(|n| &n[..]).unwrap_or(&[]);
-        self.frame.upload_primitives(node_ident, &self.transform, prim_iter)
+        let node_ident = &self.node_ident;
+        self.frame.upload_primitives(node_ident, self.theme, &self.transform, prim_iter)
     }
 
     #[inline]
@@ -330,22 +342,19 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
         FrameRectStack {
             frame: self.frame,
             transform: F::child_rect_transform(&self.transform, child_rect),
-            node_ident: self.node_ident.as_mut().map(|n| &mut **n),
+            theme: self.theme,
+            node_ident: self.node_ident,
             pop_node_ident: false,
         }
     }
 
-    pub(crate) fn set_ident_vec(&mut self, vec: &'a mut Vec<NodeIdent>) {
-        self.node_ident = Some(vec);
-    }
-
     pub(crate) fn enter_child_node<'b>(&'b mut self, child_ident: NodeIdent) -> FrameRectStack<'b, F> {
-        assert_ne!(self.node_ident, None);
-        self.node_ident.as_mut().unwrap().push(child_ident);
+        self.node_ident.push(child_ident);
         FrameRectStack {
             frame: self.frame,
             transform: self.transform,
-            node_ident: self.node_ident.as_mut().map(|n| &mut **n),
+            theme: self.theme,
+            node_ident: self.node_ident,
             pop_node_ident: true,
         }
     }
@@ -354,7 +363,7 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
 impl<'a, F: RenderFrame> Drop for FrameRectStack<'a, F> {
     fn drop(&mut self) {
         if self.pop_node_ident {
-            self.node_ident.as_mut().unwrap().pop().expect("Too many pops");
+            self.node_ident.pop().expect("Too many pops");
         }
     }
 }
