@@ -173,11 +173,11 @@ pub trait Renderer {
 }
 
 pub trait RenderFrame {
-    type Transform;
+    type Transform: Copy;
     type Theme: Theme;
     type Primitive: Copy;
 
-    fn upload_primitives<I>(&mut self, transform: &Self::Transform, prim_iter: I)
+    fn upload_primitives<I>(&mut self, from: &[NodeIdent], transform: &Self::Transform, prim_iter: I)
         where I: Iterator<Item=Self::Primitive>;
     fn child_rect_transform(self_transform: &Self::Transform, child_rect: BoundRect<u32>) -> Self::Transform;
 }
@@ -190,7 +190,9 @@ pub trait Theme {
 
 pub struct FrameRectStack<'a, F: 'a + RenderFrame> {
     frame: &'a mut F,
-    transform: F::Transform
+    transform: F::Transform,
+    node_ident: Option<&'a mut Vec<NodeIdent>>,
+    pop_node_ident: bool,
 }
 
 pub trait Node<A, F: RenderFrame> {
@@ -309,6 +311,8 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
     pub fn new(frame: &'a mut F, base_transform: F::Transform) -> FrameRectStack<'a, F> {
         FrameRectStack {
             frame,
+            node_ident: None,
+            pop_node_ident: false,
             transform: base_transform
         }
     }
@@ -317,14 +321,40 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
     pub fn upload_primitives<I>(&mut self, prim_iter: I)
         where I: Iterator<Item=F::Primitive>
     {
-        self.frame.upload_primitives(&self.transform, prim_iter)
+        let node_ident = self.node_ident.as_ref().map(|n| &n[..]).unwrap_or(&[]);
+        self.frame.upload_primitives(node_ident, &self.transform, prim_iter)
     }
 
     #[inline]
     pub fn enter_child_rect<'b>(&'b mut self, child_rect: BoundRect<u32>) -> FrameRectStack<'b, F> {
         FrameRectStack {
             frame: self.frame,
-            transform: F::child_rect_transform(&self.transform, child_rect)
+            transform: F::child_rect_transform(&self.transform, child_rect),
+            node_ident: self.node_ident.as_mut().map(|n| &mut **n),
+            pop_node_ident: false,
+        }
+    }
+
+    pub(crate) fn set_ident_vec(&mut self, vec: &'a mut Vec<NodeIdent>) {
+        self.node_ident = Some(vec);
+    }
+
+    pub(crate) fn enter_child_node<'b>(&'b mut self, child_ident: NodeIdent) -> FrameRectStack<'b, F> {
+        assert_ne!(self.node_ident, None);
+        self.node_ident.as_mut().unwrap().push(child_ident);
+        FrameRectStack {
+            frame: self.frame,
+            transform: self.transform,
+            node_ident: self.node_ident.as_mut().map(|n| &mut **n),
+            pop_node_ident: true,
+        }
+    }
+}
+
+impl<'a, F: RenderFrame> Drop for FrameRectStack<'a, F> {
+    fn drop(&mut self) {
+        if self.pop_node_ident {
+            self.node_ident.as_mut().unwrap().pop().expect("Too many pops");
         }
     }
 }

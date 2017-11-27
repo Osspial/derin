@@ -21,7 +21,7 @@ use dat::SkylineAtlas;
 use std::cmp;
 use std::cell::Cell;
 use std::collections::HashMap;
-use core::tree::{Renderer, RenderFrame, Theme, FrameRectStack};
+use core::tree::{Renderer, NodeIdent, RenderFrame, Theme, FrameRectStack};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Border<T> {
@@ -138,6 +138,7 @@ impl Renderer for GLRenderer {
         let (width, height) = self.window.get_inner_size().unwrap();
         self.render_state.viewport = DimsRect::new(width, height).into();
         self.frame.window_dims = DimsRect::new(width as f32, height as f32);
+
         FrameRectStack::new(&mut self.frame, BoundRect::new(0, 0, width, height))
     }
 
@@ -171,7 +172,7 @@ impl RenderFrame for GLFrame {
     type Primitive = DrawImage;
     type Theme = IconAtlas;
 
-    fn upload_primitives<I>(&mut self, transform: &BoundRect<u32>, prim_iter: I)
+    fn upload_primitives<I>(&mut self, _: &[NodeIdent], transform: &BoundRect<u32>, prim_iter: I)
         where I: Iterator<Item=DrawImage>
     {
         let iter_mapped = prim_iter

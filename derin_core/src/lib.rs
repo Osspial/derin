@@ -36,6 +36,7 @@ pub struct Root<A, N, F>
     node_stack_base: NodeStackBase<A, F>,
     force_full_redraw: bool,
     event_stamp: u32,
+    node_ident_stack: Vec<NodeIdent>,
     pub root_node: N,
     pub theme: F::Theme,
     _marker: PhantomData<*const F>
@@ -74,6 +75,7 @@ impl<A, N, F> Root<A, N, F>
             node_stack_base: NodeStackBase::new(),
             force_full_redraw: false,
             event_stamp: 1,
+            node_ident_stack: Vec::new(),
             root_node, theme,
             _marker: PhantomData
         }
@@ -94,6 +96,7 @@ impl<A, N, F> Root<A, N, F>
             ref mut root_node,
             ref mut theme,
             ref mut event_stamp,
+            ref mut node_ident_stack,
             ..
         } = *self;
         // Initialize node stack to root.
@@ -608,6 +611,7 @@ impl<A, N, F> Root<A, N, F>
                 if root_update.render_self || root_update.update_child {
                     {
                         let mut frame = renderer.make_frame();
+                        frame.set_ident_vec(node_ident_stack);
                         if let NodeSubtraitMut::Parent(root_as_parent) = root.subtrait_mut() {
                             if root_update.update_layout {
                                 root_as_parent.update_child_layout();
@@ -657,7 +661,7 @@ impl<'a, F> NodeRenderer<'a, F>
             for summary in children_summaries {
                 let NodeSummary {
                     node: ref mut child_node,
-                    ident: _,
+                    ident,
                     rect: child_rect,
                     update_tag: _
                 } = *summary;
@@ -673,7 +677,8 @@ impl<'a, F> NodeRenderer<'a, F>
 
                 match child_node.subtrait_mut() {
                     NodeSubtraitMut::Parent(child_node_as_parent) => {
-                        let mut child_frame = self.frame.enter_child_rect(child_rect);
+                        let mut child_frame = self.frame.enter_child_node(ident);
+                        let mut child_frame = child_frame.enter_child_rect(child_rect);
 
                         if update_layout {
                             child_node_as_parent.update_child_layout();
@@ -692,7 +697,10 @@ impl<'a, F> NodeRenderer<'a, F>
                     },
                     NodeSubtraitMut::Node(child_node) => {
                         if render_self {
-                            child_node.render(&mut self.frame.enter_child_rect(child_rect), self.theme);
+                            let mut child_frame = self.frame.enter_child_node(ident);
+                            let mut child_frame = child_frame.enter_child_rect(child_rect);
+
+                            child_node.render(&mut child_frame, self.theme);
                         }
                     }
                 }
