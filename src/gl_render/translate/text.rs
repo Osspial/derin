@@ -76,15 +76,15 @@ impl<'a> Iterator for TextTranslate<'a> {
                                 dpi,
                                 ..
                             } = *self;
-                            let color = text_style.color;
 
                             let face_size = FaceSize::new(text_style.face_size, text_style.face_size);
 
                             let render_mode = RenderMode::Normal;
                             let (atlas_rect, glyph_bearing) = atlas.glyph_rect(
-                                text_style,
+                                text_style.face.clone(),
+                                text_style.face_size,
                                 next_glyph.glyph_index,
-                                |_, _| {
+                                || {
                                     let glyph_res = face.load_glyph(
                                         next_glyph.glyph_index,
                                         face_size,

@@ -183,7 +183,7 @@ impl Default for SizeBounds {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Margins<T> {
     pub left: T,
     pub top: T,

@@ -93,7 +93,7 @@ impl Translator {
 
             match (prim.prim, node_theme.icon, node_theme.text) {
                 (Prim::Image, Some(image), _) => {
-                    let atlas_rect = atlas.image_rect(theme_path, |_| (&image.pixels, image.dims)).cast::<u16>().unwrap();
+                    let atlas_rect = atlas.image_rect(theme_path, || (&image.pixels, image.dims)).cast::<u16>().unwrap();
 
                     vertex_buf.extend(ImageTranslate::new(
                         abs_rect,

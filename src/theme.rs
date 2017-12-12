@@ -11,40 +11,34 @@ use std::collections::HashMap;
 
 use core::tree::Theme as CoreTheme;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Image {
     pub pixels: Vec<Rgba<Nu8>>,
     pub dims: DimsRect<u32>,
     pub rescale: RescaleRules
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RescaleRules {
     Stretch,
     Slice(Margins<u16>)
 }
 
-#[derive(Debug, Clone)]
-pub enum Layer {
-    Image(Rc<Image>),
-    Text(ThemeText)
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ThemeText {
     pub face: ThemeFace,
     pub color: Rgba<Nu8>,
     pub face_size: u32
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ThemeNode {
     pub text: Option<ThemeText>,
     pub icon: Option<Rc<Image>>,
 }
 
 /// Reference-counted face handle. This is cheap to clone.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ThemeFace {
     font_path: Rc<Path>,
     face_index: i32
