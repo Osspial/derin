@@ -4,16 +4,24 @@ extern crate derin_macros;
 extern crate glutin;
 extern crate png;
 
+extern crate gl_raii;
+
 use derin::dct::buttons::MouseButton;
 use derin::dct::hints::{WidgetHints, NodeSpan, GridSize, Margins};
 use derin::{ButtonHandler, NodeLayout, Button, Group};
-use derin::gl_render::{Border, GLRenderer};
+use derin::gl_render::GLRenderer;
 use derin::core::{LoopFlow, Root, WindowEvent};
 use derin::core::tree::NodeIdent;
+use derin::theme::{ThemeText, ThemeFace, RescaleRules};
+use derin::geometry::{Point2, DimsRect, Rectangle};
+
+use gl_raii::colors::Rgba;
+use gl_raii::glsl::Nu8;
+
+use std::rc::Rc;
 
 use glutin::{Event, ControlFlow, WindowEvent as GWindowEvent, MouseButton as GMouseButton, ElementState};
 
-use derin::geometry::{Point2, DimsRect, Rectangle};
 
 enum GalleryEvent {}
 
@@ -49,12 +57,12 @@ impl NodeLayout for BasicLayout {
         match node_ident {
             NodeIdent::Str("button") => Some(WidgetHints {
                 node_span: NodeSpan::new(0, 0),
-                margins: Margins::new(16, 16, 16, 16),
+                margins: Margins::new(16, 100, 16, 16),
                 ..WidgetHints::default()
             }),
             NodeIdent::Str("nested") => Some(WidgetHints {
                 node_span: NodeSpan::new(1, 0),
-                margins: Margins::new(16, 16, 16, 16),
+                margins: Margins::new(16, 16, 16, 100),
                 ..WidgetHints::default()
             }),
             _ => None
@@ -89,10 +97,10 @@ impl NodeLayout for BasicLayoutVertical {
 fn main() {
     let group = Group::new(
         BasicContainer {
-            button: Button::new(BasicHandler),
+            button: Button::new("Hello World!".to_string(), BasicHandler),
             nested: Group::new(NestedContainer {
-                button0: Button::new(BasicHandler),
-                button1: Button::new(BasicHandler)
+                button0: Button::new("tr".to_string(), BasicHandler),
+                button1: Button::new("br".to_string(), BasicHandler)
             }, BasicLayoutVertical)
         },
         BasicLayout
@@ -106,7 +114,7 @@ fn main() {
 
     let mut renderer = unsafe{ GLRenderer::new(&events_loop, window_builder).unwrap() };
 
-    let mut atlas = derin::gl_render::IconAtlas::new();
+    let mut theme = derin::theme::Theme::new();
 
     macro_rules! upload_image {
         ($name:expr, $path:expr, $dims:expr, $border:expr) => {{
@@ -117,16 +125,33 @@ fn main() {
             // Read the next frame. Currently this function should only called once.
             // The default options
             reader.next_frame(&mut image).unwrap();
-            let bnorm_slice = unsafe{ std::slice::from_raw_parts(image.as_ptr() as *const _, image.len()/4) };
-            atlas.upload_icon(
+            theme.insert_node(
                 $name.to_string(),
-                DimsRect::new($dims, $dims),
-                Border::new($border, $border, $border, $border),
-                &bnorm_slice
+                derin::theme::ThemeNode {
+                    text: Some(ThemeText {
+                        face: ThemeFace::new("./tests/DejaVuSans.ttf", 0).unwrap(),
+                        color: Rgba::new(Nu8(255), Nu8(100), Nu8(100), Nu8(255)),
+                        face_size: 16 * 64
+                    }),
+                    icon: Some(Rc::new(derin::theme::Image {
+                        pixels: unsafe {
+                            Vec::from_raw_parts(
+                                image.as_mut_ptr() as *mut _,
+                                image.len() / 4,
+                                image.capacity() / 4
+                            )
+                        },
+                        dims: DimsRect::new($dims, $dims),
+                        rescale: RescaleRules::Slice(Margins::new($border, $border, $border, $border))
+                    }))
+                }
             );
+
+            ::std::mem::forget(image);
         }}
     }
 
+    upload_image!("Group", "../group.png", 3, 1);
     upload_image!("Button::Normal", "../button.normal.png", 32, 4);
     upload_image!("Button::Hover", "../button.hover.png", 32, 4);
     upload_image!("Button::Clicked", "../button.clicked.png", 32, 4);

@@ -38,7 +38,7 @@ pub struct GridEngine {
     /// The size bounds of the engine, accounting for the size bounds of the widgets.
     actual_size_bounds: SizeBounds,
     /// The margins that appear around the outside of the widget grid
-    pub grid_margins: Margins
+    pub grid_margins: Margins<Px>
 }
 
 impl UpdateHeapCache {
@@ -535,7 +535,7 @@ impl CellHinter {
         }
     }
 
-    pub fn hint(&self, bounds: SizeBounds, margins: Margins) -> Result<BoundRect<Px>, HintError> {
+    pub fn hint(&self, bounds: SizeBounds, margins: Margins<Px>) -> Result<BoundRect<Px>, HintError> {
         let margins_x = margins.left + margins.right;
         let margins_y = margins.top + margins.bottom;
 

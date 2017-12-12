@@ -1,7 +1,7 @@
 use Px;
 use num_traits::Bounded;
 use cgmath_geometry::{DimsRect, Rectangle};
-use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
+use std::ops::{Add, Range, RangeFrom, RangeFull, RangeTo};
 
 pub type Tr = u32;
 pub type Fr = f32;
@@ -103,11 +103,11 @@ pub struct WidgetHints {
     pub size_bounds: SizeBounds,
     pub node_span: NodeSpan,
     pub place_in_cell: PlaceInCell,
-    pub margins: Margins
+    pub margins: Margins<Px>
 }
 
 impl WidgetHints {
-    pub fn new(size_bounds: SizeBounds, node_span: NodeSpan, place_in_cell: PlaceInCell, margins: Margins) -> WidgetHints {
+    pub fn new(size_bounds: SizeBounds, node_span: NodeSpan, place_in_cell: PlaceInCell, margins: Margins<Px>) -> WidgetHints {
         WidgetHints {
             size_bounds: size_bounds,
             node_span: node_span,
@@ -183,16 +183,16 @@ impl Default for SizeBounds {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy)]
-pub struct Margins {
-    pub left: Px,
-    pub top: Px,
-    pub right: Px,
-    pub bottom: Px
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Margins<T> {
+    pub left: T,
+    pub top: T,
+    pub right: T,
+    pub bottom: T
 }
 
-impl Margins {
-    pub fn new(left: Px, top: Px, right: Px, bottom: Px) -> Margins {
+impl<T> Margins<T> {
+    pub fn new(left: T, top: T, right: T, bottom: T) -> Margins<T> {
         Margins {
             left: left,
             top: top,
@@ -200,12 +200,18 @@ impl Margins {
             bottom: bottom
         }
     }
+}
 
-    pub fn width(self) -> Px {
+impl<T> Margins<T>
+    where T: Add<Output=T>
+{
+    #[inline(always)]
+    pub fn width(self) -> T {
         self.left + self.right
     }
 
-    pub fn height(self) -> Px {
+    #[inline(always)]
+    pub fn height(self) -> T {
         self.top + self.bottom
     }
 }

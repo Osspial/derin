@@ -1,4 +1,4 @@
-#![feature(splice)]
+#![feature(splice, conservative_impl_trait)]
 
 extern crate cgmath;
 extern crate cgmath_geometry;
@@ -6,7 +6,7 @@ extern crate cgmath_geometry;
 use std::{cmp, mem};
 use std::ops::Range;
 
-use cgmath::Vector2;
+use cgmath::{EuclideanSpace, Vector2};
 use cgmath_geometry::{DimsRect, OffsetRect, Rectangle};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -155,32 +155,71 @@ impl<P: Copy> SkylineAtlas<P> {
         self.max_used_height
     }
 
-    fn insert_over(&mut self, insert_over: InsertOver, image_dims: DimsRect<u32>, image_view: OffsetRect<u32>, image_data: &[P]) -> OffsetRect<u32> {
+    fn insert_over(&mut self, insert_over: InsertOver, image_dims: DimsRect<u32>) -> OffsetRect<u32>
+    {
         let insert_offset = Vector2::new(self.heights[insert_over.range.start].bounds_min, insert_over.height);
 
         let bounds_min = self.heights[insert_over.range.start].bounds_min;
         let insert_range = HeightRange {
             bounds_min,
-            bounds_max: bounds_min + image_view.width(),
-            height: insert_over.height + image_view.height()
+            bounds_max: bounds_min + image_dims.width(),
+            height: insert_over.height + image_dims.height()
         };
-        if insert_over.width == image_view.width() {
+        if insert_over.width == image_dims.width() {
             self.heights.splice(insert_over.range.clone(), Some(insert_range));
         } else {
-            self.heights[insert_over.range.end - 1].bounds_min = bounds_min + image_view.width();
+            self.heights[insert_over.range.end - 1].bounds_min = bounds_min + image_dims.width();
             self.heights.splice(insert_over.range.start..insert_over.range.end - 1, Some(insert_range));
         }
         self.max_used_height = cmp::max(self.max_used_height, insert_range.height);
 
-        let insert_rect = OffsetRect::from(image_view) + insert_offset;
-        self.blit(image_dims, image_view, insert_offset, image_data);
-        insert_rect
+        OffsetRect::from(image_dims) + insert_offset
     }
 
     pub fn add_image(&mut self, image_dims: DimsRect<u32>, image_view: OffsetRect<u32>, image_data: &[P]) -> Option<OffsetRect<u32>> {
-        match self.calc_insert_over(DimsRect{ dims: image_view.dims() }) {
-            Some(range) => Some(self.insert_over(range, image_dims, image_view, image_data)),
-            None => None
+        self.add_image_rows(DimsRect{ dims: image_view.dims() }, rows_from_image(image_dims, image_view, image_data)).ok()
+    }
+
+    pub fn add_image_rows<'a, I>(&mut self, image_dims: DimsRect<u32>, image_data: I) -> Result<OffsetRect<u32>, I>
+        where I: IntoIterator<Item=&'a [P]>,
+              P: 'a
+    {
+        match self.calc_insert_over(image_dims) {
+            Some(range) => {
+                let insert_rect = self.insert_over(range, image_dims);
+                self.blit_rows(image_dims, insert_rect.min().to_vec(), image_data);
+                Ok(insert_rect)
+            },
+            None => Err(image_data)
+        }
+    }
+
+    pub fn add_image_pixels<'a, I, J>(&mut self, image_dims: DimsRect<u32>, image_data: I) -> Result<OffsetRect<u32>, I>
+        where I: IntoIterator<Item=J>,
+              J: IntoIterator<Item=P>
+    {
+        match self.calc_insert_over(image_dims) {
+            Some(range) =>{
+                let insert_rect = self.insert_over(range, image_dims);
+                self.blit_pixels(image_dims, insert_rect.min().to_vec(), image_data);
+                Ok(insert_rect)
+            },
+            None => Err(image_data)
+        }
+    }
+
+    pub fn clear(&mut self, background_color: Option<P>) {
+        self.heights.clear();
+        self.heights.push(HeightRange {
+            bounds_min: 0,
+            bounds_max: self.dims.width(),
+            height: 0
+        });
+
+        if let Some(bgc) = background_color {
+            for pixel in &mut self.pixels {
+                *pixel = bgc;
+            }
         }
     }
 
@@ -237,12 +276,15 @@ impl<P: Copy> SkylineAtlas<P> {
             }
 
             let remove_rect = rects_sorted.remove(best_insert_index);
-            *remove_rect.1 = self.insert_over(best_insert_over, dims, remove_rect.0, &old_pixels);
+            *remove_rect.1 = self.insert_over(
+                best_insert_over,
+                DimsRect{ dims: remove_rect.0.dims() }
+            );
+            self.blit(dims, remove_rect.0, remove_rect.1.min().to_vec(), &old_pixels);
             removed_rects.push(remove_rect);
         }
 
         if reset_atlas {
-            println!("reset");
             self.pixels = old_pixels;
             self.heights = old_heights;
             for (old_rect, rect_ref) in rects_sorted.drain(..).chain(removed_rects.drain(..)) {
@@ -253,9 +295,23 @@ impl<P: Copy> SkylineAtlas<P> {
 
     pub fn blit(&mut self, image_dims: DimsRect<u32>, image_view: OffsetRect<u32>, write_offset: Vector2<u32>, image_data: &[P]) {
         blit(
-            image_data, image_dims, image_view,
+            rows_from_image(image_dims, image_view, image_data), DimsRect{ dims: image_view.dims() },
             &mut self.pixels, self.dims, write_offset
         );
+    }
+
+    pub fn blit_rows<'a, I>(&mut self, image_dims: DimsRect<u32>, write_offset: Vector2<u32>, image_data: I)
+        where I: IntoIterator<Item=&'a [P]>,
+              P: 'a
+    {
+        blit(image_data, image_dims, &mut self.pixels, self.dims, write_offset);
+    }
+
+    pub fn blit_pixels<'a, I, J>(&mut self, image_dims: DimsRect<u32>, write_offset: Vector2<u32>, image_data: I)
+        where I: IntoIterator<Item=J>,
+              J: IntoIterator<Item=P>
+    {
+        blit_pixels(image_data, image_dims, &mut self.pixels, self.dims, write_offset);
     }
 }
 
@@ -266,21 +322,58 @@ impl HeightRange {
     }
 }
 
-fn blit<P: Copy>(
-    src: &[P], src_dims: DimsRect<u32>, src_copy_from: OffsetRect<u32>,
+fn rows_from_image<'a, P: 'a>(image_dims: DimsRect<u32>, image_view: OffsetRect<u32>, image_data: &'a [P]) -> impl Iterator<Item=&'a [P]> {
+    (image_view.min().y as usize..image_view.max().y as usize)
+        .map(move |r| &image_data[
+            image_dims.width() as usize * r + image_view.min().x as usize..
+            image_dims.width() as usize * r + image_view.min().x as usize + image_view.width() as usize
+        ])
+}
+
+fn blit<'a, P: 'a + Copy, I: IntoIterator<Item=&'a [P]>>(
+    src: I, src_dims: DimsRect<u32>,
     dst: &mut [P], dst_dims: DimsRect<u32>, dst_offset: Vector2<u32>
 ) {
-    for row_num in 0..src_copy_from.height() as usize {
+    let (mut width, mut height) = (src_dims.width(), 0);
+    for (row_num, src_row) in src.into_iter().enumerate() {
         let dst_row_num = row_num + dst_offset.y as usize;
         let dst_slice_offset = dst_row_num * dst_dims.width() as usize;
         let dst_row = &mut dst[dst_slice_offset..dst_slice_offset + dst_dims.width() as usize];
 
-        let src_row_num = row_num + src_copy_from.min().y as usize;
-        let src_slice_offset = src_row_num * src_dims.width() as usize;
-        let src_row = &src[src_slice_offset..src_slice_offset + src_dims.width() as usize];
+        let dst_copy_to_slice = &mut dst_row[dst_offset.x as usize..dst_offset.x as usize + src_row.len()];
+        dst_copy_to_slice.copy_from_slice(src_row);
 
-        let src_copy_slice = &src_row[src_copy_from.min().x as usize..src_copy_from.max().x as usize];
-        let dst_copy_to_slice = &mut dst_row[dst_offset.x as usize..(dst_offset.x + src_copy_from.width()) as usize];
-        dst_copy_to_slice.copy_from_slice(src_copy_slice);
+        height += 1;
+        width &= src_row.len() as u32;
     }
+
+    assert_eq!(src_dims, DimsRect::new(width, height));
+}
+
+fn blit_pixels<'a, P, I, J>(
+    src: I, src_dims: DimsRect<u32>,
+    dst: &mut [P], dst_dims: DimsRect<u32>, dst_offset: Vector2<u32>
+)
+    where I: IntoIterator<Item=J>,
+          J: IntoIterator<Item=P>
+{
+    let (mut width, mut height) = (src_dims.width(), 0);
+    for (row_num, src_row) in src.into_iter().enumerate() {
+        let dst_row_num = row_num + dst_offset.y as usize;
+        let dst_slice_offset = dst_row_num * dst_dims.width() as usize;
+        let dst_row = &mut dst[dst_slice_offset..dst_slice_offset + dst_dims.width() as usize];
+
+        let dst_copy_to_slice = &mut dst_row[dst_offset.x as usize..];
+        let mut src_row_len = 0;
+
+        for (p, v) in dst_copy_to_slice.iter_mut().zip(src_row.into_iter()) {
+            *p = v;
+            src_row_len += 1;
+        }
+
+        height += 1;
+        width &= src_row_len;
+    }
+
+    assert_eq!(src_dims, DimsRect::new(width, height));
 }
