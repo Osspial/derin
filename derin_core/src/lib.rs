@@ -399,6 +399,15 @@ impl<A, N, F> Root<A, N, F>
                                     }
                                 }
                             }
+                        } else if let MouseState::Untracked = update_tag_copy.mouse_state.get() {
+                            // If we enter an untracked state, that means we've recieved a MouseMove event without a MouseEnter
+                            // event. So, set the root as hover and re-calculate from there.
+                            let root = node_stack.move_to_root();
+
+                            let top_update_tag = mark_if_needs_update!(root);
+                            let top_mbseq = top_update_tag.mouse_state.get().mouse_button_sequence();
+                            top_update_tag.mouse_state.set(MouseState::Hovering(new_pos_windowspace, top_mbseq));
+                            continue;
                         } else {
                             // We told the stack to move to the hover node. If that's not where we are, something went
                             // *very* wrong.
