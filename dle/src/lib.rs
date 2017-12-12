@@ -11,7 +11,7 @@ mod grid;
 use dct::Px;
 use cgmath::{Vector2, EuclideanSpace};
 use cgmath_geometry::{DimsRect, Rectangle, BoundRect};
-use dct::hints::{Fr, Tr, PlaceInCell, Place, GridSize, WidgetHints, TrackHints, SizeBounds, Margins};
+use dct::hints::{Fr, Tr, PlaceInCell, Align, GridSize, WidgetHints, TrackHints, SizeBounds, Margins};
 use grid::{TrackVec, SizeResult};
 
 use std::cmp;
@@ -550,7 +550,7 @@ impl CellHinter {
         macro_rules! place_on_axis {
             ($axis:ident, $size:ident, $front_margin:expr, $back_margin:expr) => {
                 match self.place_in_or.$axis {
-                    Place::Stretch => {
+                    Align::Stretch => {
                         inner_rect.min.$axis = self.outer_rect.min.$axis + $front_margin;
                         inner_rect.max.$axis = self.outer_rect.max.$axis - $back_margin;
 
@@ -561,15 +561,15 @@ impl CellHinter {
                             inner_rect.max.$axis -= size_diff / 2;
                         }
                     },
-                    Place::Start => {
+                    Align::Start => {
                         inner_rect.min.$axis = self.outer_rect.min.$axis + $front_margin + $front_margin;
                         inner_rect.max.$axis = self.outer_rect.min.$axis + bounds.min.$size() + $front_margin;
                     },
-                    Place::End => {
+                    Align::End => {
                         inner_rect.max.$axis = self.outer_rect.max.$axis - $back_margin;
                         inner_rect.min.$axis = self.outer_rect.max.$axis - bounds.min.$size() - $back_margin;
                     },
-                    Place::Center => {
+                    Align::Center => {
                         let center = (self.outer_rect.min.$axis + self.outer_rect.max.$axis) / 2;
                         inner_rect.min.$axis = center - bounds.min.$size() / 2;
                         inner_rect.max.$axis = center + bounds.min.$size() / 2;

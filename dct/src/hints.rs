@@ -73,7 +73,7 @@ two_axis_type!{
     pub struct NodeSpan(Into<TrRange>);
 
     #[derive(Default, Debug, Clone, Copy)]
-    pub struct PlaceInCell(Place);
+    pub struct PlaceInCell(Align);
 }
 
 impl Default for NodeSpan {
@@ -83,16 +83,16 @@ impl Default for NodeSpan {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum Place {
+pub enum Align {
     Stretch,
     Start,
     End,
     Center
 }
 
-impl Default for Place {
-    fn default() -> Place {
-        Place::Stretch
+impl Default for Align {
+    fn default() -> Align {
+        Align::Stretch
     }
 }
 
