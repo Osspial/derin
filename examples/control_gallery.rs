@@ -132,16 +132,16 @@ fn main() {
     upload_image!("Button::Clicked", "../button.clicked.png", 32, 4);
 
 
-    let mut root = Root::new(group, atlas, dims);
+    let mut root = Root::new(group, theme, dims);
     root.run_forever(|for_each_event| {
         let mut ret: Option<()> = None;
         events_loop.run_forever(|glutin_event| {
             match glutin_event {
                 Event::WindowEvent{event, ..} => {
                     let derin_event_opt: Option<WindowEvent> = match event {
-                        GWindowEvent::MouseMoved{position, ..} => Some(WindowEvent::MouseMove(Point2::new(position.0 as i32, position.1 as i32))),
-                        GWindowEvent::MouseEntered{..} => Some(WindowEvent::MouseEnter(Point2::new(0, 0))),
-                        GWindowEvent::MouseLeft{..} => Some(WindowEvent::MouseExit(Point2::new(0, 0))),
+                        GWindowEvent::CursorMoved{position, ..} => Some(WindowEvent::MouseMove(Point2::new(position.0 as i32, position.1 as i32))),
+                        GWindowEvent::CursorEntered{..} => Some(WindowEvent::MouseEnter(Point2::new(0, 0))),
+                        GWindowEvent::CursorLeft{..} => Some(WindowEvent::MouseExit(Point2::new(0, 0))),
                         GWindowEvent::MouseInput{state, button: g_button, ..} => {
                             let button = match g_button {
                                 GMouseButton::Left => Some(MouseButton::Left),
@@ -172,6 +172,7 @@ fn main() {
                     }
                 },
                 Event::Awakened |
+                Event::Suspended(..) |
                 Event::DeviceEvent{..} => ()
             }
 
