@@ -93,7 +93,9 @@ impl<P: Copy> SkylineAtlas<P> {
                         lost_width = next_height.width();
                     }
 
-                    active_range.space_lost += lost_width * active_range.height - next_height.height;
+                    if lost_width > 0 {
+                        active_range.space_lost += lost_width * active_range.height - next_height.height;
+                    }
                 }
 
                 active_range.width += next_height.width();
