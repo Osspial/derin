@@ -6,7 +6,7 @@ use std::ops::{Add, Range, RangeFrom, RangeFull, RangeTo};
 pub type Tr = u32;
 pub type Fr = f32;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TrRange {
     pub start: Option<Tr>,
     pub end: Option<Tr>
@@ -63,17 +63,17 @@ impl From<RangeTo<Tr>> for TrRange {
 }
 
 two_axis_type!{
-    #[derive(Default, Debug, Clone, Copy)]
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct NodeSizing(Option<Tr>);
 
-    #[derive(Default, Debug, Clone, Copy)]
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct GridSize(Tr);
 
-    #[derive(Debug, Clone, Copy)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct NodeSpan(Into<TrRange>);
 
-    #[derive(Default, Debug, Clone, Copy)]
-    pub struct PlaceInCell(Align);
+    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub struct Align2(Align);
 }
 
 impl Default for NodeSpan {
@@ -82,7 +82,7 @@ impl Default for NodeSpan {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Align {
     Stretch,
     Start,
@@ -99,16 +99,16 @@ impl Default for Align {
 
 
 #[derive(Default, Debug, Clone, Copy)]
-pub struct WidgetHints {
+pub struct WidgetPos {
     pub size_bounds: SizeBounds,
     pub node_span: NodeSpan,
-    pub place_in_cell: PlaceInCell,
+    pub place_in_cell: Align2,
     pub margins: Margins<Px>
 }
 
-impl WidgetHints {
-    pub fn new(size_bounds: SizeBounds, node_span: NodeSpan, place_in_cell: PlaceInCell, margins: Margins<Px>) -> WidgetHints {
-        WidgetHints {
+impl WidgetPos {
+    pub fn new(size_bounds: SizeBounds, node_span: NodeSpan, place_in_cell: Align2, margins: Margins<Px>) -> WidgetPos {
+        WidgetPos {
             size_bounds: size_bounds,
             node_span: node_span,
             place_in_cell: place_in_cell,

@@ -11,7 +11,7 @@ mod grid;
 use dct::Px;
 use cgmath::{Vector2, EuclideanSpace};
 use cgmath_geometry::{DimsRect, Rectangle, BoundRect};
-use dct::hints::{Fr, Tr, PlaceInCell, Align, GridSize, WidgetHints, TrackHints, SizeBounds, Margins};
+use dct::hints::{Fr, Tr, Align2, Align, GridSize, WidgetPos, TrackHints, SizeBounds, Margins};
 use grid::{TrackVec, SizeResult};
 
 use std::cmp;
@@ -102,7 +102,7 @@ impl GridEngine {
     /// otherwise could cause rendering issues. </sup>
     pub fn update_engine(
         &mut self,
-        hints: &[WidgetHints],
+        hints: &[WidgetPos],
         rects: &mut [Result<BoundRect<Px>, SolveError>],
         heap_cache: &mut UpdateHeapCache
     ) {
@@ -524,11 +524,11 @@ impl Default for SolveAxis {
 #[derive(Debug, Clone, Copy)]
 struct CellHinter {
     outer_rect: BoundRect<Px>,
-    place_in_or: PlaceInCell
+    place_in_or: Align2
 }
 
 impl CellHinter {
-    pub fn new(outer_rect: BoundRect<Px>, place_in_or: PlaceInCell) -> CellHinter {
+    pub fn new(outer_rect: BoundRect<Px>, place_in_or: Align2) -> CellHinter {
         CellHinter {
             outer_rect: outer_rect,
             place_in_or: place_in_or,

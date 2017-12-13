@@ -20,7 +20,7 @@ use self::gl_render::{ThemedPrim, Prim, RelPoint};
 
 use std::cell::RefCell;
 
-use dct::hints::{WidgetHints, GridSize};
+use dct::hints::{WidgetPos, GridSize};
 use dle::{GridEngine, UpdateHeapCache, SolveError};
 use core::LoopFlow;
 use core::tree::{NodeIdent, NodeSummary, UpdateTag, NodeEvent, NodeSubtrait, NodeSubtraitMut, RenderFrame, FrameRectStack, Node, Parent};
@@ -71,7 +71,7 @@ pub trait NodeContainer<F: RenderFrame> {
 }
 
 pub trait NodeLayout {
-    fn hints(&self, node_ident: NodeIdent) -> Option<WidgetHints>;
+    fn hints(&self, node_ident: NodeIdent) -> Option<WidgetPos>;
     fn grid_size(&self) -> GridSize;
 }
 
@@ -349,7 +349,7 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
         #[derive(Default)]
         struct HeapCache {
             update_heap_cache: UpdateHeapCache,
-            hints_vec: Vec<WidgetHints>,
+            hints_vec: Vec<WidgetPos>,
             rects_vec: Vec<Result<BoundRect<u32>, SolveError>>
         }
         thread_local! {
@@ -366,7 +366,7 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
             } = *hc;
 
             self.container.children::<_, ()>(|summary| {
-                hints_vec.push(self.layout.hints(summary.ident).unwrap_or(WidgetHints::default()));
+                hints_vec.push(self.layout.hints(summary.ident).unwrap_or(WidgetPos::default()));
                 rects_vec.push(Ok(BoundRect::new(0, 0, 0, 0)));
                 LoopFlow::Continue
             });

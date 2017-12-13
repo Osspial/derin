@@ -7,7 +7,7 @@ extern crate png;
 extern crate gl_raii;
 
 use derin::dct::buttons::MouseButton;
-use derin::dct::hints::{WidgetHints, NodeSpan, GridSize, Margins};
+use derin::dct::hints::{WidgetPos, NodeSpan, GridSize, Margins};
 use derin::{ButtonHandler, NodeLayout, Button, Group};
 use derin::gl_render::GLRenderer;
 use derin::core::{LoopFlow, Root, WindowEvent};
@@ -53,17 +53,17 @@ impl ButtonHandler for BasicHandler {
 }
 
 impl NodeLayout for BasicLayout {
-    fn hints(&self, node_ident: NodeIdent) -> Option<WidgetHints> {
+    fn hints(&self, node_ident: NodeIdent) -> Option<WidgetPos> {
         match node_ident {
-            NodeIdent::Str("button") => Some(WidgetHints {
+            NodeIdent::Str("button") => Some(WidgetPos {
                 node_span: NodeSpan::new(0, 0),
                 margins: Margins::new(16, 100, 16, 16),
-                ..WidgetHints::default()
+                ..WidgetPos::default()
             }),
-            NodeIdent::Str("nested") => Some(WidgetHints {
+            NodeIdent::Str("nested") => Some(WidgetPos {
                 node_span: NodeSpan::new(1, 0),
                 margins: Margins::new(16, 16, 16, 100),
-                ..WidgetHints::default()
+                ..WidgetPos::default()
             }),
             _ => None
         }
@@ -74,17 +74,17 @@ impl NodeLayout for BasicLayout {
 }
 
 impl NodeLayout for BasicLayoutVertical {
-    fn hints(&self, node_ident: NodeIdent) -> Option<WidgetHints> {
+    fn hints(&self, node_ident: NodeIdent) -> Option<WidgetPos> {
         match node_ident {
-            NodeIdent::Str("button0") => Some(WidgetHints {
+            NodeIdent::Str("button0") => Some(WidgetPos {
                 node_span: NodeSpan::new(0, 0),
                 margins: Margins::new(16, 16, 16, 16),
-                ..WidgetHints::default()
+                ..WidgetPos::default()
             }),
-            NodeIdent::Str("button1") => Some(WidgetHints {
+            NodeIdent::Str("button1") => Some(WidgetPos {
                 node_span: NodeSpan::new(0, 1),
                 margins: Margins::new(16, 16, 16, 16),
-                ..WidgetHints::default()
+                ..WidgetPos::default()
             }),
             _ => None
         }
