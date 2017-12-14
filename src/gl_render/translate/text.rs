@@ -9,7 +9,7 @@ use cgmath_geometry::{BoundRect, DimsRect, OffsetRect, Rectangle};
 use gl_raii::colors::Rgba;
 use gl_raii::glsl::Nu8;
 
-use glyphydog::{ShapedBuffer, ShapedGlyph, Face, FaceSize, DPI, LoadFlags, RenderMode};
+use glyphydog::{ShapedBuffer, ShapedSegment, ShapedGlyph, Face, FaceSize, DPI, LoadFlags, RenderMode};
 
 use std::ops::Range;
 
@@ -32,7 +32,8 @@ struct Line<'a> {
     shaped_text: &'a ShapedBuffer,
     segment_range: Range<usize>,
 
-    cur_segment: usize,
+    cur_segment: Option<ShapedSegment<'a>>,
+    cur_segment_index: usize,
     cur_glyph: usize,
     segment_cursor: i32
 }
@@ -198,11 +199,26 @@ impl<'a> Line<'a> {
             shaped_text,
             segment_range: index..end_index,
 
-            cur_segment: 0,
+            cur_segment: shaped_text.get_segment(index).map(trim_segment),
+            cur_segment_index: 0,
             cur_glyph: 0,
             segment_cursor: 0
         }
     }
+}
+
+fn trim_segment(mut seg: ShapedSegment) -> ShapedSegment {
+    let text_trimmed = seg.text.trim_right();
+    let glyphs = seg.shaped_glyphs;
+    for glyph in glyphs.iter().rev() {
+        if glyph.word_str_index < text_trimmed.len() {
+            break;
+        }
+
+        seg.shaped_glyphs = &seg.shaped_glyphs[..seg.shaped_glyphs.len() - 1];
+    }
+
+    seg
 }
 
 impl<'a> Iterator for Line<'a> {
@@ -211,24 +227,27 @@ impl<'a> Iterator for Line<'a> {
     #[inline(always)]
     fn next(&mut self) -> Option<ShapedGlyph> {
         loop {
-            if self.cur_segment >= self.segment_range.len() {
+            if self.cur_segment_index >= self.segment_range.len() {
                 return None;
             }
 
-            // Bounds check should have been done in line creation;
-            let segment = self.shaped_text.get_segment(self.segment_range.start + self.cur_segment).unwrap();
-
-            match segment.shaped_glyphs.get(self.cur_glyph).cloned() {
-                Some(mut glyph) => {
-                    self.cur_glyph += 1;
-                    glyph.pos.x += self.segment_cursor;
-                    return Some(glyph);
-                }
-                None => {
-                    self.cur_segment += 1;
-                    self.cur_glyph = 0;
-                    self.segment_cursor += segment.advance;
-                }
+            match self.cur_segment {
+                Some(segment) => match segment.shaped_glyphs.get(self.cur_glyph).cloned() {
+                    Some(mut glyph) => {
+                        self.cur_glyph += 1;
+                        glyph.pos.x += self.segment_cursor;
+                        return Some(glyph);
+                    },
+                    None => {
+                        self.cur_segment_index += 1;
+                        self.cur_glyph = 0;
+                        self.segment_cursor += segment.advance;
+                        self.cur_segment = None;
+                    }
+                },
+                None => self.cur_segment = self.shaped_text
+                    .get_segment(self.segment_range.start + self.cur_segment_index)
+                    .map(trim_segment)
             }
         }
     }

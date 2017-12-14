@@ -97,7 +97,7 @@ impl NodeLayout for BasicLayoutVertical {
 fn main() {
     let group = Group::new(
         BasicContainer {
-            button: Button::new("Hello World!".to_string(), BasicHandler),
+            button: Button::new("Hello\n\tWorld!".to_string(), BasicHandler),
             nested: Group::new(NestedContainer {
                 button0: Button::new("tr".to_string(), BasicHandler),
                 button1: Button::new("br".to_string(), BasicHandler)
