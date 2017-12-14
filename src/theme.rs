@@ -28,7 +28,8 @@ pub enum RescaleRules {
 pub struct ThemeText {
     pub face: ThemeFace,
     pub color: Rgba<Nu8>,
-    pub face_size: u32
+    pub face_size: u32,
+    pub tab_size: u32
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

@@ -25,7 +25,9 @@ pub(in gl_render) struct TextTranslate<'a> {
     active_line: Line<'a>,
     line_num: u32,
 
-    glyph_verts: Option<ImageTranslate>
+    glyph_verts: Option<ImageTranslate>,
+
+    tab_stop: TabStop
 }
 
 struct Line<'a> {
@@ -35,7 +37,17 @@ struct Line<'a> {
     cur_segment: Option<ShapedSegment<'a>>,
     cur_segment_index: usize,
     cur_glyph: usize,
-    segment_cursor: i32
+    segment_cursor: i32,
+    segment_glyph_offset: i32,
+
+    tab_stop: TabStop
+}
+
+#[derive(Clone, Copy)]
+struct TabStop {
+    glyph_index: u32,
+    tab_glyph_advance: i32,
+    advance: i32
 }
 
 impl<'a> TextTranslate<'a> {
@@ -47,14 +59,38 @@ impl<'a> TextTranslate<'a> {
         dpi: DPI,
         atlas: &'a mut Atlas
     ) -> TextTranslate<'a> {
+        let tab_glyph_index = face.char_index('\t');
+        let space_glyph_index = face.char_index(' ');
+
+        let tab_glyph_advance = (face.glyph_advance(
+            tab_glyph_index,
+            FaceSize::new(text_style.face_size, text_style.face_size),
+            dpi,
+            LoadFlags::empty()
+        ).unwrap() + (1 << 15)) >> 16;
+        let space_glyph_advance = (face.glyph_advance(
+            space_glyph_index,
+            FaceSize::new(text_style.face_size, text_style.face_size),
+            dpi,
+            LoadFlags::empty()
+        ).unwrap() + (1 << 15)) >> 16;
+
+        let tab_stop = TabStop {
+            glyph_index: tab_glyph_index,
+            tab_glyph_advance,
+            advance: space_glyph_advance * text_style.tab_size as i32
+        };
+
         TextTranslate {
             shaped_text, face, atlas, text_style, dpi,
 
             rect,
-            active_line: Line::from_segments(0, rect.width(), shaped_text),
+            active_line: Line::from_segments(0, rect.width(), tab_stop, shaped_text),
             line_num: 0,
 
-            glyph_verts: None
+            glyph_verts: None,
+
+            tab_stop
         }
     }
 }
@@ -154,6 +190,7 @@ impl<'a> Iterator for TextTranslate<'a> {
                                 self.active_line = Line::from_segments(
                                     self.active_line.segment_range.end,
                                     self.rect.width(),
+                                    self.tab_stop,
                                     self.shaped_text
                                 );
                                 self.line_num += 1;
@@ -168,57 +205,47 @@ impl<'a> Iterator for TextTranslate<'a> {
 }
 
 impl<'a> Line<'a> {
-    fn from_segments(index: usize, max_len_px: u32, shaped_text: &'a ShapedBuffer) -> Line<'a> {
-        let mut end_index = index;
-        let mut len_px = 0;
+    fn from_segments(index: usize, max_len_px: u32, tab_stop: TabStop, shaped_text: &'a ShapedBuffer) -> Line<'a> {
+        let end_index: usize;
 
-        while let Some(segment) = shaped_text.get_segment(end_index) {
-            // if segment.advance < 0 {
-            //     // TODO: LOG NEGATIVE ADVANCE
-            // }
-            if segment.advance + len_px as i32 > max_len_px as i32 {
-                break;
+        {
+            let mut lit = Line {
+                shaped_text,
+                segment_range: index..shaped_text.segments_len(),
+
+                cur_segment: shaped_text.get_segment(index),
+                cur_segment_index: 0,
+                cur_glyph: 0,
+                segment_cursor: 0,
+                segment_glyph_offset: 0,
+
+                tab_stop
+            };
+            while let Some(glyph) = lit.next() {
+                if glyph.pos.x + glyph.advance.x > max_len_px as i32 {
+                    break;
+                }
             }
 
-            len_px += segment.advance as u32;
-            end_index += 1;
-
-            if segment.hard_break {
-                break;
-            }
-        }
-
-        if end_index == index && shaped_text.get_segment(end_index).is_some() {
-            if let Some(_) = shaped_text.get_segment(end_index) {
-                end_index += 1;
-                // len_px += segment.advance as u32;
-            }
+            end_index = match lit.cur_segment_index {
+                0 => index + 1,
+                _ => lit.cur_segment_index + index
+            };
         }
 
         Line {
             shaped_text,
             segment_range: index..end_index,
 
-            cur_segment: shaped_text.get_segment(index).map(trim_segment),
+            cur_segment: shaped_text.get_segment(index),
             cur_segment_index: 0,
             cur_glyph: 0,
-            segment_cursor: 0
+            segment_cursor: 0,
+            segment_glyph_offset: 0,
+
+            tab_stop
         }
     }
-}
-
-fn trim_segment(mut seg: ShapedSegment) -> ShapedSegment {
-    let text_trimmed = seg.text.trim_right();
-    let glyphs = seg.shaped_glyphs;
-    for glyph in glyphs.iter().rev() {
-        if glyph.word_str_index < text_trimmed.len() {
-            break;
-        }
-
-        seg.shaped_glyphs = &seg.shaped_glyphs[..seg.shaped_glyphs.len() - 1];
-    }
-
-    seg
 }
 
 impl<'a> Iterator for Line<'a> {
@@ -235,19 +262,26 @@ impl<'a> Iterator for Line<'a> {
                 Some(segment) => match segment.shaped_glyphs.get(self.cur_glyph).cloned() {
                     Some(mut glyph) => {
                         self.cur_glyph += 1;
-                        glyph.pos.x += self.segment_cursor;
-                        return Some(glyph);
+                        glyph.pos.x += self.segment_cursor + self.segment_glyph_offset;
+
+                        match segment.text[glyph.word_str_index..].chars().next().unwrap_or(' ').is_whitespace() {
+                            false => return Some(glyph),
+                            true if glyph.glyph_index == self.tab_stop.glyph_index => {
+                                let advance_to_stop = self.tab_stop.advance - (glyph.pos.x % self.tab_stop.advance);
+                                self.segment_glyph_offset += advance_to_stop - self.tab_stop.tab_glyph_advance;
+                            },
+                            true => continue
+                        }
                     },
                     None => {
                         self.cur_segment_index += 1;
                         self.cur_glyph = 0;
-                        self.segment_cursor += segment.advance;
+                        self.segment_cursor += segment.advance + self.segment_glyph_offset;
+                        self.segment_glyph_offset = 0;
                         self.cur_segment = None;
                     }
                 },
-                None => self.cur_segment = self.shaped_text
-                    .get_segment(self.segment_range.start + self.cur_segment_index)
-                    .map(trim_segment)
+                None => self.cur_segment = self.shaped_text.get_segment(self.segment_range.start + self.cur_segment_index)
             }
         }
     }
