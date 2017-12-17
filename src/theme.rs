@@ -2,7 +2,7 @@ use gl_raii::colors::Rgba;
 use gl_raii::glsl::Nu8;
 
 use cgmath_geometry::DimsRect;
-use dct::hints::Margins;
+use dct::hints::{Align2, Margins};
 
 use std::io;
 use std::rc::Rc;
@@ -29,7 +29,8 @@ pub struct ThemeText {
     pub face: ThemeFace,
     pub color: Rgba<Nu8>,
     pub face_size: u32,
-    pub tab_size: u32
+    pub tab_size: u32,
+    pub justify: Align2
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

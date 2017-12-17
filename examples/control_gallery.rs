@@ -7,7 +7,7 @@ extern crate png;
 extern crate gl_raii;
 
 use derin::dct::buttons::MouseButton;
-use derin::dct::hints::{WidgetPos, NodeSpan, GridSize, Margins};
+use derin::dct::hints::{WidgetPos, NodeSpan, GridSize, Margins, Align, Align2};
 use derin::{ButtonHandler, NodeLayout, Button, Group};
 use derin::gl_render::GLRenderer;
 use derin::core::{LoopFlow, Root, WindowEvent};
@@ -97,9 +97,9 @@ impl NodeLayout for BasicLayoutVertical {
 fn main() {
     let group = Group::new(
         BasicContainer {
-            button: Button::new("Hello \tHello Hello Hello Hello Hello".to_string(), BasicHandler),
+            button: Button::new("Hello \tHello Hello Hello".to_string(), BasicHandler),
             nested: Group::new(NestedContainer {
-                button0: Button::new("tr".to_string(), BasicHandler),
+                button0: Button::new("tr tr".to_string(), BasicHandler),
                 button1: Button::new("br".to_string(), BasicHandler)
             }, BasicLayoutVertical)
         },
@@ -132,7 +132,8 @@ fn main() {
                         face: ThemeFace::new("./tests/DejaVuSans.ttf", 0).unwrap(),
                         color: Rgba::new(Nu8(255), Nu8(100), Nu8(100), Nu8(255)),
                         face_size: 16 * 64,
-                        tab_size: 8
+                        tab_size: 8,
+                        justify: Align2::new(Align::Center, Align::Center),
                     }),
                     icon: Some(Rc::new(derin::theme::Image {
                         pixels: unsafe {
