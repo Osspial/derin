@@ -97,7 +97,7 @@ impl NodeLayout for BasicLayoutVertical {
 fn main() {
     let group = Group::new(
         BasicContainer {
-            button: Button::new("Hello \tHello Hello Hello".to_string(), BasicHandler),
+            button: Button::new("good day\tgood day good day good day good day \nHello Hello".to_string(), BasicHandler),
             nested: Group::new(NestedContainer {
                 button0: Button::new("tr tr".to_string(), BasicHandler),
                 button1: Button::new("br".to_string(), BasicHandler)
@@ -133,7 +133,7 @@ fn main() {
                         color: Rgba::new(Nu8(255), Nu8(100), Nu8(100), Nu8(255)),
                         face_size: 16 * 64,
                         tab_size: 8,
-                        justify: Align2::new(Align::Center, Align::Center),
+                        justify: Align2::new(Align::Stretch, Align::Center),
                     }),
                     icon: Some(Rc::new(derin::theme::Image {
                         pixels: unsafe {

@@ -12,6 +12,7 @@ extern crate gl_raii_macros;
 extern crate glutin;
 extern crate arrayvec;
 extern crate glyphydog;
+extern crate itertools;
 
 pub mod gl_render;
 pub mod theme;
