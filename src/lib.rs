@@ -24,7 +24,9 @@ use std::cell::RefCell;
 use dct::hints::{WidgetPos, GridSize};
 use dle::{GridEngine, UpdateHeapCache, SolveError};
 use core::LoopFlow;
-use core::tree::{NodeIdent, NodeSummary, UpdateTag, NodeEvent, NodeSubtrait, NodeSubtraitMut, RenderFrame, FrameRectStack, Node, Parent};
+use core::event::{NodeEvent, EventOps};
+use core::render::{RenderFrame, FrameRectStack};
+use core::tree::{NodeIdent, NodeSummary, UpdateTag, NodeSubtrait, NodeSubtraitMut, Node, Parent};
 
 use cgmath::Point2;
 use cgmath_geometry::{BoundRect, DimsRect, Rectangle};
@@ -187,7 +189,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
         ].iter().cloned());
     }
 
-    fn on_node_event(&mut self, event: NodeEvent) -> Option<H::Action> {
+    fn on_node_event(&mut self, event: NodeEvent) -> EventOps<H::Action> {
         use self::NodeEvent::*;
 
         let mut action = None;
@@ -217,7 +219,10 @@ impl<F, H> Node<H::Action, F> for Button<H>
             self.state = new_state;
         }
 
-        action
+        EventOps {
+            action,
+            bubble: false
+        }
     }
 
     #[inline]
@@ -268,8 +273,11 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
     }
 
     #[inline]
-    fn on_node_event(&mut self, _: NodeEvent) -> Option<A> {
-        None
+    fn on_node_event(&mut self, _: NodeEvent) -> EventOps<A> {
+        EventOps {
+            action: None,
+            bubble: true
+        }
     }
 
     #[inline]

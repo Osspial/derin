@@ -13,7 +13,7 @@ use gl_render::atlas::Atlas;
 use gl_render::font_cache::FontCache;
 
 use theme::Theme;
-use core::tree::Theme as CoreTheme;
+use core::render::Theme as CoreTheme;
 
 use self::image::ImageTranslate;
 use self::text::TextTranslate;

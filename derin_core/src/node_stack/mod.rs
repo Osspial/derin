@@ -2,7 +2,8 @@ mod inner;
 
 use LoopFlow;
 use std::iter::{DoubleEndedIterator, ExactSizeIterator};
-use tree::{Node, NodeIdent, RenderFrame, ChildEventRecv, UpdateTag, NodeSubtrait, NodeSubtraitMut};
+use render::RenderFrame;
+use tree::{Node, NodeIdent, ChildEventRecv, UpdateTag, NodeSubtrait, NodeSubtraitMut};
 
 use self::inner::{NRAllocCache, NRVec};
 

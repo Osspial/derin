@@ -8,6 +8,8 @@ extern crate dct;
 extern crate arrayvec;
 
 pub mod tree;
+pub mod event;
+pub mod render;
 mod mbseq;
 mod node_stack;
 
@@ -20,6 +22,8 @@ use std::marker::PhantomData;
 use std::collections::VecDeque;
 
 use tree::*;
+use event::NodeEvent;
+use render::{Renderer, RenderFrame, FrameRectStack};
 use mbseq::MouseButtonSequence;
 use node_stack::NodeStackBase;
 use dct::buttons::MouseButton;
@@ -93,10 +97,10 @@ impl<A, N, F> Root<A, N, F>
             ref mut actions,
             ref mut node_stack_base,
             ref mut force_full_redraw,
-            ref mut root_node,
-            ref mut theme,
             ref mut event_stamp,
             ref mut node_ident_stack,
+            ref mut theme,
+            ref mut root_node,
             ..
         } = *self;
         // Initialize node stack to root.
@@ -114,8 +118,10 @@ impl<A, N, F> Root<A, N, F>
             }
 
             macro_rules! try_push_action {
-                ($action_opt:expr) => {{
-                    if let Some(action) = $action_opt {
+                ($node:expr, $event:expr) => {{
+                    let event = $event;
+                    let event_ops = $node.on_node_event(event);
+                    if let Some(action) = event_ops.action {
                         actions.push_back(action);
                     }
                 }};
@@ -151,11 +157,12 @@ impl<A, N, F> Root<A, N, F>
 
                     let (mbd_array, mbdin_array) = mouse_button_arrays!(root_node.update_tag());
                     try_push_action!{
-                        root_node.on_node_event(NodeEvent::MouseEnter {
+                        root_node,
+                        NodeEvent::MouseEnter {
                             enter_pos,
                             buttons_down: &mbd_array,
                             buttons_down_in_node: &mbdin_array
-                        })
+                        }
                     }
 
                     let top_update_tag = mark_if_needs_update!(root_node);
@@ -168,11 +175,12 @@ impl<A, N, F> Root<A, N, F>
                         let (mbd_array, mbdin_array) = mouse_button_arrays!(node.update_tag());
 
                         try_push_action!{
-                            node.on_node_event(NodeEvent::MouseExit {
+                            node,
+                            NodeEvent::MouseExit {
                                 exit_pos: exit_pos - node_offset.cast::<i32>().unwrap_or(Vector2::from_value(i32::max_value())),
                                 buttons_down: &mbd_array,
                                 buttons_down_in_node: &mbdin_array
-                            })
+                            }
                         }
 
                         let update_tag = mark_if_needs_update!(node);
@@ -218,13 +226,14 @@ impl<A, N, F> Root<A, N, F>
                             // SEND MOVE ACTION
                             let (mbd_array, mbdin_array) = mouse_button_arrays!(update_tag_copy);
                             try_push_action!{
-                                node_stack.top_mut().on_node_event(NodeEvent::MouseMove {
+                                node_stack.top_mut(),
+                                NodeEvent::MouseMove {
                                     old: node_old_pos,
                                     new: new_pos,
                                     in_node: true,
                                     buttons_down: &mbd_array,
                                     buttons_down_in_node: &mbdin_array
-                                })
+                                }
                             }
                             mark_if_needs_update!(node_stack.top_mut());
 
@@ -303,11 +312,12 @@ impl<A, N, F> Root<A, N, F>
                                                     // SEND ENTER ACTION TO CHILD
                                                     let child_mbdin_array: ArrayVec<[_; 5]> = child_mbdin.into_iter().collect();
                                                     try_push_action!{
-                                                        child.on_node_event(NodeEvent::MouseEnter {
+                                                        child,
+                                                        NodeEvent::MouseEnter {
                                                             enter_pos: enter_pos - child_pos_offset,
                                                             buttons_down: &mbd_array,
                                                             buttons_down_in_node: &child_mbdin_array
-                                                        })
+                                                        }
                                                     }
 
                                                     // Store the information relating to the child we entered,
@@ -321,12 +331,13 @@ impl<A, N, F> Root<A, N, F>
                                                 if let Some(EnterChildData{child_ident, enter_pos}) = enter_child {
                                                     // SEND CHILD ENTER ACTION
                                                     try_push_action!{
-                                                        top_node_as_parent.on_node_event(NodeEvent::MouseEnterChild {
+                                                        top_node_as_parent,
+                                                        NodeEvent::MouseEnterChild {
                                                             enter_pos,
                                                             buttons_down: &mbd_array,
                                                             buttons_down_in_node: &mbdin_array,
                                                             child: child_ident
-                                                        })
+                                                        }
                                                     }
 
                                                     // Update the layout again, if the events we've sent have triggered a
@@ -357,11 +368,12 @@ impl<A, N, F> Root<A, N, F>
                                     let mouse_exit = top_bounds.intersects_int(move_line).1.unwrap_or(new_pos);
 
                                     try_push_action!{
-                                        node_stack.top_mut().on_node_event(NodeEvent::MouseExit {
+                                        node_stack.top_mut(),
+                                        NodeEvent::MouseExit {
                                             exit_pos: mouse_exit,
                                             buttons_down: &mbd_array,
                                             buttons_down_in_node: &mbdin_array
-                                        })
+                                        }
                                     }
 
                                     mark_if_needs_update!(node_stack.top());
@@ -381,12 +393,13 @@ impl<A, N, F> Root<A, N, F>
 
                                         node_stack.pop();
                                         try_push_action!{
-                                            node_stack.top_mut().on_node_event(NodeEvent::MouseExitChild {
+                                            node_stack.top_mut(),
+                                            NodeEvent::MouseExitChild {
                                                 exit_pos: child_exit_pos,
                                                 buttons_down: &mbd_array,
                                                 buttons_down_in_node: &mbdin_array,
                                                 child: child_ident
-                                            })
+                                            }
                                         }
 
                                         let top_update_tag = node_stack.top().update_tag();
@@ -446,13 +459,14 @@ impl<A, N, F> Root<A, N, F>
                         if node_needs_move_event {
 
                             try_push_action!{
-                                node.on_node_event(NodeEvent::MouseMove {
+                                node,
+                                NodeEvent::MouseMove {
                                     old: node_old_pos,
                                     new: new_pos,
                                     in_node: false,
                                     buttons_down: &mbd_array,
                                     buttons_down_in_node: &mbdin_array
-                                })
+                                }
                             }
                             mark_if_needs_update!(node);
                         }
@@ -470,10 +484,11 @@ impl<A, N, F> Root<A, N, F>
                         let top_node = node_stack.top_mut();
                         let top_node_offset = top_node.bounds().min().cast().unwrap_or(Point2::new(i32::max_value(), i32::max_value())).to_vec();
                         try_push_action!{
-                            top_node.on_node_event(NodeEvent::MouseDown {
+                            top_node,
+                            NodeEvent::MouseDown {
                                 pos: *mouse_pos + top_node_offset,
                                 button
-                            })
+                            }
                         }
                         mark_if_needs_update!(top_node);
                         mouse_buttons_down.push_button(button);
@@ -501,7 +516,6 @@ impl<A, N, F> Root<A, N, F>
 
                     // Send the mouse up event to the hover node.
                     let mut move_to_tracked = true;
-                    let mut hover_action_opt = None;
                     node_stack.move_over_flags(ChildEventRecv::MOUSE_HOVER, |node, top_parent_offset| {
                         let bounds = node.bounds() + top_parent_offset;
                         let in_node = mouse_pos.cast::<u32>().map(|p| bounds.contains(p)).unwrap_or(false);
@@ -510,13 +524,15 @@ impl<A, N, F> Root<A, N, F>
                         // we move to the node where it was pressed.
                         move_to_tracked = !pressed_in_node;
 
-                        hover_action_opt =
-                            node.on_node_event(NodeEvent::MouseUp {
+                        try_push_action!{
+                            node,
+                            NodeEvent::MouseUp {
                                 pos: *mouse_pos,
                                 in_node,
                                 pressed_in_node,
                                 button
-                            });
+                            }
+                        }
                         mark_if_needs_update!(node);
 
                         let update_tag = node.update_tag();
@@ -535,17 +551,18 @@ impl<A, N, F> Root<A, N, F>
 
                     // If the hover node wasn't the node where the mouse button was originally pressed,
                     // send the move event to original presser.
-                    let mut button_action_opt = None;
                     if move_to_tracked {
                         node_stack.move_over_flags(button_mask, |node, top_parent_offset| {
                             let bounds = node.bounds() + top_parent_offset;
-                            button_action_opt =
-                                node.on_node_event(NodeEvent::MouseUp {
+                            try_push_action!{
+                                node,
+                                NodeEvent::MouseUp {
                                     pos: *mouse_pos,
                                     in_node: mouse_pos.cast::<u32>().map(|p| bounds.contains(p)).unwrap_or(false),
                                     pressed_in_node: true,
                                     button
-                                });
+                                }
+                            }
                             mark_if_needs_update!(node);
 
                             let update_tag = node.update_tag();
@@ -566,10 +583,6 @@ impl<A, N, F> Root<A, N, F>
                             update_tag
                         });
                     }
-
-                    // Push the actions we've collected to the action queue.
-                    try_push_action!(hover_action_opt);
-                    try_push_action!(button_action_opt);
 
                     for node in node_stack.nodes() {
                         let update_tag = node.update_tag();

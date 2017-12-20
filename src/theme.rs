@@ -9,7 +9,7 @@ use std::rc::Rc;
 use std::path::Path;
 use std::collections::HashMap;
 
-use core::tree::Theme as CoreTheme;
+use core::render::Theme as CoreTheme;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Image {

@@ -326,7 +326,7 @@ fn expand_generics(generics: &Generics, action_ty: &Ty, widget_fields: &[WidgetF
         bounds: vec![TyParamBound::Trait(
             PolyTraitRef {
                 bound_lifetimes: Vec::new(),
-                trait_ref: syn::parse_path("_derive_derin::core::tree::RenderFrame").unwrap()
+                trait_ref: syn::parse_path("_derive_derin::core::render::RenderFrame").unwrap()
             },
             TraitBoundModifier::None
         )]

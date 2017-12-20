@@ -1,5 +1,6 @@
 use std::mem;
-use tree::{Node, RenderFrame, NodeIdent};
+use render::RenderFrame;
+use tree::{Node, NodeIdent};
 
 use cgmath::{EuclideanSpace, Vector2};
 use cgmath_geometry::{BoundRect, Rectangle};

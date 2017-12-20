@@ -24,7 +24,8 @@ use cgmath_geometry::{BoundRect, DimsRect, Rectangle};
 use glutin::{GlWindow, GlContext, EventsLoop, WindowBuilder, ContextBuilder, GlRequest, CreationError};
 
 use theme::Theme;
-use core::tree::{Renderer, NodeIdent, RenderFrame};
+use core::render::{Renderer, RenderFrame};
+use core::tree::NodeIdent;
 
 use self::atlas::Atlas;
 use self::font_cache::FontCache;

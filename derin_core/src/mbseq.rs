@@ -1,4 +1,4 @@
-use std::iter::ExactSizeIterator;
+use std::iter::{ExactSizeIterator, FromIterator};
 
 use dct::buttons::{MouseButton, MOUSE_INT_MASK, MOUSE_INT_MASK_LEN, NUM_MOUSE_BUTTONS};
 
@@ -78,6 +78,19 @@ impl IntoIterator for MouseButtonSequence {
             buttons: self.buttons,
             len: self.len
         }
+    }
+}
+
+impl FromIterator<MouseButton> for MouseButtonSequence {
+    #[inline]
+    fn from_iter<T>(iter: T) -> MouseButtonSequence
+        where T: IntoIterator<Item=MouseButton>
+    {
+        let mut seq = MouseButtonSequence::new();
+        for button in iter {
+            seq.push_button(button);
+        }
+        seq
     }
 }
 
