@@ -9,7 +9,7 @@ use cgmath::{Point2, Vector2, EuclideanSpace};
 use gl_raii::ContextState;
 use gl_raii::render_state::{RenderState, BlendFunc, BlendFuncs};
 use gl_raii::program::{Shader, Program};
-use gl_raii::textures::{Dims2D, Texture};
+use gl_raii::textures::Texture;
 use gl_raii::textures::targets::SimpleTex;
 use gl_raii::framebuffer::{DrawMode, Framebuffer, DefaultFramebuffer};
 use gl_raii::buffers::{Buffer, BufferUsage};
@@ -19,7 +19,7 @@ use gl_raii::colors::Rgba;
 
 use glyphydog::DPI;
 
-use cgmath_geometry::{BoundRect, DimsRect, Rectangle};
+use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
 
 use glutin::{GlWindow, GlContext, EventsLoop, WindowBuilder, ContextBuilder, GlRequest, CreationError};
 
@@ -41,7 +41,7 @@ pub struct GLRenderer {
     fb: DefaultFramebuffer,
     program: Program<GLVertex, GLUniforms<'static>>,
     vao: VertexArrayObj<GLVertex, ()>,
-    gl_tex_atlas: Texture<Rgba<Nu8>, SimpleTex<Dims2D>>,
+    gl_tex_atlas: Texture<Rgba<Nu8>, SimpleTex<DimsBox<Point2<u32>>>>,
     render_state: RenderState
 }
 
@@ -62,9 +62,9 @@ struct GLVertex {
 
 #[derive(Uniforms, Clone, Copy)]
 struct GLUniforms<'a> {
-    atlas_size: Point2<u32>,
+    atlas_size: Vector2<u32>,
     window_size: Point2<u32>,
-    tex_atlas: &'a Texture<Rgba<Nu8>, SimpleTex<Dims2D>>
+    tex_atlas: &'a Texture<Rgba<Nu8>, SimpleTex<DimsBox<Point2<u32>>>>
 }
 
 
@@ -88,7 +88,7 @@ impl GLRenderer {
 
         let program = Program::new(&vert_shader, None, &frag_shader).unwrap_discard();
 
-        let gl_tex_atlas = Texture::new(Dims2D::new(1024, 1024), 1, context_state.clone()).unwrap();
+        let gl_tex_atlas = Texture::new(DimsBox::new2(1024, 1024), 1, context_state.clone()).unwrap();
 
         Ok(GLRenderer {
             frame: GLFrame {
@@ -121,15 +121,15 @@ impl GLRenderer {
 impl Renderer for GLRenderer {
     type Frame = GLFrame;
     fn force_full_redraw(&self) -> bool {true}
-    fn make_frame(&mut self) -> (&mut GLFrame, BoundRect<u32>) {
+    fn make_frame(&mut self) -> (&mut GLFrame, BoundBox<Point2<u32>>) {
         let (width, height) = self.window.get_inner_size().unwrap();
-        self.render_state.viewport = DimsRect::new(width, height).into();
+        self.render_state.viewport = DimsBox::new2(width, height).into();
 
-        (&mut self.frame, BoundRect::new(0, 0, width, height))
+        (&mut self.frame, BoundBox::new2(0, 0, width, height))
     }
 
     fn finish_frame(&mut self, _: &Theme) {
-        let atlas_dims = Dims2D::new(self.frame.atlas.dims().width(), self.frame.atlas.dims().height());
+        let atlas_dims = self.frame.atlas.dims();
         if atlas_dims != self.gl_tex_atlas.dims() {
             self.gl_tex_atlas = Texture::new(atlas_dims, 1, self.context_state.clone()).unwrap();
         }
@@ -137,7 +137,7 @@ impl Renderer for GLRenderer {
 
         let (window_width, window_height) = self.window.get_inner_size().unwrap();
         let uniform = GLUniforms {
-            atlas_size: Point2::new(self.gl_tex_atlas.dims().width, self.gl_tex_atlas.dims().height),
+            atlas_size: self.gl_tex_atlas.dims().dims,
             window_size: Point2::new(window_width, window_height),
             tex_atlas: &self.gl_tex_atlas
         };
@@ -153,11 +153,11 @@ impl Renderer for GLRenderer {
 }
 
 impl RenderFrame for GLFrame {
-    type Transform = BoundRect<u32>;
+    type Transform = BoundBox<Point2<u32>>;
     type Primitive = ThemedPrim;
     type Theme = Theme;
 
-    fn upload_primitives<I>(&mut self, _ident: &[NodeIdent], theme: &Theme, transform: &BoundRect<u32>, prim_iter: I)
+    fn upload_primitives<I>(&mut self, _ident: &[NodeIdent], theme: &Theme, transform: &BoundBox<Point2<u32>>, prim_iter: I)
         where I: Iterator<Item=ThemedPrim>
     {
         self.poly_translator.translate_prims(
@@ -172,7 +172,7 @@ impl RenderFrame for GLFrame {
     }
 
     #[inline]
-    fn child_rect_transform(rect: &BoundRect<u32>, child_rect: BoundRect<u32>) -> BoundRect<u32> {
+    fn child_rect_transform(rect: &BoundBox<Point2<u32>>, child_rect: BoundBox<Point2<u32>>) -> BoundBox<Point2<u32>> {
         let trans = child_rect + rect.min().to_vec();
         trans
     }

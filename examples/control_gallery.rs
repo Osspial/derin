@@ -13,7 +13,7 @@ use derin::gl_render::GLRenderer;
 use derin::core::{LoopFlow, Root, WindowEvent};
 use derin::core::tree::NodeIdent;
 use derin::theme::{ThemeText, ThemeFace, RescaleRules};
-use derin::geometry::{Point2, DimsRect, Rectangle};
+use derin::geometry::{Point2, DimsBox, GeoBox};
 
 use gl_raii::colors::Rgba;
 use gl_raii::glsl::Nu8;
@@ -106,7 +106,7 @@ fn main() {
         BasicLayout
     );
 
-    let dims = DimsRect::new(512, 512);
+    let dims = DimsBox::new2(512, 512);
     let mut events_loop = glutin::EventsLoop::new();
     let window_builder = glutin::WindowBuilder::new()
         .with_dimensions(dims.width(), dims.height())
@@ -143,7 +143,7 @@ fn main() {
                                 image.capacity() / 4
                             )
                         },
-                        dims: DimsRect::new($dims, $dims),
+                        dims: DimsBox::new2($dims, $dims),
                         rescale: RescaleRules::Slice(Margins::new($border, $border, $border, $border))
                     }))
                 }
@@ -183,7 +183,7 @@ fn main() {
                                 ElementState::Released => WindowEvent::MouseUp(b)
                             })
                         }
-                        GWindowEvent::Resized(width, height) => Some(WindowEvent::WindowResize(DimsRect::new(width, height))),
+                        GWindowEvent::Resized(width, height) => Some(WindowEvent::WindowResize(DimsBox::new2(width, height))),
                         GWindowEvent::Closed => return ControlFlow::Break,
                         _ => None
                     };

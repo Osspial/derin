@@ -2,6 +2,12 @@ use dct::buttons::MouseButton;
 use cgmath::Point2;
 use tree::NodeIdent;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct EventOps<A> {
+    pub action: Option<A>,
+    pub bubble: bool
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeEvent<'a> {
     MouseEnter {
@@ -45,8 +51,3 @@ pub enum NodeEvent<'a> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct EventOps<A> {
-    pub action: Option<A>,
-    pub bubble: bool
-}

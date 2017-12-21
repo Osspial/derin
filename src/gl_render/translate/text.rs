@@ -4,7 +4,7 @@ use gl_render::translate::image::ImageTranslate;
 use theme::{ThemeText, RescaleRules};
 
 use cgmath::{EuclideanSpace, ElementWise, Point2, Vector2};
-use cgmath_geometry::{BoundRect, DimsRect, OffsetRect, Rectangle};
+use cgmath_geometry::{BoundBox, DimsBox, OffsetBox, GeoBox};
 
 use gl_raii::colors::Rgba;
 use gl_raii::glsl::Nu8;
@@ -19,7 +19,7 @@ use std::vec;
 pub(in gl_render) struct TextTranslate<'a> {
     glyph_draw: GlyphDraw<'a>,
 
-    rect: BoundRect<u32>,
+    rect: BoundBox<Point2<u32>>,
     glyph_iter: GlyphIter<vec::IntoIter<GlyphItem>>,
     vertex_iter: Option<ImageTranslate>
 }
@@ -100,7 +100,7 @@ struct Run {
 
 impl<'a> TextTranslate<'a> {
     pub fn new(
-        rect: BoundRect<u32>,
+        rect: BoundBox<Point2<u32>>,
         shaped_text: &'a ShapedBuffer,
         text_style: ThemeText,
         face: &'a mut Face<()>,
@@ -414,7 +414,7 @@ impl Run {
 }
 
 impl<'a> GlyphDraw<'a> {
-    fn glyph_atlas_image(&mut self, glyph: ShapedGlyph, rect: BoundRect<u32>) -> ImageTranslate {
+    fn glyph_atlas_image(&mut self, glyph: ShapedGlyph, rect: BoundBox<Point2<u32>>) -> ImageTranslate {
         let GlyphDraw {
             ref mut face,
             ref mut atlas,
@@ -446,7 +446,7 @@ impl<'a> GlyphDraw<'a> {
                     Ok((bitmap, glyph_metrics)) => {
                         assert!(bitmap.pitch >= 0);
                         let (bytes, pitch, dims) = match bitmap.pitch {
-                            0 => (&[][..], 1, DimsRect::new(0, 0)),
+                            0 => (&[][..], 1, DimsBox::new2(0, 0)),
                             _ => (bitmap.buffer, bitmap.pitch as usize, bitmap.dims)
                         };
                         (
@@ -464,7 +464,7 @@ impl<'a> GlyphDraw<'a> {
                     Err(_) => {
                         // TODO: LOG
                         unimplemented!()
-                        // (&[], DimsRect::new(0, 0), Vector2::new(0, 0))
+                        // (&[], DimsBox::new2(0, 0), Vector2::new(0, 0))
                     }
                 }
             }
@@ -476,16 +476,16 @@ impl<'a> GlyphDraw<'a> {
             glyph.pos.to_vec() +
             // Advance the cursor down the line. Pos is with TLO, so vertical flip
             Vector2::new(1, -1).mul_element_wise(glyph_bearing);
-        let glyph_rect = BoundRect::new(
+        let glyph_rect = BoundBox::new2(
             glyph_pos.x,
             glyph_pos.y,
             glyph_pos.x + atlas_rect.width() as i32,
             glyph_pos.y + atlas_rect.height() as i32
-        ).cast::<u32>().unwrap_or(BoundRect::new(0, 0, 0, 0));
+        ).cast::<u32>().unwrap_or(BoundBox::new2(0, 0, 0, 0));
 
         ImageTranslate::new(
             glyph_rect,
-            atlas_rect.cast::<u16>().unwrap_or(OffsetRect::new(0, 0, 0, 0)),
+            atlas_rect.cast::<u16>().unwrap_or(OffsetBox::new2(0, 0, 0, 0)),
             text_style.color,
             RescaleRules::Stretch
         )

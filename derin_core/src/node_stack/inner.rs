@@ -2,14 +2,14 @@ use std::mem;
 use render::RenderFrame;
 use tree::{Node, NodeIdent};
 
-use cgmath::{EuclideanSpace, Vector2};
-use cgmath_geometry::{BoundRect, Rectangle};
+use cgmath::{EuclideanSpace, Point2, Vector2};
+use cgmath_geometry::{BoundBox, GeoBox};
 
 // TODO: GET CODE REVIEWED FOR SAFETY
 
 struct StackElement<'a, A, F: RenderFrame> {
     node: *mut (Node<A, F> + 'a),
-    bounds: BoundRect<u32>,
+    bounds: BoundBox<Point2<u32>>,
     ident: NodeIdent
 }
 
@@ -42,7 +42,7 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
 
         vec.push(StackElement {
             node: node,
-            bounds: BoundRect::new(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF),
+            bounds: BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF),
             ident: NodeIdent::Num(0)
         });
 
@@ -92,7 +92,7 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn top_bounds_offset(&self) -> BoundRect<u32> {
+    pub fn top_bounds_offset(&self) -> BoundBox<Point2<u32>> {
         self.top().bounds() + self.top_parent_offset
     }
 
@@ -102,7 +102,7 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn try_push<G>(&mut self, with_top: G)
+    pub fn try_push<G>(&mut self, with_top: G) -> Option<(&'a mut Node<A, F>, NodeIdent)>
         where G: FnOnce(&'a mut Node<A, F>) -> Option<(&'a mut Node<A, F>, NodeIdent)>
     {
         let new_top_opt = with_top(unsafe{ mem::transmute(self.top_mut()) } );
@@ -117,9 +117,12 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
 
             self.vec.push(StackElement {
                 node: new_top,
-                bounds: BoundRect::new(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF),
+                bounds: BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF),
                 ident: new_top_ident
             });
+            Some((unsafe{ &mut *self.vec.last().unwrap().node }, new_top_ident))
+        } else {
+            None
         }
     }
 
@@ -133,7 +136,7 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
         let popped = self.vec.pop().map(|n| unsafe{ &mut *n.node });
         if let Some(last_mut) = self.vec.last_mut() {
             self.top_parent_offset -= last_mut.bounds.min().to_vec();
-            last_mut.bounds = BoundRect::new(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF);
+            last_mut.bounds = BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF);
         }
 
         popped

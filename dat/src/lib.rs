@@ -6,8 +6,8 @@ extern crate cgmath_geometry;
 use std::{cmp, mem};
 use std::ops::Range;
 
-use cgmath::{EuclideanSpace, Vector2};
-use cgmath_geometry::{DimsRect, OffsetRect, Rectangle};
+use cgmath::{EuclideanSpace, Point2, Vector2};
+use cgmath_geometry::{DimsBox, OffsetBox, GeoBox};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct HeightRange {
@@ -20,7 +20,7 @@ struct HeightRange {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkylineAtlas<P: Copy> {
     background_color: P,
-    dims: DimsRect<u32>,
+    dims: DimsBox<Point2<u32>>,
     pixels: Vec<P>,
     heights: Vec<HeightRange>,
     max_used_height: u32
@@ -36,7 +36,7 @@ struct InsertOver {
 
 impl<P: Copy> SkylineAtlas<P> {
     #[inline]
-    pub fn new(background_color: P, dims: DimsRect<u32>) -> SkylineAtlas<P> {
+    pub fn new(background_color: P, dims: DimsBox<Point2<u32>>) -> SkylineAtlas<P> {
         let base_range = HeightRange {
             bounds_min: 0,
             bounds_max: dims.width(),
@@ -57,11 +57,11 @@ impl<P: Copy> SkylineAtlas<P> {
     }
 
     #[inline]
-    pub fn dims(&self) -> DimsRect<u32> {
+    pub fn dims(&self) -> DimsBox<Point2<u32>> {
         self.dims
     }
 
-    fn calc_insert_over(&self, image_dims: DimsRect<u32>) -> Option<InsertOver> {
+    fn calc_insert_over(&self, image_dims: DimsBox<Point2<u32>>) -> Option<InsertOver> {
         let mut best_range = InsertOver {
             range: 0..self.heights.len(),
             width: self.dims.width(),
@@ -120,7 +120,7 @@ impl<P: Copy> SkylineAtlas<P> {
         Some(best_range)
     }
 
-    pub fn set_dims(&mut self, background_color: P, dims: DimsRect<u32>) {
+    pub fn set_dims(&mut self, background_color: P, dims: DimsBox<Point2<u32>>) {
         let free_width = {
             let last_height = self.heights.last().unwrap();
             match last_height.height {
@@ -155,7 +155,7 @@ impl<P: Copy> SkylineAtlas<P> {
         self.max_used_height
     }
 
-    fn insert_over(&mut self, insert_over: InsertOver, image_dims: DimsRect<u32>) -> OffsetRect<u32>
+    fn insert_over(&mut self, insert_over: InsertOver, image_dims: DimsBox<Point2<u32>>) -> OffsetBox<Point2<u32>>
     {
         let insert_offset = Vector2::new(self.heights[insert_over.range.start].bounds_min, insert_over.height);
 
@@ -173,14 +173,14 @@ impl<P: Copy> SkylineAtlas<P> {
         }
         self.max_used_height = cmp::max(self.max_used_height, insert_range.height);
 
-        OffsetRect::from(image_dims) + insert_offset
+        OffsetBox::from(image_dims) + insert_offset
     }
 
-    pub fn add_image(&mut self, image_dims: DimsRect<u32>, image_view: OffsetRect<u32>, image_data: &[P]) -> Option<OffsetRect<u32>> {
-        self.add_image_rows(DimsRect{ dims: image_view.dims() }, rows_from_image(image_dims, image_view, image_data)).ok()
+    pub fn add_image(&mut self, image_dims: DimsBox<Point2<u32>>, image_view: OffsetBox<Point2<u32>>, image_data: &[P]) -> Option<OffsetBox<Point2<u32>>> {
+        self.add_image_rows(DimsBox::new(image_view.dims()), rows_from_image(image_dims, image_view, image_data)).ok()
     }
 
-    pub fn add_image_rows<'a, I>(&mut self, image_dims: DimsRect<u32>, image_data: I) -> Result<OffsetRect<u32>, I>
+    pub fn add_image_rows<'a, I>(&mut self, image_dims: DimsBox<Point2<u32>>, image_data: I) -> Result<OffsetBox<Point2<u32>>, I>
         where I: IntoIterator<Item=&'a [P]>,
               P: 'a
     {
@@ -194,7 +194,7 @@ impl<P: Copy> SkylineAtlas<P> {
         }
     }
 
-    pub fn add_image_pixels<'a, I, J>(&mut self, image_dims: DimsRect<u32>, image_data: I) -> Result<OffsetRect<u32>, I>
+    pub fn add_image_pixels<'a, I, J>(&mut self, image_dims: DimsBox<Point2<u32>>, image_data: I) -> Result<OffsetBox<Point2<u32>>, I>
         where I: IntoIterator<Item=J>,
               J: IntoIterator<Item=P>
     {
@@ -224,14 +224,14 @@ impl<P: Copy> SkylineAtlas<P> {
     }
 
     pub fn compact<'a, I>(&mut self, rects: I)
-        where I: IntoIterator<Item=&'a mut OffsetRect<u32>>
+        where I: IntoIterator<Item=&'a mut OffsetBox<Point2<u32>>>
     {
         let mut old_pixels = vec![self.background_color; self.pixels.len()];
         mem::swap(&mut old_pixels, &mut self.pixels);
         let old_heights = self.heights.clone();
 
         let mut rects_sorted = {
-            let mut rects: Vec<(OffsetRect<u32>, &'a mut OffsetRect<u32>)> = rects.into_iter().map(|r| (*r, r)).collect();
+            let mut rects: Vec<(OffsetBox<Point2<u32>>, &'a mut OffsetBox<Point2<u32>>)> = rects.into_iter().map(|r| (*r, r)).collect();
             rects.sort_unstable_by(|&(_, ref a), &(_, ref b)| (b.height(), b.width()).cmp(&(a.height(), a.width())));
             rects
         };
@@ -257,7 +257,7 @@ impl<P: Copy> SkylineAtlas<P> {
             };
 
             for (index, &mut (_, ref mut rect)) in rects_sorted.iter_mut().enumerate() {
-                match self.calc_insert_over(DimsRect{ dims: rect.dims() }) {
+                match self.calc_insert_over(DimsBox::new(rect.dims())) {
                     Some(insert_over) => {
                         if insert_over.space_lost < best_insert_over.space_lost || best_insert_index == usize::max_value() {
                             best_insert_index = index;
@@ -278,7 +278,7 @@ impl<P: Copy> SkylineAtlas<P> {
             let remove_rect = rects_sorted.remove(best_insert_index);
             *remove_rect.1 = self.insert_over(
                 best_insert_over,
-                DimsRect{ dims: remove_rect.0.dims() }
+                DimsBox::new(remove_rect.0.dims())
             );
             self.blit(dims, remove_rect.0, remove_rect.1.min().to_vec(), &old_pixels);
             removed_rects.push(remove_rect);
@@ -293,21 +293,21 @@ impl<P: Copy> SkylineAtlas<P> {
         }
     }
 
-    pub fn blit(&mut self, image_dims: DimsRect<u32>, image_view: OffsetRect<u32>, write_offset: Vector2<u32>, image_data: &[P]) {
+    pub fn blit(&mut self, image_dims: DimsBox<Point2<u32>>, image_view: OffsetBox<Point2<u32>>, write_offset: Vector2<u32>, image_data: &[P]) {
         blit(
-            rows_from_image(image_dims, image_view, image_data), DimsRect{ dims: image_view.dims() },
+            rows_from_image(image_dims, image_view, image_data), DimsBox::new(image_view.dims()),
             &mut self.pixels, self.dims, write_offset
         );
     }
 
-    pub fn blit_rows<'a, I>(&mut self, image_dims: DimsRect<u32>, write_offset: Vector2<u32>, image_data: I)
+    pub fn blit_rows<'a, I>(&mut self, image_dims: DimsBox<Point2<u32>>, write_offset: Vector2<u32>, image_data: I)
         where I: IntoIterator<Item=&'a [P]>,
               P: 'a
     {
         blit(image_data, image_dims, &mut self.pixels, self.dims, write_offset);
     }
 
-    pub fn blit_pixels<'a, I, J>(&mut self, image_dims: DimsRect<u32>, write_offset: Vector2<u32>, image_data: I)
+    pub fn blit_pixels<'a, I, J>(&mut self, image_dims: DimsBox<Point2<u32>>, write_offset: Vector2<u32>, image_data: I)
         where I: IntoIterator<Item=J>,
               J: IntoIterator<Item=P>
     {
@@ -322,7 +322,7 @@ impl HeightRange {
     }
 }
 
-fn rows_from_image<'a, P: 'a>(image_dims: DimsRect<u32>, image_view: OffsetRect<u32>, image_data: &'a [P]) -> impl Iterator<Item=&'a [P]> {
+fn rows_from_image<'a, P: 'a>(image_dims: DimsBox<Point2<u32>>, image_view: OffsetBox<Point2<u32>>, image_data: &'a [P]) -> impl Iterator<Item=&'a [P]> {
     (image_view.min().y as usize..image_view.max().y as usize)
         .map(move |r| &image_data[
             image_dims.width() as usize * r + image_view.min().x as usize..
@@ -331,8 +331,8 @@ fn rows_from_image<'a, P: 'a>(image_dims: DimsRect<u32>, image_view: OffsetRect<
 }
 
 fn blit<'a, P: 'a + Copy, I: IntoIterator<Item=&'a [P]>>(
-    src: I, src_dims: DimsRect<u32>,
-    dst: &mut [P], dst_dims: DimsRect<u32>, dst_offset: Vector2<u32>
+    src: I, src_dims: DimsBox<Point2<u32>>,
+    dst: &mut [P], dst_dims: DimsBox<Point2<u32>>, dst_offset: Vector2<u32>
 ) {
     let (mut width, mut height) = (src_dims.width(), 0);
     for (row_num, src_row) in src.into_iter().enumerate() {
@@ -347,12 +347,12 @@ fn blit<'a, P: 'a + Copy, I: IntoIterator<Item=&'a [P]>>(
         width &= src_row.len() as u32;
     }
 
-    assert_eq!(src_dims, DimsRect::new(width, height));
+    assert_eq!(src_dims, DimsBox::new2(width, height));
 }
 
 fn blit_pixels<'a, P, I, J>(
-    src: I, src_dims: DimsRect<u32>,
-    dst: &mut [P], dst_dims: DimsRect<u32>, dst_offset: Vector2<u32>
+    src: I, src_dims: DimsBox<Point2<u32>>,
+    dst: &mut [P], dst_dims: DimsBox<Point2<u32>>, dst_offset: Vector2<u32>
 )
     where I: IntoIterator<Item=J>,
           J: IntoIterator<Item=P>
@@ -375,5 +375,5 @@ fn blit_pixels<'a, P, I, J>(
         width &= src_row_len;
     }
 
-    assert_eq!(src_dims, DimsRect::new(width, height));
+    assert_eq!(src_dims, DimsBox::new2(width, height));
 }

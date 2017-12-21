@@ -2,7 +2,7 @@ mod image;
 mod text;
 
 use cgmath::{Point2, Vector2, Array};
-use cgmath_geometry::{Rectangle, BoundRect};
+use cgmath_geometry::{GeoBox, BoundBox};
 use glyphydog::{ShapedBuffer, Shaper, FaceSize, DPI};
 
 use gl_raii::glsl::{Nu8, Ni32};
@@ -22,7 +22,8 @@ use self::text::TextTranslate;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ThemedPrim {
     pub theme_path: *const str,
-    pub rect: BoundRect<RelPoint>,
+    pub min: Point2<RelPoint>,
+    pub max: Point2<RelPoint>,
     pub prim: Prim
 }
 
@@ -61,7 +62,7 @@ impl Translator {
 
     pub(in gl_render) fn translate_prims<I>(
         &mut self,
-        parent_rect: BoundRect<u32>,
+        parent_rect: BoundBox<Point2<u32>>,
         theme: &Theme,
         atlas: &mut Atlas,
         font_cache: &mut FontCache,
@@ -77,14 +78,14 @@ impl Translator {
             let parent_dims = parent_rect.dims().cast::<i32>().unwrap_or(Vector2::from_value(0));
 
             let bl = Point2 {
-                x: (parent_center.x + parent_dims.x * Ni32::from_bounded(p.rect.min.x.frac_origin) / 2) as u32,
-                y: (parent_center.y + parent_dims.y * Ni32::from_bounded(p.rect.min.y.frac_origin) / 2) as u32
+                x: (parent_center.x + parent_dims.x * Ni32::from_bounded(p.min.x.frac_origin) / 2) as u32,
+                y: (parent_center.y + parent_dims.y * Ni32::from_bounded(p.min.y.frac_origin) / 2) as u32
             };
             let tr = Point2 {
-                x: (parent_center.x + parent_dims.x * Ni32::from_bounded(p.rect.max.x.frac_origin) / 2) as u32,
-                y: (parent_center.y + parent_dims.y * Ni32::from_bounded(p.rect.max.y.frac_origin) / 2) as u32
+                x: (parent_center.x + parent_dims.x * Ni32::from_bounded(p.max.x.frac_origin) / 2) as u32,
+                y: (parent_center.y + parent_dims.y * Ni32::from_bounded(p.max.y.frac_origin) / 2) as u32
             };
-            (BoundRect::new(bl.x, bl.y, tr.x, tr.y), p)
+            (BoundBox::new2(bl.x, bl.y, tr.x, tr.y), p)
         });
 
         for (abs_rect, prim) in prim_rect_iter {

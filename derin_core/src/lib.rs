@@ -16,7 +16,7 @@ mod node_stack;
 use arrayvec::ArrayVec;
 
 use cgmath::{EuclideanSpace, Point2, Vector2, Array};
-use cgmath_geometry::{Rectangle, DimsRect, BoundRect, Segment};
+use cgmath_geometry::{GeoBox, DimsBox, BoundBox, Segment};
 
 use std::marker::PhantomData;
 use std::collections::VecDeque;
@@ -53,7 +53,7 @@ pub enum WindowEvent {
     MouseExit(Point2<i32>),
     MouseDown(MouseButton),
     MouseUp(MouseButton),
-    WindowResize(DimsRect<u32>)
+    WindowResize(DimsBox<Point2<u32>>)
 }
 
 #[must_use]
@@ -68,7 +68,7 @@ impl<A, N, F> Root<A, N, F>
           F: RenderFrame
 {
     #[inline]
-    pub fn new(mut root_node: N, theme: F::Theme, dims: DimsRect<u32>) -> Root<A, N, F> {
+    pub fn new(mut root_node: N, theme: F::Theme, dims: DimsBox<Point2<u32>>) -> Root<A, N, F> {
         // TODO: DRAW ROOT AND DO INITIAL LAYOUT
         *root_node.bounds_mut() = dims.into();
         Root {
@@ -99,8 +99,8 @@ impl<A, N, F> Root<A, N, F>
             ref mut force_full_redraw,
             ref mut event_stamp,
             ref mut node_ident_stack,
-            ref mut theme,
             ref mut root_node,
+            ref mut theme,
             ..
         } = *self;
         // Initialize node stack to root.
@@ -120,7 +120,7 @@ impl<A, N, F> Root<A, N, F>
             macro_rules! try_push_action {
                 ($node:expr, $event:expr) => {{
                     let event = $event;
-                    let event_ops = $node.on_node_event(event);
+                    let event_ops = $node.on_node_event(event, &[]);
                     if let Some(action) = event_ops.action {
                         actions.push_back(action);
                     }
@@ -205,7 +205,7 @@ impl<A, N, F> Root<A, N, F>
                         // Calculate the bounds of the hovered node in window-space, and use that to get hovered
                         // node's upper-right corner in window space (the offset).
                         let top_bounds_windowspace = node_stack.top_bounds_offset().cast::<i32>().unwrap_or(
-                            BoundRect::new(i32::max_value(), i32::max_value(), i32::max_value(), i32::max_value())
+                            BoundBox::new2(i32::max_value(), i32::max_value(), i32::max_value(), i32::max_value())
                         );
                         let top_bounds_offset = top_bounds_windowspace.min().to_vec();
 
@@ -240,7 +240,7 @@ impl<A, N, F> Root<A, N, F>
                             // Get the bounds of the node after the node has potentially been moved by the
                             // move action.
                             let new_top_bounds_windowspace = node_stack.top_bounds_offset().cast::<i32>().unwrap_or(
-                                BoundRect::new(i32::max_value(), i32::max_value(), i32::max_value(), i32::max_value())
+                                BoundBox::new2(i32::max_value(), i32::max_value(), i32::max_value(), i32::max_value())
                             );
                             let new_top_bounds = new_top_bounds_windowspace - top_bounds_offset;
 
@@ -294,7 +294,7 @@ impl<A, N, F> Root<A, N, F>
                                                     // node), and is translated to the child's coordinate space when we enter the
                                                     // child.
                                                     let enter_pos = child_bounds.cast::<i32>()
-                                                        .and_then(|bounds| bounds.intersects_int(move_line).0)
+                                                        .and_then(|bounds| bounds.intersect_line(move_line).0)
                                                         .unwrap_or(new_pos);
 
                                                     // Get the mouse buttons already down in the child, and set the mouse
@@ -365,7 +365,7 @@ impl<A, N, F> Root<A, N, F>
                                 },
                                 // If the cursor is no longer in the node, send the exit events and move to the parent node.
                                 false => {
-                                    let mouse_exit = top_bounds.intersects_int(move_line).1.unwrap_or(new_pos);
+                                    let mouse_exit = top_bounds.intersect_line(move_line).1.unwrap_or(new_pos);
 
                                     try_push_action!{
                                         node_stack.top_mut(),

@@ -8,7 +8,7 @@ use image::{DynamicImage, ColorType};
 use cgmath_geometry::DimsRect;
 
 fn main() {
-    let mut atlas = SkylineAtlas::new([0; 4], DimsRect::new(512, 512));
+    let mut atlas = SkylineAtlas::new([0; 4], DimsBox::new2(512, 512));
     let doge = extract_buffer(image::open("test_images/doge.png").unwrap());
     let ffx = extract_buffer(image::open("test_images/ffx.png").unwrap());
     let rust = extract_buffer(image::open("test_images/rust.png").unwrap());
@@ -43,7 +43,7 @@ fn main() {
 fn extract_buffer(img: DynamicImage) -> (DimsRect<u32>, Vec<[u8; 4]>) {
     match img {
         DynamicImage::ImageRgba8(img) => {
-            let rect = DimsRect::new(img.width(), img.height());
+            let rect = DimsBox::new2(img.width(), img.height());
             println!("{:?}", rect);
             (rect, img.pixels().map(|p| p.data).collect())
         },

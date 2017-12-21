@@ -9,8 +9,8 @@ extern crate dct;
 mod grid;
 
 use dct::Px;
-use cgmath::{Vector2, EuclideanSpace};
-use cgmath_geometry::{DimsRect, Rectangle, BoundRect};
+use cgmath::{Point2, Vector2, EuclideanSpace};
+use cgmath_geometry::{DimsBox, BoundBox, GeoBox};
 use dct::hints::{Fr, Tr, Align2, Align, GridSize, WidgetPos, TrackHints, SizeBounds, Margins};
 use grid::{TrackVec, SizeResult};
 
@@ -29,10 +29,10 @@ pub struct UpdateHeapCache {
 pub struct GridEngine {
     grid: TrackVec,
     /// The pixel size of the layout engine, as requested by the programmer.
-    pub desired_size: DimsRect<Px>,
+    pub desired_size: DimsBox<Point2<Px>>,
     /// The pixel size of the layout engine, accounting for the size bounds of the widgets and the size
     /// bounds of the engine.
-    actual_size: DimsRect<Px>,
+    actual_size: DimsBox<Point2<Px>>,
     /// The size bounds of the engine, as requested by the programmer.
     pub desired_size_bounds: SizeBounds,
     /// The size bounds of the engine, accounting for the size bounds of the widgets.
@@ -52,8 +52,8 @@ impl GridEngine {
     pub fn new() -> GridEngine {
         GridEngine {
             grid: TrackVec::new(),
-            desired_size: DimsRect::new(0, 0),
-            actual_size: DimsRect::new(0, 0),
+            desired_size: DimsBox::new2(0, 0),
+            actual_size: DimsBox::new2(0, 0),
             desired_size_bounds: SizeBounds::default(),
             actual_size_bounds: SizeBounds::default(),
             grid_margins: Margins::default()
@@ -84,7 +84,7 @@ impl GridEngine {
         self.grid.get_col_mut(col).expect(&format!("Col {} out of range", col)).set_hints(hints).ok();
     }
 
-    pub fn actual_size(&self) -> DimsRect<Px> {
+    pub fn actual_size(&self) -> DimsBox<Point2<Px>> {
         self.actual_size
     }
 
@@ -103,7 +103,7 @@ impl GridEngine {
     pub fn update_engine(
         &mut self,
         hints: &[WidgetPos],
-        rects: &mut [Result<BoundRect<Px>, SolveError>],
+        rects: &mut [Result<BoundBox<Point2<Px>>, SolveError>],
         heap_cache: &mut UpdateHeapCache
     ) {
         assert_eq!(hints.len(), rects.len());
@@ -116,13 +116,13 @@ impl GridEngine {
 
         // Reset the actual size bounds to zero.
         self.actual_size_bounds = SizeBounds {
-            min: DimsRect::new(0, 0),
-            max: DimsRect::new(0, 0)
+            min: DimsBox::new2(0, 0),
+            max: DimsBox::new2(0, 0)
         };
 
-        let mut frac_min_size = DimsRect::new(0, 0);
+        let mut frac_min_size = DimsBox::new2(0, 0);
 
-        let mut rigid_min_size = DimsRect::new(0, 0);
+        let mut rigid_min_size = DimsBox::new2(0, 0);
 
         // Next, we perform an iteration over the tracks, subtracting from the free space if the track is
         // rigid.
@@ -163,7 +163,7 @@ impl GridEngine {
         self.actual_size_bounds.max =
             self.desired_size_bounds.bound_rect(self.actual_size_bounds.max);
 
-        self.actual_size_bounds.min = DimsRect::new(
+        self.actual_size_bounds.min = DimsBox::new2(
             frac_min_size.width() + rigid_min_size.width() + self.grid_margins.width(),
             frac_min_size.height() + rigid_min_size.height() + self.grid_margins.height()
         );
@@ -419,19 +419,19 @@ impl GridEngine {
                     let size_y = widget_scale!(y, height, row_range, row_range_mut, free_height, fr_total_height);
 
                     // Perform cell hinting and set
-                    let widget_origin_rect = DimsRect::new(size_x, size_y);
+                    let widget_origin_rect = DimsBox::new2(size_x, size_y);
 
                     if let Some(offset) = grid.get_cell_offset(
                         hint.node_span.x.start.unwrap_or(0),
                         hint.node_span.y.start.unwrap_or(0)
                     ) {
-                        let outer_rect = BoundRect::from(widget_origin_rect) + offset.to_vec();
+                        let outer_rect = BoundBox::from(widget_origin_rect) + offset.to_vec();
                         let cell_hinter = CellHinter::new(outer_rect, hint.place_in_cell);
 
                         solvable_index += 1;
                         let grid_margin_offset = Vector2::new(self.grid_margins.left, self.grid_margins.top);
                         *widget_rect = cell_hinter.hint(hint.size_bounds, hint.margins)
-                            .map(|rect| BoundRect::from(rect) + grid_margin_offset)
+                            .map(|rect| BoundBox::from(rect) + grid_margin_offset)
                             .map_err(|_| SolveError::WidgetUnsolvable)
                     } else {
                         *widget_rect = Err(SolveError::CellOutOfBounds)
@@ -523,19 +523,19 @@ impl Default for SolveAxis {
 
 #[derive(Debug, Clone, Copy)]
 struct CellHinter {
-    outer_rect: BoundRect<Px>,
+    outer_rect: BoundBox<Point2<Px>>,
     place_in_or: Align2
 }
 
 impl CellHinter {
-    pub fn new(outer_rect: BoundRect<Px>, place_in_or: Align2) -> CellHinter {
+    pub fn new(outer_rect: BoundBox<Point2<Px>>, place_in_or: Align2) -> CellHinter {
         CellHinter {
             outer_rect: outer_rect,
             place_in_or: place_in_or,
         }
     }
 
-    pub fn hint(&self, bounds: SizeBounds, margins: Margins<Px>) -> Result<BoundRect<Px>, HintError> {
+    pub fn hint(&self, bounds: SizeBounds, margins: Margins<Px>) -> Result<BoundBox<Point2<Px>>, HintError> {
         let margins_x = margins.left + margins.right;
         let margins_y = margins.top + margins.bottom;
 
@@ -545,7 +545,7 @@ impl CellHinter {
             return Err(HintError::ORTooSmall)
         }
 
-        let mut inner_rect = BoundRect::new(0, 0, 0, 0);
+        let mut inner_rect = BoundBox::new2(0, 0, 0, 0);
 
         macro_rules! place_on_axis {
             ($axis:ident, $size:ident, $front_margin:expr, $back_margin:expr) => {

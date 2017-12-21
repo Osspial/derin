@@ -29,7 +29,7 @@ use core::render::{RenderFrame, FrameRectStack};
 use core::tree::{NodeIdent, NodeSummary, UpdateTag, NodeSubtrait, NodeSubtraitMut, Node, Parent};
 
 use cgmath::Point2;
-use cgmath_geometry::{BoundRect, DimsRect, Rectangle};
+use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
 
 use arrayvec::ArrayVec;
 
@@ -87,7 +87,7 @@ pub trait ButtonHandler {
 #[derive(Debug, Clone)]
 pub struct Button<H: ButtonHandler> {
     update_tag: UpdateTag,
-    bounds: BoundRect<u32>,
+    bounds: BoundBox<Point2<u32>>,
     state: ButtonState,
     handler: H,
     string: String
@@ -98,7 +98,7 @@ pub struct Group<C, L>
     where L: NodeLayout
 {
     update_tag: UpdateTag,
-    bounds: BoundRect<u32>,
+    bounds: BoundBox<Point2<u32>>,
     layout_engine: GridEngine,
     container: C,
     layout: L
@@ -117,7 +117,7 @@ impl<H: ButtonHandler> Button<H> {
     pub fn new(string: String, handler: H) -> Button<H> {
         Button {
             update_tag: UpdateTag::new(),
-            bounds: BoundRect::new(0, 0, 0, 0),
+            bounds: BoundBox::new2(0, 0, 0, 0),
             state: ButtonState::Normal,
             handler, string
         }
@@ -130,7 +130,7 @@ impl<C, L> Group<C, L>
     pub fn new(container: C, layout: L) -> Group<C, L> {
         Group {
             update_tag: UpdateTag::new(),
-            bounds: BoundRect::new(0, 0, 0, 0),
+            bounds: BoundBox::new2(0, 0, 0, 0),
             layout_engine: GridEngine::new(),
             container, layout
         }
@@ -147,12 +147,12 @@ impl<F, H> Node<H::Action, F> for Button<H>
     }
 
     #[inline]
-    fn bounds(&self) -> BoundRect<u32> {
+    fn bounds(&self) -> BoundBox<Point2<u32>> {
         self.bounds
     }
 
     #[inline]
-    fn bounds_mut(&mut self) -> &mut BoundRect<u32> {
+    fn bounds_mut(&mut self) -> &mut BoundBox<Point2<u32>> {
         &mut self.bounds
     }
 
@@ -168,9 +168,11 @@ impl<F, H> Node<H::Action, F> for Button<H>
         frame.upload_primitives([
             ThemedPrim {
                 theme_path: image_str,
-                rect: BoundRect::new(
+                min: Point2::new(
                     RelPoint::new(-1.0, 0),
                     RelPoint::new(-1.0, 0),
+                ),
+                max: Point2::new(
                     RelPoint::new( 1.0, 0),
                     RelPoint::new( 1.0, 0)
                 ),
@@ -178,9 +180,11 @@ impl<F, H> Node<H::Action, F> for Button<H>
             },
             ThemedPrim {
                 theme_path: image_str,
-                rect: BoundRect::new(
+                min: Point2::new(
                     RelPoint::new(-1.0, 0),
                     RelPoint::new(-1.0, 0),
+                ),
+                max: Point2::new(
                     RelPoint::new( 1.0, 0),
                     RelPoint::new( 1.0, 0)
                 ),
@@ -189,7 +193,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
         ].iter().cloned());
     }
 
-    fn on_node_event(&mut self, event: NodeEvent) -> EventOps<H::Action> {
+    fn on_node_event(&mut self, event: NodeEvent, _: &[NodeIdent]) -> EventOps<H::Action> {
         use self::NodeEvent::*;
 
         let mut action = None;
@@ -247,12 +251,12 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
     }
 
     #[inline]
-    fn bounds(&self) -> BoundRect<u32> {
+    fn bounds(&self) -> BoundBox<Point2<u32>> {
         self.bounds
     }
 
     #[inline]
-    fn bounds_mut(&mut self) -> &mut BoundRect<u32> {
+    fn bounds_mut(&mut self) -> &mut BoundBox<Point2<u32>> {
         self.update_tag.mark_update_layout();
         &mut self.bounds
     }
@@ -261,9 +265,11 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
         frame.upload_primitives([
             ThemedPrim {
                 theme_path: "Group",
-                rect: BoundRect::new(
+                min: Point2::new(
                     RelPoint::new(-1.0, 0),
                     RelPoint::new(-1.0, 0),
+                ),
+                max: Point2::new(
                     RelPoint::new( 1.0, 0),
                     RelPoint::new( 1.0, 0)
                 ),
@@ -273,7 +279,7 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
     }
 
     #[inline]
-    fn on_node_event(&mut self, _: NodeEvent) -> EventOps<A> {
+    fn on_node_event(&mut self, _: NodeEvent, _: &[NodeIdent]) -> EventOps<A> {
         EventOps {
             action: None,
             bubble: true
@@ -359,7 +365,7 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
         struct HeapCache {
             update_heap_cache: UpdateHeapCache,
             hints_vec: Vec<WidgetPos>,
-            rects_vec: Vec<Result<BoundRect<u32>, SolveError>>
+            rects_vec: Vec<Result<BoundBox<Point2<u32>>, SolveError>>
         }
         thread_local! {
             static HEAP_CACHE: RefCell<HeapCache> = RefCell::new(HeapCache::default());
@@ -376,18 +382,18 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
 
             self.container.children::<_, ()>(|summary| {
                 hints_vec.push(self.layout.hints(summary.ident).unwrap_or(WidgetPos::default()));
-                rects_vec.push(Ok(BoundRect::new(0, 0, 0, 0)));
+                rects_vec.push(Ok(BoundBox::new2(0, 0, 0, 0)));
                 LoopFlow::Continue
             });
 
-            self.layout_engine.desired_size = DimsRect::new(self.bounds.width(), self.bounds.height());
+            self.layout_engine.desired_size = DimsBox::new2(self.bounds.width(), self.bounds.height());
             self.layout_engine.set_grid_size(self.layout.grid_size());
             self.layout_engine.update_engine(hints_vec, rects_vec, update_heap_cache);
 
             let mut rects_iter = rects_vec.drain(..);
             self.container.children_mut::<_, ()>(|summary| {
                 match rects_iter.next() {
-                    Some(rect) => *summary.node.bounds_mut() = rect.unwrap_or(BoundRect::new(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF)),
+                    Some(rect) => *summary.node.bounds_mut() = rect.unwrap_or(BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF)),
                     None => return LoopFlow::Break(())
                 }
                 LoopFlow::Continue

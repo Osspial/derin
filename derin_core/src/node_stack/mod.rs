@@ -7,8 +7,8 @@ use tree::{Node, NodeIdent, ChildEventRecv, UpdateTag, NodeSubtrait, NodeSubtrai
 
 use self::inner::{NRAllocCache, NRVec};
 
-use cgmath::{Vector2, EuclideanSpace};
-use cgmath_geometry::{BoundRect, Rectangle};
+use cgmath::{Point2, Vector2, EuclideanSpace};
+use cgmath_geometry::{BoundBox, GeoBox};
 
 pub struct NodeStackBase<A, F: RenderFrame> {
     stack: NRAllocCache<A, F>
@@ -104,7 +104,7 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
     }
 
     #[inline]
-    pub fn top_bounds_offset(&self) -> BoundRect<u32> {
+    pub fn top_bounds_offset(&self) -> BoundBox<Point2<u32>> {
         self.stack.top_bounds_offset()
     }
 

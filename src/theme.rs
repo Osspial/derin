@@ -1,7 +1,8 @@
 use gl_raii::colors::Rgba;
 use gl_raii::glsl::Nu8;
 
-use cgmath_geometry::DimsRect;
+use cgmath::Point2;
+use cgmath_geometry::DimsBox;
 use dct::hints::{Align2, Margins};
 
 use std::io;
@@ -14,7 +15,7 @@ use core::render::Theme as CoreTheme;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Image {
     pub pixels: Vec<Rgba<Nu8>>,
-    pub dims: DimsRect<u32>,
+    pub dims: DimsBox<Point2<u32>>,
     pub rescale: RescaleRules
 }
 

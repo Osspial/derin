@@ -3,7 +3,7 @@ use gl_raii::glsl::Nu8;
 use gl_raii::colors::Rgba;
 
 use cgmath::Point2;
-use cgmath_geometry::{BoundRect, OffsetRect, Rectangle};
+use cgmath_geometry::{OffsetBox, BoundBox, GeoBox};
 
 use theme::RescaleRules;
 
@@ -31,7 +31,7 @@ enum TranslateVerts {
 }
 
 impl ImageTranslate {
-    pub fn new(rect: BoundRect<u32>, atlas_rect: OffsetRect<u16>, color: Rgba<Nu8>, rescale: RescaleRules) -> ImageTranslate {
+    pub fn new(rect: BoundBox<Point2<u32>>, atlas_rect: OffsetBox<Point2<u16>>, color: Rgba<Nu8>, rescale: RescaleRules) -> ImageTranslate {
         let (min, max) = (rect.min(), rect.max());
         let atlas_rect = atlas_rect.cast::<f32>().unwrap();
         let verts = match (min == max, rescale) {
