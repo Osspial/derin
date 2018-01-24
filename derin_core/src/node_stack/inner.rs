@@ -9,24 +9,32 @@ use cgmath_geometry::{BoundBox, GeoBox};
 
 struct StackElement<'a, A, F: RenderFrame> {
     node: *mut (Node<A, F> + 'a),
-    bounds: BoundBox<Point2<u32>>,
-    ident: NodeIdent
+    bounds: BoundBox<Point2<u32>>
 }
 
 pub struct NRAllocCache<A, F: RenderFrame> {
-    vec: Vec<StackElement<'static, A, F>>
+    vec: Vec<StackElement<'static, A, F>>,
+    ident_vec: Vec<NodeIdent>
 }
 
 pub struct NRVec<'a, A: 'a, F: 'a + RenderFrame> {
     cache: &'a mut Vec<StackElement<'static, A, F>>,
     vec: Vec<StackElement<'a, A, F>>,
+    ident_vec: &'a mut Vec<NodeIdent>,
     top_parent_offset: Vector2<u32>
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct NodePath<'a, N: 'a + ?Sized> {
+    pub node: &'a mut N,
+    pub path: &'a [NodeIdent]
 }
 
 impl<A, F: RenderFrame> NRAllocCache<A, F> {
     pub fn new() -> NRAllocCache<A, F> {
         NRAllocCache {
-            vec: vec![]
+            vec: Vec::new(),
+            ident_vec: Vec::new()
         }
     }
 
@@ -39,16 +47,17 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
             mem::forget(cache_swap);
             Vec::from_raw_parts(mem::transmute::<_, *mut StackElement<A, F>>(ptr), len, cap)
         };
+        let mut ident_vec = &mut self.ident_vec;
 
         vec.push(StackElement {
             node: node,
-            bounds: BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF),
-            ident: NodeIdent::Num(0)
+            bounds: BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF)
         });
+        ident_vec.push(NodeIdent::Num(0));
 
         NRVec {
             cache: &mut self.vec,
-            vec,
+            vec, ident_vec,
             top_parent_offset: Vector2::new(0, 0)
         }
     }
@@ -61,13 +70,16 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn top_mut(&mut self) -> &mut (Node<A, F> + 'a) {
-        self.vec.last_mut().map(|n| unsafe{ &mut *n.node }).unwrap()
+    pub fn top_mut(&mut self) -> NodePath<Node<A, F> + 'a> {
+        NodePath {
+            node: self.vec.last_mut().map(|n| unsafe{ &mut *n.node }).unwrap(),
+            path: &self.ident_vec
+        }
     }
 
     #[inline]
     pub fn top_ident(&self) -> NodeIdent {
-        self.vec.last().unwrap().ident
+        *self.ident_vec.last().unwrap()
     }
 
     #[inline]
@@ -102,12 +114,17 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
+    pub fn ident(&self) -> &[NodeIdent] {
+        &self.ident_vec
+    }
+
+    #[inline]
     pub fn try_push<G>(&mut self, with_top: G) -> Option<(&'a mut Node<A, F>, NodeIdent)>
-        where G: FnOnce(&'a mut Node<A, F>) -> Option<(&'a mut Node<A, F>, NodeIdent)>
+        where G: FnOnce(&'a mut Node<A, F>, &[NodeIdent]) -> Option<(&'a mut Node<A, F>, NodeIdent)>
     {
-        let new_top_opt = with_top(unsafe{ mem::transmute(self.top_mut()) } );
+        let new_top_opt = with_top(unsafe{ mem::transmute(self.top_mut().node) }, &self.ident_vec );
         if let Some((new_top, new_top_ident)) = new_top_opt {
-            assert_ne!(new_top as *mut Node<A, F>, self.top_mut() as *mut _);
+            assert_ne!(new_top as *mut Node<A, F>, self.top_mut().node as *mut _);
             {
                 let cur_top = self.vec.last_mut().unwrap();
 
@@ -117,9 +134,9 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
 
             self.vec.push(StackElement {
                 node: new_top,
-                bounds: BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF),
-                ident: new_top_ident
+                bounds: BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF)
             });
+            self.ident_vec.push(new_top_ident);
             Some((unsafe{ &mut *self.vec.last().unwrap().node }, new_top_ident))
         } else {
             None
@@ -134,6 +151,7 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
         }
 
         let popped = self.vec.pop().map(|n| unsafe{ &mut *n.node });
+        self.ident_vec.pop();
         if let Some(last_mut) = self.vec.last_mut() {
             self.top_parent_offset -= last_mut.bounds.min().to_vec();
             last_mut.bounds = BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF);

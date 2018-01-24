@@ -39,6 +39,7 @@ pub struct UpdateTag {
     last_root: Cell<u32>,
     pub(crate) last_event_stamp: Cell<u32>,
     pub(crate) mouse_state: Cell<MouseState>,
+    pub(crate) has_keyboard_focus: Cell<bool>,
     pub(crate) child_event_recv: Cell<ChildEventRecv>
 }
 
@@ -56,13 +57,13 @@ impl MouseState {
 bitflags! {
     #[doc(hidden)]
     pub struct ChildEventRecv: u8 {
-        const MOUSE_L     = 1 << 0;
-        const MOUSE_R     = 1 << 1;
-        const MOUSE_M     = 1 << 2;
-        const MOUSE_X1    = 1 << 3;
-        const MOUSE_X2    = 1 << 4;
-        const MOUSE_HOVER = 1 << 5;
-        // const KEYS        = 1 << 6;
+        const MOUSE_L        = 1 << 0;
+        const MOUSE_R        = 1 << 1;
+        const MOUSE_M        = 1 << 2;
+        const MOUSE_X1       = 1 << 3;
+        const MOUSE_X2       = 1 << 4;
+        const MOUSE_HOVER    = 1 << 5;
+        const KEYBOARD = 1 << 6;
 
         const MOUSE_BUTTONS =
             Self::MOUSE_L.bits  |
@@ -97,6 +98,10 @@ impl<'a> From<&'a UpdateTag> for ChildEventRecv {
             MouseState::Hovering(_, _) => ChildEventRecv::MOUSE_HOVER,
             MouseState::Tracking(_, _)  |
             MouseState::Untracked   => ChildEventRecv::empty()
+        } |
+        match update_tag.has_keyboard_focus.get() {
+            true => ChildEventRecv::KEYBOARD,
+            false => ChildEventRecv::empty()
         }
     }
 }
@@ -168,6 +173,7 @@ impl UpdateTag {
             last_root: Cell::new(UPDATE_MASK),
             last_event_stamp: Cell::new(0),
             mouse_state: Cell::new(MouseState::Untracked),
+            has_keyboard_focus: Cell::new(false),
             child_event_recv: Cell::new(ChildEventRecv::empty())
         }
     }

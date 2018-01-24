@@ -9,3 +9,4 @@ cgmath = { git = "https://github.com/Osspial/cgmath.git", branch = "prs_merged" 
 cgmath-geometry = { git = "https://github.com/Osspial/cgmath-geometry.git" }
 dct = { path = "../dct" }
 arrayvec = "0.4"
+itertools = "0.7"

@@ -1,11 +1,19 @@
-use dct::buttons::MouseButton;
+use dct::buttons::{MouseButton, Key};
 use cgmath::Point2;
 use tree::NodeIdent;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EventOps<A> {
     pub action: Option<A>,
-    pub bubble: bool
+    pub focus: Option<FocusChange>
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum FocusChange {
+    Next,
+    Prev,
+    Take,
+    Remove
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,6 +56,11 @@ pub enum NodeEvent<'a> {
         in_node: bool,
         pressed_in_node: bool,
         button: MouseButton
-    }
+    },
+    GainFocus,
+    LoseFocus,
+    Char(char),
+    KeyDown(Key),
+    KeyUp(Key)
 }
 

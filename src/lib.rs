@@ -225,7 +225,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
 
         EventOps {
             action,
-            bubble: false
+            focus: None
         }
     }
 
@@ -282,7 +282,7 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
     fn on_node_event(&mut self, _: NodeEvent, _: &[NodeIdent]) -> EventOps<A> {
         EventOps {
             action: None,
-            bubble: true
+            focus: None
         }
     }
 
