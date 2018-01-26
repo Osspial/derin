@@ -42,6 +42,8 @@ pub mod geometry {
 pub trait NodeContainer<F: RenderFrame> {
     type Action;
 
+    fn num_children(&self) -> usize;
+
     fn children<'a, G, R>(&'a self, for_each_child: G) -> Option<R>
         where G: FnMut(NodeSummary<&'a Node<Self::Action, F>>) -> LoopFlow<R>,
               Self::Action: 'a,
@@ -67,6 +69,27 @@ pub trait NodeContainer<F: RenderFrame> {
             if summary.ident == node_ident {
                 LoopFlow::Break(summary)
             } else {
+                LoopFlow::Continue
+            }
+        })
+    }
+
+    fn child_by_index(&self, mut index: usize) -> Option<NodeSummary<&Node<Self::Action, F>>> {
+        self.children(|summary| {
+            if index == 0 {
+                LoopFlow::Break(summary)
+            } else {
+                index -= 1;
+                LoopFlow::Continue
+            }
+        })
+    }
+    fn child_by_index_mut(&mut self, mut index: usize) -> Option<NodeSummary<&mut Node<Self::Action, F>>> {
+        self.children_mut(|summary| {
+            if index == 0 {
+                LoopFlow::Break(summary)
+            } else {
+                index -= 1;
                 LoopFlow::Continue
             }
         })
@@ -195,8 +218,9 @@ impl<F, H> Node<H::Action, F> for Button<H>
 
     fn on_node_event(&mut self, event: NodeEvent, _: &[NodeIdent]) -> EventOps<H::Action> {
         use self::NodeEvent::*;
+        use core::event::FocusChange;
 
-        let mut action = None;
+        let (mut action, mut focus) = (None, None);
         let new_state = match event {
             MouseEnter{buttons_down_in_node, ..} if buttons_down_in_node.is_empty() => ButtonState::Hover,
             MouseExit{buttons_down_in_node, ..} if buttons_down_in_node.is_empty() => ButtonState::Normal,
@@ -207,6 +231,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
             MouseUp{in_node: true, pressed_in_node, ..} => {
                 match pressed_in_node {
                     true => {
+                        focus = Some(FocusChange::Take);
                         action = self.handler.on_click();
                         ButtonState::Hover
                     },
@@ -215,7 +240,12 @@ impl<F, H> Node<H::Action, F> for Button<H>
             },
             MouseUp{in_node: false, ..} => ButtonState::Normal,
             MouseEnterChild{..} |
-            MouseExitChild{..} => unreachable!()
+            MouseExitChild{..} => unreachable!(),
+            GainFocus => self.state,
+            LoseFocus => self.state,
+            Char(_) => self.state,
+            KeyDown(_) => self.state,
+            KeyUp(_) => self.state,
         };
 
         if new_state != self.state {
@@ -224,8 +254,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
         }
 
         EventOps {
-            action,
-            focus: None
+            action, focus
         }
     }
 
@@ -304,10 +333,13 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
           C: NodeContainer<F, Action=A>,
           L: NodeLayout
 {
+    fn num_children(&self) -> usize {
+        self.container.num_children()
+    }
+
     fn child(&self, node_ident: NodeIdent) -> Option<NodeSummary<&Node<A, F>>> {
         self.container.child(node_ident)
     }
-
     fn child_mut(&mut self, node_ident: NodeIdent) -> Option<NodeSummary<&mut Node<A, F>>> {
         self.container.child_mut(node_ident)
     }
@@ -360,6 +392,13 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
         }
     }
 
+    fn child_by_index(&self, index: usize) -> Option<NodeSummary<&Node<A, F>>> {
+        self.container.child_by_index(index)
+    }
+    fn child_by_index_mut(&mut self, index: usize) -> Option<NodeSummary<&mut Node<A, F>>> {
+        self.container.child_by_index_mut(index)
+    }
+
     fn update_child_layout(&mut self) {
         #[derive(Default)]
         struct HeapCache {
@@ -400,26 +439,6 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
             });
 
             hints_vec.clear();
-        })
-    }
-
-    fn child_by_point(&self, point: Point2<u32>) -> Option<NodeSummary<&Node<A, F>>> {
-        self.container.children(|summary| {
-            if summary.rect.contains(point) {
-                LoopFlow::Break(summary)
-            } else {
-                LoopFlow::Continue
-            }
-        })
-    }
-
-    fn child_by_point_mut(&mut self, point: Point2<u32>) -> Option<NodeSummary<&mut Node<A, F>>> {
-        self.container.children_mut(|summary| {
-            if summary.rect.contains(point) {
-                LoopFlow::Break(summary)
-            } else {
-                LoopFlow::Continue
-            }
         })
     }
 }

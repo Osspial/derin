@@ -28,7 +28,7 @@ use event::{NodeEvent, FocusChange};
 use render::{Renderer, RenderFrame, FrameRectStack};
 use mbseq::MouseButtonSequence;
 use node_stack::{NodeStackBase, NodePath};
-use focus_tracker::KeyboardFocusTracker;
+use focus_tracker::{KeyboardFocusTracker};
 use dct::buttons::{MouseButton, Key};
 
 pub struct Root<A, N, F>
@@ -297,13 +297,25 @@ impl<A, N, F> Root<A, N, F>
 
                                                 // Figure out if the cursor has moved into a child node, and send the relevant events if
                                                 // we have.
-                                                if let Some(child_summary) = top_node_as_parent.child_by_point_mut(new_pos_unsigned) {
+                                                top_node_as_parent.children_mut(&mut |summary_list| {
+                                                    let mut child_summary = None;
+                                                    for summary in summary_list {
+                                                        if summary.rect.contains(new_pos_unsigned) {
+                                                            child_summary = Some(summary);
+                                                            break;
+                                                        }
+                                                    }
+                                                    let child_summary = match child_summary {
+                                                        Some(summary) => summary,
+                                                        None => return LoopFlow::Continue
+                                                    };
+
                                                     let NodeSummary {
-                                                        node: child,
+                                                        node: ref mut child,
                                                         rect: child_bounds,
                                                         ident: child_ident,
                                                         ..
-                                                    } = child_summary;
+                                                    } = *child_summary;
 
                                                     let child_pos_offset = child_bounds.min().to_vec().cast::<i32>()
                                                         .unwrap_or(Vector2::from_value(i32::max_value()));
@@ -345,7 +357,8 @@ impl<A, N, F> Root<A, N, F>
                                                     // We `continue` the loop after this, but the continue is handled by the
                                                     // `enter_child` check below. `mark_if_needs_update` is called after the
                                                     // continue.
-                                                }
+                                                    LoopFlow::Break(())
+                                                });
 
                                                 if let Some(EnterChildData{child_ident, enter_pos}) = enter_child {
                                                     // SEND CHILD ENTER ACTION
@@ -633,20 +646,21 @@ impl<A, N, F> Root<A, N, F>
                 },
             }
 
-            {
-                let mut focus_drain = focus_tracker.drain_focus();
-                assert_eq!(0, node_ident_stack.len());
-                loop {
-                    let focus = match focus_drain.next() {
-                        Some((focus, ident_iter)) => {
-                            node_ident_stack.extend(ident_iter);
-                            focus
-                        },
-                        None => break
-                    };
-                    match focus {
-                        FocusChange::Remove => {
-                            let NodePath{ node, path } = node_stack.top_mut();
+            // Dispatch focus-changing events to the nodes.
+            let mut focus_drain = focus_tracker.drain_focus();
+            assert_eq!(0, node_ident_stack.len());
+            loop {
+                let focus = match focus_drain.next() {
+                    Some((focus, ident_iter)) => {
+                        node_ident_stack.extend(ident_iter);
+                        focus
+                    },
+                    None => break
+                };
+
+                match focus {
+                    FocusChange::Remove => {
+                        if let Some(NodePath{ node, path }) = node_stack.move_to_path(node_ident_stack.iter().cloned()) {
                             if node.update_tag().has_keyboard_focus.get() {
                                 try_push_action!(
                                     node,
@@ -659,18 +673,37 @@ impl<A, N, F> Root<A, N, F>
                                     update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
                                 }
                             }
-                        },
-                        // FocusChange::Take => {
-                        //     {
-                        //         let NodePath{ node, path } = node_stack.top_mut();
-                        //         try_push_action!(node, path.into_iter().cloned() => (focus_drain), NodeEvent::GainFocus);
-                        //     }
-                        // }
-                        // try_push_action!(node, path.into_iter().cloned() => (focus_drain), )
-                        _ => unimplemented!()
-                    }
-                    node_ident_stack.clear();
+                        }
+                    },
+                    FocusChange::Take => {
+                        if let Some(NodePath{ node, path }) = node_stack.move_to_keyboard_focus() {
+                            if path == &**node_ident_stack {
+                                node_ident_stack.clear();
+                                continue;
+                            }
+                            try_push_action!(node, path.into_iter().cloned() => (focus_drain), NodeEvent::LoseFocus);
+
+                            let update_tag = mark_if_needs_update!(node);
+                            update_tag.has_keyboard_focus.set(false);
+                            for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
+                                update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
+                            }
+                        }
+                        if let Some(NodePath{ node, path }) = node_stack.move_to_path(node_ident_stack.iter().cloned()) {
+                            try_push_action!(node, path.into_iter().cloned() => (focus_drain), NodeEvent::GainFocus);
+                            let update_tag = mark_if_needs_update!(node);
+                            update_tag.has_keyboard_focus.set(true);
+
+                            node_stack.pop();
+                            for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
+                                update_tag.child_event_recv.set(update_tag.child_event_recv.get() | ChildEventRecv::KEYBOARD);
+                            }
+                        }
+                    },
+                    FocusChange::Next |
+                    FocusChange::Prev => unimplemented!()
                 }
+                node_ident_stack.clear();
             }
 
             // Increment the event stamp. Because new `UpdateTag`s have a default event stampo of 0,
@@ -768,7 +801,7 @@ impl<'a, F> NodeRenderer<'a, F>
                     node: ref mut child_node,
                     ident,
                     rect: child_rect,
-                    update_tag: _
+                    ..
                 } = *summary;
 
                 let mut root_update = child_node.update_tag().needs_update(self.root_id);

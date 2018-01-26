@@ -63,4 +63,3 @@ pub enum NodeEvent<'a> {
     KeyDown(Key),
     KeyUp(Key)
 }
-

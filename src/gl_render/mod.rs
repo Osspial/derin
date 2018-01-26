@@ -74,7 +74,7 @@ impl GLRenderer {
         let window = {
             let context_builder = ContextBuilder::new()
                 .with_gl(GlRequest::GlThenGles {
-                    opengl_version: (3, 3),
+                    opengl_version: (3, 1),
                     opengles_version: (3, 0)
                 });
             GlWindow::new(window_builder, context_builder, events_loop)?

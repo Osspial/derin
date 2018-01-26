@@ -6,7 +6,7 @@ extern crate png;
 
 extern crate gl_raii;
 
-use derin::dct::buttons::MouseButton;
+use derin::dct::buttons::{MouseButton, Key};
 use derin::dct::hints::{WidgetPos, NodeSpan, GridSize, Margins, Align, Align2};
 use derin::{ButtonHandler, NodeLayout, Button, Group};
 use derin::gl_render::GLRenderer;
@@ -20,7 +20,7 @@ use gl_raii::glsl::Nu8;
 
 use std::rc::Rc;
 
-use glutin::{Event, ControlFlow, WindowEvent as GWindowEvent, MouseButton as GMouseButton, ElementState};
+use glutin::{Event, ControlFlow, WindowEvent as GWindowEvent, MouseButton as GMouseButton, ElementState, VirtualKeyCode};
 
 
 enum GalleryEvent {}
@@ -184,6 +184,17 @@ fn main() {
                             })
                         }
                         GWindowEvent::Resized(width, height) => Some(WindowEvent::WindowResize(DimsBox::new2(width, height))),
+                        GWindowEvent::ReceivedCharacter(c) => Some(WindowEvent::Char(c)),
+                        GWindowEvent::KeyboardInput{ input, .. } => {
+                            if let Some(key) = input.virtual_keycode.and_then(map_key) {
+                                match input.state {
+                                    ElementState::Pressed => Some(WindowEvent::KeyDown(key)),
+                                    ElementState::Released => Some(WindowEvent::KeyUp(key))
+                                }
+                            } else {
+                                None
+                            }
+                        }
                         GWindowEvent::Closed => return ControlFlow::Break,
                         _ => None
                     };
@@ -208,4 +219,184 @@ fn main() {
 
         ret
     }, |_, _, _| {LoopFlow::Continue}, &mut renderer);
+}
+
+fn map_key(k: VirtualKeyCode) -> Option<Key> {
+    match k {
+        VirtualKeyCode::Back => Some(Key::Back),
+        VirtualKeyCode::Tab => Some(Key::Tab),
+        // VirtualKeyCode::Clear => Some(Key::Clear),
+        VirtualKeyCode::Return => Some(Key::Enter),
+        // VirtualKeyCode::Pause => Some(Key::Pause),
+        VirtualKeyCode::Escape => Some(Key::Escape),
+        VirtualKeyCode::Space => Some(Key::Space),
+        VirtualKeyCode::PageUp => Some(Key::PgUp),
+        VirtualKeyCode::PageDown => Some(Key::PgDn),
+        VirtualKeyCode::End => Some(Key::End),
+        VirtualKeyCode::Home => Some(Key::Home),
+        // VirtualKeyCode::Select => Some(Key::Select),
+        // VirtualKeyCode::Print => Some(Key::Print),
+        // VirtualKeyCode::Execute => Some(Key::Execute),
+        VirtualKeyCode::Snapshot => Some(Key::PrntScr),
+        VirtualKeyCode::Insert => Some(Key::Insert),
+        VirtualKeyCode::Delete => Some(Key::Delete),
+        // VirtualKeyCode::Help => Some(Key::Help),
+        VirtualKeyCode::Key0 => Some(Key::Key0),
+        VirtualKeyCode::Key1 => Some(Key::Key1),
+        VirtualKeyCode::Key2 => Some(Key::Key2),
+        VirtualKeyCode::Key3 => Some(Key::Key3),
+        VirtualKeyCode::Key4 => Some(Key::Key4),
+        VirtualKeyCode::Key5 => Some(Key::Key5),
+        VirtualKeyCode::Key6 => Some(Key::Key6),
+        VirtualKeyCode::Key7 => Some(Key::Key7),
+        VirtualKeyCode::Key8 => Some(Key::Key8),
+        VirtualKeyCode::Key9 => Some(Key::Key9),
+        VirtualKeyCode::A => Some(Key::A),
+        VirtualKeyCode::B => Some(Key::B),
+        VirtualKeyCode::C => Some(Key::C),
+        VirtualKeyCode::D => Some(Key::D),
+        VirtualKeyCode::E => Some(Key::E),
+        VirtualKeyCode::F => Some(Key::F),
+        VirtualKeyCode::G => Some(Key::G),
+        VirtualKeyCode::H => Some(Key::H),
+        VirtualKeyCode::I => Some(Key::I),
+        VirtualKeyCode::J => Some(Key::J),
+        VirtualKeyCode::K => Some(Key::K),
+        VirtualKeyCode::L => Some(Key::L),
+        VirtualKeyCode::M => Some(Key::M),
+        VirtualKeyCode::N => Some(Key::N),
+        VirtualKeyCode::O => Some(Key::O),
+        VirtualKeyCode::P => Some(Key::P),
+        VirtualKeyCode::Q => Some(Key::Q),
+        VirtualKeyCode::R => Some(Key::R),
+        VirtualKeyCode::S => Some(Key::S),
+        VirtualKeyCode::T => Some(Key::T),
+        VirtualKeyCode::U => Some(Key::U),
+        VirtualKeyCode::V => Some(Key::V),
+        VirtualKeyCode::W => Some(Key::W),
+        VirtualKeyCode::X => Some(Key::X),
+        VirtualKeyCode::Y => Some(Key::Y),
+        VirtualKeyCode::Z => Some(Key::Z),
+        VirtualKeyCode::Semicolon => Some(Key::Semi),
+        VirtualKeyCode::Equals => Some(Key::Plus),
+        VirtualKeyCode::Comma => Some(Key::Comma),
+        VirtualKeyCode::Minus => Some(Key::Minus),
+        VirtualKeyCode::Period => Some(Key::Dot),
+        VirtualKeyCode::Slash => Some(Key::Slash),
+        VirtualKeyCode::Grave => Some(Key::Tilde),
+        VirtualKeyCode::LBracket => Some(Key::LBrac),
+        VirtualKeyCode::RBracket => Some(Key::RBrac),
+        VirtualKeyCode::Backslash => Some(Key::Pipe),
+        VirtualKeyCode::Apostrophe => Some(Key::Quote),
+        VirtualKeyCode::Sleep => Some(Key::Sleep),
+        VirtualKeyCode::Numpad0 => Some(Key::Num0),
+        VirtualKeyCode::Numpad1 => Some(Key::Num1),
+        VirtualKeyCode::Numpad2 => Some(Key::Num2),
+        VirtualKeyCode::Numpad3 => Some(Key::Num3),
+        VirtualKeyCode::Numpad4 => Some(Key::Num4),
+        VirtualKeyCode::Numpad5 => Some(Key::Num5),
+        VirtualKeyCode::Numpad6 => Some(Key::Num6),
+        VirtualKeyCode::Numpad7 => Some(Key::Num7),
+        VirtualKeyCode::Numpad8 => Some(Key::Num8),
+        VirtualKeyCode::Numpad9 => Some(Key::Num9),
+        VirtualKeyCode::Multiply => Some(Key::NumStar),
+        VirtualKeyCode::Add => Some(Key::NumPlus),
+        VirtualKeyCode::Subtract => Some(Key::NumSub),
+        VirtualKeyCode::Decimal => Some(Key::NumDot),
+        VirtualKeyCode::Divide => Some(Key::NumSlash),
+        VirtualKeyCode::F1 => Some(Key::F1),
+        VirtualKeyCode::F2 => Some(Key::F2),
+        VirtualKeyCode::F3 => Some(Key::F3),
+        VirtualKeyCode::F4 => Some(Key::F4),
+        VirtualKeyCode::F5 => Some(Key::F5),
+        VirtualKeyCode::F6 => Some(Key::F6),
+        VirtualKeyCode::F7 => Some(Key::F7),
+        VirtualKeyCode::F8 => Some(Key::F8),
+        VirtualKeyCode::F9 => Some(Key::F9),
+        VirtualKeyCode::F10 => Some(Key::F10),
+        VirtualKeyCode::F11 => Some(Key::F11),
+        VirtualKeyCode::F12 => Some(Key::F12),
+        VirtualKeyCode::F13 => Some(Key::F13),
+        VirtualKeyCode::F14 => Some(Key::F14),
+        VirtualKeyCode::F15 => Some(Key::F15),
+        // VirtualKeyCode::F16 => Some(Key::F16),
+        // VirtualKeyCode::F17 => Some(Key::F17),
+        // VirtualKeyCode::F18 => Some(Key::F18),
+        // VirtualKeyCode::F19 => Some(Key::F19),
+        // VirtualKeyCode::F20 => Some(Key::F20),
+        // VirtualKeyCode::F21 => Some(Key::F21),
+        // VirtualKeyCode::F22 => Some(Key::F22),
+        // VirtualKeyCode::F23 => Some(Key::F23),
+        // VirtualKeyCode::F24 => Some(Key::F24),
+        VirtualKeyCode::Numlock => Some(Key::Num),
+        // VirtualKeyCode::Caps => Some(Key::Caps),
+        VirtualKeyCode::Scroll => Some(Key::Scroll),
+        VirtualKeyCode::LShift => Some(Key::LShift),
+        VirtualKeyCode::RShift => Some(Key::RShift),
+        VirtualKeyCode::LControl => Some(Key::LCtrl),
+        VirtualKeyCode::RControl => Some(Key::RCtrl),
+        VirtualKeyCode::LAlt => Some(Key::LAlt),
+        VirtualKeyCode::RAlt => Some(Key::RAlt),
+        VirtualKeyCode::NavigateBackward => Some(Key::BBack),
+        VirtualKeyCode::NavigateForward => Some(Key::BFwd),
+        VirtualKeyCode::WebRefresh => Some(Key::BRef),
+        VirtualKeyCode::WebStop => Some(Key::BStop),
+        VirtualKeyCode::WebSearch => Some(Key::BSearch),
+        VirtualKeyCode::WebFavorites => Some(Key::BFav),
+        VirtualKeyCode::WebHome => Some(Key::BHome),
+        VirtualKeyCode::NextTrack => Some(Key::MNTrack),
+        VirtualKeyCode::PrevTrack => Some(Key::MPTrack),
+        VirtualKeyCode::Stop => Some(Key::MStop),
+        VirtualKeyCode::Pause => Some(Key::MPause),
+        VirtualKeyCode::Left => Some(Key::LArrow),
+        VirtualKeyCode::Up => Some(Key::UArrow),
+        VirtualKeyCode::Right => Some(Key::RArrow),
+        VirtualKeyCode::Down => Some(Key::DArrow),
+        VirtualKeyCode::Kana => Some(Key::Kana),
+        // VirtualKeyCode::Junja => Some(Key::Junja),
+        // VirtualKeyCode::Final => Some(Key::Final),
+        VirtualKeyCode::Kanji => Some(Key::Kanji),
+        VirtualKeyCode::Convert => Some(Key::Convert),
+        // VirtualKeyCode::Nonconvert => Some(Key::Nonconvert),
+        // VirtualKeyCode::Accept => Some(Key::Accept),
+        // VirtualKeyCode::ModeChange => Some(Key::ModeChange),
+        // VirtualKeyCode::Process => Some(Key::Process),
+        // VirtualKeyCode::LShift => Some(Key::Shift),
+        // VirtualKeyCode::Control => Some(Key::Control),
+        // VirtualKeyCode::Menu => Some(Key::Menu),
+        VirtualKeyCode::Compose |
+        VirtualKeyCode::AbntC1 |
+        VirtualKeyCode::AbntC2 |
+        VirtualKeyCode::Apps |
+        VirtualKeyCode::At |
+        VirtualKeyCode::Ax |
+        VirtualKeyCode::Calculator |
+        VirtualKeyCode::Capital |
+        VirtualKeyCode::Colon |
+        VirtualKeyCode::LMenu |
+        VirtualKeyCode::LWin |
+        VirtualKeyCode::Mail |
+        VirtualKeyCode::MediaSelect |
+        VirtualKeyCode::MediaStop |
+        VirtualKeyCode::Mute |
+        VirtualKeyCode::MyComputer |
+        VirtualKeyCode::NoConvert |
+        VirtualKeyCode::NumpadComma |
+        VirtualKeyCode::NumpadEnter |
+        VirtualKeyCode::NumpadEquals |
+        VirtualKeyCode::OEM102 |
+        VirtualKeyCode::PlayPause |
+        VirtualKeyCode::Power |
+        VirtualKeyCode::RMenu |
+        VirtualKeyCode::RWin |
+        VirtualKeyCode::Sysrq |
+        VirtualKeyCode::Underline |
+        VirtualKeyCode::Unlabeled |
+        VirtualKeyCode::VolumeDown |
+        VirtualKeyCode::VolumeUp |
+        VirtualKeyCode::Wake |
+        VirtualKeyCode::WebBack |
+        VirtualKeyCode::WebForward |
+        VirtualKeyCode::Yen => None
+    }
 }

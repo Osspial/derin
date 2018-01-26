@@ -1,7 +1,7 @@
 #![feature(conservative_impl_trait)]
 
 // Quote recurses a lot.
-#![recursion_limit="128"]
+#![recursion_limit="256"]
 
 extern crate proc_macro;
 extern crate syn;
@@ -97,6 +97,14 @@ fn impl_node_container(derive_input: &DeriveInput) -> Tokens {
         is_mut: true
     };
 
+    let num_children_iter = widget_fields.iter().cloned().enumerate().map(|(field_num, widget_field)| {
+        let widget_ident = widget_field.ident().clone().unwrap_or(Ident::new(field_num));
+        match widget_field {
+            WidgetField::Widget(_) => quote!(+ 1),
+            WidgetField::Collection(_) => quote!(($self.#widget_ident).into_iter().len())
+        }
+    });
+
     quote!{
         #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
         const #dummy_const: () = {
@@ -105,106 +113,36 @@ fn impl_node_container(derive_input: &DeriveInput) -> Tokens {
             impl #impl_generics _derive_derin::NodeContainer<__F> for #ident #ty_generics #where_clause {
                 type Action = #action_ty;
 
+                #[inline]
+                fn num_children(&self) -> usize {
+                    0 #(#num_children_iter)*
+                }
+
+                #[allow(unused_assignments)]
                 fn children<'a, __G, __R>(&'a self, mut for_each_child: __G) -> Option<__R>
                     where __G: FnMut(_derive_derin::core::tree::NodeSummary<&'a _derive_derin::core::tree::Node<Self::Action, __F>>) -> _derive_derin::core::LoopFlow<__R>,
                           Self::Action: 'a,
                           __F: 'a
                 {
+                    let mut index = 0;
                     #(#call_child_iter)*
                     None
                 }
 
+                #[allow(unused_assignments)]
                 fn children_mut<'a, __G, __R>(&'a mut self, mut for_each_child: __G) -> Option<__R>
                     where __G: FnMut(_derive_derin::core::tree::NodeSummary<&'a mut _derive_derin::core::tree::Node<Self::Action, __F>>) -> _derive_derin::core::LoopFlow<__R>,
                           Self::Action: 'a,
                           __F: 'a
                 {
+                    let mut index = 0;
                     #(#call_child_mut_iter)*
                     None
                 }
             }
         };
     }
-
-    // quote!{
-    //     #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
-    //     const #dummy_const: () = {
-    //         extern crate derin as _derive_derin;
-
-    //         #parent_mut
-    //         #parent
-    //     };
-    // }
 }
-
-// fn parent_mut(derive_input: &DeriveInput, action_ty: &Ty, widget_fields: &[WidgetField], layout_ident: &Ident) -> Tokens {
-//     let &DeriveInput{
-//         ref ident,
-//         ref generics,
-//         ..
-//     } = derive_input;
-
-//     let generics_raw = expand_generics(generics, widget_fields, |ty_string| format!("_derive_derin::ui::NodeProcessorGridMut<{}>", ty_string));
-//     let (impl_generics_mut, _, where_clause_mut) = generics_raw.split_for_impl();
-//     let (_, ty_generics, _) = generics.split_for_impl();
-//     let add_child_mut_iter = AddChildIter {
-//         layout_ident: layout_ident.clone(),
-//         fields: widget_fields.iter().cloned(),
-//         field_num: 0,
-//         is_mut: true
-//     };
-
-//     quote!{
-//         impl #impl_generics_mut ParentMut<NPI> for #ident #ty_generics #where_clause_mut {
-//             type ChildAction = #action_ty;
-
-//             fn children_mut(&mut self, npi: NPI) -> Result<(), NPI::Error> {
-//                 let mut np = npi.init_grid(
-//                     self.#layout_ident.grid_size(),
-//                     self.#layout_ident.col_hints(),
-//                     self.#layout_ident.row_hints()
-//                 );
-
-//                 #(#add_child_mut_iter)*
-//                 Ok(())
-//             }
-//         }
-//     }
-// }
-
-// fn parent(derive_input: &DeriveInput, widget_fields: &[WidgetField], layout_ident: &Ident) -> Tokens {
-//     let &DeriveInput{
-//         ref ident,
-//         ref generics,
-//         ..
-//     } = derive_input;
-
-//     let generics_raw = expand_generics(generics, widget_fields, |ty_string| format!("_derive_derin::ui::NodeProcessorGrid<{}>", ty_string));
-//     let (impl_generics, _, where_clause) = generics_raw.split_for_impl();
-//     let (_, ty_generics, _) = generics.split_for_impl();
-//     let add_child_iter = AddChildIter {
-//         layout_ident: layout_ident.clone(),
-//         fields: widget_fields.iter().cloned(),
-//         field_num: 0,
-//         is_mut: false
-//     };
-
-//     quote!{
-//         impl #impl_generics Parent<NPI> for #ident #ty_generics #where_clause {
-
-//             fn children(&self, npi: NPI) -> Result<(), NPI::Error> {
-//                 let mut np = npi.init_grid(
-//                     self.#layout_ident.grid_size(),
-//                     self.#layout_ident.col_hints(),
-//                     self.#layout_ident.row_hints()
-//                 );
-
-//                 #(#add_child_iter)*
-//                 Ok(())
-//             }
-//         }
-//     }
-// }
 
 struct CallChildIter<'a, W>
         where W: Iterator<Item = WidgetField<'a>>
@@ -241,11 +179,13 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
                             ident: #child_id,
                             rect: <_ as _derive_derin::core::tree::Node<Self::Action, __F>>::bounds(&self.#widget_ident),
                             update_tag: <_ as _derive_derin::core::tree::Node<Self::Action, __F>>::update_tag(&self.#widget_ident).clone(),
-                            node: #widget_expr
+                            node: #widget_expr,
+                            index
                         });
                         if let _derive_derin::core::LoopFlow::Break(b) = flow {
                             return Some(b);
                         }
+                        index += 1;
                     }};
                 },
                 WidgetField::Collection(field) => {
@@ -260,11 +200,13 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
                                 ident: #child_id,
                                 rect: <_ as Node<Self::Action, __F>>::bounds(child),
                                 update_tag: <_ as Node<Self::Action, __F>>::update_tag(child).clone(),
-                                node: child
+                                node: child,
+                                index
                             });
                             if let _derive_derin::core::LoopFlow::Break(b) = flow {
                                 return Some(b);
                             }
+                            index += 1;
                         }
                     }}
                 }

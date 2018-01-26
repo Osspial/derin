@@ -47,7 +47,7 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
             mem::forget(cache_swap);
             Vec::from_raw_parts(mem::transmute::<_, *mut StackElement<A, F>>(ptr), len, cap)
         };
-        let mut ident_vec = &mut self.ident_vec;
+        let ident_vec = &mut self.ident_vec;
 
         vec.push(StackElement {
             node: node,
@@ -91,6 +91,7 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     pub fn truncate(&mut self, len: usize) {
         assert_ne!(0, len);
         self.vec.truncate(len);
+        self.ident_vec.truncate(len);
 
         self.top_parent_offset = Vector2::new(0, 0);
         for bounds in self.vec[..len-1].iter().map(|n| n.bounds) {
@@ -115,6 +116,7 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
 
     #[inline]
     pub fn ident(&self) -> &[NodeIdent] {
+        debug_assert_eq!(self.ident_vec.len(), self.vec.len());
         &self.ident_vec
     }
 

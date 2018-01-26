@@ -63,7 +63,7 @@ bitflags! {
         const MOUSE_X1       = 1 << 3;
         const MOUSE_X2       = 1 << 4;
         const MOUSE_HOVER    = 1 << 5;
-        const KEYBOARD = 1 << 6;
+        const KEYBOARD       = 1 << 6;
 
         const MOUSE_BUTTONS =
             Self::MOUSE_L.bits  |
@@ -128,6 +128,30 @@ subtrait_enums! {subtraits {
     Node(Node<A, F>)
 }}
 
+/// Behavior when another node attempts to focus a given node.
+///
+/// Note that this is *ignored* if the attempt to focus came from the return value of this node's
+/// `on_node_event` function.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OnFocus {
+    /// Accept focus, and send a `GainFocus` event to this node. Is default.
+    Accept,
+    /// Don't accept focus, and try to focus the next node.
+    Skip,
+    FocusChild
+}
+
+/// Configures where to deliver focus when a child send a `FocusChange::Next` or `FocusChange::Prev`,
+/// and there is no next/previous node to deliver focus to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum OnFocusOverflow {
+    /// Go the the parent node and attempt to deliver focus to the next node on the parent's level.
+    /// Is default.
+    Continue,
+    /// Wrap focus around, returning focus to the first/last node on the current level.
+    Wrap
+}
+
 pub trait Node<A, F: RenderFrame> {
     fn update_tag(&self) -> &UpdateTag;
     fn bounds(&self) -> BoundBox<Point2<u32>>;
@@ -136,6 +160,10 @@ pub trait Node<A, F: RenderFrame> {
     fn on_node_event(&mut self, event: NodeEvent, source_child: &[NodeIdent]) -> EventOps<A>;
     fn subtrait(&self) -> NodeSubtrait<A, F>;
     fn subtrait_mut(&mut self) -> NodeSubtraitMut<A, F>;
+
+    fn accepts_focus(&self) -> OnFocus {
+        OnFocus::default()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -143,20 +171,41 @@ pub struct NodeSummary<N> {
     pub node: N,
     pub ident: NodeIdent,
     pub rect: BoundBox<Point2<u32>>,
-    pub update_tag: UpdateTag
+    pub update_tag: UpdateTag,
+    pub index: usize
 }
 
 pub trait Parent<A, F: RenderFrame>: Node<A, F> {
+    fn num_children(&self) -> usize;
+
     fn child(&self, node_ident: NodeIdent) -> Option<NodeSummary<&Node<A, F>>>;
     fn child_mut(&mut self, node_ident: NodeIdent) -> Option<NodeSummary<&mut Node<A, F>>>;
+
+    fn child_by_index(&self, index: usize) -> Option<NodeSummary<&Node<A, F>>>;
+    fn child_by_index_mut(&mut self, index: usize) -> Option<NodeSummary<&mut Node<A, F>>>;
 
     fn children<'a>(&'a self, for_each: &mut FnMut(&[NodeSummary<&'a Node<A, F>>]) -> LoopFlow<()>);
     fn children_mut<'a>(&'a mut self, for_each: &mut FnMut(&mut [NodeSummary<&'a mut Node<A, F>>]) -> LoopFlow<()>);
 
     fn update_child_layout(&mut self);
 
-    fn child_by_point(&self, point: Point2<u32>) -> Option<NodeSummary<&Node<A, F>>>;
-    fn child_by_point_mut(&mut self, point: Point2<u32>) -> Option<NodeSummary<&mut Node<A, F>>>;
+    fn on_child_focus_overflow(&self) -> OnFocusOverflow {
+        OnFocusOverflow::default()
+    }
+}
+
+impl Default for OnFocus {
+    #[inline(always)]
+    fn default() -> OnFocus {
+        OnFocus::Accept
+    }
+}
+
+impl Default for OnFocusOverflow {
+    #[inline(always)]
+    fn default() -> OnFocusOverflow {
+        OnFocusOverflow::Continue
+    }
 }
 
 const RENDER_SELF: u32 = 1 << 31;

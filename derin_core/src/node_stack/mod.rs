@@ -92,11 +92,6 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
     }
 
     #[inline]
-    pub fn ident(&self) -> &[NodeIdent] {
-        self.stack.ident()
-    }
-
-    #[inline]
     pub fn pop(&mut self) -> Option<&'a mut Node<A, F>> {
         self.stack.pop()
     }
@@ -146,7 +141,9 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
         let mut diverge_depth = 0;
         {
             let mut active_path_iter = self.stack.ident().iter();
-            while active_path_iter.next() == ident_path_iter.peek() {
+            // While the next item in the ident path and the active path are equal, increment the
+            // diverge depth.
+            while active_path_iter.next().and_then(|ident| ident_path_iter.peek().map(|i| i == ident)).unwrap_or(false) {
                 diverge_depth += 1;
                 ident_path_iter.next();
             }
@@ -215,7 +212,8 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
                     remove_flags |= flags_removed;
                 }}
             }
-            let child_pushed = self.stack.try_push(|top_node, path| {
+            let mut run_fn_on_top_node = false;
+            self.stack.try_push(|top_node, path| {
                 top_node_offset = top_node.bounds().min().to_vec();
                 match top_node.subtrait_mut() {
                     NodeSubtraitMut::Node(top_node) => {
@@ -232,18 +230,16 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
                     NodeSubtraitMut::Parent(top_node_as_parent) => {
                         let mut child_ident = None;
 
-                        top_node_as_parent.children_mut(&mut |children_summaries| {
-                            let mut run_on_index = None;
-
-                            for (index, child_summary) in children_summaries.iter_mut().enumerate() {
+                        top_node_as_parent.children(&mut |children_summaries| {
+                            for child_summary in children_summaries.iter() {
                                 let node_tags = ChildEventRecv::from(&child_summary.update_tag);
                                 if node_tags & flag_trail_flags != ChildEventRecv::empty() {
                                     flags &= !flag_trail_flags;
                                     on_flag_trail = None;
                                     child_ident = Some(child_summary.ident);
 
-                                    run_on_index = Some(index);
-                                    break;
+                                    run_fn_on_top_node = true;
+                                    return LoopFlow::Break(());
                                 }
 
                                 match child_summary.node.subtrait() {
@@ -260,15 +256,7 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
                                 }
                             }
 
-                            match run_on_index {
-                                None => LoopFlow::Continue,
-                                Some(index) => {
-                                    // We call the function after the loop has exited and the ident
-                                    // has been pushed to the stack, so we can call the function with
-                                    // the ident.
-                                    LoopFlow::Break(())
-                                }
-                            }
+                            LoopFlow::Continue
                         });
 
                         if child_ident.is_none() {
@@ -282,8 +270,8 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
                         }
                     }
                 }
-            }).is_some();
-            if child_pushed {
+            });
+            if run_fn_on_top_node {
                 let NodePath{ node: child, path: child_path } = self.stack.top_mut();
                 call_fn!(child, child_path, top_parent_offset + top_node_offset);
             }

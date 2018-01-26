@@ -1,9 +1,7 @@
 use event::FocusChange;
 use tree::NodeIdent;
 use std::cmp;
-use std::vec::Drain;
 use std::ops::RangeFrom;
-use std::iter::Peekable;
 use itertools::Itertools;
 
 #[derive(Debug, Clone, Default)]
@@ -11,6 +9,7 @@ pub struct KeyboardFocusTracker {
     code_vec: Vec<FocusCode>
 }
 
+#[derive(Debug)]
 pub struct FocusDrain<'a> {
     index: RangeFrom<usize>,
     code_vec: &'a mut Vec<FocusCode>
@@ -61,7 +60,13 @@ impl<'a> FocusDrain<'a> {
 
 
         let FocusDrain{ ref mut index, ref code_vec } = *self;
-        Some((focus, index.take_while_ref(move |i| code_vec.get(*i).map(FocusCode::is_ident).unwrap_or(false)).map(move |i| code_vec[i].unwrap_ident())))
+        let unwrap_ident = move |i| {
+            match code_vec[i] {
+                FocusCode::Ident(ident) => ident,
+                FocusCode::FocusChange(..) => panic!("not an ident"),
+            }
+        };
+        Some((focus, index.take_while_ref(move |i| code_vec.get(*i).map(FocusCode::is_ident).unwrap_or(false)).map(unwrap_ident)))
     }
 }
 
@@ -78,13 +83,6 @@ impl FocusCode {
         match *self {
             FocusCode::FocusChange(..) => false,
             FocusCode::Ident(..) => true
-        }
-    }
-
-    fn unwrap_ident(self) -> NodeIdent {
-        match self {
-            FocusCode::Ident(ident) => ident,
-            FocusCode::FocusChange(..) => panic!("not an ident"),
         }
     }
 }
