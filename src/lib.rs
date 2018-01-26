@@ -195,6 +195,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
 
     fn on_node_event(&mut self, event: NodeEvent, _: &[NodeIdent]) -> EventOps<H::Action> {
         use self::NodeEvent::*;
+        use core::event::FocusChange;
 
         let mut action = None;
         let new_state = match event {
@@ -215,7 +216,12 @@ impl<F, H> Node<H::Action, F> for Button<H>
             },
             MouseUp{in_node: false, ..} => ButtonState::Normal,
             MouseEnterChild{..} |
-            MouseExitChild{..} => unreachable!()
+            MouseExitChild{..} => unreachable!(),
+            GainFocus => self.state,
+            LoseFocus => self.state,
+            Char(c) => {println!("char {}", c); self.state},
+            KeyDown(k) => {println!("key {:?}", k); self.state},
+            KeyUp(k) => {println!("key {:?}", k); self.state},
         };
 
         if new_state != self.state {
@@ -225,7 +231,11 @@ impl<F, H> Node<H::Action, F> for Button<H>
 
         EventOps {
             action,
-            focus: None
+            focus: if let MouseDown{..} = event {
+                Some(FocusChange::Take)
+            } else {
+                None
+            }
         }
     }
 

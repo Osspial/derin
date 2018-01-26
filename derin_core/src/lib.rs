@@ -646,27 +646,32 @@ impl<A, N, F> Root<A, N, F>
                     };
                     match focus {
                         FocusChange::Remove => {
-                            let NodePath{ node, path } = node_stack.top_mut();
-                            if node.update_tag().has_keyboard_focus.get() {
-                                try_push_action!(
-                                    node,
-                                    path.into_iter().cloned() => (focus_drain),
-                                    NodeEvent::LoseFocus
-                                );
-                                let update_tag = mark_if_needs_update!(node);
-                                update_tag.has_keyboard_focus.set(false);
-                                for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
-                                    update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
+                            if let Some(NodePath{ node, path }) = node_stack.move_to_path(node_ident_stack.iter().cloned()) {
+                                if node.update_tag().has_keyboard_focus.get() {
+                                    try_push_action!(
+                                        node,
+                                        path.into_iter().cloned() => (focus_drain),
+                                        NodeEvent::LoseFocus
+                                    );
+                                    let update_tag = mark_if_needs_update!(node);
+                                    update_tag.has_keyboard_focus.set(false);
+                                    for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
+                                        update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
+                                    }
                                 }
                             }
                         },
-                        // FocusChange::Take => {
-                        //     {
-                        //         let NodePath{ node, path } = node_stack.top_mut();
-                        //         try_push_action!(node, path.into_iter().cloned() => (focus_drain), NodeEvent::GainFocus);
-                        //     }
-                        // }
-                        // try_push_action!(node, path.into_iter().cloned() => (focus_drain), )
+                        FocusChange::Take => {
+                            if let Some(NodePath{ node, path }) = node_stack.move_to_keyboard_focus() {
+                                if path == &**node_ident_stack {
+                                    continue;
+                                }
+                                try_push_action!(node, path.into_iter().cloned() => (focus_drain), NodeEvent::LoseFocus);
+                            }
+                            if let Some(NodePath{ node, path}) = node_stack.move_to_path(node_ident_stack.iter().cloned()) {
+                                try_push_action!(node, path.into_iter().cloned() => (focus_drain), NodeEvent::GainFocus);
+                            }
+                        }
                         _ => unimplemented!()
                     }
                     node_ident_stack.clear();

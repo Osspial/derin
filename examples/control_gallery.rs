@@ -184,6 +184,7 @@ fn main() {
                             })
                         }
                         GWindowEvent::Resized(width, height) => Some(WindowEvent::WindowResize(DimsBox::new2(width, height))),
+                        GWindowEvent::ReceivedCharacter(c) => Some(WindowEvent::Char(c)),
                         GWindowEvent::Closed => return ControlFlow::Break,
                         _ => None
                     };
