@@ -218,7 +218,7 @@ fn main() {
         });
 
         ret
-    }, |_, _, _| {LoopFlow::Continue}, &mut renderer);
+    }, |_, _, _| {LoopFlow::Continue}, |_, _| None, &mut renderer);
 }
 
 fn map_key(k: VirtualKeyCode) -> Option<Key> {

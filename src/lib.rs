@@ -216,50 +216,51 @@ impl<F, H> Node<H::Action, F> for Button<H>
         ].iter().cloned());
     }
 
-    fn on_node_event(&mut self, event: NodeEvent, _: &[NodeIdent]) -> EventOps<H::Action> {
+    fn on_node_event(&mut self, event: NodeEvent, bubble_source: &[NodeIdent]) -> EventOps<H::Action> {
         use self::NodeEvent::*;
-        use core::event::FocusChange;
         use dct::buttons::Key;
 
-        let (mut action, mut focus) = (None, None);
-        let new_state = match event {
-            MouseEnter{buttons_down_in_node, ..} if buttons_down_in_node.is_empty() => ButtonState::Hover,
-            MouseExit{buttons_down_in_node, ..} if buttons_down_in_node.is_empty() => ButtonState::Normal,
-            MouseEnter{..} |
-            MouseExit{..}  |
-            MouseMove{..} => self.state,
-            MouseDown{..} => ButtonState::Clicked,
-            MouseUp{in_node: true, pressed_in_node, ..} => {
-                match pressed_in_node {
-                    true => {
-                        focus = Some(FocusChange::Take);
-                        action = self.handler.on_click();
-                        ButtonState::Hover
-                    },
-                    false => self.state
+        let (mut action, focus) = (None, None);
+        if bubble_source.len() == 0 {
+            let new_state = match event {
+                MouseEnter{buttons_down_in_node, ..} if buttons_down_in_node.is_empty() => ButtonState::Hover,
+                MouseExit{buttons_down_in_node, ..} if buttons_down_in_node.is_empty() => ButtonState::Normal,
+                MouseEnter{..} |
+                MouseExit{..}  |
+                MouseMove{..} => self.state,
+                MouseDown{..} => ButtonState::Clicked,
+                MouseUp{in_node: true, pressed_in_node, ..} => {
+                    match pressed_in_node {
+                        true => {
+                            action = self.handler.on_click();
+                            ButtonState::Hover
+                        },
+                        false => self.state
+                    }
+                },
+                MouseUp{in_node: false, ..} => ButtonState::Normal,
+                MouseEnterChild{..} |
+                MouseExitChild{..} => unreachable!(),
+                GainFocus => ButtonState::Hover,
+                LoseFocus => ButtonState::Normal,
+                Char(_) => self.state,
+                KeyDown(Key::Tab) => {
+                    self.state
                 }
-            },
-            MouseUp{in_node: false, ..} => ButtonState::Normal,
-            MouseEnterChild{..} |
-            MouseExitChild{..} => unreachable!(),
-            GainFocus => ButtonState::Hover,
-            LoseFocus => ButtonState::Normal,
-            Char(_) => self.state,
-            KeyDown(Key::Tab) => {
-                focus = Some(FocusChange::Prev);
-                self.state
-            }
-            KeyDown(_) => self.state,
-            KeyUp(_) => self.state,
-        };
+                KeyDown(_) => self.state,
+                KeyUp(_) => self.state,
+            };
 
-        if new_state != self.state {
-            self.update_tag.mark_render_self();
-            self.state = new_state;
+            if new_state != self.state {
+                self.update_tag.mark_render_self();
+                self.state = new_state;
+            }
         }
 
+
         EventOps {
-            action, focus
+            action, focus,
+            bubble: true
         }
     }
 
@@ -316,7 +317,8 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
     fn on_node_event(&mut self, _: NodeEvent, _: &[NodeIdent]) -> EventOps<A> {
         EventOps {
             action: None,
-            focus: None
+            focus: None,
+            bubble: true
         }
     }
 

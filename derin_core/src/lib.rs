@@ -4,6 +4,7 @@ extern crate cgmath;
 extern crate cgmath_geometry;
 #[macro_use]
 extern crate bitflags;
+#[macro_use]
 extern crate dct;
 extern crate arrayvec;
 extern crate itertools;
@@ -13,11 +14,11 @@ pub mod event;
 pub mod render;
 mod mbseq;
 mod node_stack;
-mod focus_tracker;
+mod meta_tracker;
 
 use arrayvec::ArrayVec;
 
-use cgmath::{EuclideanSpace, Point2, Vector2, Array};
+use cgmath::{EuclideanSpace, Point2, Vector2, Array, Bounded};
 use cgmath_geometry::{GeoBox, DimsBox, BoundBox, Segment};
 
 use std::cmp::Ordering;
@@ -29,7 +30,7 @@ use event::{NodeEvent, FocusChange};
 use render::{Renderer, RenderFrame, FrameRectStack};
 use mbseq::MouseButtonSequence;
 use node_stack::{NodeStackBase, NodePath, NodeStack};
-use focus_tracker::{KeyboardFocusTracker, FocusDrain};
+use meta_tracker::{MetaEventTracker, MetaDrain, MetaEvent, MetaEventVariant};
 use dct::buttons::{MouseButton, Key};
 
 pub struct Root<A, N, F>
@@ -45,7 +46,7 @@ pub struct Root<A, N, F>
     force_full_redraw: bool,
     event_stamp: u32,
     node_ident_stack: Vec<NodeIdent>,
-    focus_tracker: KeyboardFocusTracker,
+    meta_tracker: MetaEventTracker,
     pub root_node: N,
     pub theme: F::Theme,
     _marker: PhantomData<*const F>
@@ -88,15 +89,16 @@ impl<A, N, F> Root<A, N, F>
             force_full_redraw: false,
             event_stamp: 1,
             node_ident_stack: Vec::new(),
-            focus_tracker: KeyboardFocusTracker::default(),
+            meta_tracker: MetaEventTracker::default(),
             root_node, theme,
             _marker: PhantomData
         }
     }
 
-    pub fn run_forever<E, AF, R, G>(&mut self, mut gen_events: E, mut on_action: AF, renderer: &mut R) -> Option<G>
+    pub fn run_forever<E, AF, BF, R, G>(&mut self, mut gen_events: E, mut on_action: AF, mut bubble_fallthrough: BF, renderer: &mut R) -> Option<G>
         where E: FnMut(&mut FnMut(WindowEvent) -> LoopFlow<G>) -> Option<G>,
               AF: FnMut(A, &mut N, &mut F::Theme) -> LoopFlow<G>,
+              BF: FnMut(NodeEvent, &[NodeIdent]) -> Option<A>,
               R: Renderer<Frame=F>
     {
         let Root {
@@ -108,7 +110,7 @@ impl<A, N, F> Root<A, N, F>
             ref mut force_full_redraw,
             ref mut event_stamp,
             ref mut node_ident_stack,
-            ref mut focus_tracker,
+            ref mut meta_tracker,
             ref mut root_node,
             ref mut theme,
             ..
@@ -128,18 +130,40 @@ impl<A, N, F> Root<A, N, F>
             }
 
             macro_rules! try_push_action {
-                ($node:expr, $path:expr, $event:expr) => {{
-                    try_push_action!($node, $path => (focus_tracker), $event)
-                }};
-                ($node:expr, $path:expr => ($focus_tracker:expr), $event:expr) => {{
+                (
+                    $node:expr, $path:expr $(=> ($meta_tracker:expr))*,
+                    $event:expr $(, to_rootspace: $node_offset:expr)* $(, bubble ($bubble:expr, $bubble_store:expr, $bubble_path:expr))*
+                ) => {{
                     let event = $event;
-                    let event_ops = $node.on_node_event(event, &[]);
+                    let node_offset = if_tokens!(($($node_offset)*) {
+                        $($node_offset.cast::<i32>().unwrap_or(Vector2::from_value(0)))*
+                    } else {Vector2::from_value(0)});
+                    let event_ops = $node.on_node_event(
+                        event,
+                        if_tokens!(($($bubble_path)*) {
+                            $($bubble_path)*
+                        } else {
+                            &[]
+                        })
+                    );
+
                     if let Some(action) = event_ops.action {
                         actions.push_back(action);
                     }
                     if let Some(focus) = event_ops.focus {
-                        $focus_tracker.push_focus(focus, $path);
+                        if_tokens!(($($meta_tracker)*) {
+                            $($meta_tracker)*
+                        } else {meta_tracker}).push_focus(focus, $path);
                     }
+                    if event_ops.bubble $(& $bubble)* {
+                        if_tokens!(($($meta_tracker)*) {
+                            $($meta_tracker)*
+                        } else {meta_tracker}).push_bubble(
+                            event.translate(node_offset).into(),
+                            $path
+                        );
+                    }
+                    $(*$bubble_store = event_ops.bubble;)*
                 }};
             }
 
@@ -193,10 +217,10 @@ impl<A, N, F> Root<A, N, F>
                         try_push_action!{
                             node, path.iter().cloned(),
                             NodeEvent::MouseExit {
-                                exit_pos: exit_pos - node_offset.cast::<i32>().unwrap_or(Vector2::from_value(i32::max_value())),
+                                exit_pos: exit_pos - node_offset.cast::<i32>().unwrap_or(Vector2::max_value()),
                                 buttons_down: &mbd_array,
                                 buttons_down_in_node: &mbdin_array
-                            }
+                            }, to_rootspace: node_offset
                         }
 
                         let update_tag = mark_if_needs_update!(node);
@@ -251,7 +275,7 @@ impl<A, N, F> Root<A, N, F>
                                         in_node: true,
                                         buttons_down: &mbd_array,
                                         buttons_down_in_node: &mbdin_array
-                                    }
+                                    }, to_rootspace: top_bounds_offset
                                 }
                                 mark_if_needs_update!(node);
                             }
@@ -292,7 +316,8 @@ impl<A, N, F> Root<A, N, F>
                                             if let Some(new_pos_unsigned) = new_pos.cast::<u32>() {
                                                 struct EnterChildData {
                                                     child_ident: NodeIdent,
-                                                    enter_pos: Point2<i32>
+                                                    enter_pos: Point2<i32>,
+                                                    child_pos_offset: Vector2<i32>
                                                 }
                                                 let mut enter_child: Option<EnterChildData> = None;
 
@@ -319,7 +344,7 @@ impl<A, N, F> Root<A, N, F>
                                                     } = *child_summary;
 
                                                     let child_pos_offset = child_bounds.min().to_vec().cast::<i32>()
-                                                        .unwrap_or(Vector2::from_value(i32::max_value()));
+                                                        .unwrap_or(Vector2::max_value());
 
                                                     // Find the exact location where the cursor entered the child node. This is
                                                     // done in the child's parent's coordinate space (i.e. the currently hovered
@@ -349,11 +374,11 @@ impl<A, N, F> Root<A, N, F>
                                                             enter_pos: enter_pos - child_pos_offset,
                                                             buttons_down: &mbd_array,
                                                             buttons_down_in_node: &child_mbdin_array
-                                                        }
+                                                        }, to_rootspace: child_pos_offset
                                                     }
 
                                                     // Store the information relating to the child we entered,
-                                                    enter_child = Some(EnterChildData{ child_ident, enter_pos });
+                                                    enter_child = Some(EnterChildData{ child_ident, enter_pos, child_pos_offset });
 
                                                     // We `continue` the loop after this, but the continue is handled by the
                                                     // `enter_child` check below. `mark_if_needs_update` is called after the
@@ -361,7 +386,7 @@ impl<A, N, F> Root<A, N, F>
                                                     LoopFlow::Break(())
                                                 });
 
-                                                if let Some(EnterChildData{child_ident, enter_pos}) = enter_child {
+                                                if let Some(EnterChildData{ child_ident, enter_pos, child_pos_offset }) = enter_child {
                                                     // SEND CHILD ENTER ACTION
                                                     try_push_action!{
                                                         top_node_as_parent, top_path.iter().cloned(),
@@ -370,7 +395,7 @@ impl<A, N, F> Root<A, N, F>
                                                             buttons_down: &mbd_array,
                                                             buttons_down_in_node: &mbdin_array,
                                                             child: child_ident
-                                                        }
+                                                        }, to_rootspace: child_pos_offset
                                                     }
 
                                                     // Update the layout again, if the events we've sent have triggered a
@@ -408,7 +433,7 @@ impl<A, N, F> Root<A, N, F>
                                                 exit_pos: mouse_exit,
                                                 buttons_down: &mbd_array,
                                                 buttons_down_in_node: &mbdin_array
-                                            }
+                                            }, to_rootspace: top_bounds_offset
                                         }
                                     }
 
@@ -424,7 +449,8 @@ impl<A, N, F> Root<A, N, F>
 
                                     // Send the exit action and mark the parent as hovered, as long as we aren't at the root.
                                     if 0 < node_stack.depth() {
-                                        let child_exit_pos = mouse_exit - node_stack.top_parent_offset().cast::<i32>().unwrap_or(Vector2::from_value(i32::max_value()));
+                                        let top_parent_offset = node_stack.top_parent_offset().cast::<i32>().unwrap_or(Vector2::max_value());
+                                        let child_exit_pos = mouse_exit - top_parent_offset;
                                         let child_ident = node_stack.top_ident();
 
                                         node_stack.pop();
@@ -437,7 +463,7 @@ impl<A, N, F> Root<A, N, F>
                                                     buttons_down: &mbd_array,
                                                     buttons_down_in_node: &mbdin_array,
                                                     child: child_ident
-                                                }
+                                                }, to_rootspace: top_parent_offset
                                             }
                                         }
 
@@ -476,7 +502,7 @@ impl<A, N, F> Root<A, N, F>
                         let (node_needs_move_event, node_old_pos, node_offset): (bool, Point2<i32>, Vector2<i32>);
 
                         {
-                            node_offset = (node_parent_offset + node.bounds().min().to_vec()).cast::<i32>().unwrap_or(Vector2::from_value(i32::max_value()));
+                            node_offset = (node_parent_offset + node.bounds().min().to_vec()).cast::<i32>().unwrap_or(Vector2::max_value());
                             let update_tag = node.update_tag();
                             new_pos = new_pos_windowspace - node_offset;
 
@@ -504,7 +530,7 @@ impl<A, N, F> Root<A, N, F>
                                     in_node: false,
                                     buttons_down: &mbd_array,
                                     buttons_down_in_node: &mbdin_array
-                                }
+                                }, to_rootspace: node_offset
                             }
                             mark_if_needs_update!(node);
                         }
@@ -519,14 +545,17 @@ impl<A, N, F> Root<A, N, F>
 
                     let button_mask = ChildEventRecv::mouse_button_mask(button);
                     {
+                        let top_parent_offset = node_stack.top_parent_offset();
                         let NodePath{ node: top_node, path } = node_stack.top_mut();
-                        let top_node_offset = top_node.bounds().min().cast().unwrap_or(Point2::new(i32::max_value(), i32::max_value())).to_vec();
+                        let top_node_offset = (top_parent_offset + top_node.bounds().min().to_vec())
+                            .cast().unwrap_or(Vector2::max_value());
+
                         try_push_action!{
                             top_node, path.iter().cloned(),
                             NodeEvent::MouseDown {
-                                pos: *mouse_pos + top_node_offset,
+                                pos: *mouse_pos - top_node_offset,
                                 button
-                            }
+                            }, to_rootspace: top_node_offset
                         }
                         mark_if_needs_update!(top_node);
                         mouse_buttons_down.push_button(button);
@@ -556,6 +585,7 @@ impl<A, N, F> Root<A, N, F>
                     let mut move_to_tracked = true;
                     node_stack.move_over_flags(ChildEventRecv::MOUSE_HOVER, |node, path, top_parent_offset| {
                         let bounds = node.bounds() + top_parent_offset;
+                        let node_offset = bounds.min().to_vec().cast().unwrap_or(Vector2::max_value());
                         let in_node = mouse_pos.cast::<u32>().map(|p| bounds.contains(p)).unwrap_or(false);
                         let pressed_in_node = node.update_tag().mouse_state.get().mouse_button_sequence().contains(button);
                         // If the hover node wasn't the one where the mouse was originally pressed, ensure that
@@ -565,11 +595,11 @@ impl<A, N, F> Root<A, N, F>
                         try_push_action!{
                             node, path.iter().cloned(),
                             NodeEvent::MouseUp {
-                                pos: *mouse_pos,
+                                pos: *mouse_pos - node_offset,
                                 in_node,
                                 pressed_in_node,
                                 button
-                            }
+                            }, to_rootspace: node_offset
                         }
                         mark_if_needs_update!(node);
 
@@ -592,14 +622,15 @@ impl<A, N, F> Root<A, N, F>
                     if move_to_tracked {
                         node_stack.move_over_flags(button_mask, |node, path, top_parent_offset| {
                             let bounds = node.bounds() + top_parent_offset;
+                            let node_offset = bounds.min().to_vec().cast().unwrap_or(Vector2::max_value());
                             try_push_action!{
                                 node, path.iter().cloned(),
                                 NodeEvent::MouseUp {
-                                    pos: *mouse_pos,
+                                    pos: *mouse_pos - node_offset,
                                     in_node: mouse_pos.cast::<u32>().map(|p| bounds.contains(p)).unwrap_or(false),
                                     pressed_in_node: true,
                                     button
-                                }
+                                }, to_rootspace: node_offset
                             }
                             mark_if_needs_update!(node);
 
@@ -648,19 +679,19 @@ impl<A, N, F> Root<A, N, F>
             }
 
             // Dispatch focus-changing events to the nodes.
-            let mut focus_drain = focus_tracker.drain_focus();
+            let mut meta_drain = meta_tracker.drain_meta();
             assert_eq!(0, node_ident_stack.len());
             loop {
                 let mut take_focus_to = |
                     node_stack: &mut NodeStack<_, _, _>,
                     node_ident_stack: &[NodeIdent],
-                    focus_drain: &mut FocusDrain
+                    meta_drain: &mut MetaDrain
                 | {
                     if let Some(NodePath{ node, path }) = node_stack.move_to_keyboard_focus() {
                         if path == node_ident_stack {
                             return;
                         }
-                        try_push_action!(node, path.into_iter().cloned() => (focus_drain), NodeEvent::LoseFocus);
+                        try_push_action!(node, path.into_iter().cloned() => (meta_drain), NodeEvent::LoseFocus);
 
                         let update_tag = mark_if_needs_update!(node);
                         update_tag.has_keyboard_focus.set(false);
@@ -669,7 +700,7 @@ impl<A, N, F> Root<A, N, F>
                         }
                     }
                     if let Some(NodePath{ node, path }) = node_stack.move_to_path(node_ident_stack.iter().cloned()) {
-                        try_push_action!(node, path.into_iter().cloned() => (focus_drain), NodeEvent::GainFocus);
+                        try_push_action!(node, path.into_iter().cloned() => (meta_drain), NodeEvent::GainFocus);
                         let update_tag = mark_if_needs_update!(node);
                         update_tag.has_keyboard_focus.set(true);
 
@@ -679,100 +710,134 @@ impl<A, N, F> Root<A, N, F>
                         }
                     }
                 };
-                let focus = match focus_drain.next() {
-                    Some((focus, ident_iter)) => {
-                        node_ident_stack.extend(ident_iter);
-                        focus
+                let meta_variant = match meta_drain.next() {
+                    Some(MetaEvent{ source, variant }) => {
+                        node_ident_stack.extend(source);
+                        variant
                     },
                     None => break
                 };
 
-                match focus {
-                    FocusChange::Remove => {
-                        if let Some(NodePath{ node, path }) = node_stack.move_to_path(node_ident_stack.iter().cloned()) {
-                            if node.update_tag().has_keyboard_focus.get() {
-                                try_push_action!(
-                                    node,
-                                    path.into_iter().cloned() => (focus_drain),
-                                    NodeEvent::LoseFocus
-                                );
-                                let update_tag = mark_if_needs_update!(node);
-                                update_tag.has_keyboard_focus.set(false);
-                                for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
-                                    update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
+                match meta_variant {
+                    MetaEventVariant::FocusChange(focus) => match focus {
+                        FocusChange::Remove => {
+                            if let Some(NodePath{ node, path }) = node_stack.move_to_path(node_ident_stack.iter().cloned()) {
+                                if node.update_tag().has_keyboard_focus.get() {
+                                    try_push_action!(
+                                        node,
+                                        path.into_iter().cloned() => (meta_drain),
+                                        NodeEvent::LoseFocus
+                                    );
+                                    let update_tag = mark_if_needs_update!(node);
+                                    update_tag.has_keyboard_focus.set(false);
+                                    for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
+                                        update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
+                                    }
                                 }
                             }
-                        }
-                    },
-                    FocusChange::Take => take_focus_to(&mut node_stack, &**node_ident_stack, &mut focus_drain),
-                    FocusChange::Next |
-                    FocusChange::Prev => {
-                        let sibling_dist = match focus {
-                            FocusChange::Next => 1,
-                            FocusChange::Prev => -1,
-                            _ => unreachable!()
-                        };
+                        },
+                        FocusChange::Take => take_focus_to(&mut node_stack, &**node_ident_stack, &mut meta_drain),
+                        FocusChange::Next |
+                        FocusChange::Prev => {
+                            let sibling_dist = match focus {
+                                FocusChange::Next => 1,
+                                FocusChange::Prev => -1,
+                                _ => unreachable!()
+                            };
 
-                        node_stack.move_to_path(node_ident_stack.iter().cloned()).unwrap();
-                        let mut advance_to_sibling = true;
-                        loop {
-                            let dist_multiplier = advance_to_sibling as isize;
-                            advance_to_sibling = true;
-                            match node_stack.move_to_sibling_delta(sibling_dist * dist_multiplier) {
-                                Ok(NodePath{ node: sibling, path: sibling_path }) => match sibling.accepts_focus() {
-                                    OnFocus::Accept => {
-                                        node_ident_stack.clear();
-                                        node_ident_stack.extend(node_stack.ident().iter().cloned());
-                                        break;
-                                    },
-                                    OnFocus::Skip => continue,
-                                    OnFocus::FocusChild => {
-                                        node_stack.try_push(|top, _| {
-                                            let top_parent = top.subtrait_mut().as_parent()?;
-                                            let child_index = match sibling_dist.signum() {
-                                                -1 => top_parent.num_children() - 1,
-                                                1 => 0,
-                                                _ => unreachable!()
-                                            };
-                                            top_parent.child_by_index_mut(child_index)
-                                        }).expect("Need to handle this");
-                                        advance_to_sibling = false;
-                                        continue;
-                                    }
-                                },
-                                Err(index_out_of_bounds_cmp) => {
-                                    match node_stack.parent() {
-                                        Some(parent) => match parent.on_child_focus_overflow() {
-                                            OnFocusOverflow::Wrap => {
-                                                let move_to_index = match index_out_of_bounds_cmp {
-                                                    Ordering::Less => parent.num_children() - 1,
-                                                    Ordering::Greater => 0,
-                                                    Ordering::Equal => unreachable!()
-                                                };
-                                                node_stack.move_to_sibling_index(move_to_index).unwrap();
-                                                advance_to_sibling = false;
-                                                continue;
-                                            },
-                                            OnFocusOverflow::Continue => {
-                                                node_stack.pop();
-                                                continue;
-                                            }
+                            node_stack.move_to_path(node_ident_stack.iter().cloned()).unwrap();
+                            let mut advance_to_sibling = true;
+                            loop {
+                                let dist_multiplier = advance_to_sibling as isize;
+                                advance_to_sibling = true;
+                                match node_stack.move_to_sibling_delta(sibling_dist * dist_multiplier) {
+                                    Ok(NodePath{ node: sibling, .. }) => match sibling.accepts_focus() {
+                                        OnFocus::Accept => {
+                                            node_ident_stack.clear();
+                                            node_ident_stack.extend(node_stack.ident().iter().cloned());
+                                            break;
                                         },
-                                        None => {
-                                            match sibling_dist {
-                                                -1 => node_stack.try_push(|n, _| n.subtrait_mut().as_parent().and_then(|p| p.child_by_index_mut(p.num_children() - 1))),
-                                                1 => node_stack.try_push(|n, _| n.subtrait_mut().as_parent().and_then(|p| p.child_by_index_mut(0))),
-                                                _ => unreachable!()
-                                            };
+                                        OnFocus::Skip => continue,
+                                        OnFocus::FocusChild => {
+                                            node_stack.try_push(|top, _| {
+                                                let top_parent = top.subtrait_mut().as_parent()?;
+                                                let child_index = match sibling_dist.signum() {
+                                                    -1 => top_parent.num_children() - 1,
+                                                    1 => 0,
+                                                    _ => unreachable!()
+                                                };
+                                                top_parent.child_by_index_mut(child_index)
+                                            }).expect("Need to handle this");
                                             advance_to_sibling = false;
                                             continue;
                                         }
-                                    }
-                                },
+                                    },
+                                    Err(index_out_of_bounds_cmp) => {
+                                        match node_stack.parent() {
+                                            Some(parent) => match parent.on_child_focus_overflow() {
+                                                OnFocusOverflow::Wrap => {
+                                                    let move_to_index = match index_out_of_bounds_cmp {
+                                                        Ordering::Less => parent.num_children() - 1,
+                                                        Ordering::Greater => 0,
+                                                        Ordering::Equal => unreachable!()
+                                                    };
+                                                    node_stack.move_to_sibling_index(move_to_index).unwrap();
+                                                    advance_to_sibling = false;
+                                                    continue;
+                                                },
+                                                OnFocusOverflow::Continue => {
+                                                    node_stack.pop();
+                                                    continue;
+                                                }
+                                            },
+                                            None => {
+                                                match sibling_dist {
+                                                    -1 => node_stack.try_push(|n, _| n.subtrait_mut().as_parent().and_then(|p| p.child_by_index_mut(p.num_children() - 1))),
+                                                    1 => node_stack.try_push(|n, _| n.subtrait_mut().as_parent().and_then(|p| p.child_by_index_mut(0))),
+                                                    _ => unreachable!()
+                                                };
+                                                advance_to_sibling = false;
+                                                continue;
+                                            }
+                                        }
+                                    },
+                                }
                             }
-                        }
 
-                        take_focus_to(&mut node_stack, &**node_ident_stack, &mut focus_drain);
+                            take_focus_to(&mut node_stack, &**node_ident_stack, &mut meta_drain);
+                        }
+                    },
+                    MetaEventVariant::EventBubble(event_owned) => {
+                        if let None = node_stack.move_to_path(node_ident_stack[..node_ident_stack.len() - 1].iter().cloned()) {
+                            node_ident_stack.clear();
+                            continue;
+                        }
+                        event_owned.as_borrowed(|event| {
+                            let mut continue_bubble = true;
+                            let mut slice_range = node_stack.depth() + 1..;
+                            node_stack.drain_to_root_while(|top_node, ident, parent_offset| {
+                                let node_offset = (
+                                        parent_offset +
+                                        top_node.bounds().min().to_vec()
+                                    ).cast().unwrap_or(Vector2::max_value());
+                                try_push_action!(
+                                    top_node,
+                                    ident.into_iter().cloned() => (meta_drain),
+                                    event.translate(-node_offset),
+                                    to_rootspace: node_offset,
+                                    bubble (false, &mut continue_bubble, &node_ident_stack[slice_range.clone()])
+                                );
+                                mark_if_needs_update!(top_node);
+                                slice_range.start -= 1;
+                                continue_bubble
+                            });
+
+                            if continue_bubble {
+                                if let Some(action) = bubble_fallthrough(event, &node_ident_stack) {
+                                    actions.push_back(action);
+                                }
+                            }
+                        });
                     }
                 }
                 node_ident_stack.clear();

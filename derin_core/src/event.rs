@@ -1,11 +1,14 @@
 use dct::buttons::{MouseButton, Key};
-use cgmath::Point2;
+use cgmath::{Point2, Vector2};
 use tree::NodeIdent;
+use arrayvec::ArrayVec;
+use mbseq::MouseButtonSequence;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EventOps<A> {
     pub action: Option<A>,
-    pub focus: Option<FocusChange>
+    pub focus: Option<FocusChange>,
+    pub bubble: bool
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -62,4 +65,240 @@ pub enum NodeEvent<'a> {
     Char(char),
     KeyDown(Key),
     KeyUp(Key)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NodeEventOwned {
+    MouseEnter {
+        enter_pos: Point2<i32>,
+        buttons_down: MouseButtonSequence,
+        buttons_down_in_node: MouseButtonSequence,
+    },
+    MouseExit {
+        exit_pos: Point2<i32>,
+        buttons_down: MouseButtonSequence,
+        buttons_down_in_node: MouseButtonSequence,
+    },
+    MouseEnterChild {
+        enter_pos: Point2<i32>,
+        buttons_down: MouseButtonSequence,
+        buttons_down_in_node: MouseButtonSequence,
+        child: NodeIdent
+    },
+    MouseExitChild {
+        exit_pos: Point2<i32>,
+        buttons_down: MouseButtonSequence,
+        buttons_down_in_node: MouseButtonSequence,
+        child: NodeIdent
+    },
+    MouseMove {
+        old: Point2<i32>,
+        new: Point2<i32>,
+        in_node: bool,
+        buttons_down: MouseButtonSequence,
+        buttons_down_in_node: MouseButtonSequence
+    },
+    MouseDown {
+        pos: Point2<i32>,
+        button: MouseButton
+    },
+    MouseUp {
+        pos: Point2<i32>,
+        in_node: bool,
+        pressed_in_node: bool,
+        button: MouseButton
+    },
+    GainFocus,
+    LoseFocus,
+    Char(char),
+    KeyDown(Key),
+    KeyUp(Key)
+}
+
+impl<'a> NodeEvent<'a> {
+    pub fn translate(self, dir: Vector2<i32>) -> NodeEvent<'a> {
+        match self {
+            NodeEvent::MouseEnter{ enter_pos, buttons_down, buttons_down_in_node } =>
+                NodeEvent::MouseEnter {
+                    enter_pos: enter_pos + dir,
+                    buttons_down,
+                    buttons_down_in_node,
+                },
+            NodeEvent::MouseExit{ exit_pos, buttons_down, buttons_down_in_node } =>
+                NodeEvent::MouseExit {
+                    exit_pos: exit_pos + dir,
+                    buttons_down,
+                    buttons_down_in_node,
+                },
+            NodeEvent::MouseEnterChild{ enter_pos, child, buttons_down, buttons_down_in_node } =>
+                NodeEvent::MouseEnterChild {
+                    enter_pos: enter_pos + dir,
+                    child,
+                    buttons_down,
+                    buttons_down_in_node,
+                },
+            NodeEvent::MouseExitChild{ exit_pos, child, buttons_down, buttons_down_in_node } =>
+                NodeEvent::MouseExitChild {
+                    exit_pos: exit_pos + dir,
+                    child, buttons_down,
+                    buttons_down_in_node,
+                },
+            NodeEvent::MouseMove{ old, new, in_node, buttons_down, buttons_down_in_node } =>
+                NodeEvent::MouseMove {
+                    old: old + dir, new: new + dir,
+                    in_node, buttons_down,
+                    buttons_down_in_node,
+                },
+            NodeEvent::MouseDown{ pos, button } =>
+                NodeEvent::MouseDown {
+                    pos: pos + dir,
+                    button
+                },
+            NodeEvent::MouseUp{ pos, in_node, pressed_in_node, button } =>
+                NodeEvent::MouseUp {
+                    pos: pos + dir,
+                    in_node, pressed_in_node, button
+                },
+            NodeEvent::GainFocus => NodeEvent::GainFocus,
+            NodeEvent::LoseFocus => NodeEvent::LoseFocus,
+            NodeEvent::Char(c) => NodeEvent::Char(c),
+            NodeEvent::KeyDown(k) => NodeEvent::KeyDown(k),
+            NodeEvent::KeyUp(k) => NodeEvent::KeyUp(k)
+        }
+    }
+}
+
+impl NodeEventOwned {
+    pub fn as_borrowed<F, R>(&self, func: F) -> R
+        where F: FnOnce(NodeEvent) -> R
+    {
+        let (mbd_array, mbdin_array): (ArrayVec<[_; 5]>, ArrayVec<[_; 5]>);
+        match *self {
+            NodeEventOwned::MouseEnter{ buttons_down, buttons_down_in_node, .. } |
+            NodeEventOwned::MouseExit{ buttons_down, buttons_down_in_node, .. } |
+            NodeEventOwned::MouseEnterChild{ buttons_down, buttons_down_in_node, .. } |
+            NodeEventOwned::MouseExitChild{ buttons_down, buttons_down_in_node, .. } |
+            NodeEventOwned::MouseMove{ buttons_down, buttons_down_in_node, .. } => {
+                mbd_array = buttons_down.into_iter().collect();
+                mbdin_array = buttons_down_in_node.into_iter().collect();
+            },
+            _ => {
+                mbd_array = ArrayVec::new();
+                mbdin_array = ArrayVec::new();
+            }
+        }
+
+        let event_borrowed = match *self {
+            NodeEventOwned::MouseEnter{ enter_pos, .. } =>
+                NodeEvent::MouseEnter {
+                    enter_pos,
+                    buttons_down: &mbd_array,
+                    buttons_down_in_node: &mbdin_array,
+                },
+            NodeEventOwned::MouseExit{ exit_pos, .. } =>
+                NodeEvent::MouseExit {
+                    exit_pos,
+                    buttons_down: &mbd_array,
+                    buttons_down_in_node: &mbdin_array,
+                },
+            NodeEventOwned::MouseEnterChild{ enter_pos, child, .. } =>
+                NodeEvent::MouseEnterChild {
+                    enter_pos, child,
+                    buttons_down: &mbd_array,
+                    buttons_down_in_node: &mbdin_array,
+                },
+            NodeEventOwned::MouseExitChild{ exit_pos, child, .. } =>
+                NodeEvent::MouseExitChild {
+                    exit_pos, child,
+                    buttons_down: &mbd_array,
+                    buttons_down_in_node: &mbdin_array,
+                },
+            NodeEventOwned::MouseMove{ old, new, in_node, .. } =>
+                NodeEvent::MouseMove {
+                    old, new, in_node,
+                    buttons_down: &mbd_array,
+                    buttons_down_in_node: &mbdin_array,
+                },
+            NodeEventOwned::MouseDown{ pos, button, .. } =>
+                NodeEvent::MouseDown {
+                    pos, button
+                },
+            NodeEventOwned::MouseUp{ pos, in_node, pressed_in_node, button, .. } =>
+                NodeEvent::MouseUp {
+                    pos, in_node, pressed_in_node, button
+                },
+            NodeEventOwned::GainFocus => NodeEvent::GainFocus,
+            NodeEventOwned::LoseFocus => NodeEvent::LoseFocus,
+            NodeEventOwned::Char(c) => NodeEvent::Char(c),
+            NodeEventOwned::KeyDown(k) => NodeEvent::KeyDown(k),
+            NodeEventOwned::KeyUp(k) => NodeEvent::KeyUp(k)
+        };
+        func(event_borrowed)
+    }
+}
+
+impl<'a> From<NodeEvent<'a>> for NodeEventOwned {
+    fn from(event: NodeEvent<'a>) -> NodeEventOwned {
+        let (mbd_sequence, mbdin_sequence): (MouseButtonSequence, MouseButtonSequence);
+        match event {
+            NodeEvent::MouseEnter{ buttons_down, buttons_down_in_node, .. } |
+            NodeEvent::MouseExit{ buttons_down, buttons_down_in_node, .. } |
+            NodeEvent::MouseEnterChild{ buttons_down, buttons_down_in_node, .. } |
+            NodeEvent::MouseExitChild{ buttons_down, buttons_down_in_node, .. } |
+            NodeEvent::MouseMove{ buttons_down, buttons_down_in_node, .. } => {
+                mbd_sequence = buttons_down.into_iter().cloned().collect();
+                mbdin_sequence = buttons_down_in_node.into_iter().cloned().collect();
+            },
+            _ => {
+                mbd_sequence = MouseButtonSequence::new();
+                mbdin_sequence = MouseButtonSequence::new();
+            }
+        }
+
+        match event {
+            NodeEvent::MouseEnter{ enter_pos, .. } =>
+                NodeEventOwned::MouseEnter {
+                    enter_pos,
+                    buttons_down: mbd_sequence,
+                    buttons_down_in_node: mbdin_sequence,
+                },
+            NodeEvent::MouseExit{ exit_pos, .. } =>
+                NodeEventOwned::MouseExit {
+                    exit_pos,
+                    buttons_down: mbd_sequence,
+                    buttons_down_in_node: mbdin_sequence,
+                },
+            NodeEvent::MouseEnterChild{ enter_pos, child, .. } =>
+                NodeEventOwned::MouseEnterChild {
+                    enter_pos, child,
+                    buttons_down: mbd_sequence,
+                    buttons_down_in_node: mbdin_sequence,
+                },
+            NodeEvent::MouseExitChild{ exit_pos, child, .. } =>
+                NodeEventOwned::MouseExitChild {
+                    exit_pos, child,
+                    buttons_down: mbd_sequence,
+                    buttons_down_in_node: mbdin_sequence,
+                },
+            NodeEvent::MouseMove{ old, new, in_node, .. } =>
+                NodeEventOwned::MouseMove {
+                    old, new, in_node,
+                    buttons_down: mbd_sequence,
+                    buttons_down_in_node: mbdin_sequence,
+                },
+            NodeEvent::MouseDown{ pos, button, .. } =>
+                NodeEventOwned::MouseDown {
+                    pos, button
+                },
+            NodeEvent::MouseUp{ pos, in_node, pressed_in_node, button, .. } =>
+                NodeEventOwned::MouseUp {
+                    pos, in_node, pressed_in_node, button
+                },
+            NodeEvent::GainFocus => NodeEventOwned::GainFocus,
+            NodeEvent::LoseFocus => NodeEventOwned::LoseFocus,
+            NodeEvent::Char(c) => NodeEventOwned::Char(c),
+            NodeEvent::KeyDown(k) => NodeEventOwned::KeyDown(k),
+            NodeEvent::KeyUp(k) => NodeEventOwned::KeyUp(k)
+        }
+    }
 }

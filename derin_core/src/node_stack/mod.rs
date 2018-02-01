@@ -37,27 +37,37 @@ impl<A, F: RenderFrame> NodeStackBase<A, F> {
 }
 
 impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
-    #[inline]
     pub fn drain_to_root<G>(&mut self, mut for_each: G) -> NodePath<Root>
         where G: FnMut(&mut Node<A, F>, &[NodeIdent], Vector2<u32>)
     {
-        while self.stack.len() > 1 {
+        self.drain_to_root_while(|node, ident, offset| {for_each(node, ident, offset); true}).unwrap()
+    }
+
+    pub fn drain_to_root_while<G>(&mut self, mut for_each: G) -> Option<NodePath<Root>>
+        where G: FnMut(&mut Node<A, F>, &[NodeIdent], Vector2<u32>) -> bool
+    {
+        let mut continue_drain = true;
+        while self.stack.len() > 1 && continue_drain {
             {
                 let offset = self.stack.top_parent_offset();
                 let NodePath{ node, path } = self.stack.top_mut();
-                for_each(node, path, offset);
+                continue_drain = for_each(node, path, offset);
             }
             self.stack.pop();
+        }
+
+        if !continue_drain {
+            return None;
         }
 
         let top_mut = self.stack.top_mut();
         for_each(top_mut.node, top_mut.path, Vector2::new(0, 0));
 
         assert_eq!(self.root, top_mut.node as *mut _ as *mut Root);
-        NodePath {
+        Some(NodePath {
             node: unsafe{ &mut *self.root },
             path: top_mut.path
-        }
+        })
     }
 
     #[inline]
@@ -221,6 +231,9 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
                 diverge_depth += 1;
                 ident_path_iter.next();
             }
+        }
+        if diverge_depth == 0 {
+            return None;
         }
         self.stack.truncate(diverge_depth);
 
