@@ -1,4 +1,4 @@
-#![feature(conservative_impl_trait, nll)]
+#![feature(conservative_impl_trait, range_contains, nll)]
 
 extern crate cgmath;
 extern crate cgmath_geometry;
@@ -20,6 +20,7 @@ use arrayvec::ArrayVec;
 use cgmath::{EuclideanSpace, Point2, Vector2, Array};
 use cgmath_geometry::{GeoBox, DimsBox, BoundBox, Segment};
 
+use std::cmp::Ordering;
 use std::marker::PhantomData;
 use std::collections::VecDeque;
 
@@ -27,8 +28,8 @@ use tree::*;
 use event::{NodeEvent, FocusChange};
 use render::{Renderer, RenderFrame, FrameRectStack};
 use mbseq::MouseButtonSequence;
-use node_stack::{NodeStackBase, NodePath};
-use focus_tracker::{KeyboardFocusTracker};
+use node_stack::{NodeStackBase, NodePath, NodeStack};
+use focus_tracker::{KeyboardFocusTracker, FocusDrain};
 use dct::buttons::{MouseButton, Key};
 
 pub struct Root<A, N, F>
@@ -650,6 +651,34 @@ impl<A, N, F> Root<A, N, F>
             let mut focus_drain = focus_tracker.drain_focus();
             assert_eq!(0, node_ident_stack.len());
             loop {
+                let mut take_focus_to = |
+                    node_stack: &mut NodeStack<_, _, _>,
+                    node_ident_stack: &[NodeIdent],
+                    focus_drain: &mut FocusDrain
+                | {
+                    if let Some(NodePath{ node, path }) = node_stack.move_to_keyboard_focus() {
+                        if path == node_ident_stack {
+                            return;
+                        }
+                        try_push_action!(node, path.into_iter().cloned() => (focus_drain), NodeEvent::LoseFocus);
+
+                        let update_tag = mark_if_needs_update!(node);
+                        update_tag.has_keyboard_focus.set(false);
+                        for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
+                            update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
+                        }
+                    }
+                    if let Some(NodePath{ node, path }) = node_stack.move_to_path(node_ident_stack.iter().cloned()) {
+                        try_push_action!(node, path.into_iter().cloned() => (focus_drain), NodeEvent::GainFocus);
+                        let update_tag = mark_if_needs_update!(node);
+                        update_tag.has_keyboard_focus.set(true);
+
+                        node_stack.pop();
+                        for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
+                            update_tag.child_event_recv.set(update_tag.child_event_recv.get() | ChildEventRecv::KEYBOARD);
+                        }
+                    }
+                };
                 let focus = match focus_drain.next() {
                     Some((focus, ident_iter)) => {
                         node_ident_stack.extend(ident_iter);
@@ -675,33 +704,76 @@ impl<A, N, F> Root<A, N, F>
                             }
                         }
                     },
-                    FocusChange::Take => {
-                        if let Some(NodePath{ node, path }) = node_stack.move_to_keyboard_focus() {
-                            if path == &**node_ident_stack {
-                                node_ident_stack.clear();
-                                continue;
-                            }
-                            try_push_action!(node, path.into_iter().cloned() => (focus_drain), NodeEvent::LoseFocus);
-
-                            let update_tag = mark_if_needs_update!(node);
-                            update_tag.has_keyboard_focus.set(false);
-                            for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
-                                update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
-                            }
-                        }
-                        if let Some(NodePath{ node, path }) = node_stack.move_to_path(node_ident_stack.iter().cloned()) {
-                            try_push_action!(node, path.into_iter().cloned() => (focus_drain), NodeEvent::GainFocus);
-                            let update_tag = mark_if_needs_update!(node);
-                            update_tag.has_keyboard_focus.set(true);
-
-                            node_stack.pop();
-                            for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
-                                update_tag.child_event_recv.set(update_tag.child_event_recv.get() | ChildEventRecv::KEYBOARD);
-                            }
-                        }
-                    },
+                    FocusChange::Take => take_focus_to(&mut node_stack, &**node_ident_stack, &mut focus_drain),
                     FocusChange::Next |
-                    FocusChange::Prev => unimplemented!()
+                    FocusChange::Prev => {
+                        let sibling_dist = match focus {
+                            FocusChange::Next => 1,
+                            FocusChange::Prev => -1,
+                            _ => unreachable!()
+                        };
+
+                        node_stack.move_to_path(node_ident_stack.iter().cloned()).unwrap();
+                        let mut advance_to_sibling = true;
+                        loop {
+                            let dist_multiplier = advance_to_sibling as isize;
+                            advance_to_sibling = true;
+                            match node_stack.move_to_sibling_delta(sibling_dist * dist_multiplier) {
+                                Ok(NodePath{ node: sibling, path: sibling_path }) => match sibling.accepts_focus() {
+                                    OnFocus::Accept => {
+                                        node_ident_stack.clear();
+                                        node_ident_stack.extend(node_stack.ident().iter().cloned());
+                                        break;
+                                    },
+                                    OnFocus::Skip => continue,
+                                    OnFocus::FocusChild => {
+                                        node_stack.try_push(|top, _| {
+                                            let top_parent = top.subtrait_mut().as_parent()?;
+                                            let child_index = match sibling_dist.signum() {
+                                                -1 => top_parent.num_children() - 1,
+                                                1 => 0,
+                                                _ => unreachable!()
+                                            };
+                                            top_parent.child_by_index_mut(child_index)
+                                        }).expect("Need to handle this");
+                                        advance_to_sibling = false;
+                                        continue;
+                                    }
+                                },
+                                Err(index_out_of_bounds_cmp) => {
+                                    match node_stack.parent() {
+                                        Some(parent) => match parent.on_child_focus_overflow() {
+                                            OnFocusOverflow::Wrap => {
+                                                let move_to_index = match index_out_of_bounds_cmp {
+                                                    Ordering::Less => parent.num_children() - 1,
+                                                    Ordering::Greater => 0,
+                                                    Ordering::Equal => unreachable!()
+                                                };
+                                                node_stack.move_to_sibling_index(move_to_index).unwrap();
+                                                advance_to_sibling = false;
+                                                continue;
+                                            },
+                                            OnFocusOverflow::Continue => {
+                                                node_stack.pop();
+                                                continue;
+                                            }
+                                        },
+                                        None => {
+                                            match sibling_dist {
+                                                -1 => node_stack.try_push(|n, _| n.subtrait_mut().as_parent().and_then(|p| p.child_by_index_mut(p.num_children() - 1))),
+                                                1 => node_stack.try_push(|n, _| n.subtrait_mut().as_parent().and_then(|p| p.child_by_index_mut(0))),
+                                                _ => unreachable!()
+                                            };
+                                            advance_to_sibling = false;
+                                            continue;
+                                        }
+                                    }
+                                },
+                            }
+                        }
+
+                        take_focus_to(&mut node_stack, &**node_ident_stack, &mut focus_drain);
+                    }
                 }
                 node_ident_stack.clear();
             }

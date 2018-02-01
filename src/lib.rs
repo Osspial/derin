@@ -26,7 +26,7 @@ use dle::{GridEngine, UpdateHeapCache, SolveError};
 use core::LoopFlow;
 use core::event::{NodeEvent, EventOps};
 use core::render::{RenderFrame, FrameRectStack};
-use core::tree::{NodeIdent, NodeSummary, UpdateTag, NodeSubtrait, NodeSubtraitMut, Node, Parent};
+use core::tree::{NodeIdent, NodeSummary, UpdateTag, NodeSubtrait, NodeSubtraitMut, Node, Parent, OnFocus};
 
 use cgmath::Point2;
 use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
@@ -219,6 +219,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
     fn on_node_event(&mut self, event: NodeEvent, _: &[NodeIdent]) -> EventOps<H::Action> {
         use self::NodeEvent::*;
         use core::event::FocusChange;
+        use dct::buttons::Key;
 
         let (mut action, mut focus) = (None, None);
         let new_state = match event {
@@ -241,9 +242,13 @@ impl<F, H> Node<H::Action, F> for Button<H>
             MouseUp{in_node: false, ..} => ButtonState::Normal,
             MouseEnterChild{..} |
             MouseExitChild{..} => unreachable!(),
-            GainFocus => self.state,
-            LoseFocus => self.state,
+            GainFocus => ButtonState::Hover,
+            LoseFocus => ButtonState::Normal,
             Char(_) => self.state,
+            KeyDown(Key::Tab) => {
+                focus = Some(FocusChange::Prev);
+                self.state
+            }
             KeyDown(_) => self.state,
             KeyUp(_) => self.state,
         };
@@ -323,6 +328,10 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
     #[inline]
     fn subtrait_mut(&mut self) -> NodeSubtraitMut<A, F> {
         NodeSubtraitMut::Parent(self)
+    }
+
+    fn accepts_focus(&self) -> OnFocus {
+        OnFocus::FocusChild
     }
 }
 

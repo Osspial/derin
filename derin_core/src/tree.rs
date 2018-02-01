@@ -111,7 +111,7 @@ pub(crate) struct RootID(u32);
 
 macro_rules! subtrait_enums {
     (subtraits {
-        $( $Variant:ident($SubTrait:ty) ),+
+        $( $Variant:ident($SubTrait:ty) fn $as_variant:ident ),+
     }) => {
         pub enum NodeSubtrait<'a, A: 'a, F: 'a + RenderFrame> {
             $( $Variant(&'a $SubTrait) ),+
@@ -120,12 +120,33 @@ macro_rules! subtrait_enums {
         pub enum NodeSubtraitMut<'a, A: 'a, F: 'a + RenderFrame> {
             $( $Variant(&'a mut $SubTrait) ),+
         }
+
+        impl<'a, A, F: RenderFrame> NodeSubtrait<'a, A, F> {
+            $(
+                pub fn $as_variant(self) -> Option<&'a $SubTrait> {
+                    match self {
+                        NodeSubtrait::$Variant(v) => Some(v),
+                        _ => None
+                    }
+                }
+            )+
+        }
+        impl<'a, A, F: RenderFrame> NodeSubtraitMut<'a, A, F> {
+            $(
+                pub fn $as_variant(self) -> Option<&'a mut $SubTrait> {
+                    match self {
+                        NodeSubtraitMut::$Variant(v) => Some(v),
+                        _ => None
+                    }
+                }
+            )+
+        }
     }
 }
 
 subtrait_enums! {subtraits {
-    Parent(Parent<A, F>),
-    Node(Node<A, F>)
+    Parent(Parent<A, F>) fn as_parent,
+    Node(Node<A, F>) fn as_node
 }}
 
 /// Behavior when another node attempts to focus a given node.

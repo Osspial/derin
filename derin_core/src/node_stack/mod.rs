@@ -1,9 +1,10 @@
 mod inner;
 
 use LoopFlow;
+use std::cmp::{Ordering, Ord};
 use std::iter::{DoubleEndedIterator, ExactSizeIterator};
 use render::RenderFrame;
-use tree::{Node, NodeIdent, ChildEventRecv, UpdateTag, NodeSubtrait, NodeSubtraitMut};
+use tree::{Node, NodeSummary, Parent, NodeIdent, ChildEventRecv, UpdateTag, NodeSubtrait, NodeSubtraitMut};
 
 use self::inner::{NRAllocCache, NRVec};
 pub use self::inner::NodePath;
@@ -71,6 +72,64 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
         }
     }
 
+    pub fn move_to_sibling_delta(&mut self, sibling_dist: isize) -> Result<NodePath<Node<A, F> + 'a>, Ordering> {
+        if sibling_dist == 0 {
+            return Ok(self.stack.top_mut());
+        }
+
+        let top_index = self.stack.top_index();
+        let sibling_index = top_index as isize + sibling_dist;
+        let left_cmp = sibling_index.cmp(&0);
+        self.stack.pop().ok_or(left_cmp)?;
+
+        let parent = self.stack.top().subtrait().as_parent().unwrap();
+        let right_cmp = sibling_index.cmp(&(parent.num_children() as isize));
+
+        match (left_cmp, right_cmp) {
+            (Ordering::Greater, Ordering::Less) |
+            (Ordering::Equal, Ordering::Less) => {
+                let child = self.stack.try_push(|node, _|
+                    node.subtrait_mut().as_parent().unwrap().child_by_index_mut(sibling_index as usize)
+                ).unwrap();
+                Ok(NodePath {
+                    node: child.node,
+                    path: self.stack.ident()
+                })
+            },
+            _ => {
+                self.stack.try_push(|node, _|
+                    node.subtrait_mut().as_parent().unwrap().child_by_index_mut(top_index)
+                ).unwrap();
+                Err(left_cmp)
+            }
+        }
+    }
+
+    pub fn move_to_sibling_index(&mut self, sibling_index: usize) -> Result<NodePath<Node<A, F> + 'a>, Ordering> {
+        let top_index = self.stack.top_index();
+        if self.stack.pop().is_none() {
+            return match sibling_index {
+                0 => Ok(self.stack.top_mut()),
+                _ => Err(Ordering::Greater)
+            };
+        }
+        let child = self.stack.try_push(|node, _|
+            node.subtrait_mut().as_parent().unwrap().child_by_index_mut(sibling_index)
+        );
+        match child {
+            Some(child) => Ok(NodePath {
+                node: child.node,
+                path: self.stack.ident()
+            }),
+            None => {
+                self.stack.try_push(|node, _|
+                    node.subtrait_mut().as_parent().unwrap().child_by_index_mut(top_index)
+                ).unwrap();
+                Err(Ordering::Greater)
+            }
+        }
+    }
+
     #[inline]
     pub fn top(&self) -> &Node<A, F> {
         self.stack.top()
@@ -87,8 +146,23 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
     }
 
     #[inline]
+    pub fn ident(&self) -> &[NodeIdent] {
+        self.stack.ident()
+    }
+
+    pub fn parent(&self) -> Option<&Parent<A, F>> {
+        self.stack.nodes().rev().skip(1).next().map(|n| n.subtrait().as_parent().unwrap())
+    }
+
+    #[inline]
     pub fn nodes<'b>(&'b self) -> impl 'b + Iterator<Item=&'a Node<A, F>> + DoubleEndedIterator + ExactSizeIterator {
         self.stack.nodes()
+    }
+
+    pub fn try_push<G>(&mut self, with_top: G) -> Option<NodeSummary<&'a mut Node<A, F>>>
+        where G: FnOnce(&'a mut Node<A, F>, &[NodeIdent]) -> Option<NodeSummary<&'a mut Node<A, F>>>
+    {
+        self.stack.try_push(with_top)
     }
 
     #[inline]
@@ -154,7 +228,7 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
         for ident in ident_path_iter {
             valid_path = self.stack.try_push(|node, _| {
                 if let NodeSubtraitMut::Parent(node_as_parent) = node.subtrait_mut() {
-                    node_as_parent.child_mut(ident).map(|child_summary| (child_summary.node, ident))
+                    node_as_parent.child_mut(ident)
                 } else {
                     None
                 }
@@ -265,7 +339,7 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
                         }
 
                         match child_ident {
-                            Some(i) => Some((top_node_as_parent.child_mut(i).expect("Unexpected node removal").node, i)),
+                            Some(i) => top_node_as_parent.child_mut(i),
                             None => None
                         }
                     }

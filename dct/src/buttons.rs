@@ -31,8 +31,8 @@ pub enum Key {
     Pause,
     Escape,
     Space,
-    PgUp,
-    PgDn,
+    PageUp,
+    PageDown,
     End,
     Home,
     Select,
@@ -82,25 +82,25 @@ pub enum Key {
     Z,
 
     /// ';:' on US standard keyboards, though it may not be this on other layouts
-    Semi,
-    Plus,
+    Semicolon,
+    Equals,
     Comma,
     Minus,
     /// The period key
-    Dot,
+    Period,
     /// '/?' on US standard keyboards, though it may not be this on other layouts
     Slash,
     /// '`~' on US standard keyboards, though it may not be this on other layouts
-    Tilde,
+    Accent,
 
     /// '[{' on US standard keyboards, though it may not be this on other layouts
-    LBrac,
+    LBracket,
     /// ']}' on US standard keyboards, though it may not be this on other layouts
-    RBrac,
+    RBracket,
     /// '\|' on US standard keyboards, though it may not be this on other layouts
-    Pipe,
+    Backslash,
     /// `"'` on US standard keyboards, though it may not be this on other layouts
-    Quote,
+    Apostrophe,
 
     Sleep,
     Num0,
@@ -144,9 +144,9 @@ pub enum Key {
     F23,
     F24,
 
-    Num,
-    Caps,
-    Scroll,
+    NumLock,
+    CapsLock,
+    ScrollLock,
 
     LShift,
     RShift,
@@ -156,28 +156,28 @@ pub enum Key {
     RAlt,
 
     /// Browser back key
-    BBack,
+    BrowserBack,
     /// Browser forward key
-    BFwd,
+    BrowserFwd,
     /// Browser refresh key
-    BRef,
+    BrowserRef,
     /// Browser stop key
-    BStop,
+    BrowserStop,
     /// Browser search key
-    BSearch,
+    BrowserSearch,
     /// Browser favorites key
-    BFav,
+    BrowserFav,
     /// Browser start/home key
-    BHome,
+    BrowserHome,
 
     /// Next track key
-    MNTrack,
+    MediaNextTrack,
     /// Previous track key
-    MPTrack, // B)
+    MediaPrevTrack, // B)
     /// Stop media key
-    MStop,
+    MediaStop,
     /// Play/pause media key
-    MPause,
+    MediaPause,
 
     /// Left arrow key
     LArrow,

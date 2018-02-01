@@ -1,6 +1,6 @@
 use std::mem;
 use render::RenderFrame;
-use tree::{Node, NodeIdent};
+use tree::{Node, NodeIdent, NodeSummary};
 
 use cgmath::{EuclideanSpace, Point2, Vector2};
 use cgmath_geometry::{BoundBox, GeoBox};
@@ -9,7 +9,8 @@ use cgmath_geometry::{BoundBox, GeoBox};
 
 struct StackElement<'a, A, F: RenderFrame> {
     node: *mut (Node<A, F> + 'a),
-    bounds: BoundBox<Point2<u32>>
+    bounds: BoundBox<Point2<u32>>,
+    index: usize
 }
 
 pub struct NRAllocCache<A, F: RenderFrame> {
@@ -51,7 +52,8 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
 
         vec.push(StackElement {
             node: node,
-            bounds: BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF)
+            bounds: BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF),
+            index: 0
         });
         ident_vec.push(NodeIdent::Num(0));
 
@@ -80,6 +82,10 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     #[inline]
     pub fn top_ident(&self) -> NodeIdent {
         *self.ident_vec.last().unwrap()
+    }
+
+    pub fn top_index(&self) -> usize {
+        self.vec.last().unwrap().index
     }
 
     #[inline]
@@ -121,12 +127,12 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn try_push<G>(&mut self, with_top: G) -> Option<(&'a mut Node<A, F>, NodeIdent)>
-        where G: FnOnce(&'a mut Node<A, F>, &[NodeIdent]) -> Option<(&'a mut Node<A, F>, NodeIdent)>
+    pub fn try_push<G>(&mut self, with_top: G) -> Option<NodeSummary<&'a mut Node<A, F>>>
+        where G: FnOnce(&'a mut Node<A, F>, &[NodeIdent]) -> Option<NodeSummary<&'a mut Node<A, F>>>
     {
         let new_top_opt = with_top(unsafe{ mem::transmute(self.top_mut().node) }, &self.ident_vec );
-        if let Some((new_top, new_top_ident)) = new_top_opt {
-            assert_ne!(new_top as *mut Node<A, F>, self.top_mut().node as *mut _);
+        if let Some(new_top_summary) = new_top_opt {
+            assert_ne!(new_top_summary.node as *mut Node<A, F>, self.top_mut().node as *mut _);
             {
                 let cur_top = self.vec.last_mut().unwrap();
 
@@ -135,11 +141,13 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
             }
 
             self.vec.push(StackElement {
-                node: new_top,
-                bounds: BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF)
+                node: new_top_summary.node,
+                bounds: BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF),
+                index: new_top_summary.index
             });
-            self.ident_vec.push(new_top_ident);
-            Some((unsafe{ &mut *self.vec.last().unwrap().node }, new_top_ident))
+            self.ident_vec.push(new_top_summary.ident);
+            Some(new_top_summary)
+            // Some((unsafe{ &mut *self.vec.last().unwrap().node }, new_top_summary.ident))
         } else {
             None
         }
