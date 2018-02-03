@@ -38,13 +38,13 @@ impl<A, F: RenderFrame> NodeStackBase<A, F> {
 
 impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
     pub fn drain_to_root<G>(&mut self, mut for_each: G) -> NodePath<Root>
-        where G: FnMut(&mut Node<A, F>, &[NodeIdent], Vector2<u32>)
+        where G: FnMut(&mut Node<A, F>, &[NodeIdent], Vector2<i32>)
     {
         self.drain_to_root_while(|node, ident, offset| {for_each(node, ident, offset); true}).unwrap()
     }
 
     pub fn drain_to_root_while<G>(&mut self, mut for_each: G) -> Option<NodePath<Root>>
-        where G: FnMut(&mut Node<A, F>, &[NodeIdent], Vector2<u32>) -> bool
+        where G: FnMut(&mut Node<A, F>, &[NodeIdent], Vector2<i32>) -> bool
     {
         let mut continue_drain = true;
         while self.stack.len() > 1 && continue_drain {
@@ -206,12 +206,12 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
     }
 
     #[inline]
-    pub fn top_parent_offset(&self) -> Vector2<u32> {
+    pub fn top_parent_offset(&self) -> Vector2<i32> {
         self.stack.top_parent_offset()
     }
 
     #[inline]
-    pub fn top_bounds_offset(&self) -> BoundBox<Point2<u32>> {
+    pub fn top_bounds_offset(&self) -> BoundBox<Point2<i32>> {
         self.stack.top_bounds_offset()
     }
 
@@ -261,7 +261,7 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
     /// Returns number of nodes visited. `for_each_flag` takes node at flag, ident path of node,
     /// and Vector2 giving offset from root of the node's parent.
     pub fn move_over_flags<G>(&mut self, mut flags: ChildEventRecv, mut for_each_flag: G) -> usize
-        where for<'b> G: FnMut(&'b mut Node<A, F>, &[NodeIdent], Vector2<u32>) -> &'b UpdateTag
+        where for<'b> G: FnMut(&'b mut Node<A, F>, &[NodeIdent], Vector2<i32>) -> &'b UpdateTag
     {
         assert_ne!(self.stack.nodes().len(), 0);
 

@@ -1,7 +1,7 @@
 mod image;
 mod text;
 
-use cgmath::{Point2, Vector2, Array};
+use cgmath::Point2;
 use cgmath_geometry::{GeoBox, BoundBox};
 use glyphydog::{ShapedBuffer, Shaper, FaceSize, DPI};
 
@@ -62,7 +62,7 @@ impl Translator {
 
     pub(in gl_render) fn translate_prims<I>(
         &mut self,
-        parent_rect: BoundBox<Point2<u32>>,
+        parent_rect: BoundBox<Point2<i32>>,
         theme: &Theme,
         atlas: &mut Atlas,
         font_cache: &mut FontCache,
@@ -74,16 +74,16 @@ impl Translator {
         where I: IntoIterator<Item=ThemedPrim>
     {
         let prim_rect_iter = prims.into_iter().map(move |p| {
-            let parent_center = parent_rect.center().cast::<i32>().unwrap_or(Point2::from_value(0));
-            let parent_dims = parent_rect.dims().cast::<i32>().unwrap_or(Vector2::from_value(0));
+            let parent_center = parent_rect.center();
+            let parent_dims = parent_rect.dims();
 
             let bl = Point2 {
-                x: (parent_center.x + parent_dims.x * Ni32::from_bounded(p.min.x.frac_origin) / 2) as u32,
-                y: (parent_center.y + parent_dims.y * Ni32::from_bounded(p.min.y.frac_origin) / 2) as u32
+                x: parent_center.x + parent_dims.x * Ni32::from_bounded(p.min.x.frac_origin) / 2,
+                y: parent_center.y + parent_dims.y * Ni32::from_bounded(p.min.y.frac_origin) / 2
             };
             let tr = Point2 {
-                x: (parent_center.x + parent_dims.x * Ni32::from_bounded(p.max.x.frac_origin) / 2) as u32,
-                y: (parent_center.y + parent_dims.y * Ni32::from_bounded(p.max.y.frac_origin) / 2) as u32
+                x: parent_center.x + parent_dims.x * Ni32::from_bounded(p.max.x.frac_origin) / 2,
+                y: parent_center.y + parent_dims.y * Ni32::from_bounded(p.max.y.frac_origin) / 2
             };
             (BoundBox::new2(bl.x, bl.y, tr.x, tr.y), p)
         });

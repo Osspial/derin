@@ -19,7 +19,7 @@ use std::vec;
 pub(in gl_render) struct TextTranslate<'a> {
     glyph_draw: GlyphDraw<'a>,
 
-    rect: BoundBox<Point2<u32>>,
+    rect: BoundBox<Point2<i32>>,
     glyph_iter: GlyphIter<vec::IntoIter<GlyphItem>>,
     vertex_iter: Option<ImageTranslate>
 }
@@ -100,7 +100,7 @@ struct Run {
 
 impl<'a> TextTranslate<'a> {
     pub fn new(
-        rect: BoundBox<Point2<u32>>,
+        rect: BoundBox<Point2<i32>>,
         shaped_text: &'a ShapedBuffer,
         text_style: ThemeText,
         face: &'a mut Face<()>,
@@ -414,7 +414,7 @@ impl Run {
 }
 
 impl<'a> GlyphDraw<'a> {
-    fn glyph_atlas_image(&mut self, glyph: ShapedGlyph, rect: BoundBox<Point2<u32>>) -> ImageTranslate {
+    fn glyph_atlas_image(&mut self, glyph: ShapedGlyph, rect: BoundBox<Point2<i32>>) -> ImageTranslate {
         let GlyphDraw {
             ref mut face,
             ref mut atlas,
@@ -472,7 +472,7 @@ impl<'a> GlyphDraw<'a> {
 
         let glyph_pos =
             // rect top-left
-            rect.min().cast::<i32>().unwrap() +
+            rect.min() +
             glyph.pos.to_vec() +
             // Advance the cursor down the line. Pos is with TLO, so vertical flip
             Vector2::new(1, -1).mul_element_wise(glyph_bearing);
@@ -481,7 +481,7 @@ impl<'a> GlyphDraw<'a> {
             glyph_pos.y,
             glyph_pos.x + atlas_rect.width() as i32,
             glyph_pos.y + atlas_rect.height() as i32
-        ).cast::<u32>().unwrap_or(BoundBox::new2(0, 0, 0, 0));
+        );
 
         ImageTranslate::new(
             glyph_rect,

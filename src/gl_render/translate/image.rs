@@ -31,7 +31,7 @@ enum TranslateVerts {
 }
 
 impl ImageTranslate {
-    pub fn new(rect: BoundBox<Point2<u32>>, atlas_rect: OffsetBox<Point2<u16>>, color: Rgba<Nu8>, rescale: RescaleRules) -> ImageTranslate {
+    pub fn new(rect: BoundBox<Point2<i32>>, atlas_rect: OffsetBox<Point2<u16>>, color: Rgba<Nu8>, rescale: RescaleRules) -> ImageTranslate {
         let (min, max) = (rect.min(), rect.max());
         let atlas_rect = atlas_rect.cast::<f32>().unwrap();
         let verts = match (min == max, rescale) {
@@ -86,17 +86,17 @@ impl ImageTranslate {
                         [
                             $base,
                             GLVertex {
-                                loc: Point2::new($base.loc.x $sign_x $slice_x as u32, $base.loc.y),
+                                loc: Point2::new($base.loc.x $sign_x $slice_x as i32, $base.loc.y),
                                 tex_coord: Point2::new($base.tex_coord.x $sign_x $slice_x $sign_x 0.5, $base.tex_coord.y),
                                 ..$base
                             },
                             GLVertex {
-                                loc: Point2::new($base.loc.x $sign_x $slice_x as u32, $base.loc.y $sign_y $slice_y as u32),
+                                loc: Point2::new($base.loc.x $sign_x $slice_x as i32, $base.loc.y $sign_y $slice_y as i32),
                                 tex_coord: Point2::new($base.tex_coord.x $sign_x $slice_x $sign_x 0.5, $base.tex_coord.y $sign_y $slice_y $sign_y 0.5),
                                 ..$base
                             },
                             GLVertex {
-                                loc: Point2::new($base.loc.x, $base.loc.y $sign_y $slice_y as u32),
+                                loc: Point2::new($base.loc.x, $base.loc.y $sign_y $slice_y as i32),
                                 tex_coord: Point2::new($base.tex_coord.x, $base.tex_coord.y $sign_y $slice_y $sign_y 0.5),
                                 ..$base
                             },

@@ -17,7 +17,7 @@ pub trait RenderFrame {
 
     fn upload_primitives<I>(&mut self, node_ident: &[NodeIdent], theme: &Self::Theme, transform: &Self::Transform, prim_iter: I)
         where I: Iterator<Item=Self::Primitive>;
-    fn child_rect_transform(self_transform: &Self::Transform, child_rect: BoundBox<Point2<u32>>) -> Self::Transform;
+    fn child_rect_transform(self_transform: &Self::Transform, child_rect: BoundBox<Point2<i32>>) -> Self::Transform;
 }
 
 pub trait Theme {
@@ -65,7 +65,7 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
     }
 
     #[inline]
-    pub fn enter_child_rect<'b>(&'b mut self, child_rect: BoundBox<Point2<u32>>) -> FrameRectStack<'b, F> {
+    pub fn enter_child_rect<'b>(&'b mut self, child_rect: BoundBox<Point2<i32>>) -> FrameRectStack<'b, F> {
         FrameRectStack {
             frame: self.frame,
             transform: F::child_rect_transform(&self.transform, child_rect),

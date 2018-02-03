@@ -110,7 +110,7 @@ pub trait ButtonHandler {
 #[derive(Debug, Clone)]
 pub struct Button<H: ButtonHandler> {
     update_tag: UpdateTag,
-    bounds: BoundBox<Point2<u32>>,
+    bounds: BoundBox<Point2<i32>>,
     state: ButtonState,
     handler: H,
     string: String
@@ -121,7 +121,7 @@ pub struct Group<C, L>
     where L: NodeLayout
 {
     update_tag: UpdateTag,
-    bounds: BoundBox<Point2<u32>>,
+    bounds: BoundBox<Point2<i32>>,
     layout_engine: GridEngine,
     container: C,
     layout: L
@@ -170,12 +170,12 @@ impl<F, H> Node<H::Action, F> for Button<H>
     }
 
     #[inline]
-    fn bounds(&self) -> BoundBox<Point2<u32>> {
+    fn bounds(&self) -> BoundBox<Point2<i32>> {
         self.bounds
     }
 
     #[inline]
-    fn bounds_mut(&mut self) -> &mut BoundBox<Point2<u32>> {
+    fn bounds_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
         &mut self.bounds
     }
 
@@ -286,12 +286,12 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
     }
 
     #[inline]
-    fn bounds(&self) -> BoundBox<Point2<u32>> {
+    fn bounds(&self) -> BoundBox<Point2<i32>> {
         self.bounds
     }
 
     #[inline]
-    fn bounds_mut(&mut self) -> &mut BoundBox<Point2<u32>> {
+    fn bounds_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
         self.update_tag.mark_update_layout();
         &mut self.bounds
     }
@@ -415,7 +415,7 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
         struct HeapCache {
             update_heap_cache: UpdateHeapCache,
             hints_vec: Vec<WidgetPos>,
-            rects_vec: Vec<Result<BoundBox<Point2<u32>>, SolveError>>
+            rects_vec: Vec<Result<BoundBox<Point2<i32>>, SolveError>>
         }
         thread_local! {
             static HEAP_CACHE: RefCell<HeapCache> = RefCell::new(HeapCache::default());
@@ -443,7 +443,7 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
             let mut rects_iter = rects_vec.drain(..);
             self.container.children_mut::<_, ()>(|summary| {
                 match rects_iter.next() {
-                    Some(rect) => *summary.node.bounds_mut() = rect.unwrap_or(BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF)),
+                    Some(rect) => *summary.node.bounds_mut() = rect.unwrap_or(BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF)),
                     None => return LoopFlow::Break(())
                 }
                 LoopFlow::Continue

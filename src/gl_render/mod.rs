@@ -55,7 +55,7 @@ pub struct GLFrame {
 
 #[derive(TypeGroup, Debug, Clone, Copy)]
 struct GLVertex {
-    loc: Point2<u32>,
+    loc: Point2<i32>,
     color: Rgba<Nu8>,
     tex_coord: Point2<f32>
 }
@@ -74,7 +74,7 @@ impl GLRenderer {
         let window = {
             let context_builder = ContextBuilder::new()
                 .with_gl(GlRequest::GlThenGles {
-                    opengl_version: (3, 1),
+                    opengl_version: (3, 3),
                     opengles_version: (3, 0)
                 });
             GlWindow::new(window_builder, context_builder, events_loop)?
@@ -86,7 +86,7 @@ impl GLRenderer {
         let vert_shader = Shader::new(VERT_SHADER, context_state.clone()).unwrap();
         let frag_shader = Shader::new(FRAG_SHADER, context_state.clone()).unwrap();
 
-        let program = Program::new(&vert_shader, None, &frag_shader).unwrap_discard();
+        let program = Program::new(&vert_shader, None, &frag_shader).unwrap_werr();
 
         let gl_tex_atlas = Texture::new(DimsBox::new2(1024, 1024), 1, context_state.clone()).unwrap();
 
@@ -121,11 +121,11 @@ impl GLRenderer {
 impl Renderer for GLRenderer {
     type Frame = GLFrame;
     fn force_full_redraw(&self) -> bool {true}
-    fn make_frame(&mut self) -> (&mut GLFrame, BoundBox<Point2<u32>>) {
+    fn make_frame(&mut self) -> (&mut GLFrame, BoundBox<Point2<i32>>) {
         let (width, height) = self.window.get_inner_size().unwrap();
         self.render_state.viewport = DimsBox::new2(width, height).into();
 
-        (&mut self.frame, BoundBox::new2(0, 0, width, height))
+        (&mut self.frame, BoundBox::new2(0, 0, width as i32, height as i32))
     }
 
     fn finish_frame(&mut self, _: &Theme) {
@@ -146,18 +146,18 @@ impl Renderer for GLRenderer {
             self.vao.vertex_buffer_mut().sub_data(0, verts);
             self.fb.draw(DrawMode::Triangles, 0..verts.len(), &self.vao, &self.program, uniform, self.render_state);
         }
-        self.window.swap_buffers().ok();
+        self.window.swap_buffers().unwrap();
         self.frame.atlas.bump_frame_count();
         self.frame.vertices.clear();
     }
 }
 
 impl RenderFrame for GLFrame {
-    type Transform = BoundBox<Point2<u32>>;
+    type Transform = BoundBox<Point2<i32>>;
     type Primitive = ThemedPrim;
     type Theme = Theme;
 
-    fn upload_primitives<I>(&mut self, _ident: &[NodeIdent], theme: &Theme, transform: &BoundBox<Point2<u32>>, prim_iter: I)
+    fn upload_primitives<I>(&mut self, _ident: &[NodeIdent], theme: &Theme, transform: &BoundBox<Point2<i32>>, prim_iter: I)
         where I: Iterator<Item=ThemedPrim>
     {
         self.poly_translator.translate_prims(
@@ -172,7 +172,7 @@ impl RenderFrame for GLFrame {
     }
 
     #[inline]
-    fn child_rect_transform(rect: &BoundBox<Point2<u32>>, child_rect: BoundBox<Point2<u32>>) -> BoundBox<Point2<u32>> {
+    fn child_rect_transform(rect: &BoundBox<Point2<i32>>, child_rect: BoundBox<Point2<i32>>) -> BoundBox<Point2<i32>> {
         let trans = child_rect + rect.min().to_vec();
         trans
     }
@@ -180,7 +180,7 @@ impl RenderFrame for GLFrame {
 
 const VERT_SHADER: &str = r#"
     #version 330
-    in uvec2 loc;
+    in ivec2 loc;
     in vec4 color;
     in vec2 tex_coord;
 

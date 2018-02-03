@@ -9,7 +9,7 @@ use cgmath_geometry::{BoundBox, GeoBox};
 
 struct StackElement<'a, A, F: RenderFrame> {
     node: *mut (Node<A, F> + 'a),
-    bounds: BoundBox<Point2<u32>>,
+    bounds: BoundBox<Point2<i32>>,
     index: usize
 }
 
@@ -22,7 +22,7 @@ pub struct NRVec<'a, A: 'a, F: 'a + RenderFrame> {
     cache: &'a mut Vec<StackElement<'static, A, F>>,
     vec: Vec<StackElement<'a, A, F>>,
     ident_vec: &'a mut Vec<NodeIdent>,
-    top_parent_offset: Vector2<u32>
+    top_parent_offset: Vector2<i32>
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -52,7 +52,7 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
 
         vec.push(StackElement {
             node: node,
-            bounds: BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF),
+            bounds: BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF),
             index: 0
         });
         ident_vec.push(NodeIdent::Num(0));
@@ -106,12 +106,12 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn top_parent_offset(&self) -> Vector2<u32> {
+    pub fn top_parent_offset(&self) -> Vector2<i32> {
         self.top_parent_offset
     }
 
     #[inline]
-    pub fn top_bounds_offset(&self) -> BoundBox<Point2<u32>> {
+    pub fn top_bounds_offset(&self) -> BoundBox<Point2<i32>> {
         self.top().bounds() + self.top_parent_offset
     }
 
@@ -142,7 +142,7 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
 
             self.vec.push(StackElement {
                 node: new_top_summary.node,
-                bounds: BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF),
+                bounds: BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF),
                 index: new_top_summary.index
             });
             self.ident_vec.push(new_top_summary.ident);
@@ -164,7 +164,7 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
         self.ident_vec.pop();
         if let Some(last_mut) = self.vec.last_mut() {
             self.top_parent_offset -= last_mut.bounds.min().to_vec();
-            last_mut.bounds = BoundBox::new2(0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF, 0xDEADBEEF);
+            last_mut.bounds = BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF);
         }
 
         popped

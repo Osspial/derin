@@ -175,8 +175,8 @@ pub enum OnFocusOverflow {
 
 pub trait Node<A, F: RenderFrame> {
     fn update_tag(&self) -> &UpdateTag;
-    fn bounds(&self) -> BoundBox<Point2<u32>>;
-    fn bounds_mut(&mut self) -> &mut BoundBox<Point2<u32>>;
+    fn bounds(&self) -> BoundBox<Point2<i32>>;
+    fn bounds_mut(&mut self) -> &mut BoundBox<Point2<i32>>;
     fn render(&self, frame: &mut FrameRectStack<F>);
     fn on_node_event(&mut self, event: NodeEvent, source_child: &[NodeIdent]) -> EventOps<A>;
     fn subtrait(&self) -> NodeSubtrait<A, F>;
@@ -191,7 +191,7 @@ pub trait Node<A, F: RenderFrame> {
 pub struct NodeSummary<N> {
     pub node: N,
     pub ident: NodeIdent,
-    pub rect: BoundBox<Point2<u32>>,
+    pub rect: BoundBox<Point2<i32>>,
     pub update_tag: UpdateTag,
     pub index: usize
 }
