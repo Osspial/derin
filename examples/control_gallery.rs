@@ -100,7 +100,7 @@ fn main() {
             button: Button::new("good day\tgood day good day good day good day \nHello Hello".to_string(), BasicHandler),
             nested: Group::new(NestedContainer {
                 button0: Button::new("tr tr".to_string(), BasicHandler),
-                button1: Button::new("br".to_string(), BasicHandler)
+                button1: Button::new("Hello World".to_string(), BasicHandler)
             }, BasicLayoutVertical)
         },
         BasicLayout
@@ -130,10 +130,12 @@ fn main() {
                 derin::theme::ThemeNode {
                     text: Some(ThemeText {
                         face: ThemeFace::new("./tests/DejaVuSans.ttf", 0).unwrap(),
-                        color: Rgba::new(Nu8(255), Nu8(100), Nu8(100), Nu8(255)),
+                        color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
+                        highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
+                        highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
                         face_size: 16 * 64,
                         tab_size: 8,
-                        justify: Align2::new(Align::Stretch, Align::Center),
+                        justify: Align2::new(Align::Stretch, Align::Start),
                     }),
                     icon: Some(Rc::new(derin::theme::Image {
                         pixels: unsafe {

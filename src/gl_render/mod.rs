@@ -30,7 +30,7 @@ use core::tree::NodeIdent;
 use self::atlas::Atlas;
 use self::font_cache::FontCache;
 use self::translate::Translator;
-pub use self::translate::{Prim, ThemedPrim, RelPoint};
+pub use self::translate::{Prim, ThemedPrim, RelPoint, RenderString};
 
 pub struct GLRenderer {
     window: GlWindow,
@@ -74,7 +74,7 @@ impl GLRenderer {
         let window = {
             let context_builder = ContextBuilder::new()
                 .with_gl(GlRequest::GlThenGles {
-                    opengl_version: (3, 3),
+                    opengl_version: (3, 1),
                     opengles_version: (3, 0)
                 });
             GlWindow::new(window_builder, context_builder, events_loop)?

@@ -1,4 +1,4 @@
-#![feature(slice_rotate)]
+#![feature(slice_rotate, nll, range_contains)]
 
 pub extern crate dct;
 extern crate dat;
@@ -17,7 +17,7 @@ extern crate itertools;
 pub mod gl_render;
 pub mod theme;
 
-use self::gl_render::{ThemedPrim, Prim, RelPoint};
+use self::gl_render::{ThemedPrim, Prim, RelPoint, RenderString};
 
 use std::cell::RefCell;
 
@@ -113,7 +113,7 @@ pub struct Button<H: ButtonHandler> {
     bounds: BoundBox<Point2<i32>>,
     state: ButtonState,
     handler: H,
-    string: String
+    string: RenderString,
 }
 
 #[derive(Debug, Clone)]
@@ -142,7 +142,8 @@ impl<H: ButtonHandler> Button<H> {
             update_tag: UpdateTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             state: ButtonState::Normal,
-            handler, string
+            handler,
+            string: RenderString::new(string)
         }
     }
 }
@@ -211,14 +212,13 @@ impl<F, H> Node<H::Action, F> for Button<H>
                     RelPoint::new( 1.0, 0),
                     RelPoint::new( 1.0, 0)
                 ),
-                prim: Prim::Text(&self.string[..])
+                prim: Prim::Text(&self.string)
             }
         ].iter().cloned());
     }
 
     fn on_node_event(&mut self, event: NodeEvent, bubble_source: &[NodeIdent]) -> EventOps<H::Action> {
         use self::NodeEvent::*;
-        use dct::buttons::Key;
 
         let (mut action, focus) = (None, None);
         if bubble_source.len() == 0 {
@@ -244,9 +244,6 @@ impl<F, H> Node<H::Action, F> for Button<H>
                 GainFocus => ButtonState::Hover,
                 LoseFocus => ButtonState::Normal,
                 Char(_) => self.state,
-                KeyDown(Key::Tab) => {
-                    self.state
-                }
                 KeyDown(_) => self.state,
                 KeyUp(_) => self.state,
             };

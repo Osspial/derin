@@ -20,6 +20,7 @@ struct GlyphKey {
 
 pub struct Atlas {
     atlas: SkylineAtlas<Rgba<Nu8>>,
+    white_rect: Option<OffsetBox<Point2<u32>>>,
     // image_rects: HashMap<(), OffsetBox<Point2<u32>>>,
     glyph_rects: HashMap<GlyphKey, (OffsetBox<Point2<u32>>, Vector2<i32>)>,
     // image_rects: hashmap,
@@ -30,6 +31,7 @@ impl Atlas {
     pub fn new() -> Atlas {
         Atlas {
             atlas: SkylineAtlas::new(Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(0)), DimsBox::new2(1024, 1024)),
+            white_rect: None,
             // image_rects: HashMap::new(),
             glyph_rects: HashMap::new()
         }
@@ -47,8 +49,17 @@ impl Atlas {
     /// to throw away pixel data that's been unused for a while.
     pub fn bump_frame_count(&mut self) {
         self.atlas.clear(None);
+        self.white_rect = None;
         // self.image_rects.clear();
         self.glyph_rects.clear();
+    }
+
+    pub fn white(&mut self) -> OffsetBox<Point2<u32>> {
+        let white_pic = (
+            &[Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255))][..],
+            DimsBox::new2(1, 1)
+        );
+        self.white_rect.unwrap_or_else(|| self.image_rect("TODO: REPLACE WHEN STRINGS MATTER", || white_pic))
     }
 
     /// Retrieve an image from the atlas. `image_path` refers to the theme's name for the image,

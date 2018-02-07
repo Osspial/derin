@@ -22,6 +22,9 @@ pub struct Image {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RescaleRules {
     Stretch,
+    /// Similar to stretch, but begins sampling image half a pixel away from the border. Can
+    /// eliminate border artifacts in some scenarios.
+    StretchOnPixelCenter,
     Slice(Margins<u16>)
 }
 
@@ -29,6 +32,8 @@ pub enum RescaleRules {
 pub struct ThemeText {
     pub face: ThemeFace,
     pub color: Rgba<Nu8>,
+    pub highlight_bg_color: Rgba<Nu8>,
+    pub highlight_text_color: Rgba<Nu8>,
     pub face_size: u32,
     pub tab_size: u32,
     pub justify: Align2
