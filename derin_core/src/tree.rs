@@ -21,6 +21,7 @@ pub enum NodeIdent {
 pub(crate) struct Update {
     pub render_self: bool,
     pub update_child: bool,
+    pub update_timer: bool,
     pub update_layout: bool
 }
 
@@ -173,11 +174,18 @@ pub enum OnFocusOverflow {
     Wrap
 }
 
+pub struct TimerRegister {}
+
+impl TimerRegister {
+    pub fn add_timer(&mut self, name: &'static str, frequency: Duration) {}
+}
+
 pub trait Node<A, F: RenderFrame> {
     fn update_tag(&self) -> &UpdateTag;
     fn bounds(&self) -> BoundBox<Point2<i32>>;
     fn bounds_mut(&mut self) -> &mut BoundBox<Point2<i32>>;
     fn render(&self, frame: &mut FrameRectStack<F>);
+    fn register_timers(&self, register: &mut TimerRegister) {}
     fn on_node_event(&mut self, event: NodeEvent, source_child: &[NodeIdent]) -> EventOps<A>;
     fn subtrait(&self) -> NodeSubtrait<A, F>;
     fn subtrait_mut(&mut self) -> NodeSubtraitMut<A, F>;
@@ -231,10 +239,11 @@ impl Default for OnFocusOverflow {
 
 const RENDER_SELF: u32 = 1 << 31;
 const UPDATE_CHILD: u32 = 1 << 30;
+const UPDATE_LAYOUT: u32 = 1 << 29;
+const UPDATE_TIMER: u32 = 1 << 28;
 const RENDER_ALL: u32 = RENDER_SELF | UPDATE_CHILD;
-const UPDATE_LAYOUT: u32 = (1 << 29);
 
-const UPDATE_MASK: u32 = RENDER_SELF | UPDATE_CHILD | RENDER_ALL | UPDATE_LAYOUT;
+const UPDATE_MASK: u32 = RENDER_SELF | UPDATE_CHILD | RENDER_ALL | UPDATE_LAYOUT | UPDATE_TIMER;
 
 impl UpdateTag {
     #[inline]
@@ -267,6 +276,12 @@ impl UpdateTag {
     }
 
     #[inline]
+    pub fn mark_update_timer(&mut self) -> &mut UpdateTag {
+        self.last_root.set(self.last_root.get() | UPDATE_TIMER);
+        self
+    }
+
+    #[inline]
     pub(crate) fn mark_updated(&self, root_id: RootID) {
         self.last_root.set(root_id.0);
     }
@@ -286,11 +301,13 @@ impl UpdateTag {
             r if r == root_id.0 => Update {
                 render_self: false,
                 update_child: false,
+                update_timer: false,
                 update_layout: false
             },
             r => Update {
                 render_self: r & UPDATE_MASK & RENDER_SELF != 0,
                 update_child: r & UPDATE_MASK & UPDATE_CHILD != 0,
+                update_timer: r & UPDATE_MASK & UPDATE_TIMER != 0,
                 update_layout: r & UPDATE_MASK & UPDATE_LAYOUT != 0
             },
         }
