@@ -8,6 +8,7 @@ use mbseq::MouseButtonSequence;
 use dct::buttons::MouseButton;
 use event::{NodeEvent, EventOps};
 use render::{RenderFrame, FrameRectStack};
+use timer::TimerRegister;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NodeIdent {
@@ -17,7 +18,7 @@ pub enum NodeIdent {
     NumCollection(u32, u32)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Update {
     pub render_self: bool,
     pub update_child: bool,
@@ -38,6 +39,7 @@ pub(crate) enum MouseState {
 #[derive(Debug, Clone)]
 pub struct UpdateTag {
     last_root: Cell<u32>,
+    pub(crate) node_id: NodeID,
     pub(crate) last_event_stamp: Cell<u32>,
     pub(crate) mouse_state: Cell<MouseState>,
     pub(crate) has_keyboard_focus: Cell<bool>,
@@ -107,8 +109,28 @@ impl<'a> From<&'a UpdateTag> for ChildEventRecv {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct RootID(u32);
+macro_rules! id {
+    ($Name:ident) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub(crate) struct $Name(u32);
+
+        impl $Name {
+            #[inline]
+            pub fn new() -> $Name {
+                use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
+
+                static ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
+                let id = ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32;
+                assert!(id < UPDATE_MASK);
+
+                $Name(id as u32)
+            }
+        }
+    }
+}
+
+id!(RootID);
+id!(NodeID);
 
 macro_rules! subtrait_enums {
     (subtraits {
@@ -172,12 +194,6 @@ pub enum OnFocusOverflow {
     Continue,
     /// Wrap focus around, returning focus to the first/last node on the current level.
     Wrap
-}
-
-pub struct TimerRegister {}
-
-impl TimerRegister {
-    pub fn add_timer(&mut self, name: &'static str, frequency: Duration) {}
 }
 
 pub trait Node<A, F: RenderFrame> {
@@ -250,6 +266,7 @@ impl UpdateTag {
     pub fn new() -> UpdateTag {
         UpdateTag {
             last_root: Cell::new(UPDATE_MASK),
+            node_id: NodeID::new(),
             last_event_stamp: Cell::new(0),
             mouse_state: Cell::new(MouseState::Untracked),
             has_keyboard_focus: Cell::new(false),
@@ -314,15 +331,15 @@ impl UpdateTag {
     }
 }
 
-impl RootID {
-    #[inline]
-    pub fn new() -> RootID {
-        use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
+impl Update {
+    pub fn needs_redraw(self) -> bool {
+        let Update {
+            render_self,
+            update_child,
+            update_timer: _,
+            update_layout
+        } = self;
 
-        static ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
-        let id = ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32;
-        assert!(id < UPDATE_MASK);
-
-        RootID(id as u32)
+        render_self || update_child || update_layout
     }
 }

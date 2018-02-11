@@ -4,7 +4,7 @@ use LoopFlow;
 use std::cmp::{Ordering, Ord};
 use std::iter::{DoubleEndedIterator, ExactSizeIterator};
 use render::RenderFrame;
-use tree::{Node, NodeSummary, Parent, NodeIdent, ChildEventRecv, UpdateTag, NodeSubtrait, NodeSubtraitMut};
+use tree::{Node, NodeSummary, Parent, NodeIdent, ChildEventRecv, UpdateTag, NodeSubtrait, NodeSubtraitMut, RootID};
 
 use self::inner::{NRAllocCache, NRVec};
 pub use self::inner::NodePath;
@@ -12,7 +12,7 @@ pub use self::inner::NodePath;
 use cgmath::{Point2, Vector2, EuclideanSpace};
 use cgmath_geometry::{BoundBox, GeoBox};
 
-pub struct NodeStackBase<A, F: RenderFrame> {
+pub(crate) struct NodeStackBase<A, F: RenderFrame> {
     stack: NRAllocCache<A, F>
 }
 
@@ -28,10 +28,10 @@ impl<A, F: RenderFrame> NodeStackBase<A, F> {
         }
     }
 
-    pub fn use_stack<'a, Root: Node<A, F>>(&'a mut self, node: &'a mut Root) -> NodeStack<'a, A, F, Root> {
+    pub fn use_stack<'a, Root: Node<A, F>>(&'a mut self, node: &'a mut Root, root_id: RootID) -> NodeStack<'a, A, F, Root> {
         NodeStack {
             root: node,
-            stack: self.stack.use_cache(node)
+            stack: self.stack.use_cache(node, root_id)
         }
     }
 }

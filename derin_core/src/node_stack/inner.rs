@@ -1,6 +1,6 @@
 use std::mem;
 use render::RenderFrame;
-use tree::{Node, NodeIdent, NodeSummary};
+use tree::{Node, NodeIdent, NodeSummary, RootID, Update};
 
 use cgmath::{EuclideanSpace, Point2, Vector2};
 use cgmath_geometry::{BoundBox, GeoBox};
@@ -13,7 +13,7 @@ struct StackElement<'a, A, F: RenderFrame> {
     index: usize
 }
 
-pub struct NRAllocCache<A, F: RenderFrame> {
+pub(crate) struct NRAllocCache<A, F: RenderFrame> {
     vec: Vec<StackElement<'static, A, F>>,
     ident_vec: Vec<NodeIdent>
 }
@@ -22,7 +22,8 @@ pub struct NRVec<'a, A: 'a, F: 'a + RenderFrame> {
     cache: &'a mut Vec<StackElement<'static, A, F>>,
     vec: Vec<StackElement<'a, A, F>>,
     ident_vec: &'a mut Vec<NodeIdent>,
-    top_parent_offset: Vector2<i32>
+    top_parent_offset: Vector2<i32>,
+    root_id: RootID
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -39,7 +40,7 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
         }
     }
 
-    pub fn use_cache<'a>(&'a mut self, node: &mut (Node<A, F> + 'a)) -> NRVec<'a, A, F> {
+    pub fn use_cache<'a>(&'a mut self, node: &mut (Node<A, F> + 'a), root_id: RootID) -> NRVec<'a, A, F> {
         let mut cache_swap = Vec::new();
         mem::swap(&mut cache_swap, &mut self.vec);
 
@@ -60,7 +61,8 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
         NRVec {
             cache: &mut self.vec,
             vec, ident_vec,
-            top_parent_offset: Vector2::new(0, 0)
+            top_parent_offset: Vector2::new(0, 0),
+            root_id
         }
     }
 }
@@ -96,6 +98,15 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     #[inline]
     pub fn truncate(&mut self, len: usize) {
         assert_ne!(0, len);
+        for node_slice in self.vec[len-1..].windows(2).rev() {
+            let parent = unsafe{ &*node_slice[0].node };
+            let child = unsafe{ &*node_slice[1].node };
+
+            if child.update_tag().needs_update(self.root_id) != Update::default() {
+                parent.update_tag().mark_update_child_immutable();
+            }
+        }
+
         self.vec.truncate(len);
         self.ident_vec.truncate(len);
 
@@ -160,20 +171,25 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
             return None;
         }
 
-        let popped = self.vec.pop().map(|n| unsafe{ &mut *n.node });
+        let popped = self.vec.pop().map(|n| unsafe{ &mut *n.node }).unwrap();
         self.ident_vec.pop();
         if let Some(last_mut) = self.vec.last_mut() {
             self.top_parent_offset -= last_mut.bounds.min().to_vec();
             last_mut.bounds = BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF);
         }
 
-        popped
+        if popped.update_tag().needs_update(self.root_id) != Update::default() {
+            self.top_mut().node.update_tag().mark_update_child_immutable();
+        }
+
+        Some(popped)
     }
 }
 
 impl<'a, A, F: RenderFrame> Drop for NRVec<'a, A, F> {
     fn drop(&mut self) {
-        self.vec.clear();
+        while let Some(_) = self.pop() {}
+
         let mut vec = unsafe {
             let (ptr, len, cap) = (self.vec.as_ptr(), self.vec.len(), self.vec.capacity());
             Vec::from_raw_parts(mem::transmute::<_, *mut StackElement<'static, A, F>>(ptr), len, cap)
