@@ -4,6 +4,8 @@ use tree::NodeIdent;
 use arrayvec::ArrayVec;
 use mbseq::MouseButtonSequence;
 
+use std::time::{Instant, Duration};
+
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct EventOps<A> {
     pub action: Option<A>,
@@ -64,7 +66,14 @@ pub enum NodeEvent<'a> {
     LoseFocus,
     Char(char),
     KeyDown(Key),
-    KeyUp(Key)
+    KeyUp(Key),
+    Timer {
+        name: &'static str,
+        start_time: Instant,
+        last_trigger: Instant,
+        frequency: Duration,
+        times_triggered: u64
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -112,7 +121,14 @@ pub(crate) enum NodeEventOwned {
     LoseFocus,
     Char(char),
     KeyDown(Key),
-    KeyUp(Key)
+    KeyUp(Key),
+    Timer {
+        name: &'static str,
+        start_time: Instant,
+        last_trigger: Instant,
+        frequency: Duration,
+        times_triggered: u64
+    }
 }
 
 impl<'a> NodeEvent<'a> {
@@ -163,7 +179,9 @@ impl<'a> NodeEvent<'a> {
             NodeEvent::LoseFocus => NodeEvent::LoseFocus,
             NodeEvent::Char(c) => NodeEvent::Char(c),
             NodeEvent::KeyDown(k) => NodeEvent::KeyDown(k),
-            NodeEvent::KeyUp(k) => NodeEvent::KeyUp(k)
+            NodeEvent::KeyUp(k) => NodeEvent::KeyUp(k),
+            NodeEvent::Timer{ name, start_time, last_trigger, frequency, times_triggered } =>
+                NodeEvent::Timer{ name, start_time, last_trigger, frequency, times_triggered }
         }
     }
 }
@@ -231,7 +249,9 @@ impl NodeEventOwned {
             NodeEventOwned::LoseFocus => NodeEvent::LoseFocus,
             NodeEventOwned::Char(c) => NodeEvent::Char(c),
             NodeEventOwned::KeyDown(k) => NodeEvent::KeyDown(k),
-            NodeEventOwned::KeyUp(k) => NodeEvent::KeyUp(k)
+            NodeEventOwned::KeyUp(k) => NodeEvent::KeyUp(k),
+            NodeEventOwned::Timer{ name, start_time, last_trigger, frequency, times_triggered } =>
+                NodeEvent::Timer{ name, start_time, last_trigger, frequency, times_triggered }
         };
         func(event_borrowed)
     }
@@ -298,7 +318,9 @@ impl<'a> From<NodeEvent<'a>> for NodeEventOwned {
             NodeEvent::LoseFocus => NodeEventOwned::LoseFocus,
             NodeEvent::Char(c) => NodeEventOwned::Char(c),
             NodeEvent::KeyDown(k) => NodeEventOwned::KeyDown(k),
-            NodeEvent::KeyUp(k) => NodeEventOwned::KeyUp(k)
+            NodeEvent::KeyUp(k) => NodeEventOwned::KeyUp(k),
+            NodeEvent::Timer{ name, start_time, last_trigger, frequency, times_triggered } =>
+                NodeEventOwned::Timer{ name, start_time, last_trigger, frequency, times_triggered }
         }
     }
 }

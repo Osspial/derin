@@ -220,6 +220,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
     fn on_node_event(&mut self, event: NodeEvent, bubble_source: &[NodeIdent]) -> EventOps<H::Action> {
         use self::NodeEvent::*;
 
+        self.update_tag.mark_update_timer();
         let (mut action, focus) = (None, None);
         if bubble_source.len() == 0 {
             let new_state = match event {
@@ -246,6 +247,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
                 Char(_) => self.state,
                 KeyDown(_) => self.state,
                 KeyUp(_) => self.state,
+                Timer{..} => self.state
             };
 
             if new_state != self.state {

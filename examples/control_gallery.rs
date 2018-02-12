@@ -5,6 +5,7 @@ extern crate glutin;
 extern crate png;
 
 extern crate gl_raii;
+extern crate parking_lot;
 
 use derin::dct::buttons::{MouseButton, Key};
 use derin::dct::hints::{WidgetPos, NodeSpan, GridSize, Margins, Align, Align2};
@@ -18,7 +19,12 @@ use derin::geometry::{Point2, DimsBox, GeoBox};
 use gl_raii::colors::Rgba;
 use gl_raii::glsl::Nu8;
 
+use std::thread;
 use std::rc::Rc;
+use std::time::Duration;
+use std::sync::Arc;
+
+use parking_lot::Mutex;
 
 use glutin::{Event, ControlFlow, WindowEvent as GWindowEvent, MouseButton as GMouseButton, ElementState, VirtualKeyCode};
 
@@ -160,67 +166,106 @@ fn main() {
     upload_image!("Button::Hover", "../button.hover.png", 32, 4);
     upload_image!("Button::Clicked", "../button.clicked.png", 32, 4);
 
+    #[derive(PartialEq, Eq, Clone, Copy)]
+    enum TimerPark {
+        Indefinite,
+        Timeout(Duration),
+        Abort
+    }
+
+    let timer_sync = Arc::new(Mutex::new(TimerPark::Indefinite));
+    let timer_sync_timer_thread = timer_sync.clone();
+    let events_loop_proxy = events_loop.create_proxy();
+
+    let timer_thread_handle = thread::spawn(move || {
+        let timer_sync = timer_sync_timer_thread;
+        loop {
+            let park_type = *timer_sync.lock();
+
+            match park_type {
+                TimerPark::Timeout(park_duration) => {
+                    thread::park_timeout(park_duration);
+                    if *timer_sync.lock() == TimerPark::Timeout(park_duration) {
+                        if events_loop_proxy.wakeup().is_err() {
+                            return;
+                        }
+                    }
+                }
+                TimerPark::Indefinite => thread::park(),
+                TimerPark::Abort => return
+            }
+        }
+    });
 
     let mut root = Root::new(group, theme, dims);
     root.run_forever(|for_each_event| {
         let mut ret: Option<()> = None;
         events_loop.run_forever(|glutin_event| {
-            match glutin_event {
+            let derin_event: WindowEvent = match glutin_event {
                 Event::WindowEvent{event, ..} => {
-                    let derin_event_opt: Option<WindowEvent> = match event {
-                        GWindowEvent::CursorMoved{position, ..} => Some(WindowEvent::MouseMove(Point2::new(position.0 as i32, position.1 as i32))),
-                        GWindowEvent::CursorEntered{..} => Some(WindowEvent::MouseEnter(Point2::new(0, 0))),
-                        GWindowEvent::CursorLeft{..} => Some(WindowEvent::MouseExit(Point2::new(0, 0))),
+                    match event {
+                        GWindowEvent::CursorMoved{position, ..} => WindowEvent::MouseMove(Point2::new(position.0 as i32, position.1 as i32)),
+                        GWindowEvent::CursorEntered{..} => WindowEvent::MouseEnter(Point2::new(0, 0)),
+                        GWindowEvent::CursorLeft{..} => WindowEvent::MouseExit(Point2::new(0, 0)),
                         GWindowEvent::MouseInput{state, button: g_button, ..} => {
                             let button = match g_button {
-                                GMouseButton::Left => Some(MouseButton::Left),
-                                GMouseButton::Right => Some(MouseButton::Right),
-                                GMouseButton::Middle => Some(MouseButton::Middle),
-                                GMouseButton::Other(1) => Some(MouseButton::X1),
-                                GMouseButton::Other(2) => Some(MouseButton::X2),
-                                GMouseButton::Other(_) => None
+                                GMouseButton::Left => MouseButton::Left,
+                                GMouseButton::Right => MouseButton::Right,
+                                GMouseButton::Middle => MouseButton::Middle,
+                                GMouseButton::Other(1) => MouseButton::X1,
+                                GMouseButton::Other(2) => MouseButton::X2,
+                                GMouseButton::Other(_) => return ControlFlow::Continue
                             };
-                            button.map(|b| match state {
-                                ElementState::Pressed => WindowEvent::MouseDown(b),
-                                ElementState::Released => WindowEvent::MouseUp(b)
-                            })
+                            match state {
+                                ElementState::Pressed => WindowEvent::MouseDown(button),
+                                ElementState::Released => WindowEvent::MouseUp(button)
+                            }
                         }
-                        GWindowEvent::Resized(width, height) => Some(WindowEvent::WindowResize(DimsBox::new2(width, height))),
-                        GWindowEvent::ReceivedCharacter(c) => Some(WindowEvent::Char(c)),
+                        GWindowEvent::Resized(width, height) => WindowEvent::WindowResize(DimsBox::new2(width, height)),
+                        GWindowEvent::ReceivedCharacter(c) => WindowEvent::Char(c),
                         GWindowEvent::KeyboardInput{ input, .. } => {
                             if let Some(key) = input.virtual_keycode.and_then(map_key) {
                                 match input.state {
-                                    ElementState::Pressed => Some(WindowEvent::KeyDown(key)),
-                                    ElementState::Released => Some(WindowEvent::KeyUp(key))
+                                    ElementState::Pressed => WindowEvent::KeyDown(key),
+                                    ElementState::Released => WindowEvent::KeyUp(key)
                                 }
                             } else {
-                                None
+                                return ControlFlow::Continue
                             }
                         }
                         GWindowEvent::Closed => return ControlFlow::Break,
-                        _ => None
-                    };
-
-                    if let Some(derin_event) = derin_event_opt {
-                        match for_each_event(derin_event) {
-                            LoopFlow::Break(b) => {
-                                ret = Some(b);
-                                return ControlFlow::Break;
-                            },
-                            LoopFlow::Continue => ()
-                        }
+                        _ => return ControlFlow::Continue
                     }
                 },
-                Event::Awakened |
+                Event::Awakened => WindowEvent::Timer,
                 Event::Suspended(..) |
-                Event::DeviceEvent{..} => ()
+                Event::DeviceEvent{..} => return ControlFlow::Continue
+            };
+
+            let event_result = for_each_event(derin_event);
+            match event_result.flow {
+                LoopFlow::Break(b) => {
+                    ret = Some(b);
+                    return ControlFlow::Break;
+                },
+                LoopFlow::Continue => ()
             }
+
+            match event_result.wait_until_call_timer {
+                None => *timer_sync.lock() = TimerPark::Indefinite,
+                Some(park_duration) => *timer_sync.lock() = TimerPark::Timeout(park_duration)
+            }
+            timer_thread_handle.thread().unpark();
 
             ControlFlow::Continue
         });
 
         ret
     }, |_, _, _| {LoopFlow::Continue}, |_, _| None, &mut renderer);
+
+    *timer_sync.lock() = TimerPark::Abort;
+    timer_thread_handle.thread().unpark();
+    debug_assert_eq!(true, timer_thread_handle.join().is_ok());
 }
 
 fn map_key(k: VirtualKeyCode) -> Option<Key> {

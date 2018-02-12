@@ -12,6 +12,7 @@ itertools = "0.7"
 [dev-dependencies]
 derin_macros = {path = "./derin_macros"}
 png = "0.11"
+parking_lot = "0.5"
 
 [dependencies.cgmath]
 branch = "prs_merged"

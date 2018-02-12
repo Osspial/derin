@@ -8,6 +8,7 @@ use mbseq::MouseButtonSequence;
 use dct::buttons::MouseButton;
 use event::{NodeEvent, EventOps};
 use render::{RenderFrame, FrameRectStack};
+use timer::TimerRegister;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NodeIdent {
@@ -17,10 +18,11 @@ pub enum NodeIdent {
     NumCollection(u32, u32)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct Update {
     pub render_self: bool,
     pub update_child: bool,
+    pub update_timer: bool,
     pub update_layout: bool
 }
 
@@ -37,6 +39,7 @@ pub(crate) enum MouseState {
 #[derive(Debug, Clone)]
 pub struct UpdateTag {
     last_root: Cell<u32>,
+    pub(crate) node_id: NodeID,
     pub(crate) last_event_stamp: Cell<u32>,
     pub(crate) mouse_state: Cell<MouseState>,
     pub(crate) has_keyboard_focus: Cell<bool>,
@@ -106,8 +109,33 @@ impl<'a> From<&'a UpdateTag> for ChildEventRecv {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct RootID(u32);
+macro_rules! id {
+    ($Name:ident) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        pub(crate) struct $Name(u32);
+
+        impl $Name {
+            #[inline]
+            pub fn new() -> $Name {
+                use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
+
+                static ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
+                let id = ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32;
+                assert!(id < UPDATE_MASK);
+
+                $Name(id as u32)
+            }
+
+            #[allow(dead_code)]
+            pub fn dummy() -> $Name {
+                $Name(!0)
+            }
+        }
+    }
+}
+
+id!(RootID);
+id!(NodeID);
 
 macro_rules! subtrait_enums {
     (subtraits {
@@ -178,6 +206,7 @@ pub trait Node<A, F: RenderFrame> {
     fn bounds(&self) -> BoundBox<Point2<i32>>;
     fn bounds_mut(&mut self) -> &mut BoundBox<Point2<i32>>;
     fn render(&self, frame: &mut FrameRectStack<F>);
+    fn register_timers(&self, _register: &mut TimerRegister) {}
     fn on_node_event(&mut self, event: NodeEvent, source_child: &[NodeIdent]) -> EventOps<A>;
     fn subtrait(&self) -> NodeSubtrait<A, F>;
     fn subtrait_mut(&mut self) -> NodeSubtraitMut<A, F>;
@@ -231,16 +260,18 @@ impl Default for OnFocusOverflow {
 
 const RENDER_SELF: u32 = 1 << 31;
 const UPDATE_CHILD: u32 = 1 << 30;
+const UPDATE_LAYOUT: u32 = 1 << 29;
+const UPDATE_TIMER: u32 = 1 << 28;
 const RENDER_ALL: u32 = RENDER_SELF | UPDATE_CHILD;
-const UPDATE_LAYOUT: u32 = (1 << 29);
 
-const UPDATE_MASK: u32 = RENDER_SELF | UPDATE_CHILD | RENDER_ALL | UPDATE_LAYOUT;
+const UPDATE_MASK: u32 = RENDER_SELF | UPDATE_CHILD | RENDER_ALL | UPDATE_LAYOUT | UPDATE_TIMER;
 
 impl UpdateTag {
     #[inline]
     pub fn new() -> UpdateTag {
         UpdateTag {
             last_root: Cell::new(UPDATE_MASK),
+            node_id: NodeID::new(),
             last_event_stamp: Cell::new(0),
             mouse_state: Cell::new(MouseState::Untracked),
             has_keyboard_focus: Cell::new(false),
@@ -267,6 +298,12 @@ impl UpdateTag {
     }
 
     #[inline]
+    pub fn mark_update_timer(&mut self) -> &mut UpdateTag {
+        self.last_root.set(self.last_root.get() | UPDATE_TIMER);
+        self
+    }
+
+    #[inline]
     pub(crate) fn mark_updated(&self, root_id: RootID) {
         self.last_root.set(root_id.0);
     }
@@ -276,6 +313,12 @@ impl UpdateTag {
         self.last_root.set(self.last_root.get() & !UPDATE_LAYOUT);
     }
 
+    #[inline]
+    pub(crate) fn unmark_update_timer(&self) {
+        self.last_root.set(self.last_root.get() & !UPDATE_TIMER);
+    }
+
+    #[inline]
     pub(crate) fn mark_update_child_immutable(&self) {
         self.last_root.set(self.last_root.get() | UPDATE_CHILD);
     }
@@ -286,26 +329,28 @@ impl UpdateTag {
             r if r == root_id.0 => Update {
                 render_self: false,
                 update_child: false,
+                update_timer: false,
                 update_layout: false
             },
             r => Update {
                 render_self: r & UPDATE_MASK & RENDER_SELF != 0,
                 update_child: r & UPDATE_MASK & UPDATE_CHILD != 0,
+                update_timer: r & UPDATE_MASK & UPDATE_TIMER != 0,
                 update_layout: r & UPDATE_MASK & UPDATE_LAYOUT != 0
             },
         }
     }
 }
 
-impl RootID {
-    #[inline]
-    pub fn new() -> RootID {
-        use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
+impl Update {
+    pub fn needs_redraw(self) -> bool {
+        let Update {
+            render_self,
+            update_child,
+            update_timer: _,
+            update_layout
+        } = self;
 
-        static ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
-        let id = ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32;
-        assert!(id < UPDATE_MASK);
-
-        RootID(id as u32)
+        render_self || update_child || update_layout
     }
 }

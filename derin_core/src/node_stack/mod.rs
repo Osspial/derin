@@ -4,7 +4,7 @@ use LoopFlow;
 use std::cmp::{Ordering, Ord};
 use std::iter::{DoubleEndedIterator, ExactSizeIterator};
 use render::RenderFrame;
-use tree::{Node, NodeSummary, Parent, NodeIdent, ChildEventRecv, UpdateTag, NodeSubtrait, NodeSubtraitMut};
+use tree::{Node, NodeSummary, Parent, NodeIdent, ChildEventRecv, UpdateTag, NodeSubtrait, NodeSubtraitMut, RootID, NodeID};
 
 use self::inner::{NRAllocCache, NRVec};
 pub use self::inner::NodePath;
@@ -12,7 +12,7 @@ pub use self::inner::NodePath;
 use cgmath::{Point2, Vector2, EuclideanSpace};
 use cgmath_geometry::{BoundBox, GeoBox};
 
-pub struct NodeStackBase<A, F: RenderFrame> {
+pub(crate) struct NodeStackBase<A, F: RenderFrame> {
     stack: NRAllocCache<A, F>
 }
 
@@ -28,10 +28,10 @@ impl<A, F: RenderFrame> NodeStackBase<A, F> {
         }
     }
 
-    pub fn use_stack<'a, Root: Node<A, F>>(&'a mut self, node: &'a mut Root) -> NodeStack<'a, A, F, Root> {
+    pub fn use_stack<'a, Root: Node<A, F>>(&'a mut self, node: &'a mut Root, root_id: RootID) -> NodeStack<'a, A, F, Root> {
         NodeStack {
             root: node,
-            stack: self.stack.use_cache(node)
+            stack: self.stack.use_cache(node, root_id)
         }
     }
 }
@@ -367,5 +367,41 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
         }
 
         nodes_visited
+    }
+
+    pub(crate) fn move_over_nodes<I, G>(&mut self, node_ids: I, mut for_each_node: G)
+        where I: IntoIterator<Item=NodeID> + ExactSizeIterator + Clone,
+              G: FnMut(&mut Node<A, F>, &[NodeIdent], usize, Vector2<i32>)
+    {
+        self.move_to_root();
+        let mut nodes_left = node_ids.len();
+        let mut child_index = 0;
+        while nodes_left > 0 {
+            let top_parent_offset = self.stack.top_parent_offset();
+            let valid_child = self.stack.try_push(|top_node, top_path| {
+                let top_id = top_node.update_tag().node_id;
+
+                if let Some((iter_index, _)) = node_ids.clone().into_iter().enumerate().find(|&(_, id)| id == top_id) {
+                    for_each_node(top_node, top_path, iter_index, top_parent_offset);
+                    nodes_left -= 1;
+                }
+
+                if let Some(top_node_as_parent) = top_node.subtrait_mut().as_parent() {
+                    return top_node_as_parent.child_by_index_mut(child_index);
+                }
+
+                None
+            }).is_some();
+
+            match valid_child {
+                true => child_index = 0,
+                false => {
+                    child_index = self.stack.top_index() + 1;
+                    if self.stack.pop().is_none() {
+                        break
+                    }
+                }
+            }
+        }
     }
 }
