@@ -9,7 +9,7 @@ extern crate parking_lot;
 
 use derin::dct::buttons::{MouseButton, Key};
 use derin::dct::hints::{WidgetPos, NodeSpan, GridSize, Margins, Align, Align2};
-use derin::{ButtonHandler, NodeLayout, Button, Group};
+use derin::{ButtonHandler, NodeLayout, Button, Group, Label};
 use derin::gl_render::GLRenderer;
 use derin::core::{LoopFlow, Root, WindowEvent};
 use derin::core::tree::NodeIdent;
@@ -41,6 +41,7 @@ struct BasicContainer {
 #[derive(NodeContainer)]
 #[derin(action = "GalleryEvent")]
 struct NestedContainer {
+    label: Label,
     button0: Button<BasicHandler>,
     button1: Button<BasicHandler>
 }
@@ -82,13 +83,18 @@ impl NodeLayout for BasicLayout {
 impl NodeLayout for BasicLayoutVertical {
     fn hints(&self, node_ident: NodeIdent) -> Option<WidgetPos> {
         match node_ident {
-            NodeIdent::Str("button0") => Some(WidgetPos {
+            NodeIdent::Str("label") => Some(WidgetPos {
                 node_span: NodeSpan::new(0, 0),
                 margins: Margins::new(16, 16, 16, 16),
                 ..WidgetPos::default()
             }),
-            NodeIdent::Str("button1") => Some(WidgetPos {
+            NodeIdent::Str("button0") => Some(WidgetPos {
                 node_span: NodeSpan::new(0, 1),
+                margins: Margins::new(16, 16, 16, 16),
+                ..WidgetPos::default()
+            }),
+            NodeIdent::Str("button1") => Some(WidgetPos {
+                node_span: NodeSpan::new(0, 2),
                 margins: Margins::new(16, 16, 16, 16),
                 ..WidgetPos::default()
             }),
@@ -96,7 +102,7 @@ impl NodeLayout for BasicLayoutVertical {
         }
     }
     fn grid_size(&self) -> GridSize {
-        GridSize::new(1, 2)
+        GridSize::new(1, 3)
     }
 }
 
@@ -105,6 +111,7 @@ fn main() {
         BasicContainer {
             button: Button::new("good day\tgood day good day good day good day \nHello Hello".to_string(), BasicHandler),
             nested: Group::new(NestedContainer {
+                label: Label::new("Nested Container".to_string()),
                 button0: Button::new("tr tr".to_string(), BasicHandler),
                 button1: Button::new("Hello World".to_string(), BasicHandler)
             }, BasicLayoutVertical)
@@ -141,7 +148,7 @@ fn main() {
                         highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
                         face_size: 16 * 64,
                         tab_size: 8,
-                        justify: Align2::new(Align::Stretch, Align::Start),
+                        justify: Align2::new(Align::Center, Align::Center),
                     }),
                     icon: Some(Rc::new(derin::theme::Image {
                         pixels: unsafe {
@@ -165,6 +172,21 @@ fn main() {
     upload_image!("Button::Normal", "../button.normal.png", 32, 4);
     upload_image!("Button::Hover", "../button.hover.png", 32, 4);
     upload_image!("Button::Clicked", "../button.clicked.png", 32, 4);
+    theme.insert_node(
+        "Label".to_string(),
+        derin::theme::ThemeNode {
+            text: Some(ThemeText {
+                face: ThemeFace::new("./tests/DejaVuSans.ttf", 0).unwrap(),
+                color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
+                highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
+                highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                face_size: 16 * 64,
+                tab_size: 8,
+                justify: Align2::new(Align::Center, Align::Start),
+            }),
+            icon: None
+        }
+    );
 
     #[derive(PartialEq, Eq, Clone, Copy)]
     enum TimerPark {
