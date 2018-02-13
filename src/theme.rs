@@ -1,5 +1,5 @@
-use gl_raii::colors::Rgba;
-use gl_raii::glsl::Nu8;
+use gullery::colors::Rgba;
+use gullery::glsl::Nu8;
 
 use cgmath::Point2;
 use cgmath_geometry::DimsBox;

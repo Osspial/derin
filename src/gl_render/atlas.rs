@@ -4,8 +4,8 @@ use std::collections::HashMap;
 use cgmath::{Point2, Vector2};
 use cgmath_geometry::{OffsetBox, DimsBox, GeoBox};
 
-use gl_raii::glsl::Nu8;
-use gl_raii::colors::Rgba;
+use gullery::glsl::Nu8;
+use gullery::colors::Rgba;
 
 use dat::SkylineAtlas;
 

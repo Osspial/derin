@@ -5,8 +5,8 @@ use cgmath::Point2;
 use cgmath_geometry::{GeoBox, BoundBox};
 use glyphydog::{ShapedBuffer, Shaper, FaceSize, DPI};
 
-use gl_raii::glsl::{Nu8, Ni32};
-use gl_raii::colors::Rgba;
+use gullery::glsl::{Nu8, Ni32};
+use gullery::colors::Rgba;
 
 use gl_render::GLVertex;
 use gl_render::atlas::Atlas;

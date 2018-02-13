@@ -6,9 +6,9 @@ extern crate dle;
 pub extern crate derin_core as core;
 extern crate cgmath;
 extern crate cgmath_geometry;
-extern crate gl_raii;
+extern crate gullery;
 #[macro_use]
-extern crate gl_raii_macros;
+extern crate gullery_macros;
 extern crate glutin;
 extern crate arrayvec;
 extern crate glyphydog;

@@ -4,7 +4,7 @@ extern crate derin_macros;
 extern crate glutin;
 extern crate png;
 
-extern crate gl_raii;
+extern crate gullery;
 extern crate parking_lot;
 
 use derin::dct::buttons::{MouseButton, Key};
@@ -16,8 +16,8 @@ use derin::core::tree::NodeIdent;
 use derin::theme::{ThemeText, ThemeFace, RescaleRules};
 use derin::geometry::{Point2, DimsBox, GeoBox};
 
-use gl_raii::colors::Rgba;
-use gl_raii::glsl::Nu8;
+use gullery::colors::Rgba;
+use gullery::glsl::Nu8;
 
 use std::thread;
 use std::rc::Rc;

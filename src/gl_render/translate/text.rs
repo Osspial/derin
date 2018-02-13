@@ -6,8 +6,8 @@ use theme::{ThemeText, RescaleRules};
 use cgmath::{EuclideanSpace, ElementWise, Point2, Vector2};
 use cgmath_geometry::{BoundBox, DimsBox, OffsetBox, Segment, GeoBox};
 
-use gl_raii::colors::Rgba;
-use gl_raii::glsl::Nu8;
+use gullery::colors::Rgba;
+use gullery::glsl::Nu8;
 
 use glyphydog::{ShapedBuffer, ShapedGlyph, Face, FaceSize, DPI, LoadFlags, RenderMode};
 use dct::hints::Align;

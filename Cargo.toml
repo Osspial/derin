@@ -30,11 +30,11 @@ path = "./derin_core"
 [dependencies.dle]
 path = "./dle"
 
-[dependencies.gl_raii]
-git = "https://github.com/Osspial/gl_raii.git"
+[dependencies.gullery]
+git = "https://github.com/Osspial/gullery.git"
 
-[dependencies.gl_raii_macros]
-git = "https://github.com/Osspial/gl_raii.git"
+[dependencies.gullery_macros]
+git = "https://github.com/Osspial/gullery.git"
 
 [workspace]
 members = ["./dat", "./dct", "./dle", "./derin_macros", "./derin_core"]

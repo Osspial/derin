@@ -6,16 +6,16 @@ use std::rc::Rc;
 
 use cgmath::{Point2, Vector2, EuclideanSpace};
 
-use gl_raii::ContextState;
-use gl_raii::render_state::{RenderState, BlendFunc, BlendFuncs};
-use gl_raii::program::{Shader, Program};
-use gl_raii::textures::Texture;
-use gl_raii::textures::targets::SimpleTex;
-use gl_raii::framebuffer::{DrawMode, Framebuffer, DefaultFramebuffer};
-use gl_raii::buffers::{Buffer, BufferUsage};
-use gl_raii::vao::VertexArrayObj;
-use gl_raii::glsl::Nu8;
-use gl_raii::colors::Rgba;
+use gullery::ContextState;
+use gullery::render_state::{RenderState, BlendFunc, BlendFuncs};
+use gullery::program::{Shader, Program};
+use gullery::textures::Texture;
+use gullery::textures::targets::SimpleTex;
+use gullery::framebuffer::{DrawMode, Framebuffer, DefaultFramebuffer};
+use gullery::buffers::{Buffer, BufferUsage};
+use gullery::vao::VertexArrayObj;
+use gullery::glsl::Nu8;
+use gullery::colors::Rgba;
 
 use glyphydog::DPI;
 
