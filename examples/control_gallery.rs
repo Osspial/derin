@@ -60,7 +60,7 @@ impl ButtonHandler for BasicHandler {
 }
 
 impl NodeLayout for BasicLayout {
-    fn hints(&self, node_ident: NodeIdent) -> Option<WidgetPos> {
+    fn hints(&self, node_ident: NodeIdent, _: usize, _: usize) -> Option<WidgetPos> {
         match node_ident {
             NodeIdent::Str("button") => Some(WidgetPos {
                 node_span: NodeSpan::new(0, 0),
@@ -81,24 +81,14 @@ impl NodeLayout for BasicLayout {
 }
 
 impl NodeLayout for BasicLayoutVertical {
-    fn hints(&self, node_ident: NodeIdent) -> Option<WidgetPos> {
-        match node_ident {
-            NodeIdent::Str("label") => Some(WidgetPos {
-                node_span: NodeSpan::new(0, 0),
+    fn hints(&self, _: NodeIdent, node_index: usize, num_nodes: usize) -> Option<WidgetPos> {
+        match node_index >= num_nodes {
+            true => None,
+            false => Some(WidgetPos {
+                node_span: NodeSpan::new(0, node_index as u32),
                 margins: Margins::new(16, 16, 16, 16),
                 ..WidgetPos::default()
-            }),
-            NodeIdent::Str("button0") => Some(WidgetPos {
-                node_span: NodeSpan::new(0, 1),
-                margins: Margins::new(16, 16, 16, 16),
-                ..WidgetPos::default()
-            }),
-            NodeIdent::Str("button1") => Some(WidgetPos {
-                node_span: NodeSpan::new(0, 2),
-                margins: Margins::new(16, 16, 16, 16),
-                ..WidgetPos::default()
-            }),
-            _ => None
+            })
         }
     }
     fn grid_size(&self) -> GridSize {

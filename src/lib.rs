@@ -97,7 +97,7 @@ pub trait NodeContainer<F: RenderFrame> {
 }
 
 pub trait NodeLayout {
-    fn hints(&self, node_ident: NodeIdent) -> Option<WidgetPos>;
+    fn hints(&self, node_ident: NodeIdent, node_index: usize, num_nodes: usize) -> Option<WidgetPos>;
     fn grid_size(&self) -> GridSize;
 }
 
@@ -519,8 +519,9 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
                 ref mut rects_vec
             } = *hc;
 
+            let num_children = self.num_children();
             self.container.children::<_, ()>(|summary| {
-                hints_vec.push(self.layout.hints(summary.ident).unwrap_or(WidgetPos::default()));
+                hints_vec.push(self.layout.hints(summary.ident, summary.index, num_children).unwrap_or(WidgetPos::default()));
                 rects_vec.push(Ok(BoundBox::new2(0, 0, 0, 0)));
                 LoopFlow::Continue
             });
