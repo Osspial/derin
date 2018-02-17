@@ -4,7 +4,7 @@ use LoopFlow;
 use std::cmp::{Ordering, Ord};
 use std::iter::{DoubleEndedIterator, ExactSizeIterator};
 use render::RenderFrame;
-use tree::{Node, NodeSummary, Parent, NodeIdent, ChildEventRecv, UpdateTag, NodeSubtrait, NodeSubtraitMut, RootID, NodeID};
+use tree::{Node, NodeSummary, Parent, NodeIdent, ChildEventRecv, UpdateTag, NodeSubtraitMut, RootID, NodeID};
 
 use self::inner::{NRAllocCache, NRVec};
 pub use self::inner::NodePath;
@@ -291,22 +291,16 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
             let top_parent_offset = self.stack.top_parent_offset();
 
             let mut top_node_offset = Vector2::new(0, 0);
-            macro_rules! call_fn {
-                ($node:expr, $path:expr, $offset:expr) => {{
-                    let update_tag = for_each_flag($node, $path, $offset);
-                    let flags_removed = flag_trail_flags - ChildEventRecv::from(update_tag);
-                    nodes_visited += 1;
-                    remove_flags |= flags_removed;
-                }}
-            }
-            let mut run_fn_on_top_node = false;
             self.stack.try_push(|top_node, path| {
                 top_node_offset = top_node.bounds().min().to_vec();
                 match top_node.subtrait_mut() {
                     NodeSubtraitMut::Node(top_node) => {
                         let node_tags = ChildEventRecv::from(top_node.update_tag());
                         if node_tags & flag_trail_flags != ChildEventRecv::empty() {
-                            call_fn!(top_node, path, top_parent_offset);
+                            let update_tag = for_each_flag(top_node, path, top_parent_offset);
+                            let flags_removed = flag_trail_flags - ChildEventRecv::from(update_tag);
+                            nodes_visited += 1;
+                            remove_flags |= flags_removed;
                         }
 
                         flags &= !flag_trail_flags;
@@ -319,27 +313,11 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
 
                         top_node_as_parent.children(&mut |children_summaries| {
                             for child_summary in children_summaries.iter() {
-                                let node_tags = ChildEventRecv::from(&child_summary.update_tag);
-                                if node_tags & flag_trail_flags != ChildEventRecv::empty() {
-                                    flags &= !flag_trail_flags;
-                                    on_flag_trail = None;
+                                let child_flags = get_update_flags(&child_summary.update_tag);
+                                if child_flags & flag_trail_flags != ChildEventRecv::empty() {
+                                    on_flag_trail = Some(child_flags & flag_trail_flags);
                                     child_ident = Some(child_summary.ident);
-
-                                    run_fn_on_top_node = true;
                                     return LoopFlow::Break(());
-                                }
-
-                                match child_summary.node.subtrait() {
-                                    NodeSubtrait::Parent(_) => {
-                                        let child_flags = child_summary.update_tag.child_event_recv.get();
-                                        if child_flags & flag_trail_flags != ChildEventRecv::empty() {
-                                            on_flag_trail = Some(child_flags & flag_trail_flags);
-                                            child_ident = Some(child_summary.ident);
-
-                                            break;
-                                        }
-                                    },
-                                    NodeSubtrait::Node(_) => ()
                                 }
                             }
 
@@ -358,10 +336,6 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
                     }
                 }
             });
-            if run_fn_on_top_node {
-                let NodePath{ node: child, path: child_path } = self.stack.top_mut();
-                call_fn!(child, child_path, top_parent_offset + top_node_offset);
-            }
 
             flags &= !remove_flags;
         }

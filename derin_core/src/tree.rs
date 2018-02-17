@@ -304,6 +304,11 @@ impl UpdateTag {
     }
 
     #[inline]
+    pub fn has_keyboard_focus(&self) -> bool {
+        self.has_keyboard_focus.get()
+    }
+
+    #[inline]
     pub(crate) fn mark_updated(&self, root_id: RootID) {
         self.last_root.set(root_id.0);
     }

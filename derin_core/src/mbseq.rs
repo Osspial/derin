@@ -1,6 +1,22 @@
 use std::iter::{ExactSizeIterator, FromIterator};
 
 use dct::buttons::{MouseButton, MOUSE_INT_MASK, MOUSE_INT_MASK_LEN, NUM_MOUSE_BUTTONS};
+use cgmath::Point2;
+use arrayvec::{ArrayVec, IntoIter};
+use event::MouseDown;
+
+type PointArray = [Point2<i32>; MOUSE_INT_MASK_LEN as usize];
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MouseButtonSequenceTrackPos {
+    seq: MouseButtonSequence,
+    down_positions: ArrayVec<PointArray>
+}
+
+pub struct MouseButtonSeqTrackPosIter {
+    seq_iter: MouseButtonSeqIter,
+    pos_iter: IntoIter<PointArray>
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MouseButtonSequence {
@@ -12,6 +28,43 @@ pub struct MouseButtonSequence {
 pub struct MouseButtonSeqIter {
     buttons: u16,
     len: u8
+}
+
+impl MouseButtonSequenceTrackPos {
+    pub fn new() -> MouseButtonSequenceTrackPos {
+        MouseButtonSequenceTrackPos {
+            seq: MouseButtonSequence::new(),
+            down_positions: ArrayVec::new()
+        }
+    }
+
+    pub fn push_button(&mut self, button: MouseButton, pos: Point2<i32>) -> &mut MouseButtonSequenceTrackPos {
+        self.release_button(button);
+        self.seq.push_button(button);
+        self.down_positions.push(pos);
+        self
+    }
+
+    pub fn release_button(&mut self, button: MouseButton) -> &mut MouseButtonSequenceTrackPos {
+        for (i, b) in self.seq.into_iter().enumerate() {
+            if b == button {
+                self.down_positions.remove(i);
+                break;
+            }
+        }
+        self.seq.release_button(button);
+        self
+    }
+
+    pub fn contains(&self, button: MouseButton) -> Option<MouseDown> {
+        self.seq.into_iter().enumerate().find(|&(_, b)| b == button)
+            .map(|(i, b)| MouseDown{ button: b, down_pos: self.down_positions[i] })
+    }
+
+    // #[inline]
+    // pub fn len(&self) -> u8 {
+    //     self.seq.len()
+    // }
 }
 
 impl MouseButtonSequence {
@@ -94,6 +147,19 @@ impl FromIterator<MouseButton> for MouseButtonSequence {
     }
 }
 
+impl IntoIterator for MouseButtonSequenceTrackPos {
+    type Item = MouseDown;
+    type IntoIter = MouseButtonSeqTrackPosIter;
+
+    #[inline]
+    fn into_iter(self) -> MouseButtonSeqTrackPosIter {
+        MouseButtonSeqTrackPosIter {
+            seq_iter: self.seq.into_iter(),
+            pos_iter: self.down_positions.into_iter()
+        }
+    }
+}
+
 impl Iterator for MouseButtonSeqIter {
     type Item = MouseButton;
 
@@ -117,6 +183,25 @@ impl Iterator for MouseButtonSeqIter {
 }
 
 impl ExactSizeIterator for MouseButtonSeqIter {}
+
+impl Iterator for MouseButtonSeqTrackPosIter {
+    type Item = MouseDown;
+
+    #[inline]
+    fn next(&mut self) -> Option<MouseDown> {
+        Some(MouseDown {
+            button: self.seq_iter.next()?,
+            down_pos: self.pos_iter.next()?
+        })
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.seq_iter.size_hint()
+    }
+}
+
+impl ExactSizeIterator for MouseButtonSeqTrackPosIter {}
 
 #[cfg(test)]
 mod tests {
