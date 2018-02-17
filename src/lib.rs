@@ -280,8 +280,8 @@ impl<F, H> Node<H::Action, F> for Button<H>
                 GainFocus => ButtonState::Hover,
                 LoseFocus => ButtonState::Normal,
                 Char(_) => self.state,
-                KeyDown(_) => self.state,
-                KeyUp(_) => self.state,
+                KeyDown(_, _) => self.state,
+                KeyUp(_, _) => self.state,
                 Timer{..} => self.state
             };
 

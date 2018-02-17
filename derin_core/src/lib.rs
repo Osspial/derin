@@ -34,7 +34,7 @@ use render::{Renderer, RenderFrame, FrameRectStack};
 use mbseq::MouseButtonSequenceTrackPos;
 use node_stack::{NodeStackBase, NodePath, NodeStack};
 use meta_tracker::{MetaEventTracker, MetaDrain, MetaEvent, MetaEventVariant};
-use dct::buttons::{MouseButton, Key};
+use dct::buttons::{MouseButton, Key, ModifierKeys};
 
 pub struct Root<A, N, F>
     where N: Node<A, F> + 'static,
@@ -64,8 +64,8 @@ pub enum WindowEvent {
     MouseDown(MouseButton),
     MouseUp(MouseButton),
     WindowResize(DimsBox<Point2<u32>>),
-    KeyDown(Key),
-    KeyUp(Key),
+    KeyDown(Key, ModifierKeys),
+    KeyUp(Key, ModifierKeys),
     Char(char),
     Timer
 }
@@ -651,14 +651,14 @@ impl<A, N, F> Root<A, N, F>
                         update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !button_mask);
                     }
                 },
-                WindowEvent::KeyDown(key) => {
+                WindowEvent::KeyDown(key, modifiers) => {
                     if let Some(NodePath{ node: focus_node, path }) = node_stack.move_to_keyboard_focus() {
-                        try_push_action!(focus_node, path.iter().cloned(), NodeEvent::KeyDown(key));
+                        try_push_action!(focus_node, path.iter().cloned(), NodeEvent::KeyDown(key, modifiers));
                     }
                 },
-                WindowEvent::KeyUp(key) => {
+                WindowEvent::KeyUp(key, modifiers) => {
                     if let Some(NodePath{ node: focus_node, path }) = node_stack.move_to_keyboard_focus() {
-                        try_push_action!(focus_node, path.iter().cloned(), NodeEvent::KeyUp(key));
+                        try_push_action!(focus_node, path.iter().cloned(), NodeEvent::KeyUp(key, modifiers));
                     }
                 },
                 WindowEvent::Char(c) => {

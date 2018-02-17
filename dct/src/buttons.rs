@@ -20,6 +20,15 @@ pub const MOUSE_INT_MASK: u16 = 0b111;
 pub const MOUSE_INT_MASK_LEN: u16 = 3;
 pub const NUM_MOUSE_BUTTONS: usize = 5;
 
+bitflags!{
+    pub struct ModifierKeys: u8 {
+        const SHIFT = 1 << 0;
+        const CTRL  = 1 << 1;
+        const ALT   = 1 << 2;
+        const LOGO  = 1 << 3;
+    }
+}
+
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Key {

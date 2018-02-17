@@ -7,3 +7,4 @@ authors = ["Osspial <osspial@gmail.com>"]
 cgmath = { git = "https://github.com/Osspial/cgmath.git", branch = "prs_merged" }
 num-traits = "0.1"
 cgmath-geometry = { git = "https://github.com/Osspial/cgmath-geometry.git" }
+bitflags = "1.0"

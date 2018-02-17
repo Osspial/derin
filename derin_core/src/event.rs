@@ -1,4 +1,4 @@
-use dct::buttons::{MouseButton, Key};
+use dct::buttons::{MouseButton, Key, ModifierKeys};
 use cgmath::{Point2, Vector2};
 use tree::NodeIdent;
 use arrayvec::ArrayVec;
@@ -73,8 +73,8 @@ pub enum NodeEvent<'a> {
     GainFocus,
     LoseFocus,
     Char(char),
-    KeyDown(Key),
-    KeyUp(Key),
+    KeyDown(Key, ModifierKeys),
+    KeyUp(Key, ModifierKeys),
     Timer {
         name: &'static str,
         start_time: Instant,
@@ -130,8 +130,8 @@ pub(crate) enum NodeEventOwned {
     GainFocus,
     LoseFocus,
     Char(char),
-    KeyDown(Key),
-    KeyUp(Key),
+    KeyDown(Key, ModifierKeys),
+    KeyUp(Key, ModifierKeys),
     Timer {
         name: &'static str,
         start_time: Instant,
@@ -189,8 +189,8 @@ impl<'a> NodeEvent<'a> {
             NodeEvent::GainFocus => NodeEvent::GainFocus,
             NodeEvent::LoseFocus => NodeEvent::LoseFocus,
             NodeEvent::Char(c) => NodeEvent::Char(c),
-            NodeEvent::KeyDown(k) => NodeEvent::KeyDown(k),
-            NodeEvent::KeyUp(k) => NodeEvent::KeyUp(k),
+            NodeEvent::KeyDown(k, modifiers) => NodeEvent::KeyDown(k, modifiers),
+            NodeEvent::KeyUp(k, modifiers) => NodeEvent::KeyUp(k, modifiers),
             NodeEvent::Timer{ name, start_time, last_trigger, frequency, times_triggered } =>
                 NodeEvent::Timer{ name, start_time, last_trigger, frequency, times_triggered }
         }
@@ -259,8 +259,8 @@ impl NodeEventOwned {
             NodeEventOwned::GainFocus => NodeEvent::GainFocus,
             NodeEventOwned::LoseFocus => NodeEvent::LoseFocus,
             NodeEventOwned::Char(c) => NodeEvent::Char(c),
-            NodeEventOwned::KeyDown(k) => NodeEvent::KeyDown(k),
-            NodeEventOwned::KeyUp(k) => NodeEvent::KeyUp(k),
+            NodeEventOwned::KeyDown(k, modifiers) => NodeEvent::KeyDown(k, modifiers),
+            NodeEventOwned::KeyUp(k, modifiers) => NodeEvent::KeyUp(k, modifiers),
             NodeEventOwned::Timer{ name, start_time, last_trigger, frequency, times_triggered } =>
                 NodeEvent::Timer{ name, start_time, last_trigger, frequency, times_triggered }
         };
@@ -328,8 +328,8 @@ impl<'a> From<NodeEvent<'a>> for NodeEventOwned {
             NodeEvent::GainFocus => NodeEventOwned::GainFocus,
             NodeEvent::LoseFocus => NodeEventOwned::LoseFocus,
             NodeEvent::Char(c) => NodeEventOwned::Char(c),
-            NodeEvent::KeyDown(k) => NodeEventOwned::KeyDown(k),
-            NodeEvent::KeyUp(k) => NodeEventOwned::KeyUp(k),
+            NodeEvent::KeyDown(k, modifiers) => NodeEventOwned::KeyDown(k, modifiers),
+            NodeEvent::KeyUp(k, modifiers) => NodeEventOwned::KeyUp(k, modifiers),
             NodeEvent::Timer{ name, start_time, last_trigger, frequency, times_triggered } =>
                 NodeEventOwned::Timer{ name, start_time, last_trigger, frequency, times_triggered }
         }
