@@ -35,9 +35,9 @@ impl FontCache {
 
         match cached_face_index {
             Some(i) => {
-                if i > 1 {
+                if i >= 1 {
                     // Move the newest face to the front of the face list.
-                    self.faces[..i].rotate_right(1);
+                    self.faces[..i+1].rotate_right(1);
                 }
                 Ok(&mut self.faces[0].face)
             },

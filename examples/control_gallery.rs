@@ -9,7 +9,7 @@ extern crate parking_lot;
 
 use derin::dct::buttons::{MouseButton, Key, ModifierKeys};
 use derin::dct::hints::{WidgetPos, NodeSpan, GridSize, Margins, Align, Align2};
-use derin::{ButtonHandler, NodeLayout, Button, Group, Label};
+use derin::{ButtonHandler, NodeLayout, Button, EditBox, Group, Label};
 use derin::gl_render::GLRenderer;
 use derin::core::{LoopFlow, Root, WindowEvent};
 use derin::core::tree::NodeIdent;
@@ -42,6 +42,7 @@ struct BasicContainer {
 #[derin(action = "GalleryEvent")]
 struct NestedContainer {
     label: Label,
+    edit_box: EditBox,
     button0: Button<BasicHandler>,
     button1: Button<BasicHandler>
 }
@@ -92,7 +93,7 @@ impl NodeLayout for BasicLayoutVertical {
         }
     }
     fn grid_size(&self) -> GridSize {
-        GridSize::new(1, 3)
+        GridSize::new(1, 4)
     }
 }
 
@@ -102,6 +103,7 @@ fn main() {
             button: Button::new("good day\tgood day good day good day good day \nHello Hello".to_string(), BasicHandler),
             nested: Group::new(NestedContainer {
                 label: Label::new("Nested Container".to_string()),
+                edit_box: EditBox::new("A Text Box".to_string()),
                 button0: Button::new("tr tr".to_string(), BasicHandler),
                 button1: Button::new("Hello World".to_string(), BasicHandler)
             }, BasicLayoutVertical)
@@ -138,7 +140,7 @@ fn main() {
                         highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
                         face_size: 16 * 64,
                         tab_size: 8,
-                        justify: Align2::new(Align::Center, Align::Center),
+                        justify: Align2::new(Align::Start, Align::Start),
                     }),
                     icon: Some(Rc::new(derin::theme::Image {
                         pixels: unsafe {
@@ -162,6 +164,7 @@ fn main() {
     upload_image!("Button::Normal", "../button.normal.png", 32, 4);
     upload_image!("Button::Hover", "../button.hover.png", 32, 4);
     upload_image!("Button::Clicked", "../button.clicked.png", 32, 4);
+    upload_image!("EditBox", "../editbox.png", 8, 3);
     theme.insert_node(
         "Label".to_string(),
         derin::theme::ThemeNode {

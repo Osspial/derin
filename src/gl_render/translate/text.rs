@@ -12,6 +12,8 @@ use gullery::glsl::Nu8;
 use glyphydog::{ShapedBuffer, ShapedGlyph, Face, FaceSize, DPI, LoadFlags, RenderMode};
 use dct::hints::Align;
 
+use unicode_segmentation::UnicodeSegmentation;
+
 use itertools::Itertools;
 use std::{cmp, vec};
 use std::cmp::Ordering;
@@ -26,8 +28,15 @@ pub(in gl_render) struct TextTranslate<'a> {
     glyph_slice_index: usize,
     glyph_slice: Ref<'a, [RenderGlyph]>,
     highlight_range: Range<usize>,
+    cursor_pos: Option<usize>,
+    string_len: usize,
+
+    font_ascender: i32,
+    font_descender: i32,
+
     highlight_vertex_iter: Option<ImageTranslate>,
-    glyph_vertex_iter: Option<ImageTranslate>
+    glyph_vertex_iter: Option<ImageTranslate>,
+    cursor_vertex_iter: Option<ImageTranslate>
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -39,9 +48,17 @@ pub struct RenderGlyph {
 }
 
 #[derive(Debug, Clone)]
+pub struct EditString {
+    pub render_string: RenderString,
+    pub draw_cursor: bool,
+    cursor_pos: usize,
+    highlight_range: Range<usize>,
+    cursor_target_x_px: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
 pub struct RenderString {
     string: String,
-    pub highlight_range: Range<usize>,
     cell: RefCell<Option<RenderStringCell>>
 }
 
@@ -51,131 +68,6 @@ struct RenderStringCell {
     text_style: ThemeText,
     dpi: DPI,
     draw_rect: BoundBox<Point2<i32>>,
-}
-
-impl RenderString {
-    pub fn new(string: String) -> RenderString {
-        RenderString {
-            string,
-            highlight_range: 0..0,
-            cell: RefCell::new(None)
-        }
-    }
-
-    #[inline]
-    pub fn string(&self) -> &str {
-        &self.string
-    }
-
-    #[inline]
-    pub fn string_mut(&mut self) -> &mut String {
-        self.cell.get_mut().as_mut().map(|cell| cell.shaped_glyphs.clear());
-        &mut self.string
-    }
-
-    pub fn select_on_line(&mut self, segment: Segment<Point2<i32>>) {
-        let cell = self.cell.borrow();
-        let cell = match *cell {
-            Some(ref cell) => cell,
-            None => {self.highlight_range = 0..0; return}
-        };
-        let shaped_glyphs = &cell.shaped_glyphs;
-
-        // let mut min_y_dist = None;
-        let dist = |min: i32, max: i32, point: i32| match (min.cmp(&point), max.cmp(&point)) {
-            (Ordering::Equal, _) |
-            (_, Ordering::Equal) |
-            (Ordering::Less, Ordering::Greater) => 0,
-            (Ordering::Greater, _) => min - point,
-            (_, Ordering::Less) => point - min
-        };
-
-
-        let (mut min_start_x_dist, mut min_start_y_dist) = (i32::max_value(), i32::max_value());
-        let (mut min_end_x_dist, mut min_end_y_dist) = (i32::max_value(), i32::max_value());
-        let (mut start_index, mut end_index) = (0, 0);
-        let mut end_in_range = false;
-
-        for (i, glyph) in shaped_glyphs.iter().enumerate() {
-            let x_dist = |point: Point2<_>| dist(glyph.highlight_rect.min.x, glyph.highlight_rect.max.x, point.x);
-            let y_dist = |point: Point2<_>| dist(glyph.highlight_rect.min.y, glyph.highlight_rect.max.y, point.y);
-            let glyph_start_x_dist = x_dist(segment.start);
-            let glyph_start_y_dist = y_dist(segment.start);
-            let glyph_end_x_dist = x_dist(segment.end);
-            let glyph_end_y_dist = y_dist(segment.end);
-
-            if glyph_start_y_dist < min_start_y_dist {
-                min_start_y_dist = glyph_start_y_dist;
-                min_start_x_dist = glyph_start_x_dist;
-                start_index = i;
-            }
-            if glyph_end_y_dist < min_end_y_dist {
-                min_end_y_dist = glyph_end_y_dist;
-                min_end_x_dist = glyph_end_x_dist;
-                end_index = i;
-                end_in_range = glyph.highlight_rect.center().x <= segment.end.x;
-            }
-            if glyph_start_x_dist < min_start_x_dist && glyph_start_y_dist <= min_start_y_dist {
-                min_start_x_dist = glyph_start_x_dist;
-                start_index = i;
-            }
-            if glyph_end_x_dist < min_end_x_dist && glyph_end_y_dist <= min_end_y_dist {
-                min_end_x_dist = glyph_end_x_dist;
-                end_index = i;
-                end_in_range = glyph.highlight_rect.center().x <= segment.end.x;
-            }
-        }
-
-        end_index += end_in_range as usize;
-        self.highlight_range = cmp::min(start_index, end_index)..cmp::max(start_index, end_index);
-    }
-
-    fn reshape_glyphs<'a, F>(&self,
-        rect: BoundBox<Point2<i32>>,
-        shape_text: F,
-        text_style: &ThemeText,
-        face: &mut Face<()>,
-        dpi: DPI
-    ) -> Ref<[RenderGlyph]>
-        where F: FnOnce(&str, &mut Face<()>) -> &'a ShapedBuffer
-    {
-        {
-            let mut cell_opt = self.cell.borrow_mut();
-            let use_cached_glyphs: bool;
-            let cell = match *cell_opt {
-                Some(ref mut cell) => {
-                    use_cached_glyphs =
-                        cell.shaped_glyphs.len() != 0 &&
-                        (text_style, dpi, rect) ==
-                        (&cell.text_style, cell.dpi, cell.draw_rect);
-
-                    // Update cell contents to reflect new values
-                    cell.text_style = text_style.clone();
-                    cell.dpi = dpi;
-                    cell.draw_rect = rect;
-
-                    cell
-                },
-                None => {
-                    use_cached_glyphs = false;
-                    *cell_opt = Some(RenderStringCell {
-                        shaped_glyphs: Vec::new(),
-                        text_style: text_style.clone(),
-                        dpi,
-                        draw_rect: rect
-                    });
-                    cell_opt.as_mut().unwrap()
-                }
-            };
-            if !use_cached_glyphs {
-                let shaped_buffer = shape_text(&self.string, face);
-                cell.shaped_glyphs.clear();
-                cell.shaped_glyphs.extend(GlyphIter::new(rect, shaped_buffer, text_style, face, dpi));
-            }
-        }
-
-        Ref::map(self.cell.borrow(), |c| &c.as_ref().unwrap().shaped_glyphs[..])
-    }
 }
 
 struct GlyphDraw<'a> {
@@ -260,7 +152,7 @@ struct Run {
 }
 
 impl<'a> TextTranslate<'a> {
-    pub fn new<'b, F>(
+    pub fn new_rs<'b, F>(
         rect: BoundBox<Point2<i32>>,
         text_style: ThemeText,
         face: &'a mut Face<()>,
@@ -271,14 +163,61 @@ impl<'a> TextTranslate<'a> {
     ) -> TextTranslate<'a>
         where F: FnOnce(&str, &mut Face<()>) -> &'b ShapedBuffer
     {
+        Self::new_raw(rect, text_style, face, dpi, atlas, shape_text, render_string, 0..0, None)
+    }
+
+    pub fn new_es<'b, F>(
+        rect: BoundBox<Point2<i32>>,
+        text_style: ThemeText,
+        face: &'a mut Face<()>,
+        dpi: DPI,
+        atlas: &'a mut Atlas,
+        shape_text: F,
+        edit_string: &'a EditString
+    ) -> TextTranslate<'a>
+        where F: FnOnce(&str, &mut Face<()>) -> &'b ShapedBuffer
+    {
+        Self::new_raw(
+            rect, text_style, face, dpi, atlas,
+            shape_text, &edit_string.render_string,
+            edit_string.highlight_range.clone(),
+            match edit_string.draw_cursor && edit_string.highlight_range.len() == 0 {
+                true => Some(edit_string.cursor_pos),
+                false => None
+            }
+        )
+    }
+
+    fn new_raw<'b, F>(
+        rect: BoundBox<Point2<i32>>,
+        text_style: ThemeText,
+        face: &'a mut Face<()>,
+        dpi: DPI,
+        atlas: &'a mut Atlas,
+        shape_text: F,
+        render_string: &'a RenderString,
+        highlight_range: Range<usize>,
+        cursor_pos: Option<usize>,
+    ) -> TextTranslate<'a>
+        where F: FnOnce(&str, &mut Face<()>) -> &'b ShapedBuffer
+    {
+        let face_size = FaceSize::new(text_style.face_size, text_style.face_size);
+        let font_metrics = face.metrics_sized(face_size, dpi).unwrap();
+        let (ascender, descender) = ((font_metrics.ascender / 64) as i32, (font_metrics.descender / 64) as i32);
+
         TextTranslate {
             rect,
             glyph_slice_index: 0,
             glyph_slice: render_string.reshape_glyphs(rect, shape_text, &text_style, face, dpi),
             glyph_draw: GlyphDraw{ face, atlas, text_style, dpi },
-            highlight_range: render_string.highlight_range.clone(),
+            highlight_range,
+            cursor_pos,
+            string_len: render_string.string.len(),
+            font_ascender: ascender,
+            font_descender: descender,
             highlight_vertex_iter: None,
-            glyph_vertex_iter: None
+            glyph_vertex_iter: None,
+            cursor_vertex_iter: None
         }
     }
 }
@@ -602,9 +541,12 @@ impl<'a> Iterator for TextTranslate<'a> {
 
     fn next(&mut self) -> Option<GLVertex> {
         loop {
+            fn next_in_iter(i: Option<impl Iterator<Item=GLVertex>>) -> Option<GLVertex> {i.map(|mut v| v.next()).unwrap_or(None)}
+            // let next_in_iter = |i| i.map(|v| v.next()).unwrap_or(None);
             let next_vertex =
-                self.highlight_vertex_iter.as_mut().map(|v| v.next()).unwrap_or(None)
-                    .or_else(|| self.glyph_vertex_iter.as_mut().map(|v| v.next()).unwrap_or(None));
+                next_in_iter(self.highlight_vertex_iter.as_mut())
+                    .or_else(|| next_in_iter(self.glyph_vertex_iter.as_mut()))
+                    .or_else(|| next_in_iter(self.cursor_vertex_iter.as_mut()));
             match next_vertex {
                 Some(vert) => return Some(vert),
                 None => {
@@ -612,12 +554,57 @@ impl<'a> Iterator for TextTranslate<'a> {
                         ref glyph_slice,
                         ref mut glyph_slice_index,
                         ref highlight_range,
-                        ref mut glyph_vertex_iter,
+                        ref mut cursor_pos,
                         ref mut glyph_draw,
+                        string_len,
+                        font_ascender,
+                        font_descender,
+                        ref mut glyph_vertex_iter,
                         ref mut highlight_vertex_iter,
+                        ref mut cursor_vertex_iter,
                         rect,
                     } = *self;
-                    let next_glyph = glyph_slice.get(*glyph_slice_index)?;
+                    let next_glyph_opt = glyph_slice.get(*glyph_slice_index);
+
+                    *cursor_vertex_iter = cursor_pos.and_then(|pos| {
+                        let str_index = next_glyph_opt.map(|g| g.str_index).unwrap_or(0);
+                        let highlight_rect_opt = next_glyph_opt.map(|g| g.highlight_rect + rect.min().to_vec());
+                        let base_pos = if pos == str_index {
+                            highlight_rect_opt.map(|r| r.min()).or(Some(
+                                Point2 {
+                                    x: match glyph_draw.text_style.justify.x {
+                                        Align::Start |
+                                        Align::Stretch => 0,
+                                        Align::Center => rect.width() as i32 / 2,
+                                        Align::End => rect.width()
+                                    },
+                                    y: match glyph_draw.text_style.justify.y {
+                                        Align::Center => rect.height() as i32 / 2,
+                                        Align::End => rect.height() as i32,
+                                        _ => 0
+                                    } - font_descender
+                                } + rect.min().to_vec()
+                            ))
+                        } else if pos == str_index + 1 && pos == string_len {
+                            highlight_rect_opt.map(|r| Point2::new(r.max().x, r.min().y))
+                        } else {None};
+
+                        base_pos.map(|pos| {
+                            *cursor_pos = None;
+                            ImageTranslate::new(
+                                BoundBox::new(pos, pos + Vector2::new(1, font_ascender - font_descender)),
+                                glyph_draw.atlas.white().cast().unwrap_or(OffsetBox::new2(0, 0, 0, 0)),
+                                glyph_draw.text_style.color,
+                                RescaleRules::StretchOnPixelCenter
+                            )
+                        })
+                    });
+
+                    let next_glyph = match (next_glyph_opt, self.cursor_vertex_iter.is_some()) {
+                        (Some(next_glyph), _) => next_glyph,
+                        (None, false) => return None,
+                        (None, true) => continue
+                    };
                     *glyph_slice_index += 1;
 
                     let is_highlighted = highlight_range.contains(next_glyph.str_index);
@@ -630,10 +617,12 @@ impl<'a> Iterator for TextTranslate<'a> {
                         )
                     );
 
+                    let highlight_rect = next_glyph.highlight_rect + rect.min().to_vec();
+
                     *highlight_vertex_iter = match is_highlighted {
                         true => {
                             Some(ImageTranslate::new(
-                                next_glyph.highlight_rect + rect.min().to_vec(),
+                                highlight_rect,
                                 glyph_draw.atlas.white().cast().unwrap_or(OffsetBox::new2(0, 0, 0, 0)),
                                 glyph_draw.text_style.highlight_bg_color,
                                 RescaleRules::StretchOnPixelCenter
@@ -758,5 +747,330 @@ impl<'a> GlyphDraw<'a> {
             },
             RescaleRules::Stretch
         )
+    }
+}
+
+
+impl RenderString {
+    pub fn new(string: String) -> RenderString {
+        RenderString {
+            string,
+            cell: RefCell::new(None)
+        }
+    }
+
+    #[inline]
+    pub fn string(&self) -> &str {
+        &self.string
+    }
+
+    #[inline]
+    pub fn string_mut(&mut self) -> &mut String {
+        self.cell.get_mut().as_mut().map(|cell| cell.shaped_glyphs.clear());
+        &mut self.string
+    }
+
+    fn reshape_glyphs<'a, F>(&self,
+        rect: BoundBox<Point2<i32>>,
+        shape_text: F,
+        text_style: &ThemeText,
+        face: &mut Face<()>,
+        dpi: DPI
+    ) -> Ref<[RenderGlyph]>
+        where F: FnOnce(&str, &mut Face<()>) -> &'a ShapedBuffer
+    {
+        {
+            let mut cell_opt = self.cell.borrow_mut();
+            let use_cached_glyphs: bool;
+            let cell = match *cell_opt {
+                Some(ref mut cell) => {
+                    use_cached_glyphs =
+                        cell.shaped_glyphs.len() != 0 &&
+                        (text_style, dpi, rect) ==
+                        (&cell.text_style, cell.dpi, cell.draw_rect);
+
+                    // Update cell contents to reflect new values
+                    cell.text_style = text_style.clone();
+                    cell.dpi = dpi;
+                    cell.draw_rect = rect;
+
+                    cell
+                },
+                None => {
+                    use_cached_glyphs = false;
+                    *cell_opt = Some(RenderStringCell {
+                        shaped_glyphs: Vec::new(),
+                        text_style: text_style.clone(),
+                        dpi,
+                        draw_rect: rect
+                    });
+                    cell_opt.as_mut().unwrap()
+                }
+            };
+            if !use_cached_glyphs {
+                let shaped_buffer = shape_text(&self.string, face);
+                cell.shaped_glyphs.clear();
+                cell.shaped_glyphs.extend(GlyphIter::new(rect, shaped_buffer, text_style, face, dpi));
+            }
+        }
+
+        Ref::map(self.cell.borrow(), |c| &c.as_ref().unwrap().shaped_glyphs[..])
+    }
+
+    fn selection_glyph_iter<'a>(&'a mut self) -> impl 'a + Iterator<Item=RenderGlyph> + DoubleEndedIterator {
+        let empty_iter = [].iter().cloned().chain(None);
+
+        let shaped_glyphs = match *self.cell.get_mut() {
+            Some(ref cell) => &cell.shaped_glyphs,
+            None => return empty_iter
+        };
+
+        if let Some(last_glyph) = shaped_glyphs.last().cloned() {
+            let dummy_last_glyph_pos_x = last_glyph.pos.x + last_glyph.highlight_rect.width();
+            let dummy_last_glyph = RenderGlyph {
+                pos: Point2::new(dummy_last_glyph_pos_x, last_glyph.pos.y),
+                highlight_rect: BoundBox::new2(
+                    dummy_last_glyph_pos_x, last_glyph.highlight_rect.min.y,
+                    dummy_last_glyph_pos_x, last_glyph.highlight_rect.min.y + last_glyph.highlight_rect.height()
+                ),
+                str_index: self.string.len(),
+                glyph_index: None
+            };
+            shaped_glyphs.iter().cloned().chain(Some(dummy_last_glyph))
+        } else {
+            empty_iter
+        }
+    }
+}
+
+impl EditString {
+    pub fn new(render_string: RenderString) -> EditString {
+        EditString {
+            render_string,
+            draw_cursor: false,
+            cursor_pos: 0,
+            highlight_range: 0..0,
+            cursor_target_x_px: None
+        }
+    }
+
+    #[inline]
+    pub fn cursor_pos(&self) -> usize {
+        self.cursor_pos
+    }
+
+    #[inline]
+    pub fn cursor_pos_mut(&mut self) -> &mut usize {
+        self.cursor_target_x_px = None;
+        &mut self.cursor_pos
+    }
+
+    #[inline]
+    pub fn highlight_range(&self) -> Range<usize> {
+        self.highlight_range.clone()
+    }
+
+    pub fn move_cursor_vertical(&mut self, dist: isize) {
+        let EditString {
+            ref mut cursor_pos,
+            ref mut cursor_target_x_px,
+            ref mut render_string,
+            ..
+        } = *self;
+
+        macro_rules! search_for_glyph {
+            ($iter:expr) => {{
+                let mut glyph_iter = $iter.skip_while(move |g| g.str_index != *cursor_pos);
+                if let Some(cursor_glyph) = glyph_iter.next() {
+                    let cursor_pos_px = cursor_glyph.highlight_rect.min;
+                    if cursor_target_x_px.is_none() {
+                        *cursor_target_x_px = Some(cursor_pos_px.x);
+                    }
+                    let target_x_px = cursor_target_x_px.unwrap();
+
+                    let mut min_dist_x = i32::max_value();
+                    let mut cur_line_y = cursor_glyph.highlight_rect.min.y;
+                    let mut line_delta = 0;
+
+                    for glyph in glyph_iter {
+                        let glyph_dist_x = (target_x_px - glyph.highlight_rect.min.x).abs();
+                        if glyph.highlight_rect.min.y != cur_line_y {
+                            line_delta += 1;
+                            cur_line_y = glyph.highlight_rect.min.y;
+                            if line_delta > dist.abs() {
+                                return;
+                            }
+
+                            min_dist_x = glyph_dist_x;
+                            *cursor_pos = glyph.str_index;
+
+                            continue;
+                        }
+                        if line_delta == 0 {
+                            continue;
+                        }
+
+                        if glyph_dist_x < min_dist_x {
+                            min_dist_x = glyph_dist_x;
+                            *cursor_pos = glyph.str_index;
+                        }
+                    }
+                }
+            }}
+        }
+
+        let glyph_iter = render_string.selection_glyph_iter();
+        match dist.signum() {
+             0 => return,
+             1 => search_for_glyph!(glyph_iter),
+            -1 => search_for_glyph!(glyph_iter.rev()),
+            _ => unreachable!()
+        }
+    }
+
+    pub fn move_cursor_horizontal(&mut self, dist: isize, jump_to_word_boundaries: bool, expand_selection: bool) {
+        let cursor_start_pos = self.cursor_pos;
+        self.cursor_target_x_px = None;
+        self.cursor_pos = match (self.highlight_range.len() * !expand_selection as usize, dist.signum(), jump_to_word_boundaries) {
+            (_, 0, _) => return,
+            (0, 1, false) =>
+                self.render_string.string[self.cursor_pos..].grapheme_indices(true)
+                    .skip(dist as usize).map(|(i, _)| i + self.cursor_pos)
+                    .next().unwrap_or(self.render_string.string.len()),
+            (0, -1, false) =>
+                self.render_string.string[..self.cursor_pos].grapheme_indices(true)
+                    .rev().skip(dist.abs() as usize - 1).map(|(i, _)| i)
+                    .next().unwrap_or(0),
+            (0, 1, true) =>
+                self.render_string.string[self.cursor_pos..].unicode_words()
+                .skip(dist as usize).next()
+                .map(|word| word.as_ptr() as usize - self.render_string.string.as_ptr() as usize)
+                .unwrap_or(self.render_string.string.len()),
+            (0, -1, true) => self.render_string.string[..self.cursor_pos].unicode_words()
+                .rev().skip(dist.abs() as usize - 1).next()
+                .map(|word| word.as_ptr() as usize - self.render_string.string.as_ptr() as usize)
+                .unwrap_or(0),
+            (_, 1, _) => self.highlight_range.end,
+            (_, -1, _) => self.highlight_range.start,
+            _ => unreachable!()
+        };
+        if expand_selection {
+            if self.highlight_range.len() == 0 {
+                self.highlight_range = cursor_start_pos..cursor_start_pos;
+            }
+
+            match (cursor_start_pos == self.highlight_range.start, self.cursor_pos < self.highlight_range.end) {
+                (false, true) if self.cursor_pos < self.highlight_range.start => {
+                    self.highlight_range.end = self.highlight_range.start;
+                    self.highlight_range.start = self.cursor_pos;
+                }
+                (false, _) => self.highlight_range.end = self.cursor_pos,
+                (true, true) => self.highlight_range.start = self.cursor_pos,
+                (true, false) => {
+                    self.highlight_range.start = self.highlight_range.end;
+                    self.highlight_range.end = self.cursor_pos;
+                }
+            }
+        } else {
+            self.highlight_range = 0..0;
+        }
+    }
+
+    pub fn select_on_line(&mut self, segment: Segment<Point2<i32>>) {
+        let cell = self.render_string.cell.borrow();
+        let cell = match *cell {
+            Some(ref cell) => cell,
+            None => {self.highlight_range = 0..0; return}
+        };
+        let shaped_glyphs = &cell.shaped_glyphs;
+
+        // let mut min_y_dist = None;
+        let dist = |min: i32, max: i32, point: i32| match (min.cmp(&point), max.cmp(&point)) {
+            (Ordering::Equal, _) |
+            (_, Ordering::Equal) |
+            (Ordering::Less, Ordering::Greater) => 0,
+            (Ordering::Greater, _) => min - point,
+            (_, Ordering::Less) => point - min
+        };
+
+
+        let (mut min_start_x_dist, mut min_start_y_dist) = (i32::max_value(), i32::max_value());
+        let (mut min_end_x_dist, mut min_end_y_dist) = (i32::max_value(), i32::max_value());
+        let (mut start_index, mut end_index) = (0, 0);
+
+        for glyph in shaped_glyphs.iter() {
+            let x_dist = |point: Point2<_>| dist(glyph.highlight_rect.min.x, glyph.highlight_rect.max.x, point.x);
+            let y_dist = |point: Point2<_>| dist(glyph.highlight_rect.min.y, glyph.highlight_rect.max.y, point.y);
+            let glyph_start_x_dist = x_dist(segment.start);
+            let glyph_start_y_dist = y_dist(segment.start);
+            let glyph_end_x_dist = x_dist(segment.end);
+            let glyph_end_y_dist = y_dist(segment.end);
+            let highlight_center = glyph.highlight_rect.center();
+
+            if glyph_start_y_dist < min_start_y_dist {
+                min_start_y_dist = glyph_start_y_dist;
+                min_start_x_dist = glyph_start_x_dist;
+                start_index = glyph.str_index + (highlight_center.x <= segment.start.x) as usize;
+            }
+            if glyph_end_y_dist < min_end_y_dist {
+                min_end_y_dist = glyph_end_y_dist;
+                min_end_x_dist = glyph_end_x_dist;
+                end_index = glyph.str_index + (highlight_center.x <= segment.end.x) as usize;
+            }
+            if glyph_start_x_dist < min_start_x_dist && glyph_start_y_dist <= min_start_y_dist {
+                min_start_x_dist = glyph_start_x_dist;
+                start_index = glyph.str_index + (highlight_center.x <= segment.start.x) as usize;
+            }
+            if glyph_end_x_dist < min_end_x_dist && glyph_end_y_dist <= min_end_y_dist {
+                min_end_x_dist = glyph_end_x_dist;
+                end_index = glyph.str_index + (highlight_center.x <= segment.end.x) as usize;
+            }
+        }
+
+        self.highlight_range = cmp::min(start_index, end_index)..cmp::max(start_index, end_index);
+        self.cursor_pos = end_index;
+    }
+
+    pub fn select_all(&mut self) {
+        self.highlight_range = 0..self.render_string.string.len();
+        self.cursor_pos = self.highlight_range.end;
+    }
+
+    pub fn deselect_all(&mut self) {
+        self.highlight_range = 0..0;
+    }
+
+    pub fn insert_char(&mut self, c: char) {
+        if self.highlight_range.len() != 0 {
+            self.render_string.string_mut().drain(self.highlight_range.clone());
+            self.cursor_pos = self.highlight_range.start;
+            self.highlight_range = 0..0;
+        }
+        self.render_string.string_mut().insert(self.cursor_pos, c);
+        self.cursor_pos += c.len_utf8();
+    }
+
+    pub fn insert_str(&mut self, s: &str) {
+        if self.highlight_range.len() != 0 {
+            self.render_string.string_mut().drain(self.highlight_range.clone());
+            self.cursor_pos = self.highlight_range.start;
+            self.highlight_range = 0..0;
+        }
+        self.render_string.string_mut().insert_str(self.cursor_pos, s);
+        self.cursor_pos += s.len();
+    }
+
+    pub fn delete_chars(&mut self, dist: isize, jump_to_word_boundaries: bool) {
+        let drain_range = if self.highlight_range.len() != 0 {
+            self.highlight_range.clone()
+        } else {
+            let old_pos = self.cursor_pos;
+            self.move_cursor_horizontal(dist, jump_to_word_boundaries, false);
+            let new_pos = self.cursor_pos;
+            cmp::min(old_pos, new_pos)..cmp::max(old_pos, new_pos)
+        };
+        self.render_string.string_mut().drain(drain_range.clone());
+        self.highlight_range = 0..0;
+        self.cursor_pos = drain_range.start;
     }
 }

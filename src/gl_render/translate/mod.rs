@@ -18,7 +18,7 @@ use core::render::Theme as CoreTheme;
 use self::image::ImageTranslate;
 use self::text::TextTranslate;
 
-pub use self::text::RenderString;
+pub use self::text::{EditString, RenderString};
 
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,7 +38,8 @@ pub struct RelPoint {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Prim {
     Image,
-    Text(*const RenderString)
+    String(*const RenderString),
+    EditString(*const EditString)
 }
 
 impl RelPoint {
@@ -105,12 +106,12 @@ impl Translator {
                         image.rescale
                     ));
                 },
-                (Prim::Text(render_string), _, Some(theme_text)) => {
+                (Prim::String(render_string), _, Some(theme_text)) => {
                     match font_cache.face(theme_text.face.clone()) {
                         Ok(face) => {
                             let render_string = unsafe{ &*render_string };
 
-                            vertex_buf.extend(TextTranslate::new(
+                            vertex_buf.extend(TextTranslate::new_rs(
                                 abs_rect,
                                 theme_text.clone(),
                                 face,
@@ -127,6 +128,35 @@ impl Translator {
                                     &self.shaped_text
                                 },
                                 render_string
+                            ));
+                        },
+                        Err(_) => {
+                            //TODO: log
+                        }
+                    }
+                },
+                (Prim::EditString(edit_string), _, Some(theme_text)) => {
+                    match font_cache.face(theme_text.face.clone()) {
+                        Ok(face) => {
+                            let edit_string = unsafe{ &*edit_string };
+
+                            vertex_buf.extend(TextTranslate::new_es(
+                                abs_rect,
+                                theme_text.clone(),
+                                face,
+                                dpi,
+                                atlas,
+                                |string, face| {
+                                    self.shaper.shape_text(
+                                        string,
+                                        face,
+                                        FaceSize::new(theme_text.face_size, theme_text.face_size),
+                                        dpi,
+                                        &mut self.shaped_text
+                                    ).ok();
+                                    &self.shaped_text
+                                },
+                                edit_string
                             ));
                         },
                         Err(_) => {
