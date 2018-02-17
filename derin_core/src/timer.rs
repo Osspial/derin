@@ -24,6 +24,7 @@ pub struct TimerRegister<'a> {
 struct TimerProto {
     name: &'static str,
     frequency: Duration,
+    reset_timer: bool,
     extra_proto: Option<ExtraProto>
 }
 
@@ -96,11 +97,11 @@ impl TimerList {
 }
 
 impl<'a> TimerRegister<'a> {
-    pub fn add_timer(&mut self, name: &'static str, frequency: Duration) {
+    pub fn add_timer(&mut self, name: &'static str, frequency: Duration, reset_timer: bool) {
         let insert_index = match self.new_timers.binary_search_by_key(&frequency, |t| t.frequency) {
             Ok(i) | Err(i) => i
         };
-        self.new_timers.insert(insert_index, TimerProto{ name, frequency, extra_proto: None });
+        self.new_timers.insert(insert_index, TimerProto{ name, frequency, reset_timer, extra_proto: None });
     }
 }
 
@@ -120,7 +121,7 @@ impl<'a> Drop for TimerRegister<'a> {
 
             for new_timer in new_timers.iter_mut() {
                 if new_timer.name == timer.name {
-                    if new_timer.frequency == timer.frequency {
+                    if !new_timer.reset_timer {
                         new_timer.extra_proto = Some(ExtraProto {
                             start_time: timer.start_time,
                             last_trigger: timer.last_trigger,
@@ -140,9 +141,9 @@ impl<'a> Drop for TimerRegister<'a> {
             name: p.name,
             node_id: node_id,
             start_time: p.extra_proto.map(|p| p.start_time).unwrap_or(cur_time),
-            last_trigger: p.extra_proto.map(|p| p.last_trigger).unwrap_or(cur_time),
+            last_trigger: p.extra_proto.map(|p| p.last_trigger).unwrap_or(cur_time - p.frequency),
             frequency: p.frequency,
-            times_triggered: p.extra_proto.map(|p| p.times_triggered).unwrap_or(0)
+            times_triggered: p.extra_proto.map(|p| p.times_triggered).unwrap_or(!0) // We default to max value so the addition wraps around to zero
         });
         let mut next_timer: Option<Timer> = new_timers.next();
 
@@ -201,7 +202,7 @@ impl Timer {
             start_time: cur_time,
             last_trigger: cur_time,
             frequency: Duration::new(!0, 0),
-            times_triggered: 0
+            times_triggered: !0
         }
     }
 
@@ -210,7 +211,7 @@ impl Timer {
     }
 
     fn trigger(&mut self, trigger_time: Instant) {
+        self.times_triggered = self.times_triggered.wrapping_add(1);
         self.last_trigger = trigger_time;
-        self.times_triggered += 1;
     }
 }
