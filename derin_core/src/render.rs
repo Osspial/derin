@@ -1,11 +1,14 @@
 use tree::NodeIdent;
 use cgmath::Point2;
 use cgmath_geometry::BoundBox;
+use dct::cursor::CursorIcon;
 
 pub trait Renderer {
     type Frame: RenderFrame;
     #[inline]
     fn force_full_redraw(&self) -> bool {false}
+    fn set_cursor_pos(&mut self, pos: Point2<i32>);
+    fn set_cursor_icon(&mut self, icon: CursorIcon);
     fn make_frame(&mut self) -> (&mut Self::Frame, <Self::Frame as RenderFrame>::Transform);
     fn finish_frame(&mut self, theme: &<Self::Frame as RenderFrame>::Theme);
 }

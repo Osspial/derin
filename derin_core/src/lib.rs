@@ -131,8 +131,12 @@ impl<A, N, F> Root<A, N, F>
         } = *self;
         // Initialize node stack to root.
         let mut node_stack = node_stack_base.use_stack(root_node, root_id);
+        let mut current_cursor_icon = Default::default();
 
         gen_events(&mut |event| {
+            let mut set_cursor_pos = None;
+            let mut set_cursor_icon = None;
+
             macro_rules! mouse_button_arrays {
                 ($update_tag:expr, $root_offset:expr) => {{
                     let shift_button = move |mut down: MouseDown| {
@@ -177,6 +181,8 @@ impl<A, N, F> Root<A, N, F>
                             $path
                         );
                     }
+                    set_cursor_pos = set_cursor_pos.or(event_ops.cursor_pos.map(|p| p $(+ $node_offset)*));
+                    set_cursor_icon = set_cursor_icon.or(event_ops.cursor_icon);
                     $(*$bubble_store = event_ops.bubble;)*
 
                     let node_update_tag = $node.update_tag();
@@ -871,6 +877,16 @@ impl<A, N, F> Root<A, N, F>
                             break;
                         }
                     }
+                }
+            }
+
+            if let Some(cursor_pos) = set_cursor_pos {
+                renderer.set_cursor_pos(cursor_pos);
+            }
+            if let Some(cursor_icon) = set_cursor_icon {
+                if cursor_icon != current_cursor_icon {
+                    renderer.set_cursor_icon(set_cursor_icon.unwrap_or(Default::default()));
+                    current_cursor_icon = cursor_icon;
                 }
             }
 

@@ -1,3 +1,4 @@
+use dct::cursor::CursorIcon;
 use dct::buttons::{MouseButton, Key, ModifierKeys};
 use cgmath::{Point2, Vector2};
 use tree::NodeIdent;
@@ -10,7 +11,9 @@ use std::time::{Instant, Duration};
 pub struct EventOps<A> {
     pub action: Option<A>,
     pub focus: Option<FocusChange>,
-    pub bubble: bool
+    pub bubble: bool,
+    pub cursor_pos: Option<Point2<i32>>,
+    pub cursor_icon: Option<CursorIcon>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

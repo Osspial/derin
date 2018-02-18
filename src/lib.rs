@@ -25,6 +25,7 @@ use std::cell::RefCell;
 use std::time::Duration;
 
 use dct::hints::{WidgetPos, GridSize};
+use dct::cursor::CursorIcon;
 use dct::buttons::{Key, ModifierKeys};
 use dle::{GridEngine, UpdateHeapCache, SolveError};
 use core::LoopFlow;
@@ -325,7 +326,9 @@ impl<F, H> Node<H::Action, F> for Button<H>
 
         EventOps {
             action, focus,
-            bubble: true
+            bubble: true,
+            cursor_pos: None,
+            cursor_icon: None
         }
     }
 
@@ -380,7 +383,9 @@ impl<A, F> Node<A, F> for Label
         EventOps {
             action: None,
             focus: None,
-            bubble: true
+            bubble: true,
+            cursor_pos: None,
+            cursor_icon: None
         }
     }
 
@@ -544,7 +549,9 @@ impl<A, F> Node<A, F> for EditBox
         EventOps {
             action: None,
             focus,
-            bubble: true
+            bubble: true,
+            cursor_pos: None,
+            cursor_icon: Some(CursorIcon::Text)
         }
     }
 
@@ -608,7 +615,9 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
         EventOps {
             action: None,
             focus: None,
-            bubble: true
+            bubble: true,
+            cursor_pos: None,
+            cursor_icon: None
         }
     }
 

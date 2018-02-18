@@ -11,3 +11,4 @@ mod macros;
 pub mod buttons;
 pub mod hints;
 pub mod color;
+pub mod cursor;

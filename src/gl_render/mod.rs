@@ -3,6 +3,7 @@ mod font_cache;
 mod translate;
 
 use std::rc::Rc;
+use dct::cursor::CursorIcon;
 
 use cgmath::{Point2, Vector2, EuclideanSpace};
 
@@ -21,7 +22,7 @@ use glyphydog::DPI;
 
 use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
 
-use glutin::{GlWindow, GlContext, EventsLoop, WindowBuilder, ContextBuilder, GlRequest, CreationError};
+use glutin::{GlWindow, GlContext, EventsLoop, WindowBuilder, ContextBuilder, GlRequest, CreationError, CursorState, MouseCursor};
 
 use theme::Theme;
 use core::render::{Renderer, RenderFrame};
@@ -121,6 +122,33 @@ impl GLRenderer {
 impl Renderer for GLRenderer {
     type Frame = GLFrame;
     fn force_full_redraw(&self) -> bool {true}
+
+    fn set_cursor_pos(&mut self, pos: Point2<i32>) {
+        self.window.set_cursor_position(pos.x, pos.y).ok();
+    }
+    fn set_cursor_icon(&mut self, icon: CursorIcon) {
+        let glutin_icon = match icon {
+            CursorIcon::Pointer => MouseCursor::Default,
+            CursorIcon::Wait => MouseCursor::Wait,
+            CursorIcon::Crosshair => MouseCursor::Crosshair,
+            CursorIcon::Hand => MouseCursor::Hand,
+            CursorIcon::NotAllowed => MouseCursor::NotAllowed,
+            CursorIcon::Text => MouseCursor::Text,
+            CursorIcon::Move => MouseCursor::Move,
+            CursorIcon::SizeNS => MouseCursor::NsResize,
+            CursorIcon::SizeWE => MouseCursor::EwResize,
+            CursorIcon::SizeNeSw => MouseCursor::NeswResize,
+            CursorIcon::SizeNwSe => MouseCursor::NwseResize,
+            CursorIcon::SizeAll => MouseCursor::AllScroll,
+            CursorIcon::Hide => {
+                self.window.set_cursor_state(CursorState::Hide).ok();
+                return;
+            }
+        };
+        self.window.set_cursor_state(CursorState::Normal).ok();
+        self.window.set_cursor(glutin_icon);
+    }
+
     fn make_frame(&mut self) -> (&mut GLFrame, BoundBox<Point2<i32>>) {
         let (width, height) = self.window.get_inner_size().unwrap();
         self.render_state.viewport = DimsBox::new2(width, height).into();
