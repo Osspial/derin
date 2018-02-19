@@ -893,7 +893,8 @@ impl EditString {
         self.highlight_range.clone()
     }
 
-    pub fn move_cursor_vertical(&mut self, dist: isize) {
+    pub fn move_cursor_vertical(&mut self, dist: isize, expand_selection: bool) {
+        let cursor_start_pos = self.cursor_pos;
         let EditString {
             ref mut cursor_pos,
             ref mut cursor_target_x_px,
@@ -949,6 +950,11 @@ impl EditString {
             -1 => search_for_glyph!(glyph_iter.rev()),
             _ => unreachable!()
         }
+        if expand_selection {
+            self.expand_selection_to_cursor(cursor_start_pos);
+        } else {
+            self.highlight_range = 0..0;
+        }
     }
 
     pub fn move_cursor_horizontal(&mut self, dist: isize, jump_to_word_boundaries: bool, expand_selection: bool) {
@@ -978,24 +984,28 @@ impl EditString {
             _ => unreachable!()
         };
         if expand_selection {
-            if self.highlight_range.len() == 0 {
-                self.highlight_range = cursor_start_pos..cursor_start_pos;
-            }
-
-            match (cursor_start_pos == self.highlight_range.start, self.cursor_pos < self.highlight_range.end) {
-                (false, true) if self.cursor_pos < self.highlight_range.start => {
-                    self.highlight_range.end = self.highlight_range.start;
-                    self.highlight_range.start = self.cursor_pos;
-                }
-                (false, _) => self.highlight_range.end = self.cursor_pos,
-                (true, true) => self.highlight_range.start = self.cursor_pos,
-                (true, false) => {
-                    self.highlight_range.start = self.highlight_range.end;
-                    self.highlight_range.end = self.cursor_pos;
-                }
-            }
+            self.expand_selection_to_cursor(cursor_start_pos);
         } else {
             self.highlight_range = 0..0;
+        }
+    }
+
+    fn expand_selection_to_cursor(&mut self, cursor_start_pos: usize) {
+        if self.highlight_range.len() == 0 {
+            self.highlight_range = cursor_start_pos..cursor_start_pos;
+        }
+
+        match (cursor_start_pos == self.highlight_range.start, self.cursor_pos < self.highlight_range.end) {
+            (false, true) if self.cursor_pos < self.highlight_range.start => {
+                self.highlight_range.end = self.highlight_range.start;
+                self.highlight_range.start = self.cursor_pos;
+            }
+            (false, _) => self.highlight_range.end = self.cursor_pos,
+            (true, true) => self.highlight_range.start = self.cursor_pos,
+            (true, false) => {
+                self.highlight_range.start = self.highlight_range.end;
+                self.highlight_range.end = self.cursor_pos;
+            }
         }
     }
 

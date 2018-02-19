@@ -474,8 +474,8 @@ impl<A, F> Node<A, F> for EditBox
                         jump_to_word_boundaries,
                         modifiers.contains(ModifierKeys::SHIFT)
                     ),
-                    (Key::UArrow, _) => self.string.move_cursor_vertical(-1),
-                    (Key::DArrow, _) => self.string.move_cursor_vertical(1),
+                    (Key::UArrow, _) => self.string.move_cursor_vertical(-1, modifiers.contains(ModifierKeys::SHIFT)),
+                    (Key::DArrow, _) => self.string.move_cursor_vertical(1, modifiers.contains(ModifierKeys::SHIFT)),
                     (Key::A, ModifierKeys::CTRL) => self.string.select_all(),
                     (Key::C, ModifierKeys::CTRL) => {
                         if let Ok(mut clipboard) = ClipboardContext::new() {
