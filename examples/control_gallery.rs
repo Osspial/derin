@@ -111,6 +111,8 @@ fn main() {
         BasicLayout
     );
 
+    let mut theme = derin::theme::Theme::default();
+
     let dims = DimsBox::new2(512, 512);
     let mut events_loop = glutin::EventsLoop::new();
     let window_builder = glutin::WindowBuilder::new()
@@ -118,68 +120,6 @@ fn main() {
         .with_title("Derin Control Gallery");
 
     let mut renderer = unsafe{ GLRenderer::new(&events_loop, window_builder).unwrap() };
-
-    let mut theme = derin::theme::Theme::new();
-
-    macro_rules! upload_image {
-        ($name:expr, $path:expr, $dims:expr, $border:expr) => {{
-            let image_png = png::Decoder::new(std::io::Cursor::new(&include_bytes!($path)[..]));
-            let (info, mut reader) = image_png.read_info().unwrap();
-            // Allocate the output buffer.
-            let mut image = vec![0; info.buffer_size()];
-            // Read the next frame. Currently this function should only called once.
-            // The default options
-            reader.next_frame(&mut image).unwrap();
-            theme.insert_node(
-                $name.to_string(),
-                derin::theme::ThemeNode {
-                    text: Some(ThemeText {
-                        face: ThemeFace::new("./tests/DejaVuSans.ttf", 0).unwrap(),
-                        color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
-                        highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
-                        highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
-                        face_size: 16 * 64,
-                        tab_size: 8,
-                        justify: Align2::new(Align::Start, Align::Start),
-                    }),
-                    icon: Some(Rc::new(derin::theme::Image {
-                        pixels: unsafe {
-                            Vec::from_raw_parts(
-                                image.as_mut_ptr() as *mut _,
-                                image.len() / 4,
-                                image.capacity() / 4
-                            )
-                        },
-                        dims: DimsBox::new2($dims, $dims),
-                        rescale: RescaleRules::Slice(Margins::new($border, $border, $border, $border))
-                    }))
-                }
-            );
-
-            ::std::mem::forget(image);
-        }}
-    }
-
-    upload_image!("Group", "../group.png", 3, 1);
-    upload_image!("Button::Normal", "../button.normal.png", 32, 4);
-    upload_image!("Button::Hover", "../button.hover.png", 32, 4);
-    upload_image!("Button::Clicked", "../button.clicked.png", 32, 4);
-    upload_image!("EditBox", "../editbox.png", 8, 3);
-    theme.insert_node(
-        "Label".to_string(),
-        derin::theme::ThemeNode {
-            text: Some(ThemeText {
-                face: ThemeFace::new("./tests/DejaVuSans.ttf", 0).unwrap(),
-                color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
-                highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
-                highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
-                face_size: 16 * 64,
-                tab_size: 8,
-                justify: Align2::new(Align::Center, Align::Start),
-            }),
-            icon: None
-        }
-    );
 
     #[derive(PartialEq, Eq, Clone, Copy)]
     enum TimerPark {

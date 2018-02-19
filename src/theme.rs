@@ -1,9 +1,10 @@
+use png;
 use gullery::colors::Rgba;
 use gullery::glsl::Nu8;
 
 use cgmath::Point2;
 use cgmath_geometry::DimsBox;
-use dct::hints::{Align2, Margins};
+use dct::hints::{Align, Align2, Margins};
 
 use std::io;
 use std::rc::Rc;
@@ -78,7 +79,7 @@ impl ThemeFace {
 }
 
 impl Theme {
-    pub fn new() -> Theme {
+    pub fn empty() -> Theme {
         Theme {
             map: HashMap::new()
         }
@@ -100,5 +101,74 @@ impl CoreTheme for Theme {
                 icon: None
             }
         )
+    }
+}
+
+impl Default for Theme {
+    fn default() -> Theme {
+        let mut theme = Theme::empty();
+
+        macro_rules! upload_image {
+            ($name:expr, $path:expr, $dims:expr, $border:expr) => {{
+                let image_png = png::Decoder::new(::std::io::Cursor::new(&include_bytes!($path)[..]));
+                let (info, mut reader) = image_png.read_info().unwrap();
+                // Allocate the output buffer.
+                let mut image = vec![0; info.buffer_size()];
+                // Read the next frame. Currently this function should only called once.
+                // The default options
+                reader.next_frame(&mut image).unwrap();
+                theme.insert_node(
+                    $name.to_string(),
+                    ThemeNode {
+                        text: Some(ThemeText {
+                            // TODO: DON'T LOAD FROM SRC
+                            face: ThemeFace::new("./src/default_theme_resources/DejaVuSans.ttf", 0).unwrap(),
+                            color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
+                            highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
+                            highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                            face_size: 16 * 64,
+                            tab_size: 8,
+                            justify: Align2::new(Align::Start, Align::Start),
+                        }),
+                        icon: Some(Rc::new(Image {
+                            pixels: unsafe {
+                                Vec::from_raw_parts(
+                                    image.as_mut_ptr() as *mut _,
+                                    image.len() / 4,
+                                    image.capacity() / 4
+                                )
+                            },
+                            dims: DimsBox::new2($dims, $dims),
+                            rescale: RescaleRules::Slice(Margins::new($border, $border, $border, $border))
+                        }))
+                    }
+                );
+
+                ::std::mem::forget(image);
+            }}
+        }
+
+        upload_image!("Group", "./default_theme_resources/group.png", 3, 1);
+        upload_image!("Button::Normal", "./default_theme_resources/button.normal.png", 32, 4);
+        upload_image!("Button::Hover", "./default_theme_resources/button.hover.png", 32, 4);
+        upload_image!("Button::Clicked", "./default_theme_resources/button.clicked.png", 32, 4);
+        upload_image!("EditBox", "./default_theme_resources/editbox.png", 8, 3);
+        theme.insert_node(
+            "Label".to_string(),
+            ThemeNode {
+                text: Some(ThemeText {
+                    face: ThemeFace::new("./src/default_theme_resources/DejaVuSans.ttf", 0).unwrap(),
+                    color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
+                    highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
+                    highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                    face_size: 16 * 64,
+                    tab_size: 8,
+                    justify: Align2::new(Align::Center, Align::Start),
+                }),
+                icon: None
+            }
+        );
+
+        theme
     }
 }

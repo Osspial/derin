@@ -15,6 +15,7 @@ extern crate glyphydog;
 extern crate itertools;
 extern crate unicode_segmentation;
 extern crate clipboard;
+extern crate png;
 
 pub mod gl_render;
 pub mod theme;
