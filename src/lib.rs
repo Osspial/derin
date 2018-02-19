@@ -16,8 +16,10 @@ extern crate itertools;
 extern crate unicode_segmentation;
 extern crate clipboard;
 extern crate png;
+extern crate parking_lot;
 
 pub mod gl_render;
+pub mod glutin_window;
 pub mod theme;
 
 use self::gl_render::{ThemedPrim, Prim, RelPoint, EditString, RenderString};

@@ -47,7 +47,6 @@ pub struct GLRenderer {
 }
 
 pub struct GLFrame {
-    // render_queue: RenderQueue,
     poly_translator: Translator,
     vertices: Vec<GLVertex>,
     atlas: Atlas,
@@ -116,6 +115,11 @@ impl GLRenderer {
             gl_tex_atlas,
             context_state
         })
+    }
+
+    pub fn dims(&self) -> DimsBox<Point2<u32>> {
+        let (width, height) = self.window.get_inner_size().unwrap();
+        DimsBox::new2(width, height)
     }
 }
 
