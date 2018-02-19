@@ -542,7 +542,6 @@ impl<'a> Iterator for TextTranslate<'a> {
     fn next(&mut self) -> Option<GLVertex> {
         loop {
             fn next_in_iter(i: Option<impl Iterator<Item=GLVertex>>) -> Option<GLVertex> {i.map(|mut v| v.next()).unwrap_or(None)}
-            // let next_in_iter = |i| i.map(|v| v.next()).unwrap_or(None);
             let next_vertex =
                 next_in_iter(self.highlight_vertex_iter.as_mut())
                     .or_else(|| next_in_iter(self.glyph_vertex_iter.as_mut()))
@@ -617,10 +616,34 @@ impl<'a> Iterator for TextTranslate<'a> {
                         )
                     );
 
-                    let highlight_rect = next_glyph.highlight_rect + rect.min().to_vec();
 
-                    *highlight_vertex_iter = match is_highlighted {
+                    let starts_highlight_rect =
+                        (
+                            highlight_range.start == next_glyph.str_index &&
+                            highlight_range.len() > 0
+                        ) ||
+                        (
+                            is_highlighted &&
+                            Some(next_glyph.pos.y) != self.glyph_slice.get(*glyph_slice_index - 2).map(|g| g.pos.y)
+                        );
+                    *highlight_vertex_iter = match starts_highlight_rect {
                         true => {
+                            let mut dummy_last_glyph = *self.glyph_slice.last().unwrap();
+                            dummy_last_glyph.pos.x += dummy_last_glyph.highlight_rect.width();
+                            dummy_last_glyph.highlight_rect.min.x += dummy_last_glyph.highlight_rect.width();
+                            dummy_last_glyph.highlight_rect.max.x = dummy_last_glyph.highlight_rect.min.x;
+                            dummy_last_glyph.str_index += 1;
+
+                            let highlight_rect_end = self.glyph_slice[*glyph_slice_index..]
+                                .iter().cloned().chain(Some(dummy_last_glyph))
+                                .take_while(|g| g.pos.y == next_glyph.pos.y)
+                                .take_while(|g| g.str_index <= highlight_range.end)
+                                .last().unwrap().pos.x;
+
+                            let mut highlight_rect = next_glyph.highlight_rect;
+                            highlight_rect.max.x = highlight_rect_end;
+                            highlight_rect = highlight_rect + rect.min().to_vec();
+
                             Some(ImageTranslate::new(
                                 highlight_rect,
                                 glyph_draw.atlas.white().cast().unwrap_or(OffsetBox::new2(0, 0, 0, 0)),
