@@ -459,6 +459,7 @@ impl<A, F> Node<A, F> for EditBox
             _ => !c.is_control()
         };
         let mut focus = None;
+        let mut cursor_icon = None;
         match event {
             KeyDown(key, modifiers) => loop {
                 let jump_to_word_boundaries = modifiers.contains(ModifierKeys::CTRL);
@@ -536,6 +537,8 @@ impl<A, F> Node<A, F> for EditBox
                     self.update_tag.mark_render_self();
                 }
             },
+            MouseEnter{..} => cursor_icon = Some(CursorIcon::Text),
+            MouseExit{..} => cursor_icon = Some(CursorIcon::default()),
             GainFocus  |
             LoseFocus => {
                 self.string.deselect_all();
@@ -552,7 +555,7 @@ impl<A, F> Node<A, F> for EditBox
             focus,
             bubble: true,
             cursor_pos: None,
-            cursor_icon: Some(CursorIcon::Text)
+            cursor_icon
         }
     }
 
