@@ -25,8 +25,8 @@ struct BasicContainer {
 struct NestedContainer {
     label: Label,
     edit_box: EditBox,
-    button0: Button<BasicHandler>,
-    button1: Button<BasicHandler>
+    #[derin(collection = "Button<BasicHandler>")]
+    buttons: Vec<Button<BasicHandler>>
 }
 
 struct BasicHandler;
@@ -81,12 +81,11 @@ impl NodeLayout for BasicLayoutVertical {
 fn main() {
     let group = Group::new(
         BasicContainer {
-            button: Button::new("good day\tgood day good day good day good day \nHello Hello".to_string(), BasicHandler),
+            button: Button::new("Add Button".to_string(), BasicHandler),
             nested: Group::new(NestedContainer {
                 label: Label::new("Nested Container".to_string()),
                 edit_box: EditBox::new("A Text Box".to_string()),
-                button0: Button::new("tr tr".to_string(), BasicHandler),
-                button1: Button::new("Hello World".to_string(), BasicHandler)
+                buttons: Vec::new(),
             }, BasicLayoutVertical)
         },
         BasicLayout
@@ -99,7 +98,8 @@ fn main() {
 
     let mut window = unsafe{ derin::glutin_window::GlutinWindow::new(window_builder, group, theme).unwrap() };
     let _: Option<()> = window.run_forever(
-        |event, _, _| {
+        |event, root, _| {
+            root.container_mut().nested.container_mut().buttons.push(Button::new("An added button".to_string(), BasicHandler));
             println!("{:?}", event);
             LoopFlow::Continue
         },

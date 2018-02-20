@@ -230,6 +230,15 @@ impl<C, L> Group<C, L>
             container, layout
         }
     }
+
+    pub fn container(&self) -> &C {
+        &self.container
+    }
+
+    pub fn container_mut(&mut self) -> &mut C {
+        self.update_tag.mark_update_child().mark_update_layout();
+        &mut self.container
+    }
 }
 
 impl<F, H> Node<H::Action, F> for Button<H>

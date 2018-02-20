@@ -55,12 +55,12 @@ fn impl_node_container(derive_input: &DeriveInput) -> Tokens {
                 let mut widget_field = Some(WidgetField::Widget(field));
                 derin_attribute_iter(&field.attrs, |attr| {
                     match *attr {
-                        MetaItem::Word(ref attr_name)
+                        MetaItem::NameValue(ref attr_name, Lit::Str(ref collection_inner, _))
                             if attr_name == "collection" =>
                             if let Some(ref mut widget_field_ref) = widget_field {
                                 match *widget_field_ref {
-                                    WidgetField::Widget(_) => *widget_field_ref = WidgetField::Collection(field),
-                                    WidgetField::Collection(_) => panic!("Repeated #[derin(collection)] attribute")
+                                    WidgetField::Widget(_) => *widget_field_ref = WidgetField::Collection(field, syn::parse_type(collection_inner).expect("Malformed collection type")),
+                                    WidgetField::Collection(_, _) => panic!("Repeated #[derin(collection)] attribute")
                                 }
                             } else {
                                 panic!("layout and collection field on same attribute")
@@ -101,7 +101,7 @@ fn impl_node_container(derive_input: &DeriveInput) -> Tokens {
         let widget_ident = widget_field.ident().clone().unwrap_or(Ident::new(field_num));
         match widget_field {
             WidgetField::Widget(_) => quote!(+ 1),
-            WidgetField::Collection(_) => quote!(($self.#widget_ident).into_iter().len())
+            WidgetField::Collection(_, _) => quote!(+ (&self.#widget_ident).into_iter().count())
         }
     });
 
@@ -188,7 +188,7 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
                         index += 1;
                     }};
                 },
-                WidgetField::Collection(field) => {
+                WidgetField::Collection(field, _) => {
                     let child_id = match field.ident {
                         Some(_) => quote!(_derive_derin::core::tree::NodeIdent::StrCollection(stringify!(#widget_ident), child_index as u32)),
                         None => quote!(_derive_derin::core::tree::NodeIdent::NumCollection(#widget_ident, child_index as u32))
@@ -196,10 +196,10 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
 
                     output = quote!{{
                         for (child_index, child) in (#widget_expr).into_iter().enumerate() {
-                            let flow = for_each_child(NodeSummary {
+                            let flow = for_each_child(_derive_derin::core::tree::NodeSummary {
                                 ident: #child_id,
-                                rect: <_ as Node<Self::Action, __F>>::bounds(child),
-                                update_tag: <_ as Node<Self::Action, __F>>::update_tag(child).clone(),
+                                rect: <_ as _derive_derin::core::tree::Node<Self::Action, __F>>::bounds(child),
+                                update_tag: <_ as _derive_derin::core::tree::Node<Self::Action, __F>>::update_tag(child).clone(),
                                 node: child,
                                 index
                             });
@@ -220,17 +220,17 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum WidgetField<'a> {
     Widget(&'a Field),
-    Collection(&'a Field)
+    Collection(&'a Field, Ty)
 }
 
 impl<'a> WidgetField<'a> {
-    fn ident(self) -> &'a Option<Ident> {
-        match self {
+    fn ident(&self) -> &'a Option<Ident> {
+        match *self {
             WidgetField::Widget(field) |
-            WidgetField::Collection(field) => &field.ident
+            WidgetField::Collection(field, _) => &field.ident
         }
     }
 }
@@ -290,19 +290,6 @@ fn expand_generics(generics: &Generics, action_ty: &Ty, widget_fields: &[WidgetF
         generics.where_clause.predicates.push(WherePredicate::BoundPredicate(member_bound));
     }
 
-    // let never_bound = WhereBoundPredicate {
-    //     bound_lifetimes: Vec::new(),
-    //     bounded_ty: npi_gridproc_ty.clone(),
-    //     bounds: vec![TyParamBound::Trait(
-    //         PolyTraitRef{
-    //             bound_lifetimes: Vec::new(),
-    //             trait_ref: syn::parse_path(&trait_fn("!")).unwrap()
-    //         },
-    //         TraitBoundModifier::None
-    //     )]
-    // };
-    // generics.where_clause.predicates.push(WherePredicate::BoundPredicate(never_bound));
-
 
     generics
 }
@@ -311,8 +298,7 @@ fn field_types<'a, I: 'a + Iterator<Item = &'a WidgetField<'a>>>(widget_fields: 
     widget_fields.map(|widget_field|
         match *widget_field {
             WidgetField::Widget(ref widget_field) => widget_field.ty.clone(),
-            WidgetField::Collection(&Field{ref ty, ..}) =>
-                syn::parse_type(&format!("{}", quote!(<#ty as IntoIterator>::Item))).unwrap()
+            WidgetField::Collection(_, ref collection_ty) => collection_ty.clone()
         }
     )
 }
