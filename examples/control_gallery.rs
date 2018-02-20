@@ -57,7 +57,7 @@ impl NodeLayout for BasicLayout {
             _ => None
         }
     }
-    fn grid_size(&self) -> GridSize {
+    fn grid_size(&self, _: usize) -> GridSize {
         GridSize::new(2, 1)
     }
 }
@@ -73,8 +73,8 @@ impl NodeLayout for BasicLayoutVertical {
             })
         }
     }
-    fn grid_size(&self) -> GridSize {
-        GridSize::new(1, 4)
+    fn grid_size(&self, num_nodes: usize) -> GridSize {
+        GridSize::new(1, num_nodes as u32)
     }
 }
 

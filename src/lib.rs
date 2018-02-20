@@ -108,7 +108,7 @@ pub trait NodeContainer<F: RenderFrame> {
 
 pub trait NodeLayout {
     fn hints(&self, node_ident: NodeIdent, node_index: usize, num_nodes: usize) -> Option<WidgetPos>;
-    fn grid_size(&self) -> GridSize;
+    fn grid_size(&self, num_nodes: usize) -> GridSize;
 }
 
 pub trait ButtonHandler {
@@ -752,7 +752,7 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
             });
 
             self.layout_engine.desired_size = DimsBox::new2(self.bounds.width(), self.bounds.height());
-            self.layout_engine.set_grid_size(self.layout.grid_size());
+            self.layout_engine.set_grid_size(self.layout.grid_size(num_children));
             self.layout_engine.update_engine(hints_vec, rects_vec, update_heap_cache);
 
             let mut rects_iter = rects_vec.drain(..);
