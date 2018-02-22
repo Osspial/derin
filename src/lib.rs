@@ -27,7 +27,7 @@ use self::gl_render::{ThemedPrim, Prim, RelPoint, EditString, RenderString};
 use std::cell::RefCell;
 use std::time::Duration;
 
-use dct::hints::{WidgetPos, GridSize};
+use dct::hints::{WidgetPos, GridSize, Margins, Align2, NodeSpan};
 use dct::cursor::CursorIcon;
 use dct::buttons::{Key, ModifierKeys};
 use dle::{GridEngine, UpdateHeapCache, SolveError};
@@ -106,7 +106,7 @@ pub trait NodeContainer<F: RenderFrame> {
     }
 }
 
-pub trait NodeLayout {
+pub trait GridLayout {
     fn hints(&self, node_ident: NodeIdent, node_index: usize, num_nodes: usize) -> Option<WidgetPos>;
     fn grid_size(&self, num_nodes: usize) -> GridSize;
 }
@@ -115,6 +115,78 @@ pub trait ButtonHandler {
     type Action;
 
     fn on_click(&mut self) -> Option<Self::Action>;
+}
+
+impl<A: Clone> ButtonHandler for Option<A> {
+    type Action = A;
+
+    fn on_click(&mut self) -> Option<Self::Action> {
+        self.clone()
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LayoutHorizontal {
+    pub widget_margins: Margins<i32>,
+    pub widget_place: Align2
+}
+
+impl LayoutHorizontal {
+    #[inline(always)]
+    pub fn new(widget_margins: Margins<i32>, widget_place: Align2) -> LayoutHorizontal {
+        LayoutHorizontal{ widget_margins, widget_place }
+    }
+}
+
+impl GridLayout for LayoutHorizontal {
+    fn hints(&self, _: NodeIdent, node_index: usize, num_nodes: usize) -> Option<WidgetPos> {
+        match node_index >= num_nodes {
+            true => None,
+            false => Some(WidgetPos {
+                node_span: NodeSpan::new(node_index as u32, 0),
+                margins: self.widget_margins,
+                place_in_cell: self.widget_place,
+                ..WidgetPos::default()
+            })
+        }
+    }
+
+    #[inline]
+    fn grid_size(&self, num_nodes: usize) -> GridSize {
+        GridSize::new(num_nodes as u32, 1)
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LayoutVertical {
+    pub widget_margins: Margins<i32>,
+    pub widget_place: Align2
+}
+
+impl LayoutVertical {
+    #[inline(always)]
+    pub fn new(widget_margins: Margins<i32>, widget_place: Align2) -> LayoutVertical {
+        LayoutVertical{ widget_margins, widget_place }
+    }
+}
+
+impl GridLayout for LayoutVertical {
+    fn hints(&self, _: NodeIdent, node_index: usize, num_nodes: usize) -> Option<WidgetPos> {
+        match node_index >= num_nodes {
+            true => None,
+            false => Some(WidgetPos {
+                node_span: NodeSpan::new(0, node_index as u32),
+                margins: self.widget_margins,
+                place_in_cell: self.widget_place,
+                ..WidgetPos::default()
+            })
+        }
+    }
+
+    #[inline]
+    fn grid_size(&self, num_nodes: usize) -> GridSize {
+        GridSize::new(1, num_nodes as u32)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -142,7 +214,7 @@ pub struct EditBox {
 
 #[derive(Debug, Clone)]
 pub struct Group<C, L>
-    where L: NodeLayout
+    where L: GridLayout
 {
     update_tag: UpdateTag,
     bounds: BoundBox<Point2<i32>>,
@@ -220,7 +292,7 @@ impl EditBox {
 }
 
 impl<C, L> Group<C, L>
-    where L: NodeLayout
+    where L: GridLayout
 {
     pub fn new(container: C, layout: L) -> Group<C, L> {
         Group {
@@ -590,7 +662,7 @@ impl<A, F> Node<A, F> for EditBox
 impl<A, F, C, L> Node<A, F> for Group<C, L>
     where F: RenderFrame<Primitive=ThemedPrim>,
           C: NodeContainer<F, Action=A>,
-          L: NodeLayout
+          L: GridLayout
 {
     #[inline]
     fn update_tag(&self) -> &UpdateTag {
@@ -656,7 +728,7 @@ const CHILD_BATCH_SIZE: usize = 24;
 impl<A, F, C, L> Parent<A, F> for Group<C, L>
     where F: RenderFrame<Primitive=ThemedPrim>,
           C: NodeContainer<F, Action=A>,
-          L: NodeLayout
+          L: GridLayout
 {
     fn num_children(&self) -> usize {
         self.container.num_children()
