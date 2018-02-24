@@ -486,7 +486,8 @@ impl<F, H> Node<H::Action, F> for Button<H>
                         ::core::event::PopupCreate {
                             rect: BoundBox::new2(0, 0, 128, 128),
                             title: "".to_string(),
-                            decorations: false
+                            decorations: false,
+                            tool_window: true
                         }
                     ));
                     self.state

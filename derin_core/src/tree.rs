@@ -187,6 +187,7 @@ pub struct PopupAttributes {
     pub rect: BoundBox<Point2<i32>>,
     pub title: String,
     pub decorations: bool,
+    pub tool_window: bool,
     pub id: PopupID
 }
 

@@ -24,6 +24,7 @@ pub struct PopupCreate {
     pub rect: BoundBox<Point2<i32>>,
     pub title: String,
     pub decorations: bool,
+    pub tool_window: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

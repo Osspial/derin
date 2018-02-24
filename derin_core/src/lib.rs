@@ -211,6 +211,7 @@ impl<A, N, F> Root<A, N, F>
                             rect: popup_create.rect + node_offset,
                             title: popup_create.title,
                             decorations: popup_create.decorations,
+                            tool_window: popup_create.tool_window,
                             id: popup_id
                         });
                     }
