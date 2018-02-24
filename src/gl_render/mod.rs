@@ -22,7 +22,7 @@ use glyphydog::DPI;
 
 use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
 
-use glutin::{GlWindow, GlContext, EventsLoop, WindowBuilder, ContextBuilder, GlRequest, CreationError, CursorState, MouseCursor};
+use glutin::*;
 
 use theme::Theme;
 use core::render::{Renderer, RenderFrame};
@@ -73,8 +73,9 @@ impl GLRenderer {
     pub unsafe fn new(events_loop: &EventsLoop, window_builder: WindowBuilder) -> Result<GLRenderer, CreationError> {
         let window = {
             let context_builder = ContextBuilder::new()
+                .with_gl_profile(GlProfile::Core)
                 .with_gl(GlRequest::GlThenGles {
-                    opengl_version: (3, 1),
+                    opengl_version: (3, 3),
                     opengles_version: (3, 0)
                 });
             GlWindow::new(window_builder, context_builder, events_loop)?
@@ -120,6 +121,11 @@ impl GLRenderer {
     pub fn dims(&self) -> DimsBox<Point2<u32>> {
         let (width, height) = self.window.get_inner_size().unwrap();
         DimsBox::new2(width, height)
+    }
+
+    #[inline]
+    pub fn window(&self) -> &GlWindow {
+        &self.window
     }
 }
 

@@ -16,7 +16,7 @@ pub(crate) struct NodeStackBase<A, F: RenderFrame> {
     stack: NRAllocCache<A, F>
 }
 
-pub struct NodeStack<'a, A: 'a, F: 'a + RenderFrame, Root: 'a + > {
+pub struct NodeStack<'a, A: 'a, F: 'a + RenderFrame, Root: 'a + ?Sized> {
     stack: NRVec<'a, A, F>,
     root: *mut Root
 }
@@ -34,9 +34,16 @@ impl<A, F: RenderFrame> NodeStackBase<A, F> {
             stack: self.stack.use_cache(node, root_id)
         }
     }
+
+    pub fn use_stack_dyn<'a>(&'a mut self, node: &'a mut Node<A, F>, root_id: RootID) -> NodeStack<'a, A, F, Node<A, F>> {
+        NodeStack {
+            root: node,
+            stack: self.stack.use_cache(node, root_id)
+        }
+    }
 }
 
-impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
+impl<'a, A, F: RenderFrame, Root: Node<A, F> + ?Sized> NodeStack<'a, A, F, Root> {
     pub fn drain_to_root<G>(&mut self, mut for_each: G) -> NodePath<Root>
         where G: FnMut(&mut Node<A, F>, &[NodeIdent], Vector2<i32>)
     {
@@ -49,9 +56,8 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
         let mut continue_drain = true;
         while self.stack.len() > 1 && continue_drain {
             {
-                let offset = self.stack.top_parent_offset();
-                let NodePath{ node, path } = self.stack.top_mut();
-                continue_drain = for_each(node, path, offset);
+                let NodePath{ node, path, top_parent_offset } = self.stack.top_mut();
+                continue_drain = for_each(node, path, top_parent_offset);
             }
             self.stack.pop();
         }
@@ -63,10 +69,11 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
         let top_mut = self.stack.top_mut();
         for_each(top_mut.node, top_mut.path, Vector2::new(0, 0));
 
-        assert_eq!(self.root, top_mut.node as *mut _ as *mut Root);
+        assert_eq!(self.root as *mut () as usize, top_mut.node as *mut _ as *mut () as usize);
         Some(NodePath {
             node: unsafe{ &mut *self.root },
-            path: top_mut.path
+            path: top_mut.path,
+            top_parent_offset: Vector2::new(0, 0)
         })
     }
 
@@ -75,10 +82,11 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
         self.stack.truncate(1);
 
         let top_mut = self.stack.top_mut();
-        assert_eq!(self.root, top_mut.node as *mut _ as *mut Root);
+        assert_eq!(self.root as *mut () as usize, top_mut.node as *mut _ as *mut () as usize);
         NodePath {
             node: unsafe{ &mut *self.root },
-            path: top_mut.path
+            path: top_mut.path,
+            top_parent_offset: Vector2::new(0, 0)
         }
     }
 
@@ -103,7 +111,8 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
                 ).unwrap();
                 Ok(NodePath {
                     node: child.node,
-                    path: self.stack.ident()
+                    path: self.stack.ident(),
+                    top_parent_offset: self.top_parent_offset()
                 })
             },
             _ => {
@@ -129,7 +138,8 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F>> NodeStack<'a, A, F, Root> {
         match child {
             Some(child) => Ok(NodePath {
                 node: child.node,
-                path: self.stack.ident()
+                path: self.stack.ident(),
+                top_parent_offset: self.top_parent_offset()
             }),
             None => {
                 self.stack.try_push(|node, _|

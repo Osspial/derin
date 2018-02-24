@@ -1,21 +1,27 @@
-use glutin::{Event, EventsLoop, ControlFlow, WindowBuilder, WindowEvent as GWindowEvent, MouseButton as GMouseButton, CreationError, ElementState, VirtualKeyCode};
+use glutin::*;
+use glutin::{MouseButton as GMouseButton, WindowEvent as GWindowEvent};
 use gl_render::{GLRenderer, GLFrame};
 use dct::buttons::{MouseButton, Key, ModifierKeys};
 use core::{Root, LoopFlow, WindowEvent, EventLoopResult};
-use core::tree::{Node, NodeIdent};
+use core::tree::{Node, NodeIdent, PopupID};
 use core::event::NodeEvent;
 use theme::Theme;
 
 use std::thread::{self, JoinHandle};
 use std::sync::Arc;
+use std::cell::{Cell, RefCell};
 use std::time::Duration;
+use std::collections::HashMap;
 use cgmath::Point2;
-use cgmath_geometry::DimsBox;
+use cgmath_geometry::{DimsBox, GeoBox};
 
 use parking_lot::Mutex;
 
 pub struct GlutinWindow<A: 'static, N: 'static + Node<A, GLFrame>> {
-    primary_renderer: GLRenderer,
+    primary_renderer: RefCell<GLRenderer>,
+    window_popup_map: HashMap<WindowId, PopupID>,
+    popup_renderers: RefCell<HashMap<PopupID, GLRenderer>>,
+    active_renderer: Cell<Option<PopupID>>,
     events_loop: EventsLoop,
     timer_sync: Arc<Mutex<TimerPark>>,
     timer_thread_handle: JoinHandle<()>,
@@ -60,7 +66,10 @@ impl<A, N: Node<A, GLFrame>> GlutinWindow<A, N> {
 
         Ok(GlutinWindow {
             root: Root::new(root, theme, renderer.dims()),
-            primary_renderer: renderer,
+            primary_renderer: RefCell::new(renderer),
+            active_renderer: Cell::new(None),
+            window_popup_map: HashMap::new(),
+            popup_renderers: RefCell::new(HashMap::new()),
             events_loop,
             timer_sync,
             timer_thread_handle,
@@ -73,82 +82,138 @@ impl<A, N: Node<A, GLFrame>> GlutinWindow<A, N> {
     {
         let GlutinWindow {
             ref mut primary_renderer,
+            ref popup_renderers,
+            ref active_renderer,
+            ref mut window_popup_map,
             ref mut events_loop,
             ref mut timer_sync,
             ref mut timer_thread_handle,
             ref mut root,
         } = *self;
 
-        let adapt_window_events = |for_each_event: &mut FnMut(WindowEvent) -> EventLoopResult<R>| {
+        let adapt_window_events = |for_each_event: &mut FnMut(Option<PopupID>, WindowEvent) -> EventLoopResult<R>| {
             let mut ret: Option<R> = None;
-            events_loop.run_forever(|glutin_event| {
-                let derin_event: WindowEvent = match glutin_event {
-                    Event::WindowEvent{event, ..} => {
-                        match event {
-                            GWindowEvent::CursorMoved{position, ..} => WindowEvent::MouseMove(Point2::new(position.0 as i32, position.1 as i32)),
-                            GWindowEvent::CursorEntered{..} => WindowEvent::MouseEnter(Point2::new(0, 0)),
-                            GWindowEvent::CursorLeft{..} => WindowEvent::MouseExit(Point2::new(0, 0)),
-                            GWindowEvent::MouseInput{state, button: g_button, ..} => {
-                                let button = match g_button {
-                                    GMouseButton::Left => MouseButton::Left,
-                                    GMouseButton::Right => MouseButton::Right,
-                                    GMouseButton::Middle => MouseButton::Middle,
-                                    GMouseButton::Other(1) => MouseButton::X1,
-                                    GMouseButton::Other(2) => MouseButton::X2,
-                                    GMouseButton::Other(_) => return ControlFlow::Continue
-                                };
-                                match state {
-                                    ElementState::Pressed => WindowEvent::MouseDown(button),
-                                    ElementState::Released => WindowEvent::MouseUp(button)
-                                }
-                            }
-                            GWindowEvent::Resized(width, height) => WindowEvent::WindowResize(DimsBox::new2(width, height)),
-                            GWindowEvent::ReceivedCharacter(c) => WindowEvent::Char(c),
-                            GWindowEvent::KeyboardInput{ input, .. } => {
-                                if let Some(key) = input.virtual_keycode.and_then(map_key) {
-                                    let mut modifiers = ModifierKeys::empty();
-                                    modifiers.set(ModifierKeys::SHIFT, input.modifiers.shift);
-                                    modifiers.set(ModifierKeys::CTRL, input.modifiers.ctrl);
-                                    modifiers.set(ModifierKeys::ALT, input.modifiers.alt);
-                                    modifiers.set(ModifierKeys::LOGO, input.modifiers.logo);
-                                    match input.state {
-                                        ElementState::Pressed => WindowEvent::KeyDown(key, modifiers),
-                                        ElementState::Released => WindowEvent::KeyUp(key, modifiers)
+            loop {
+                let mut add_popups = Vec::new();
+                events_loop.run_forever(|glutin_event| {
+                    let mut popup_id = None;
+                    let derin_event: WindowEvent = match glutin_event {
+                        Event::WindowEvent{window_id, event} => {
+                            popup_id = window_popup_map.get(&window_id).cloned();
+                            match event {
+                                GWindowEvent::CursorMoved{position, ..} => WindowEvent::MouseMove(Point2::new(position.0 as i32, position.1 as i32)),
+                                GWindowEvent::CursorEntered{..} => WindowEvent::MouseEnter(Point2::new(0, 0)),
+                                GWindowEvent::CursorLeft{..} => WindowEvent::MouseExit(Point2::new(0, 0)),
+                                GWindowEvent::MouseInput{state, button: g_button, ..} => {
+                                    let button = match g_button {
+                                        GMouseButton::Left => MouseButton::Left,
+                                        GMouseButton::Right => MouseButton::Right,
+                                        GMouseButton::Middle => MouseButton::Middle,
+                                        GMouseButton::Other(1) => MouseButton::X1,
+                                        GMouseButton::Other(2) => MouseButton::X2,
+                                        GMouseButton::Other(_) => return ControlFlow::Continue
+                                    };
+                                    match state {
+                                        ElementState::Pressed => WindowEvent::MouseDown(button),
+                                        ElementState::Released => WindowEvent::MouseUp(button)
                                     }
-                                } else {
-                                    return ControlFlow::Continue
                                 }
+                                GWindowEvent::Resized(width, height) => WindowEvent::WindowResize(DimsBox::new2(width, height)),
+                                GWindowEvent::ReceivedCharacter(c) => WindowEvent::Char(c),
+                                GWindowEvent::KeyboardInput{ input, .. } => {
+                                    if let Some(key) = input.virtual_keycode.and_then(map_key) {
+                                        let mut modifiers = ModifierKeys::empty();
+                                        modifiers.set(ModifierKeys::SHIFT, input.modifiers.shift);
+                                        modifiers.set(ModifierKeys::CTRL, input.modifiers.ctrl);
+                                        modifiers.set(ModifierKeys::ALT, input.modifiers.alt);
+                                        modifiers.set(ModifierKeys::LOGO, input.modifiers.logo);
+                                        match input.state {
+                                            ElementState::Pressed => WindowEvent::KeyDown(key, modifiers),
+                                            ElementState::Released => WindowEvent::KeyUp(key, modifiers)
+                                        }
+                                    } else {
+                                        return ControlFlow::Continue
+                                    }
+                                }
+                                GWindowEvent::Closed => return match popup_id {
+                                    Some(_) => ControlFlow::Continue,
+                                    None => ControlFlow::Break
+                                },
+                                _ => return ControlFlow::Continue
                             }
-                            GWindowEvent::Closed => return ControlFlow::Break,
-                            _ => return ControlFlow::Continue
-                        }
-                    },
-                    Event::Awakened => WindowEvent::Timer,
-                    Event::Suspended(..) |
-                    Event::DeviceEvent{..} => return ControlFlow::Continue
-                };
+                        },
+                        Event::Awakened => WindowEvent::Timer,
+                        Event::Suspended(..) |
+                        Event::DeviceEvent{..} => return ControlFlow::Continue
+                    };
 
-                let event_result = for_each_event(derin_event);
-                match event_result.flow {
-                    LoopFlow::Break(b) => {
-                        ret = Some(b);
+                    let event_result = for_each_event(popup_id, derin_event);
+
+                    match event_result.wait_until_call_timer {
+                        None => *timer_sync.lock() = TimerPark::Indefinite,
+                        Some(park_duration) => *timer_sync.lock() = TimerPark::Timeout(park_duration)
+                    }
+                    timer_thread_handle.thread().unpark();
+
+                    match event_result.flow {
+                        LoopFlow::Break(b) => {
+                            ret = Some(b);
+                            return ControlFlow::Break;
+                        },
+                        LoopFlow::Continue => ()
+                    }
+                    if event_result.popups.len() > 0 {
+                        add_popups = event_result.popups;
                         return ControlFlow::Break;
-                    },
-                    LoopFlow::Continue => ()
+                    }
+
+                    ControlFlow::Continue
+                });
+                if add_popups.len() == 0 {
+                    break;
                 }
 
-                match event_result.wait_until_call_timer {
-                    None => *timer_sync.lock() = TimerPark::Indefinite,
-                    Some(park_duration) => *timer_sync.lock() = TimerPark::Timeout(park_duration)
+                let mut popup_renderers = popup_renderers.borrow_mut();
+                for popup_attrs in add_popups.drain(..) {
+                    let builder = WindowBuilder::new()
+                        .with_dimensions(popup_attrs.rect.width() as u32, popup_attrs.rect.height() as u32)
+                        .with_title(popup_attrs.title)
+                        .with_decorations(popup_attrs.decorations);
+                    let popup_renderer = unsafe{ GLRenderer::new(events_loop, builder).unwrap() };
+                    let window_pos = primary_renderer.borrow().window().get_inner_position().unwrap();
+                    popup_renderer.window().set_position(popup_attrs.rect.min().x + window_pos.0, popup_attrs.rect.min().y + window_pos.1);
+                    window_popup_map.insert(popup_renderer.window().id(), popup_attrs.id);
+                    popup_renderers.insert(popup_attrs.id, popup_renderer);
+                    active_renderer.set(Some(popup_attrs.id));
                 }
-                timer_thread_handle.thread().unpark();
-
-                ControlFlow::Continue
-            });
+            }
             ret
         };
 
-        root.run_forever(adapt_window_events, on_action, on_fallthrough, primary_renderer)
+        root.run_forever(
+            adapt_window_events,
+            on_action,
+            on_fallthrough,
+            |popup_id_opt, with_renderer| {
+                let (mut hashmap_cell, mut primary_cell);
+
+                let renderer_ref = match popup_id_opt {
+                    Some(popup_id) => {
+                        hashmap_cell = popup_renderers.borrow_mut();
+                        hashmap_cell.get_mut(&popup_id).unwrap()
+                    },
+                    _ => {
+                        primary_cell = primary_renderer.borrow_mut();
+                        &mut *primary_cell
+                    }
+                };
+                if popup_id_opt != active_renderer.get() {
+                    unsafe{ renderer_ref.window().make_current().unwrap() };
+                    active_renderer.set(popup_id_opt);
+                }
+                with_renderer(renderer_ref)
+            }
+        )
     }
 }
 
@@ -302,6 +367,7 @@ fn map_key(k: VirtualKeyCode) -> Option<Key> {
         // VirtualKeyCode::LShift => Some(Key::Shift),
         // VirtualKeyCode::Control => Some(Key::Control),
         // VirtualKeyCode::Menu => Some(Key::Menu),
+        VirtualKeyCode::Caret |
         VirtualKeyCode::Compose |
         VirtualKeyCode::AbntC1 |
         VirtualKeyCode::AbntC2 |

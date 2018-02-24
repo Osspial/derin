@@ -13,7 +13,7 @@ pub trait Renderer {
     fn finish_frame(&mut self, theme: &<Self::Frame as RenderFrame>::Theme);
 }
 
-pub trait RenderFrame {
+pub trait RenderFrame: 'static {
     type Transform: Copy;
     type Theme: Theme;
     type Primitive: Copy;

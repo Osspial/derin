@@ -43,6 +43,8 @@ use cgmath_geometry::{BoundBox, Segment, DimsBox, GeoBox};
 use arrayvec::ArrayVec;
 use clipboard::{ClipboardContext, ClipboardProvider};
 
+use std::marker::PhantomData;
+
 pub mod geometry {
     pub use cgmath::*;
     pub use cgmath_geometry::*;
@@ -106,18 +108,74 @@ pub trait NodeContainer<F: RenderFrame> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct SingleContainer<A, F: RenderFrame, N: Node<A, F>> {
+    pub node: N,
+    _marker: PhantomData<(A, F)>
+}
+
+impl<A, F: RenderFrame, N: Node<A, F>> SingleContainer<A, F, N> {
+    #[inline(always)]
+    pub fn new(node: N) -> SingleContainer<A, F, N> {
+        SingleContainer{ node, _marker: PhantomData }
+    }
+}
+
+impl<A, F: RenderFrame, N: Node<A, F>> NodeContainer<F> for SingleContainer<A, F, N> {
+    type Action = A;
+
+    #[inline(always)]
+    fn num_children(&self) -> usize {1}
+
+    fn children<'a, G, R>(&'a self, mut for_each_child: G) -> Option<R>
+        where G: FnMut(NodeSummary<&'a Node<Self::Action, F>>) -> LoopFlow<R>,
+              Self::Action: 'a,
+              F: 'a
+    {
+        let self_summary = NodeSummary {
+            node: &self.node as &Node<A, F>,
+            ident: NodeIdent::Num(0),
+            rect: self.node.bounds(),
+            update_tag: self.node.update_tag().clone(),
+            index: 0
+        };
+        match for_each_child(self_summary) {
+            LoopFlow::Continue => None,
+            LoopFlow::Break(r) => Some(r)
+        }
+    }
+
+    fn children_mut<'a, G, R>(&'a mut self, mut for_each_child: G) -> Option<R>
+        where G: FnMut(NodeSummary<&'a mut Node<Self::Action, F>>) -> LoopFlow<R>,
+              Self::Action: 'a,
+              F: 'a
+    {
+        let self_summary = NodeSummary {
+            rect: self.node.bounds(),
+            update_tag: self.node.update_tag().clone(),
+            node: &mut self.node as &mut Node<A, F>,
+            ident: NodeIdent::Num(0),
+            index: 0
+        };
+        match for_each_child(self_summary) {
+            LoopFlow::Continue => None,
+            LoopFlow::Break(r) => Some(r)
+        }
+    }
+}
+
 pub trait GridLayout {
     fn hints(&self, node_ident: NodeIdent, node_index: usize, num_nodes: usize) -> Option<WidgetPos>;
     fn grid_size(&self, num_nodes: usize) -> GridSize;
 }
 
 pub trait ButtonHandler {
-    type Action;
+    type Action: 'static;
 
     fn on_click(&mut self) -> Option<Self::Action>;
 }
 
-impl<A: Clone> ButtonHandler for Option<A> {
+impl<A: 'static + Clone> ButtonHandler for Option<A> {
     type Action = A;
 
     fn on_click(&mut self) -> Option<Self::Action> {
@@ -196,6 +254,7 @@ pub struct Button<H: ButtonHandler> {
     state: ButtonState,
     handler: H,
     string: RenderString,
+    waiting_for_mouseover: bool
 }
 
 #[derive(Debug, Clone)]
@@ -239,7 +298,8 @@ impl<H: ButtonHandler> Button<H> {
             bounds: BoundBox::new2(0, 0, 0, 0),
             state: ButtonState::Normal,
             handler,
-            string: RenderString::new(string)
+            string: RenderString::new(string),
+            waiting_for_mouseover: false
         }
     }
 
@@ -369,17 +429,37 @@ impl<F, H> Node<H::Action, F> for Button<H>
         ].iter().cloned());
     }
 
-    fn on_node_event(&mut self, event: NodeEvent, bubble_source: &[NodeIdent]) -> EventOps<H::Action> {
+    fn register_timers(&self, register: &mut TimerRegister) {
+        if self.waiting_for_mouseover {
+            register.add_timer("mouseover_text", Duration::new(1, 0), true);
+        }
+    }
+
+    fn on_node_event(&mut self, event: NodeEvent, bubble_source: &[NodeIdent]) -> EventOps<H::Action, F> {
         use self::NodeEvent::*;
 
         let (mut action, focus) = (None, None);
+        let mut popup = None;
+
         if bubble_source.len() == 0 {
             let new_state = match event {
-                MouseEnter{buttons_down_in_node, ..} if buttons_down_in_node.is_empty() => ButtonState::Hover,
-                MouseExit{buttons_down_in_node, ..} if buttons_down_in_node.is_empty() => ButtonState::Normal,
-                MouseEnter{..} |
-                MouseExit{..}  |
-                MouseMove{..} => self.state,
+                MouseEnter{buttons_down_in_node, ..} |
+                MouseExit{buttons_down_in_node, ..} => {
+                    self.waiting_for_mouseover = false;
+                    self.update_tag.mark_update_timer();
+
+                    match (buttons_down_in_node.is_empty(), event) {
+                        (true, MouseEnter{..}) => ButtonState::Hover,
+                        (true, MouseExit{..}) => ButtonState::Normal,
+                        (false, _) => self.state,
+                        _ => unreachable!()
+                    }
+                },
+                MouseMove{..} => {
+                    self.waiting_for_mouseover = true;
+                    self.update_tag.mark_update_timer();
+                    self.state
+                },
                 MouseDown{..} => ButtonState::Clicked,
                 MouseUp{in_node: true, pressed_in_node, ..} => {
                     match pressed_in_node {
@@ -397,8 +477,21 @@ impl<F, H> Node<H::Action, F> for Button<H>
                 LoseFocus => ButtonState::Normal,
                 Char(_)     |
                 KeyDown(..) |
-                KeyUp(..)   |
-                Timer{..}  => self.state
+                KeyUp(..)  => self.state,
+                Timer{name: "mouseover_text", times_triggered: 1, ..} => {
+                    self.waiting_for_mouseover = false;
+                    self.update_tag.mark_update_timer();
+                    popup = Some((
+                        Box::new(Group::new(SingleContainer::new(Label::new("Hello Popup!".to_string())), LayoutHorizontal::default())) as Box<Node<_, F>>,
+                        ::core::event::PopupCreate {
+                            rect: BoundBox::new2(0, 0, 128, 128),
+                            title: "".to_string(),
+                            decorations: false
+                        }
+                    ));
+                    self.state
+                },
+                Timer{..} => self.state
             };
 
             if new_state != self.state {
@@ -412,7 +505,8 @@ impl<F, H> Node<H::Action, F> for Button<H>
             action, focus,
             bubble: true,
             cursor_pos: None,
-            cursor_icon: None
+            cursor_icon: None,
+            popup
         }
     }
 
@@ -463,13 +557,14 @@ impl<A, F> Node<A, F> for Label
     }
 
     #[inline]
-    fn on_node_event(&mut self, _: NodeEvent, _: &[NodeIdent]) -> EventOps<A> {
+    fn on_node_event(&mut self, _: NodeEvent, _: &[NodeIdent]) -> EventOps<A, F> {
         EventOps {
             action: None,
             focus: None,
             bubble: true,
             cursor_pos: None,
-            cursor_icon: None
+            cursor_icon: None,
+            popup: None
         }
     }
 
@@ -531,7 +626,7 @@ impl<A, F> Node<A, F> for EditBox
         ].iter().cloned());
     }
 
-    fn on_node_event(&mut self, event: NodeEvent, _: &[NodeIdent]) -> EventOps<A> {
+    fn on_node_event(&mut self, event: NodeEvent, _: &[NodeIdent]) -> EventOps<A, F> {
         use self::NodeEvent::*;
         use dct::buttons::MouseButton;
 
@@ -638,7 +733,8 @@ impl<A, F> Node<A, F> for EditBox
             focus,
             bubble: true,
             cursor_pos: None,
-            cursor_icon
+            cursor_icon,
+            popup: None
         }
     }
 
@@ -698,13 +794,14 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
     }
 
     #[inline]
-    fn on_node_event(&mut self, _: NodeEvent, _: &[NodeIdent]) -> EventOps<A> {
+    fn on_node_event(&mut self, _: NodeEvent, _: &[NodeIdent]) -> EventOps<A, F> {
         EventOps {
             action: None,
             focus: None,
             bubble: true,
             cursor_pos: None,
-            cursor_icon: None
+            cursor_icon: None,
+            popup: None
         }
     }
 

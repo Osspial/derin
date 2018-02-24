@@ -1,4 +1,4 @@
-#![feature(conservative_impl_trait, range_contains, nll)]
+#![feature(conservative_impl_trait, universal_impl_trait, range_contains, nll)]
 
 extern crate cgmath;
 extern crate cgmath_geometry;
@@ -25,7 +25,7 @@ use cgmath_geometry::{GeoBox, DimsBox, Segment};
 use std::cmp::Ordering;
 use std::time::Duration;
 use std::marker::PhantomData;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 use tree::*;
 use timer::{Timer, TimerList};
@@ -53,7 +53,13 @@ pub struct Root<A, N, F>
     timer_list: TimerList,
     pub root_node: N,
     pub theme: F::Theme,
+    popup_nodes: HashMap<PopupID, PopupNode<A, F>>,
     _marker: PhantomData<*const F>
+}
+
+struct PopupNode<A, F: RenderFrame> {
+    node: Box<Node<A, F>>,
+    mouse_pos: Point2<i32>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,10 +84,11 @@ pub enum LoopFlow<R> {
 }
 
 #[must_use]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EventLoopResult<R> {
     pub flow: LoopFlow<R>,
-    pub wait_until_call_timer: Option<Duration>
+    pub wait_until_call_timer: Option<Duration>,
+    pub popups: Vec<PopupAttributes>
 }
 
 impl<A, N, F> Root<A, N, F>
@@ -104,19 +111,23 @@ impl<A, N, F> Root<A, N, F>
             meta_tracker: MetaEventTracker::default(),
             timer_list: TimerList::new(None),
             root_node, theme,
+            popup_nodes: HashMap::new(),
             _marker: PhantomData
         }
     }
 
-    pub fn run_forever<E, AF, BF, R, G>(&mut self, mut gen_events: E, mut on_action: AF, mut bubble_fallthrough: BF, renderer: &mut R) -> Option<G>
-        where E: FnMut(&mut FnMut(WindowEvent) -> EventLoopResult<G>) -> Option<G>,
-              AF: FnMut(A, &mut N, &mut F::Theme) -> LoopFlow<G>,
-              BF: FnMut(NodeEvent, &[NodeIdent]) -> Option<A>,
-              R: Renderer<Frame=F>
+    pub fn run_forever<R, G>(
+        &mut self,
+        mut gen_events: impl FnMut(&mut FnMut(Option<PopupID>, WindowEvent) -> EventLoopResult<G>) -> Option<G>,
+        mut on_action: impl FnMut(A, &mut N, &mut F::Theme) -> LoopFlow<G>,
+        mut bubble_fallthrough: impl FnMut(NodeEvent, &[NodeIdent]) -> Option<A>,
+        mut with_renderer: impl FnMut(Option<PopupID>, &mut FnMut(&mut R))
+    ) -> Option<G>
+        where R: Renderer<Frame=F>
     {
         let Root {
             id: root_id,
-            ref mut mouse_pos,
+            mouse_pos: ref mut root_mouse_pos,
             ref mut mouse_buttons_down,
             ref mut actions,
             ref mut node_stack_base,
@@ -127,15 +138,32 @@ impl<A, N, F> Root<A, N, F>
             ref mut timer_list,
             ref mut root_node,
             ref mut theme,
+            ref mut popup_nodes,
             ..
         } = *self;
         // Initialize node stack to root.
-        let mut node_stack = node_stack_base.use_stack(root_node, root_id);
         let mut current_cursor_icon = Default::default();
+        // let mut cur_popup_id = None;
+        let mut popup_map_insert = Vec::new();
 
-        gen_events(&mut |event| {
+        gen_events(&mut |event_popup_id, event| {
             let mut set_cursor_pos = None;
             let mut set_cursor_icon = None;
+            let mut new_popups = Vec::new();
+            let mouse_pos: &mut Point2<i32>;
+
+            let node_stack_root = match event_popup_id {
+                Some(id) => {
+                    let popup_node = popup_nodes.get_mut(&id).unwrap();
+                    mouse_pos = &mut popup_node.mouse_pos;
+                    &mut *popup_node.node
+                },
+                None => {
+                    mouse_pos = root_mouse_pos;
+                    &mut *root_node
+                }
+            };
+            let mut node_stack = node_stack_base.use_stack_dyn(node_stack_root, root_id);
 
             macro_rules! mouse_button_arrays {
                 ($update_tag:expr, $root_offset:expr) => {{
@@ -153,10 +181,10 @@ impl<A, N, F> Root<A, N, F>
             macro_rules! try_push_action {
                 (
                     $node:expr, $path:expr $(=> ($meta_tracker:expr))*,
-                    $event:expr $(, to_rootspace: $node_offset:expr)* $(, bubble ($bubble:expr, $bubble_store:expr, $bubble_path:expr))*
+                    $event:expr, to_rootspace: $node_offset:expr $(, bubble ($bubble:expr, $bubble_store:expr, $bubble_path:expr))*
                 ) => {{
                     let event = $event;
-                    let node_offset = $($node_offset +)* Vector2::from_value(0);
+                    let node_offset = $node_offset;
                     let event_ops = $node.on_node_event(
                         event,
                         if_tokens!(($($bubble_path)*) {
@@ -175,13 +203,24 @@ impl<A, N, F> Root<A, N, F>
                     if let Some(focus) = event_ops.focus {
                         meta_tracker.push_focus(focus, $path);
                     }
+                    if let Some((popup_node, popup_create)) = event_ops.popup {
+                        let popup_id = PopupID::new();
+                        popup_map_insert.push((popup_id, popup_node));
+
+                        new_popups.push(PopupAttributes {
+                            rect: popup_create.rect + node_offset,
+                            title: popup_create.title,
+                            decorations: popup_create.decorations,
+                            id: popup_id
+                        });
+                    }
                     if event_ops.bubble $(& $bubble)* {
                         meta_tracker.push_bubble(
                             event.translate(node_offset).into(),
                             $path
                         );
                     }
-                    set_cursor_pos = set_cursor_pos.or(event_ops.cursor_pos.map(|p| p $(+ $node_offset)*));
+                    set_cursor_pos = set_cursor_pos.or(event_ops.cursor_pos.map(|p| p + node_offset));
                     set_cursor_icon = set_cursor_icon.or(event_ops.cursor_icon);
                     $(*$bubble_store = event_ops.bubble;)*
 
@@ -208,7 +247,7 @@ impl<A, N, F> Root<A, N, F>
                     *force_full_redraw = true;
                 },
                 WindowEvent::MouseEnter(enter_pos) => {
-                    let NodePath{ node: root_node, path: root_path } = node_stack.move_to_root();
+                    let NodePath{ node: root_node, path: root_path, .. } = node_stack.move_to_root();
 
                     let (mbd_array, mbdin_array) = mouse_button_arrays!(root_node.update_tag(), Vector2::new(0, 0));
                     let top_update_tag = try_push_action!(
@@ -217,13 +256,14 @@ impl<A, N, F> Root<A, N, F>
                             enter_pos,
                             buttons_down: &mbd_array,
                             buttons_down_in_node: &mbdin_array
-                        }
+                        }, to_rootspace: Vector2::new(0, 0)
                     );
 
                     let top_mbseq = top_update_tag.mouse_state.get().mouse_button_sequence();
                     top_update_tag.mouse_state.set(MouseState::Hovering(enter_pos, top_mbseq));
                 },
                 WindowEvent::MouseExit(exit_pos) => {
+                    node_stack.move_to_hover();
                     node_stack.drain_to_root(|node, path, parent_offset| {
                         let node_offset = node.bounds().min().to_vec() + parent_offset;
                         let (mbd_array, mbdin_array) = mouse_button_arrays!(node.update_tag(), node_offset);
@@ -248,7 +288,7 @@ impl<A, N, F> Root<A, N, F>
                 },
 
 
-                WindowEvent::MouseMove(new_pos_windowspace) => {
+                WindowEvent::MouseMove(new_pos_windowspace) if new_pos_windowspace != *mouse_pos => {
                     // Update the stored mouse position
                     *mouse_pos = new_pos_windowspace;
 
@@ -277,7 +317,7 @@ impl<A, N, F> Root<A, N, F>
                             // SEND MOVE ACTION
                             let (mbd_array, mbdin_array) = mouse_button_arrays!(update_tag_copy, top_bounds_offset);
                             {
-                                let NodePath{ node, path } = node_stack.top_mut();
+                                let NodePath{ node, path, .. } = node_stack.top_mut();
                                 try_push_action!(
                                     node, path.iter().cloned(),
                                     NodeEvent::MouseMove {
@@ -312,7 +352,7 @@ impl<A, N, F> Root<A, N, F>
 
                                     // Send actions to the child node. If the hover node isn't a parent, there's
                                     // nothing we need to do.
-                                    let NodePath{ node: top_node, path: top_path } = node_stack.top_mut();
+                                    let NodePath{ node: top_node, path: top_path, .. } = node_stack.top_mut();
                                     match top_node.subtrait_mut() {
                                         NodeSubtraitMut::Node(_) => (),
                                         NodeSubtraitMut::Parent(top_node_as_parent) => {
@@ -429,7 +469,7 @@ impl<A, N, F> Root<A, N, F>
                                     let mouse_exit = top_bounds.intersect_line(move_line).1.unwrap_or(new_pos);
 
                                     {
-                                        let NodePath{ node, path } = node_stack.top_mut();
+                                        let NodePath{ node, path, .. } = node_stack.top_mut();
                                         try_push_action!(
                                             node, path.iter().cloned(),
                                             NodeEvent::MouseExit {
@@ -456,7 +496,7 @@ impl<A, N, F> Root<A, N, F>
 
                                         node_stack.pop();
                                         {
-                                            let NodePath{ node, path } = node_stack.top_mut();
+                                            let NodePath{ node, path, .. } = node_stack.top_mut();
                                             try_push_action!(
                                                 node, path.iter().cloned(),
                                                 NodeEvent::MouseExitChild {
@@ -533,6 +573,7 @@ impl<A, N, F> Root<A, N, F>
                         node.update_tag()
                     });
                 },
+                WindowEvent::MouseMove(_) => (),
 
 
                 WindowEvent::MouseDown(button) => {
@@ -658,18 +699,27 @@ impl<A, N, F> Root<A, N, F>
                     }
                 },
                 WindowEvent::KeyDown(key, modifiers) => {
-                    if let Some(NodePath{ node: focus_node, path }) = node_stack.move_to_keyboard_focus() {
-                        try_push_action!(focus_node, path.iter().cloned(), NodeEvent::KeyDown(key, modifiers));
+                    if let Some(NodePath{ node: focus_node, path, top_parent_offset }) = node_stack.move_to_keyboard_focus() {
+                        let bounds_rootspace = focus_node.bounds() + top_parent_offset;
+                        let node_offset = bounds_rootspace.min().to_vec();
+
+                        try_push_action!(focus_node, path.iter().cloned(), NodeEvent::KeyDown(key, modifiers), to_rootspace: node_offset);
                     }
                 },
                 WindowEvent::KeyUp(key, modifiers) => {
-                    if let Some(NodePath{ node: focus_node, path }) = node_stack.move_to_keyboard_focus() {
-                        try_push_action!(focus_node, path.iter().cloned(), NodeEvent::KeyUp(key, modifiers));
+                    if let Some(NodePath{ node: focus_node, path, top_parent_offset }) = node_stack.move_to_keyboard_focus() {
+                        let bounds_rootspace = focus_node.bounds() + top_parent_offset;
+                        let node_offset = bounds_rootspace.min().to_vec();
+
+                        try_push_action!(focus_node, path.iter().cloned(), NodeEvent::KeyUp(key, modifiers), to_rootspace: node_offset);
                     }
                 },
                 WindowEvent::Char(c) => {
-                    if let Some(NodePath{ node: focus_node, path }) = node_stack.move_to_keyboard_focus() {
-                        try_push_action!(focus_node, path.iter().cloned(), NodeEvent::Char(c));
+                    if let Some(NodePath{ node: focus_node, path, top_parent_offset }) = node_stack.move_to_keyboard_focus() {
+                        let bounds_rootspace = focus_node.bounds() + top_parent_offset;
+                        let node_offset = bounds_rootspace.min().to_vec();
+
+                        try_push_action!(focus_node, path.iter().cloned(), NodeEvent::Char(c), to_rootspace: node_offset);
                     }
                 },
                 WindowEvent::Timer => {
@@ -680,7 +730,7 @@ impl<A, N, F> Root<A, N, F>
                     }
                     node_stack.move_over_nodes(
                         triggered_timers.iter().cloned().map(timer_node_id),
-                        |node, path, timer_index, _| {
+                        |node, path, timer_index, top_parent_offset| {
                             let timer = triggered_timers[timer_index];
                             try_push_action!(
                                 node,
@@ -691,7 +741,7 @@ impl<A, N, F> Root<A, N, F>
                                     last_trigger: timer.last_trigger,
                                     frequency: timer.frequency,
                                     times_triggered: timer.times_triggered
-                                }
+                                }, to_rootspace: node.bounds().min().to_vec() + top_parent_offset
                             );
                         }
                     );
@@ -707,20 +757,26 @@ impl<A, N, F> Root<A, N, F>
                     node_ident_stack: &[NodeIdent],
                     meta_drain: &mut MetaDrain
                 | {
-                    if let Some(NodePath{ node, path }) = node_stack.move_to_keyboard_focus() {
+                    if let Some(NodePath{ node, path, top_parent_offset }) = node_stack.move_to_keyboard_focus() {
                         if path == node_ident_stack {
                             return;
                         }
                         node.update_tag().has_keyboard_focus.set(false);
-                        try_push_action!(node, path.into_iter().cloned() => (*meta_drain), NodeEvent::LoseFocus);
+                        let bounds_rootspace = node.bounds() + top_parent_offset;
+                        let node_offset = bounds_rootspace.min().to_vec();
+
+                        try_push_action!(node, path.into_iter().cloned() => (*meta_drain), NodeEvent::LoseFocus, to_rootspace: node_offset);
 
                         for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
                             update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
                         }
                     }
-                    if let Some(NodePath{ node, path }) = node_stack.move_to_path(node_ident_stack.iter().cloned()) {
+                    if let Some(NodePath{ node, path, top_parent_offset }) = node_stack.move_to_path(node_ident_stack.iter().cloned()) {
                         node.update_tag().has_keyboard_focus.set(true);
-                        try_push_action!(node, path.into_iter().cloned() => (*meta_drain), NodeEvent::GainFocus);
+                        let bounds_rootspace = node.bounds() + top_parent_offset;
+                        let node_offset = bounds_rootspace.min().to_vec();
+
+                        try_push_action!(node, path.into_iter().cloned() => (*meta_drain), NodeEvent::GainFocus, to_rootspace: node_offset);
 
                         node_stack.pop();
                         for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
@@ -739,13 +795,16 @@ impl<A, N, F> Root<A, N, F>
                 match meta_variant {
                     MetaEventVariant::FocusChange(focus) => match focus {
                         FocusChange::Remove => {
-                            if let Some(NodePath{ node, path }) = node_stack.move_to_path(node_ident_stack.iter().cloned()) {
+                            if let Some(NodePath{ node, path, top_parent_offset }) = node_stack.move_to_path(node_ident_stack.iter().cloned()) {
                                 if node.update_tag().has_keyboard_focus.get() {
                                     node.update_tag().has_keyboard_focus.set(false);
+                                    let bounds_rootspace = node.bounds() + top_parent_offset;
+                                    let node_offset = bounds_rootspace.min().to_vec();
+
                                     try_push_action!(
                                         node,
                                         path.into_iter().cloned() => (meta_drain),
-                                        NodeEvent::LoseFocus
+                                        NodeEvent::LoseFocus, to_rootspace: node_offset
                                     );
                                     for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
                                         update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
@@ -864,13 +923,13 @@ impl<A, N, F> Root<A, N, F>
             }
 
             let mut return_flow = LoopFlow::Continue;
-            let root = node_stack.move_to_root().node;
-            let mut root_update = root.update_tag().needs_update(root_id);
+            let mut root_update = node_stack.move_to_root().node.update_tag().needs_update(root_id);
             let mark_active_nodes_redraw = root_update.needs_redraw();
 
+            drop(node_stack);
             if 0 < actions.len() {
                 while let Some(action) = actions.pop_front() {
-                    match on_action(action, root, theme) {
+                    match on_action(action, root_node, theme) {
                         LoopFlow::Continue => (),
                         LoopFlow::Break(ret) => {
                             return_flow = LoopFlow::Break(ret);
@@ -879,60 +938,72 @@ impl<A, N, F> Root<A, N, F>
                     }
                 }
             }
+            let redraw_node = match event_popup_id {
+                Some(id) => &mut *popup_nodes.get_mut(&id).unwrap().node,
+                None => root_node
+            };
 
-            if let Some(cursor_pos) = set_cursor_pos {
-                renderer.set_cursor_pos(cursor_pos);
-            }
-            if let Some(cursor_icon) = set_cursor_icon {
-                if cursor_icon != current_cursor_icon {
-                    renderer.set_cursor_icon(set_cursor_icon.unwrap_or(Default::default()));
-                    current_cursor_icon = cursor_icon;
+            with_renderer(event_popup_id, &mut |renderer| {
+                if let Some(cursor_pos) = set_cursor_pos {
+                    renderer.set_cursor_pos(cursor_pos);
                 }
-            }
-
-
-            // Draw the node tree.
-            if mark_active_nodes_redraw || *force_full_redraw {
-                let force_full_redraw = *force_full_redraw || renderer.force_full_redraw();
-
-                root_update.render_self |= force_full_redraw;
-                root_update.update_child |= force_full_redraw;
-
-                if root_update.render_self || root_update.update_child {
-                    {
-                        let (frame, base_transform) = renderer.make_frame();
-                        let mut frame_rect_stack = FrameRectStack::new(frame, base_transform, theme, node_ident_stack);
-
-                        if let NodeSubtraitMut::Parent(root_as_parent) = root.subtrait_mut() {
-                            if root_update.update_layout {
-                                root_as_parent.update_child_layout();
-                            }
-                        }
-                        if root_update.render_self {
-                            root.render(&mut frame_rect_stack);
-                        }
-                        if root_update.update_child {
-                            if let NodeSubtraitMut::Parent(root_as_parent) = root.subtrait_mut() {
-                                NodeRenderer {
-                                    root_id: root_id,
-                                    frame: frame_rect_stack,
-                                    force_full_redraw: force_full_redraw,
-                                    theme
-                                }.render_node_children(root_as_parent)
-                            }
-                        }
+                if let Some(cursor_icon) = set_cursor_icon {
+                    if cursor_icon != current_cursor_icon {
+                        renderer.set_cursor_icon(set_cursor_icon.unwrap_or(Default::default()));
+                        current_cursor_icon = cursor_icon;
                     }
-
-                    renderer.finish_frame(theme);
-                    root.update_tag().mark_updated(root_id);
                 }
-            }
 
-            *force_full_redraw = false;
+
+                // Draw the node tree.
+                if mark_active_nodes_redraw || *force_full_redraw {
+                    let force_full_redraw = *force_full_redraw || renderer.force_full_redraw();
+
+                    root_update.render_self |= force_full_redraw;
+                    root_update.update_child |= force_full_redraw;
+
+                    if root_update.render_self || root_update.update_child {
+                        {
+                            let (frame, base_transform) = renderer.make_frame();
+                            let mut frame_rect_stack = FrameRectStack::new(frame, base_transform, theme, node_ident_stack);
+
+                            if let NodeSubtraitMut::Parent(root_as_parent) = redraw_node.subtrait_mut() {
+                                if root_update.update_layout {
+                                    root_as_parent.update_child_layout();
+                                }
+                            }
+                            if root_update.render_self {
+                                redraw_node.render(&mut frame_rect_stack);
+                            }
+                            if root_update.update_child {
+                                if let NodeSubtraitMut::Parent(root_as_parent) = redraw_node.subtrait_mut() {
+                                    NodeRenderer {
+                                        root_id: root_id,
+                                        frame: frame_rect_stack,
+                                        force_full_redraw: force_full_redraw,
+                                        theme
+                                    }.render_node_children(root_as_parent)
+                                }
+                            }
+                        }
+
+                        renderer.finish_frame(theme);
+                        redraw_node.update_tag().mark_updated(root_id);
+                    }
+                }
+
+                *force_full_redraw = false;
+            });
+
+            drop(redraw_node);
+            popup_nodes.extend(popup_map_insert.drain(..)
+                .map(|(id, node)| (id, PopupNode{ node, mouse_pos: Point2::new(0, 0) }))
+            );
 
             EventLoopResult {
                 flow: return_flow,
-                wait_until_call_timer: timer_list.time_until_trigger()
+                wait_until_call_timer: timer_list.time_until_trigger(),
+                popups: new_popups
             }
         })
     }

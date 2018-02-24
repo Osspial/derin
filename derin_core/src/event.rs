@@ -1,19 +1,29 @@
 use dct::cursor::CursorIcon;
 use dct::buttons::{MouseButton, Key, ModifierKeys};
 use cgmath::{Point2, Vector2};
-use tree::NodeIdent;
+use cgmath_geometry::BoundBox;
+use tree::{Node, NodeIdent};
 use arrayvec::ArrayVec;
 use mbseq::{MouseButtonSequence, MouseButtonSequenceTrackPos};
+use render::RenderFrame;
 
 use std::time::{Instant, Duration};
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct EventOps<A> {
+#[derive(Default)]
+pub struct EventOps<A, F: RenderFrame> {
     pub action: Option<A>,
     pub focus: Option<FocusChange>,
     pub bubble: bool,
     pub cursor_pos: Option<Point2<i32>>,
-    pub cursor_icon: Option<CursorIcon>
+    pub cursor_icon: Option<CursorIcon>,
+    pub popup: Option<(Box<Node<A, F>>, PopupCreate)>
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PopupCreate {
+    pub rect: BoundBox<Point2<i32>>,
+    pub title: String,
+    pub decorations: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

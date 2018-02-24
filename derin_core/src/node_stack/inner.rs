@@ -29,7 +29,8 @@ pub struct NRVec<'a, A: 'a, F: 'a + RenderFrame> {
 #[derive(Debug, PartialEq, Eq)]
 pub struct NodePath<'a, N: 'a + ?Sized> {
     pub node: &'a mut N,
-    pub path: &'a [NodeIdent]
+    pub path: &'a [NodeIdent],
+    pub top_parent_offset: Vector2<i32>
 }
 
 impl<A, F: RenderFrame> NRAllocCache<A, F> {
@@ -77,7 +78,8 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     pub fn top_mut(&mut self) -> NodePath<Node<A, F> + 'a> {
         NodePath {
             node: self.vec.last_mut().map(|n| unsafe{ &mut *n.node }).unwrap(),
-            path: &self.ident_vec
+            path: &self.ident_vec,
+            top_parent_offset: self.top_parent_offset()
         }
     }
 
@@ -158,7 +160,6 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
             });
             self.ident_vec.push(new_top_summary.ident);
             Some(new_top_summary)
-            // Some((unsafe{ &mut *self.vec.last().unwrap().node }, new_top_summary.ident))
         } else {
             None
         }
@@ -173,14 +174,14 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
 
         let popped = self.vec.pop().map(|n| unsafe{ &mut *n.node }).unwrap();
         self.ident_vec.pop();
-        if let Some(last_mut) = self.vec.last_mut() {
-            self.top_parent_offset -= last_mut.bounds.min().to_vec();
-            last_mut.bounds = BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF);
-        }
+        let last_mut = self.vec.last_mut().unwrap();
+        self.top_parent_offset -= last_mut.bounds.min().to_vec();
+        last_mut.bounds = BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF);
 
         if popped.update_tag().needs_update(self.root_id) != Update::default() {
             self.top_mut().node.update_tag().mark_update_child_immutable();
         }
+
 
         Some(popped)
     }
@@ -189,6 +190,8 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
 impl<'a, A, F: RenderFrame> Drop for NRVec<'a, A, F> {
     fn drop(&mut self) {
         while let Some(_) = self.pop() {}
+        self.vec.clear();
+        self.ident_vec.clear();
 
         let mut vec = unsafe {
             let (ptr, len, cap) = (self.vec.as_ptr(), self.vec.len(), self.vec.capacity());

@@ -110,32 +110,37 @@ impl<'a> From<&'a UpdateTag> for ChildEventRecv {
 }
 
 macro_rules! id {
-    ($Name:ident) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub(crate) struct $Name(u32);
+    (pub$(($vis:tt))* $Name:ident $(let $id:ident; $with_id:block)*) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub$(($vis))* struct $Name(u32);
 
         impl $Name {
             #[inline]
-            pub fn new() -> $Name {
+            pub(crate) fn new() -> $Name {
                 use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
 
                 static ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
                 let id = ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32;
-                assert!(id < UPDATE_MASK);
+                $({
+                    let $id = id;
+                    $with_id
+                })*
 
                 $Name(id as u32)
             }
 
             #[allow(dead_code)]
-            pub fn dummy() -> $Name {
+            pub(crate) fn dummy() -> $Name {
                 $Name(!0)
             }
         }
     }
 }
 
-id!(RootID);
-id!(NodeID);
+id!(pub(crate) RootID let id; {assert!(id < UPDATE_MASK)});
+id!(pub(crate) NodeID);
+id!(pub PopupID);
+
 
 macro_rules! subtrait_enums {
     (subtraits {
@@ -177,6 +182,14 @@ subtrait_enums! {subtraits {
     Node(Node<A, F>) fn as_node
 }}
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PopupAttributes {
+    pub rect: BoundBox<Point2<i32>>,
+    pub title: String,
+    pub decorations: bool,
+    pub id: PopupID
+}
+
 /// Behavior when another node attempts to focus a given node.
 ///
 /// Note that this is *ignored* if the attempt to focus came from the return value of this node's
@@ -207,7 +220,7 @@ pub trait Node<A, F: RenderFrame> {
     fn bounds_mut(&mut self) -> &mut BoundBox<Point2<i32>>;
     fn render(&self, frame: &mut FrameRectStack<F>);
     fn register_timers(&self, _register: &mut TimerRegister) {}
-    fn on_node_event(&mut self, event: NodeEvent, source_child: &[NodeIdent]) -> EventOps<A>;
+    fn on_node_event(&mut self, event: NodeEvent, source_child: &[NodeIdent]) -> EventOps<A, F>;
     fn subtrait(&self) -> NodeSubtrait<A, F>;
     fn subtrait_mut(&mut self) -> NodeSubtraitMut<A, F>;
 
@@ -217,12 +230,12 @@ pub trait Node<A, F: RenderFrame> {
 }
 
 #[derive(Debug, Clone)]
-pub struct NodeSummary<N> {
-    pub node: N,
+pub struct NodeSummary<N: ?Sized> {
     pub ident: NodeIdent,
     pub rect: BoundBox<Point2<i32>>,
     pub update_tag: UpdateTag,
-    pub index: usize
+    pub index: usize,
+    pub node: N,
 }
 
 pub trait Parent<A, F: RenderFrame>: Node<A, F> {
