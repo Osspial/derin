@@ -22,10 +22,12 @@ pub mod gl_render;
 pub mod glutin_window;
 pub mod theme;
 
-use self::gl_render::{ThemedPrim, Prim, RelPoint, EditString, RenderString};
+use self::gl_render::{ThemedPrim, Prim, PrimFrame, RelPoint, EditString, RenderString};
 
+use std::mem;
 use std::cell::RefCell;
 use std::time::Duration;
+use std::marker::PhantomData;
 
 use dct::hints::{WidgetPos, GridSize, Margins, Align2, NodeSpan};
 use dct::cursor::CursorIcon;
@@ -43,7 +45,6 @@ use cgmath_geometry::{BoundBox, Segment, DimsBox, GeoBox};
 use arrayvec::ArrayVec;
 use clipboard::{ClipboardContext, ClipboardProvider};
 
-use std::marker::PhantomData;
 
 pub mod geometry {
     pub use cgmath::*;
@@ -282,6 +283,20 @@ pub struct Group<C, L>
     layout: L
 }
 
+pub struct DirectRender<R>
+    where R: DirectRenderState
+{
+    update_tag: UpdateTag,
+    bounds: BoundBox<Point2<i32>>,
+    render_state: R
+}
+
+pub trait DirectRenderState {
+    type RenderType;
+
+    fn render(&self, _: &mut Self::RenderType);
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ButtonState {
     Normal,
@@ -373,8 +388,27 @@ impl<C, L> Group<C, L>
     }
 }
 
+impl<R: DirectRenderState> DirectRender<R> {
+    pub fn new(render_state: R) -> DirectRender<R> {
+        DirectRender {
+            update_tag: UpdateTag::new(),
+            bounds: BoundBox::new2(0, 0, 0, 0),
+            render_state
+        }
+    }
+
+    pub fn render_state(&self) -> &R {
+        &self.render_state
+    }
+
+    pub fn render_state_mut(&mut self) -> &mut R {
+        self.update_tag.mark_render_self();
+        &mut self.render_state
+    }
+}
+
 impl<F, H> Node<H::Action, F> for Button<H>
-    where F: RenderFrame<Primitive=ThemedPrim>,
+    where F: PrimFrame,
           H: ButtonHandler
 {
     #[inline]
@@ -524,7 +558,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
 }
 
 impl<A, F> Node<A, F> for Label
-    where F: RenderFrame<Primitive=ThemedPrim>
+    where F: PrimFrame
 {
     #[inline]
     fn update_tag(&self) -> &UpdateTag {
@@ -582,7 +616,7 @@ impl<A, F> Node<A, F> for Label
 }
 
 impl<A, F> Node<A, F> for EditBox
-    where F: RenderFrame<Primitive=ThemedPrim>
+    where F: PrimFrame
 {
     #[inline]
     fn update_tag(&self) -> &UpdateTag {
@@ -758,7 +792,7 @@ impl<A, F> Node<A, F> for EditBox
 }
 
 impl<A, F, C, L> Node<A, F> for Group<C, L>
-    where F: RenderFrame<Primitive=ThemedPrim>,
+    where F: PrimFrame,
           C: NodeContainer<F, Action=A>,
           L: GridLayout
 {
@@ -825,7 +859,7 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
 const CHILD_BATCH_SIZE: usize = 24;
 
 impl<A, F, C, L> Parent<A, F> for Group<C, L>
-    where F: RenderFrame<Primitive=ThemedPrim>,
+    where F: PrimFrame,
           C: NodeContainer<F, Action=A>,
           L: GridLayout
 {
@@ -937,5 +971,62 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
 
             hints_vec.clear();
         })
+    }
+}
+
+impl<A, F, R> Node<A, F> for DirectRender<R>
+    where R: DirectRenderState + 'static,
+          F: PrimFrame<DirectRender = R::RenderType>
+{
+    #[inline]
+    fn update_tag(&self) -> &UpdateTag {
+        &self.update_tag
+    }
+
+    #[inline]
+    fn bounds(&self) -> BoundBox<Point2<i32>> {
+        self.bounds
+    }
+
+    #[inline]
+    fn bounds_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+        &mut self.bounds
+    }
+
+    fn render(&self, frame: &mut FrameRectStack<F>) {
+        frame.upload_primitives(Some(ThemedPrim {
+            theme_path: "DirectRender",
+            min: Point2::new(
+                RelPoint::new(-1.0, 0),
+                RelPoint::new(-1.0, 0),
+            ),
+            max: Point2::new(
+                RelPoint::new( 1.0, 0),
+                RelPoint::new( 1.0, 0)
+            ),
+            prim: unsafe{ Prim::DirectRender(mem::transmute((&|render_type: &mut R::RenderType| self.render_state.render(render_type)) as &Fn(&mut R::RenderType))) }
+        }).into_iter());
+    }
+
+    #[inline]
+    fn on_node_event(&mut self, _: NodeEvent, _: &[NodeIdent]) -> EventOps<A, F> {
+        EventOps {
+            action: None,
+            focus: None,
+            bubble: true,
+            cursor_pos: None,
+            cursor_icon: None,
+            popup: None
+        }
+    }
+
+    #[inline]
+    fn subtrait(&self) -> NodeSubtrait<A, F> {
+        NodeSubtrait::Node(self)
+    }
+
+    #[inline]
+    fn subtrait_mut(&mut self) -> NodeSubtraitMut<A, F> {
+        NodeSubtraitMut::Node(self)
     }
 }

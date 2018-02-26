@@ -6,12 +6,14 @@ use core::{Root, LoopFlow, WindowEvent, EventLoopResult};
 use core::tree::{Node, NodeIdent, PopupID};
 use core::event::NodeEvent;
 use theme::Theme;
+use gullery::ContextState;
 
 use std::thread::{self, JoinHandle};
 use std::sync::Arc;
 use std::cell::{Cell, RefCell};
 use std::time::Duration;
 use std::collections::HashMap;
+use std::rc::Rc;
 use cgmath::Point2;
 use cgmath_geometry::{DimsBox, GeoBox};
 
@@ -74,6 +76,18 @@ impl<A, N: Node<A, GLFrame>> GlutinWindow<A, N> {
             timer_sync,
             timer_thread_handle,
         })
+    }
+
+    pub fn context_state(&self) -> Rc<ContextState> {
+        self.primary_renderer.borrow().context_state()
+    }
+
+    pub fn root(&self) -> &N {
+        &self.root.root_node
+    }
+
+    pub fn root_mut(&mut self) -> &mut N {
+        &mut self.root.root_node
     }
 
     pub fn run_forever<F, FF, R>(&mut self, on_action: F, on_fallthrough: FF) -> Option<R>

@@ -20,7 +20,7 @@ use gullery::colors::Rgba;
 
 use glyphydog::DPI;
 
-use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
+use cgmath_geometry::{BoundBox, OffsetBox, DimsBox, GeoBox};
 
 use glutin::*;
 
@@ -37,20 +37,25 @@ pub struct GLRenderer {
     window: GlWindow,
     frame: GLFrame,
 
-    // OpenGL structs
-    context_state: Rc<ContextState>,
-    fb: DefaultFramebuffer,
-    program: Program<GLVertex, GLUniforms<'static>>,
-    vao: VertexArrayObj<GLVertex, ()>,
-    gl_tex_atlas: Texture<Rgba<Nu8>, SimpleTex<DimsBox<Point2<u32>>>>,
-    render_state: RenderState
 }
 
 pub struct GLFrame {
     poly_translator: Translator,
+    draw: FrameDraw
+}
+
+struct FrameDraw {
     vertices: Vec<GLVertex>,
     atlas: Atlas,
     font_cache: FontCache,
+
+    // OpenGL structs
+    context_state: Rc<ContextState>,
+    gl_tex_atlas: Texture<Rgba<Nu8>, SimpleTex<DimsBox<Point2<u32>>>>,
+    render_state: RenderState,
+    fb: DefaultFramebuffer,
+    program: Program<GLVertex, GLUniforms<'static>>,
+    vao: VertexArrayObj<GLVertex, ()>,
 }
 
 #[derive(TypeGroup, Debug, Clone, Copy)]
@@ -67,15 +72,18 @@ struct GLUniforms<'a> {
     tex_atlas: &'a Texture<Rgba<Nu8>, SimpleTex<DimsBox<Point2<u32>>>>
 }
 
+pub trait PrimFrame: RenderFrame<Primitive=ThemedPrim<<Self as PrimFrame>::DirectRender>> {
+    type DirectRender;
+}
 
 
 impl GLRenderer {
     pub unsafe fn new(events_loop: &EventsLoop, window_builder: WindowBuilder) -> Result<GLRenderer, CreationError> {
         let window = {
             let context_builder = ContextBuilder::new()
-                .with_gl_profile(GlProfile::Core)
+                // .with_gl_profile(GlProfile::Core)
                 .with_gl(GlRequest::GlThenGles {
-                    opengl_version: (3, 3),
+                    opengl_version: (3, 1),
                     opengles_version: (3, 0)
                 });
             GlWindow::new(window_builder, context_builder, events_loop)?
@@ -94,27 +102,27 @@ impl GLRenderer {
         Ok(GLRenderer {
             frame: GLFrame {
                 poly_translator: Translator::new(),
-                vertices: Vec::new(),
-                atlas: Atlas::new(),
-                font_cache: FontCache::new()
+                draw: FrameDraw {
+                    vertices: Vec::new(),
+                    atlas: Atlas::new(),
+                    font_cache: FontCache::new(),
+                    fb: DefaultFramebuffer::new(context_state.clone()),
+                    vao: VertexArrayObj::new_noindex(Buffer::with_size(BufferUsage::StreamDraw, 2048 * 3, context_state.clone())),
+                    render_state: RenderState {
+                        blend: Some(BlendFuncs {
+                            src_rgb: BlendFunc::SrcAlpha,
+                            dst_rgb: BlendFunc::OneMinusSrcAlpha,
+                            src_alpha: BlendFunc::SrcAlpha,
+                            dst_alpha: BlendFunc::OneMinusSrcAlpha
+                        }),
+                        ..RenderState::default()
+                    },
+                    program,
+                    gl_tex_atlas,
+                    context_state
+                }
             },
             window,
-
-
-            fb: DefaultFramebuffer::new(context_state.clone()),
-            vao: VertexArrayObj::new_noindex(Buffer::with_size(BufferUsage::StreamDraw, 2048 * 3, context_state.clone())),
-            render_state: RenderState {
-                blend: Some(BlendFuncs {
-                    src_rgb: BlendFunc::SrcAlpha,
-                    dst_rgb: BlendFunc::OneMinusSrcAlpha,
-                    src_alpha: BlendFunc::SrcAlpha,
-                    dst_alpha: BlendFunc::OneMinusSrcAlpha
-                }),
-                ..RenderState::default()
-            },
-            program,
-            gl_tex_atlas,
-            context_state
         })
     }
 
@@ -126,6 +134,10 @@ impl GLRenderer {
     #[inline]
     pub fn window(&self) -> &GlWindow {
         &self.window
+    }
+
+    pub fn context_state(&self) -> Rc<ContextState> {
+        self.frame.draw.context_state.clone()
     }
 }
 
@@ -161,51 +173,58 @@ impl Renderer for GLRenderer {
 
     fn make_frame(&mut self) -> (&mut GLFrame, BoundBox<Point2<i32>>) {
         let (width, height) = self.window.get_inner_size().unwrap();
-        self.render_state.viewport = DimsBox::new2(width, height).into();
+        self.frame.draw.render_state.viewport = DimsBox::new2(width, height).into();
 
         (&mut self.frame, BoundBox::new2(0, 0, width as i32, height as i32))
     }
 
     fn finish_frame(&mut self, _: &Theme) {
-        let atlas_dims = self.frame.atlas.dims();
+        self.frame.draw.draw_contents();
+        self.window.swap_buffers().unwrap();
+        self.frame.draw.atlas.bump_frame_count();
+    }
+}
+
+impl FrameDraw {
+    fn draw_contents(&mut self) {
+        let atlas_dims = self.atlas.dims();
         if atlas_dims != self.gl_tex_atlas.dims() {
             self.gl_tex_atlas = Texture::new(atlas_dims, 1, self.context_state.clone()).unwrap();
         }
-        self.gl_tex_atlas.sub_image(0, Vector2::new(0, 0), atlas_dims, self.frame.atlas.pixels());
+        self.gl_tex_atlas.sub_image(0, Vector2::new(0, 0), atlas_dims, self.atlas.pixels());
 
-        let (window_width, window_height) = self.window.get_inner_size().unwrap();
         let uniform = GLUniforms {
             atlas_size: self.gl_tex_atlas.dims().dims,
-            window_size: Point2::new(window_width, window_height),
+            window_size: Point2::from_vec(self.render_state.viewport.dims()),
             tex_atlas: &self.gl_tex_atlas
         };
 
-        for verts in self.frame.vertices.chunks(self.vao.vertex_buffer().size()) {
+        for verts in self.vertices.chunks(self.vao.vertex_buffer().size()) {
             self.vao.vertex_buffer_mut().sub_data(0, verts);
             self.fb.draw(DrawMode::Triangles, 0..verts.len(), &self.vao, &self.program, uniform, self.render_state);
         }
-        self.window.swap_buffers().unwrap();
-        self.frame.atlas.bump_frame_count();
-        self.frame.vertices.clear();
+        self.vertices.clear();
     }
+}
+
+impl PrimFrame for GLFrame {
+    type DirectRender = (DefaultFramebuffer, BoundBox<Point2<f32>>, OffsetBox<Point2<u32>>, Rc<ContextState>);
 }
 
 impl RenderFrame for GLFrame {
     type Transform = BoundBox<Point2<i32>>;
-    type Primitive = ThemedPrim;
+    type Primitive = ThemedPrim<<Self as PrimFrame>::DirectRender>;
     type Theme = Theme;
 
     fn upload_primitives<I>(&mut self, _ident: &[NodeIdent], theme: &Theme, transform: &BoundBox<Point2<i32>>, prim_iter: I)
-        where I: Iterator<Item=ThemedPrim>
+        where I: Iterator<Item=ThemedPrim<<GLFrame as PrimFrame>::DirectRender>>
     {
         self.poly_translator.translate_prims(
             *transform,
             theme,
-            &mut self.atlas,
-            &mut self.font_cache,
             DPI::new(72, 72), // TODO: REPLACE HARDCODED VALUE
             prim_iter,
-            &mut self.vertices
+            &mut self.draw
         );
     }
 
