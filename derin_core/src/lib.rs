@@ -212,6 +212,7 @@ impl<A, N, F> Root<A, N, F>
                             title: popup_create.title,
                             decorations: popup_create.decorations,
                             tool_window: popup_create.tool_window,
+                            focusable: popup_create.focusable,
                             id: popup_id
                         });
                     }

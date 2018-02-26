@@ -188,6 +188,7 @@ pub struct PopupAttributes {
     pub title: String,
     pub decorations: bool,
     pub tool_window: bool,
+    pub focusable: bool,
     pub id: PopupID
 }
 

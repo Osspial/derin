@@ -177,12 +177,16 @@ impl<A, N: Node<A, GLFrame>> GlutinWindow<A, N> {
                 for popup_attrs in add_popups.drain(..) {
                     let builder = WindowBuilder::new()
                         .with_dimensions(popup_attrs.rect.width() as u32, popup_attrs.rect.height() as u32)
+                        .with_visibility(false)
+                        .with_focusability(popup_attrs.focusable)
                         .with_title(popup_attrs.title)
                         .is_popup(popup_attrs.tool_window)
                         .with_decorations(popup_attrs.decorations);
                     let popup_renderer = unsafe{ GLRenderer::new(events_loop, builder).unwrap() };
                     let window_pos = primary_renderer.borrow().window().get_inner_position().unwrap();
                     popup_renderer.window().set_position(popup_attrs.rect.min().x + window_pos.0, popup_attrs.rect.min().y + window_pos.1);
+                    popup_renderer.window().show();
+
                     window_popup_map.insert(popup_renderer.window().id(), popup_attrs.id);
                     popup_renderers.insert(popup_attrs.id, popup_renderer);
                     active_renderer.set(Some(popup_attrs.id));

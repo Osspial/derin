@@ -431,7 +431,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
 
     fn register_timers(&self, register: &mut TimerRegister) {
         if self.waiting_for_mouseover {
-            register.add_timer("mouseover_text", Duration::new(1, 0), true);
+            register.add_timer("mouseover_text", Duration::new(1, 0)/2, true);
         }
     }
 
@@ -487,7 +487,8 @@ impl<F, H> Node<H::Action, F> for Button<H>
                             rect: BoundBox::new2(0, 0, 128, 128),
                             title: "".to_string(),
                             decorations: false,
-                            tool_window: true
+                            tool_window: true,
+                            focusable: false
                         }
                     ));
                     self.state

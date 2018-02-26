@@ -25,6 +25,7 @@ pub struct PopupCreate {
     pub title: String,
     pub decorations: bool,
     pub tool_window: bool,
+    pub focusable: bool
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
