@@ -34,12 +34,12 @@ use dct::cursor::CursorIcon;
 use dct::buttons::{Key, ModifierKeys};
 use dle::{GridEngine, UpdateHeapCache, SolveError};
 use core::LoopFlow;
-use core::event::{NodeEvent, EventOps, FocusChange};
+use core::event::{NodeEvent, EventOps, FocusChange, InputState};
 use core::render::{RenderFrame, FrameRectStack};
 use core::timer::TimerRegister;
 use core::tree::{NodeIdent, NodeSummary, UpdateTag, NodeSubtrait, NodeSubtraitMut, Node, Parent, OnFocus};
 
-use cgmath::Point2;
+use cgmath::{EuclideanSpace, Point2};
 use cgmath_geometry::{BoundBox, Segment, DimsBox, GeoBox};
 
 use arrayvec::ArrayVec;
@@ -469,7 +469,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
         }
     }
 
-    fn on_node_event(&mut self, event: NodeEvent, bubble_source: &[NodeIdent]) -> EventOps<H::Action, F> {
+    fn on_node_event(&mut self, event: NodeEvent, input_state: InputState, bubble_source: &[NodeIdent]) -> EventOps<H::Action, F> {
         use self::NodeEvent::*;
 
         let (mut action, focus) = (None, None);
@@ -518,7 +518,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
                     popup = Some((
                         Box::new(Group::new(SingleContainer::new(Label::new("Hello Popup!".to_string())), LayoutHorizontal::default())) as Box<Node<_, F>>,
                         ::core::event::PopupCreate {
-                            rect: BoundBox::new2(0, 0, 128, 128),
+                            rect: BoundBox::new2(0, 0, 128, 128) + input_state.mouse_pos.to_vec(),
                             title: "".to_string(),
                             decorations: false,
                             tool_window: true,
@@ -593,7 +593,7 @@ impl<A, F> Node<A, F> for Label
     }
 
     #[inline]
-    fn on_node_event(&mut self, _: NodeEvent, _: &[NodeIdent]) -> EventOps<A, F> {
+    fn on_node_event(&mut self, _: NodeEvent, _: InputState, _: &[NodeIdent]) -> EventOps<A, F> {
         EventOps {
             action: None,
             focus: None,
@@ -662,7 +662,7 @@ impl<A, F> Node<A, F> for EditBox
         ].iter().cloned());
     }
 
-    fn on_node_event(&mut self, event: NodeEvent, _: &[NodeIdent]) -> EventOps<A, F> {
+    fn on_node_event(&mut self, event: NodeEvent, _: InputState, _: &[NodeIdent]) -> EventOps<A, F> {
         use self::NodeEvent::*;
         use dct::buttons::MouseButton;
 
@@ -745,9 +745,9 @@ impl<A, F> Node<A, F> for EditBox
                     .mark_render_self()
                     .mark_update_timer();
             },
-            MouseMove{new, buttons_down_in_node, ..} => {
+            MouseMove{new_pos, buttons_down_in_node, ..} => {
                 if let Some(down) = buttons_down_in_node.iter().find(|d| d.button == MouseButton::Left) {
-                    self.string.select_on_line(Segment::new(down.down_pos, new));
+                    self.string.select_on_line(Segment::new(down.down_pos, new_pos));
                     self.update_tag.mark_render_self();
                 }
             },
@@ -830,7 +830,7 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
     }
 
     #[inline]
-    fn on_node_event(&mut self, _: NodeEvent, _: &[NodeIdent]) -> EventOps<A, F> {
+    fn on_node_event(&mut self, _: NodeEvent, _: InputState, _: &[NodeIdent]) -> EventOps<A, F> {
         EventOps {
             action: None,
             focus: None,
@@ -1009,7 +1009,7 @@ impl<A, F, R> Node<A, F> for DirectRender<R>
     }
 
     #[inline]
-    fn on_node_event(&mut self, _: NodeEvent, _: &[NodeIdent]) -> EventOps<A, F> {
+    fn on_node_event(&mut self, _: NodeEvent, _: InputState, _: &[NodeIdent]) -> EventOps<A, F> {
         EventOps {
             action: None,
             focus: None,

@@ -29,7 +29,7 @@ use std::collections::{HashMap, VecDeque};
 
 use tree::*;
 use timer::{Timer, TimerList};
-use event::{NodeEvent, MouseDown, FocusChange};
+use event::{NodeEvent, InputState, MouseDown, FocusChange};
 use render::{Renderer, RenderFrame, FrameRectStack};
 use mbseq::MouseButtonSequenceTrackPos;
 use node_stack::{NodeStackBase, NodePath, NodeStack};
@@ -54,6 +54,7 @@ pub struct Root<A, N, F>
     pub root_node: N,
     pub theme: F::Theme,
     popup_nodes: HashMap<PopupID, PopupNode<A, F>>,
+    modifiers: ModifierKeys,
     _marker: PhantomData<*const F>
 }
 
@@ -70,8 +71,8 @@ pub enum WindowEvent {
     MouseDown(MouseButton),
     MouseUp(MouseButton),
     WindowResize(DimsBox<Point2<u32>>),
-    KeyDown(Key, ModifierKeys),
-    KeyUp(Key, ModifierKeys),
+    KeyDown(Key),
+    KeyUp(Key),
     Char(char),
     Timer
 }
@@ -112,13 +113,14 @@ impl<A, N, F> Root<A, N, F>
             timer_list: TimerList::new(None),
             root_node, theme,
             popup_nodes: HashMap::new(),
+            modifiers: ModifierKeys::empty(),
             _marker: PhantomData
         }
     }
 
     pub fn run_forever<R, G>(
         &mut self,
-        mut gen_events: impl FnMut(&mut FnMut(Option<PopupID>, WindowEvent) -> EventLoopResult<G>) -> Option<G>,
+        mut gen_events: impl FnMut(&mut FnMut(Option<PopupID>, WindowEvent, Option<ModifierKeys>) -> EventLoopResult<G>) -> Option<G>,
         mut on_action: impl FnMut(A, &mut N, &mut F::Theme) -> LoopFlow<G>,
         mut bubble_fallthrough: impl FnMut(NodeEvent, &[NodeIdent]) -> Option<A>,
         mut with_renderer: impl FnMut(Option<PopupID>, &mut FnMut(&mut R))
@@ -139,6 +141,7 @@ impl<A, N, F> Root<A, N, F>
             ref mut root_node,
             ref mut theme,
             ref mut popup_nodes,
+            ref mut modifiers,
             ..
         } = *self;
         // Initialize node stack to root.
@@ -146,11 +149,14 @@ impl<A, N, F> Root<A, N, F>
         // let mut cur_popup_id = None;
         let mut popup_map_insert = Vec::new();
 
-        gen_events(&mut |event_popup_id, event| {
+        gen_events(&mut |event_popup_id, event, modifiers_change| {
             let mut set_cursor_pos = None;
             let mut set_cursor_icon = None;
             let mut new_popups = Vec::new();
             let mouse_pos: &mut Point2<i32>;
+            if let Some(mc) = modifiers_change {
+                *modifiers = mc;
+            }
 
             let node_stack_root = match event_popup_id {
                 Some(id) => {
@@ -181,12 +187,22 @@ impl<A, N, F> Root<A, N, F>
             macro_rules! try_push_action {
                 (
                     $node:expr, $path:expr $(=> ($meta_tracker:expr))*,
-                    $event:expr, to_rootspace: $node_offset:expr $(, bubble ($bubble:expr, $bubble_store:expr, $bubble_path:expr))*
+                    ($mbd_array:tt, $mbdin_array:tt) => $event:expr, to_rootspace: $node_offset:expr $(, bubble ($bubble:expr, $bubble_store:expr, $bubble_path:expr))*
                 ) => {{
-                    let event = $event;
                     let node_offset = $node_offset;
+                    let (mbd_array, mbdin_array) = mouse_button_arrays!($node.update_tag(), Vector2::new(0, 0));
+
+                    let input_state = InputState {
+                        mouse_pos: *mouse_pos - node_offset,
+                        modifiers: *modifiers,
+                        mouse_buttons_down: &mbd_array,
+                        mouse_buttons_down_in_node: &mbdin_array
+                    };
+                    let ($mbd_array, $mbdin_array) = (&mbd_array, &mbdin_array);
+                    let event = $event;
                     let event_ops = $node.on_node_event(
                         event,
+                        input_state,
                         if_tokens!(($($bubble_path)*) {
                             $($bubble_path)*
                         } else {
@@ -251,13 +267,12 @@ impl<A, N, F> Root<A, N, F>
                 WindowEvent::MouseEnter(enter_pos) => {
                     let NodePath{ node: root_node, path: root_path, .. } = node_stack.move_to_root();
 
-                    let (mbd_array, mbdin_array) = mouse_button_arrays!(root_node.update_tag(), Vector2::new(0, 0));
                     let top_update_tag = try_push_action!(
                         root_node, root_path.iter().cloned(),
-                        NodeEvent::MouseEnter {
+                        (mbd_array, mbdin_array) => NodeEvent::MouseEnter {
                             enter_pos,
-                            buttons_down: &mbd_array,
-                            buttons_down_in_node: &mbdin_array
+                            buttons_down: mbd_array,
+                            buttons_down_in_node: mbdin_array
                         }, to_rootspace: Vector2::new(0, 0)
                     );
 
@@ -268,14 +283,13 @@ impl<A, N, F> Root<A, N, F>
                     node_stack.move_to_hover();
                     node_stack.drain_to_root(|node, path, parent_offset| {
                         let node_offset = node.bounds().min().to_vec() + parent_offset;
-                        let (mbd_array, mbdin_array) = mouse_button_arrays!(node.update_tag(), node_offset);
 
                         let update_tag = try_push_action!(
                             node, path.iter().cloned(),
-                            NodeEvent::MouseExit {
+                            (mbd_array, mbdin_array) => NodeEvent::MouseExit {
                                 exit_pos: exit_pos - node_offset,
-                                buttons_down: &mbd_array,
-                                buttons_down_in_node: &mbdin_array
+                                buttons_down: mbd_array,
+                                buttons_down_in_node: mbdin_array
                             }, to_rootspace: node_offset
                         );
 
@@ -317,17 +331,16 @@ impl<A, N, F> Root<A, N, F>
                             };
 
                             // SEND MOVE ACTION
-                            let (mbd_array, mbdin_array) = mouse_button_arrays!(update_tag_copy, top_bounds_offset);
                             {
                                 let NodePath{ node, path, .. } = node_stack.top_mut();
                                 try_push_action!(
                                     node, path.iter().cloned(),
-                                    NodeEvent::MouseMove {
-                                        old: node_old_pos,
-                                        new: new_pos,
+                                    (mbd_array, mbdin_array) => NodeEvent::MouseMove {
+                                        old_pos: node_old_pos,
+                                        new_pos: new_pos,
                                         in_node: true,
-                                        buttons_down: &mbd_array,
-                                        buttons_down_in_node: &mbdin_array
+                                        buttons_down: mbd_array,
+                                        buttons_down_in_node: mbdin_array
                                     }, to_rootspace: top_bounds_offset
                                 );
                             }
@@ -414,14 +427,12 @@ impl<A, N, F> Root<A, N, F>
                                                 }
 
                                                 // SEND ENTER ACTION TO CHILD
-                                                let child_mbdin_array: ArrayVec<[_; 5]> = child_mbdin
-                                                .into_iter().filter_map(|b| mouse_buttons_down.contains(b)).collect();
                                                 try_push_action!(
                                                     child, top_path.iter().cloned().chain(Some(child_ident)),
-                                                    NodeEvent::MouseEnter {
+                                                    (mbd_array, mbdin_array) => NodeEvent::MouseEnter {
                                                         enter_pos: enter_pos - child_pos_offset,
-                                                        buttons_down: &mbd_array,
-                                                        buttons_down_in_node: &child_mbdin_array
+                                                        buttons_down: mbd_array,
+                                                        buttons_down_in_node: mbdin_array
                                                     }, to_rootspace: child_pos_offset
                                                 );
 
@@ -437,10 +448,10 @@ impl<A, N, F> Root<A, N, F>
                                                 // SEND CHILD ENTER ACTION
                                                 try_push_action!(
                                                     top_node_as_parent, top_path.iter().cloned(),
-                                                    NodeEvent::MouseEnterChild {
+                                                    (mbd_array, mbdin_array) => NodeEvent::MouseEnterChild {
                                                         enter_pos,
-                                                        buttons_down: &mbd_array,
-                                                        buttons_down_in_node: &mbdin_array,
+                                                        buttons_down: mbd_array,
+                                                        buttons_down_in_node: mbdin_array,
                                                         child: child_ident
                                                     }, to_rootspace: child_pos_offset
                                                 );
@@ -474,10 +485,10 @@ impl<A, N, F> Root<A, N, F>
                                         let NodePath{ node, path, .. } = node_stack.top_mut();
                                         try_push_action!(
                                             node, path.iter().cloned(),
-                                            NodeEvent::MouseExit {
+                                            (mbd_array, mbdin_array) => NodeEvent::MouseExit {
                                                 exit_pos: mouse_exit,
-                                                buttons_down: &mbd_array,
-                                                buttons_down_in_node: &mbdin_array
+                                                buttons_down: mbd_array,
+                                                buttons_down_in_node: mbdin_array
                                             }, to_rootspace: top_bounds_offset
                                         );
                                     }
@@ -501,10 +512,10 @@ impl<A, N, F> Root<A, N, F>
                                             let NodePath{ node, path, .. } = node_stack.top_mut();
                                             try_push_action!(
                                                 node, path.iter().cloned(),
-                                                NodeEvent::MouseExitChild {
+                                                (mbd_array, mbdin_array) => NodeEvent::MouseExitChild {
                                                     exit_pos: child_exit_pos,
-                                                    buttons_down: &mbd_array,
-                                                    buttons_down_in_node: &mbdin_array,
+                                                    buttons_down: mbd_array,
+                                                    buttons_down_in_node: mbdin_array,
                                                     child: child_ident
                                                 }, to_rootspace: top_parent_offset
                                             );
@@ -536,7 +547,6 @@ impl<A, N, F> Root<A, N, F>
                     // Send move events to nodes that are being click-dragged but aren't being hovered.
                     node_stack.move_over_flags(ChildEventRecv::MOUSE_BUTTONS, |node, path, node_parent_offset| {
                         let new_pos: Point2<i32>;
-                        let (mbd_array, mbdin_array);
                         let (node_needs_move_event, node_old_pos, node_offset): (bool, Point2<i32>, Vector2<i32>);
 
                         {
@@ -553,21 +563,17 @@ impl<A, N, F> Root<A, N, F>
                                 s if node_needs_move_event => panic!("unexpected mouse state: {:?}", s),
                                 _ => node_old_pos = Point2::from_value(0xDEDBEEF)
                             }
-
-                            let mbds = mouse_button_arrays!(update_tag, node_offset);
-                            mbd_array = mbds.0;
-                            mbdin_array = mbds.1;
                         }
 
                         if node_needs_move_event {
                             try_push_action!(
                                 node, path.iter().cloned(),
-                                NodeEvent::MouseMove {
-                                    old: node_old_pos,
-                                    new: new_pos,
+                                (mbd_array, mbdin_array) => NodeEvent::MouseMove {
+                                    old_pos: node_old_pos,
+                                    new_pos: new_pos,
                                     in_node: false,
-                                    buttons_down: &mbd_array,
-                                    buttons_down_in_node: &mbdin_array
+                                    buttons_down: mbd_array,
+                                    buttons_down_in_node: mbdin_array
                                 }, to_rootspace: node_offset
                             );
                         }
@@ -588,7 +594,7 @@ impl<A, N, F> Root<A, N, F>
 
                         try_push_action!(
                             top_node, path.iter().cloned(),
-                            NodeEvent::MouseDown {
+                            (_, _) => NodeEvent::MouseDown {
                                 pos: *mouse_pos - top_node_offset,
                                 in_node,
                                 button
@@ -636,7 +642,7 @@ impl<A, N, F> Root<A, N, F>
 
                         try_push_action!(
                             node, path.iter().cloned(),
-                            NodeEvent::MouseUp {
+                            (_, _) => NodeEvent::MouseUp {
                                 pos: *mouse_pos - node_offset,
                                 down_pos: down_pos_rootspace - node_offset,
                                 in_node,
@@ -667,7 +673,7 @@ impl<A, N, F> Root<A, N, F>
                             let node_offset = bounds_rootspace.min().to_vec();
                             try_push_action!(
                                 node, path.iter().cloned(),
-                                NodeEvent::MouseUp {
+                                (_, _) => NodeEvent::MouseUp {
                                     pos: *mouse_pos - node_offset,
                                     down_pos: down_pos_rootspace - node_offset,
                                     in_node: bounds_rootspace.contains(*mouse_pos),
@@ -700,20 +706,20 @@ impl<A, N, F> Root<A, N, F>
                         update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !button_mask);
                     }
                 },
-                WindowEvent::KeyDown(key, modifiers) => {
+                WindowEvent::KeyDown(key) => {
                     if let Some(NodePath{ node: focus_node, path, top_parent_offset }) = node_stack.move_to_keyboard_focus() {
                         let bounds_rootspace = focus_node.bounds() + top_parent_offset;
                         let node_offset = bounds_rootspace.min().to_vec();
 
-                        try_push_action!(focus_node, path.iter().cloned(), NodeEvent::KeyDown(key, modifiers), to_rootspace: node_offset);
+                        try_push_action!(focus_node, path.iter().cloned(), (_, _) => NodeEvent::KeyDown(key, *modifiers), to_rootspace: node_offset);
                     }
                 },
-                WindowEvent::KeyUp(key, modifiers) => {
+                WindowEvent::KeyUp(key) => {
                     if let Some(NodePath{ node: focus_node, path, top_parent_offset }) = node_stack.move_to_keyboard_focus() {
                         let bounds_rootspace = focus_node.bounds() + top_parent_offset;
                         let node_offset = bounds_rootspace.min().to_vec();
 
-                        try_push_action!(focus_node, path.iter().cloned(), NodeEvent::KeyUp(key, modifiers), to_rootspace: node_offset);
+                        try_push_action!(focus_node, path.iter().cloned(), (_, _) => NodeEvent::KeyUp(key, *modifiers), to_rootspace: node_offset);
                     }
                 },
                 WindowEvent::Char(c) => {
@@ -721,7 +727,7 @@ impl<A, N, F> Root<A, N, F>
                         let bounds_rootspace = focus_node.bounds() + top_parent_offset;
                         let node_offset = bounds_rootspace.min().to_vec();
 
-                        try_push_action!(focus_node, path.iter().cloned(), NodeEvent::Char(c), to_rootspace: node_offset);
+                        try_push_action!(focus_node, path.iter().cloned(), (_, _) => NodeEvent::Char(c), to_rootspace: node_offset);
                     }
                 },
                 WindowEvent::Timer => {
@@ -737,7 +743,7 @@ impl<A, N, F> Root<A, N, F>
                             try_push_action!(
                                 node,
                                 path.iter().cloned(),
-                                NodeEvent::Timer {
+                                (_, _) => NodeEvent::Timer {
                                     name: timer.name,
                                     start_time: timer.start_time,
                                     last_trigger: timer.last_trigger,
@@ -767,7 +773,7 @@ impl<A, N, F> Root<A, N, F>
                         let bounds_rootspace = node.bounds() + top_parent_offset;
                         let node_offset = bounds_rootspace.min().to_vec();
 
-                        try_push_action!(node, path.into_iter().cloned() => (*meta_drain), NodeEvent::LoseFocus, to_rootspace: node_offset);
+                        try_push_action!(node, path.into_iter().cloned() => (*meta_drain), (_, _) => NodeEvent::LoseFocus, to_rootspace: node_offset);
 
                         for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
                             update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
@@ -778,7 +784,7 @@ impl<A, N, F> Root<A, N, F>
                         let bounds_rootspace = node.bounds() + top_parent_offset;
                         let node_offset = bounds_rootspace.min().to_vec();
 
-                        try_push_action!(node, path.into_iter().cloned() => (*meta_drain), NodeEvent::GainFocus, to_rootspace: node_offset);
+                        try_push_action!(node, path.into_iter().cloned() => (*meta_drain), (_, _) => NodeEvent::GainFocus, to_rootspace: node_offset);
 
                         node_stack.pop();
                         for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
@@ -806,7 +812,7 @@ impl<A, N, F> Root<A, N, F>
                                     try_push_action!(
                                         node,
                                         path.into_iter().cloned() => (meta_drain),
-                                        NodeEvent::LoseFocus, to_rootspace: node_offset
+                                        (_, _) => NodeEvent::LoseFocus, to_rootspace: node_offset
                                     );
                                     for update_tag in node_stack.nodes().map(|n| n.update_tag()) {
                                         update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
@@ -898,7 +904,7 @@ impl<A, N, F> Root<A, N, F>
                                 try_push_action!(
                                     top_node,
                                     ident.into_iter().cloned() => (meta_drain),
-                                    event.translate(-node_offset),
+                                    (_, _) => event.translate(-node_offset),
                                     to_rootspace: node_offset,
                                     bubble (false, &mut continue_bubble, &node_ident_stack[slice_range.clone()])
                                 );

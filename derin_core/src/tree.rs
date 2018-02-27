@@ -6,7 +6,7 @@ use cgmath_geometry::BoundBox;
 
 use mbseq::MouseButtonSequence;
 use dct::buttons::MouseButton;
-use event::{NodeEvent, EventOps};
+use event::{NodeEvent, EventOps, InputState};
 use render::{RenderFrame, FrameRectStack};
 use timer::TimerRegister;
 
@@ -222,7 +222,7 @@ pub trait Node<A, F: RenderFrame> {
     fn bounds_mut(&mut self) -> &mut BoundBox<Point2<i32>>;
     fn render(&self, frame: &mut FrameRectStack<F>);
     fn register_timers(&self, _register: &mut TimerRegister) {}
-    fn on_node_event(&mut self, event: NodeEvent, source_child: &[NodeIdent]) -> EventOps<A, F>;
+    fn on_node_event(&mut self, event: NodeEvent, input_state: InputState, source_child: &[NodeIdent]) -> EventOps<A, F>;
     fn subtrait(&self) -> NodeSubtrait<A, F>;
     fn subtrait_mut(&mut self) -> NodeSubtraitMut<A, F>;
 

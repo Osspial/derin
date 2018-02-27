@@ -43,6 +43,14 @@ pub struct MouseDown {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InputState<'a> {
+    pub mouse_buttons_down: &'a [MouseDown],
+    pub mouse_buttons_down_in_node: &'a [MouseDown],
+    pub mouse_pos: Point2<i32>,
+    pub modifiers: ModifierKeys
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeEvent<'a> {
     MouseEnter {
         enter_pos: Point2<i32>,
@@ -67,8 +75,8 @@ pub enum NodeEvent<'a> {
         child: NodeIdent
     },
     MouseMove {
-        old: Point2<i32>,
-        new: Point2<i32>,
+        old_pos: Point2<i32>,
+        new_pos: Point2<i32>,
         in_node: bool,
         buttons_down: &'a [MouseDown],
         buttons_down_in_node: &'a [MouseDown]
@@ -124,8 +132,8 @@ pub(crate) enum NodeEventOwned {
         child: NodeIdent
     },
     MouseMove {
-        old: Point2<i32>,
-        new: Point2<i32>,
+        old_pos: Point2<i32>,
+        new_pos: Point2<i32>,
         in_node: bool,
         buttons_down: MouseButtonSequence,
         buttons_down_in_node: MouseButtonSequence
@@ -184,9 +192,9 @@ impl<'a> NodeEvent<'a> {
                     child, buttons_down,
                     buttons_down_in_node,
                 },
-            NodeEvent::MouseMove{ old, new, in_node, buttons_down, buttons_down_in_node } =>
+            NodeEvent::MouseMove{ old_pos, new_pos, in_node, buttons_down, buttons_down_in_node } =>
                 NodeEvent::MouseMove {
-                    old: old + dir, new: new + dir,
+                    old_pos: old_pos + dir, new_pos: new_pos + dir,
                     in_node, buttons_down,
                     buttons_down_in_node,
                 },
@@ -257,9 +265,9 @@ impl NodeEventOwned {
                     buttons_down: &mbd_array,
                     buttons_down_in_node: &mbdin_array,
                 },
-            NodeEventOwned::MouseMove{ old, new, in_node, .. } =>
+            NodeEventOwned::MouseMove{ old_pos, new_pos, in_node, .. } =>
                 NodeEvent::MouseMove {
-                    old, new, in_node,
+                    old_pos, new_pos, in_node,
                     buttons_down: &mbd_array,
                     buttons_down_in_node: &mbdin_array,
                 },
@@ -326,9 +334,9 @@ impl<'a> From<NodeEvent<'a>> for NodeEventOwned {
                     buttons_down: mbd_sequence,
                     buttons_down_in_node: mbdin_sequence,
                 },
-            NodeEvent::MouseMove{ old, new, in_node, .. } =>
+            NodeEvent::MouseMove{ old_pos, new_pos, in_node, .. } =>
                 NodeEventOwned::MouseMove {
-                    old, new, in_node,
+                    old_pos, new_pos, in_node,
                     buttons_down: mbd_sequence,
                     buttons_down_in_node: mbdin_sequence,
                 },
