@@ -2,7 +2,7 @@ use glutin::*;
 use glutin::{MouseButton as GMouseButton, WindowEvent as GWindowEvent};
 use gl_render::{GLRenderer, GLFrame};
 use dct::buttons::{MouseButton, Key, ModifierKeys};
-use core::{Root, LoopFlow, WindowEvent, EventLoopResult};
+use core::{Root, LoopFlow, WindowEvent, EventLoopOps};
 use core::tree::{Node, NodeIdent, PopupID};
 use core::event::NodeEvent;
 use theme::Theme;
@@ -105,25 +105,33 @@ impl<A, N: Node<A, GLFrame>> GlutinWindow<A, N> {
             ref mut root,
         } = *self;
 
-        let adapt_window_events = |for_each_event: &mut FnMut(Option<PopupID>, WindowEvent, Option<ModifierKeys>) -> EventLoopResult<R>| {
+        let adapt_window_events = |event_loop_ops: &mut EventLoopOps<A, N, GLFrame, GLRenderer, R>| {
             let mut ret: Option<R> = None;
+            let map_modifiers = |g_modifiers: ModifiersState| {
+                let mut modifiers = ModifierKeys::empty();
+                modifiers.set(ModifierKeys::SHIFT, g_modifiers.shift);
+                modifiers.set(ModifierKeys::CTRL, g_modifiers.ctrl);
+                modifiers.set(ModifierKeys::ALT, g_modifiers.alt);
+                modifiers.set(ModifierKeys::LOGO, g_modifiers.logo);
+                modifiers
+            };
+
             loop {
                 let mut add_popups = Vec::new();
                 events_loop.run_forever(|glutin_event| {
-                    let mut g_modifiers = None;
                     let mut popup_id = None;
                     let derin_event: WindowEvent = match glutin_event {
                         Event::WindowEvent{window_id, event} => {
                             popup_id = window_popup_map.get(&window_id).cloned();
                             match event {
                                 GWindowEvent::CursorMoved{position, modifiers, ..} => {
-                                    g_modifiers = Some(modifiers);
+                                    event_loop_ops.set_modifiers(map_modifiers(modifiers));
                                     WindowEvent::MouseMove(Point2::new(position.0 as i32, position.1 as i32))
                                 },
                                 GWindowEvent::CursorEntered{..} => WindowEvent::MouseEnter(Point2::new(0, 0)),
                                 GWindowEvent::CursorLeft{..} => WindowEvent::MouseExit(Point2::new(0, 0)),
                                 GWindowEvent::MouseInput{state, button: g_button, modifiers, ..} => {
-                                    g_modifiers = Some(modifiers);
+                                    event_loop_ops.set_modifiers(map_modifiers(modifiers));
                                     let button = match g_button {
                                         GMouseButton::Left => MouseButton::Left,
                                         GMouseButton::Right => MouseButton::Right,
@@ -141,7 +149,7 @@ impl<A, N: Node<A, GLFrame>> GlutinWindow<A, N> {
                                 GWindowEvent::ReceivedCharacter(c) => WindowEvent::Char(c),
                                 GWindowEvent::KeyboardInput{ input, .. } => {
                                     if let Some(key) = input.virtual_keycode.and_then(map_key) {
-                                        g_modifiers = Some(input.modifiers);
+                                        event_loop_ops.set_modifiers(map_modifiers(input.modifiers));
                                         match input.state {
                                             ElementState::Pressed => WindowEvent::KeyDown(key),
                                             ElementState::Released => WindowEvent::KeyUp(key)
@@ -162,15 +170,10 @@ impl<A, N: Node<A, GLFrame>> GlutinWindow<A, N> {
                         Event::DeviceEvent{..} => return ControlFlow::Continue
                     };
 
-                    let modifiers_opt = g_modifiers.map(|g_modifiers| {
-                        let mut modifiers = ModifierKeys::empty();
-                        modifiers.set(ModifierKeys::SHIFT, g_modifiers.shift);
-                        modifiers.set(ModifierKeys::CTRL, g_modifiers.ctrl);
-                        modifiers.set(ModifierKeys::ALT, g_modifiers.alt);
-                        modifiers.set(ModifierKeys::LOGO, g_modifiers.logo);
-                        modifiers
-                    });
-                    let event_result = for_each_event(popup_id, derin_event, modifiers_opt);
+                    let event_result = match popup_id {
+                        Some(popup_id) => event_loop_ops.process_popup_event(popup_id, derin_event),
+                        None => event_loop_ops.process_event(derin_event)
+                    };
 
                     match event_result.wait_until_call_timer {
                         None => *timer_sync.lock() = TimerPark::Indefinite,

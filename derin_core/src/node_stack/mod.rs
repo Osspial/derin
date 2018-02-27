@@ -28,12 +28,12 @@ impl<A, F: RenderFrame> NodeStackBase<A, F> {
         }
     }
 
-    pub fn use_stack<'a, Root: Node<A, F>>(&'a mut self, node: &'a mut Root, root_id: RootID) -> NodeStack<'a, A, F, Root> {
-        NodeStack {
-            root: node,
-            stack: self.stack.use_cache(node, root_id)
-        }
-    }
+    // pub fn use_stack<'a, Root: Node<A, F>>(&'a mut self, node: &'a mut Root, root_id: RootID) -> NodeStack<'a, A, F, Root> {
+    //     NodeStack {
+    //         root: node,
+    //         stack: self.stack.use_cache(node, root_id)
+    //     }
+    // }
 
     pub fn use_stack_dyn<'a>(&'a mut self, node: &'a mut Node<A, F>, root_id: RootID) -> NodeStack<'a, A, F, Node<A, F>> {
         NodeStack {
