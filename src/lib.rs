@@ -518,7 +518,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
                     popup = Some((
                         Box::new(Group::new(SingleContainer::new(Label::new("Hello Popup!".to_string())), LayoutHorizontal::default())) as Box<Node<_, F>>,
                         ::core::event::PopupCreate {
-                            rect: BoundBox::new2(0, 0, 128, 128) + input_state.mouse_pos.to_vec(),
+                            rect: BoundBox::new2(1, 1, 129, 129) + input_state.mouse_pos.to_vec(),
                             title: "".to_string(),
                             decorations: false,
                             tool_window: true,

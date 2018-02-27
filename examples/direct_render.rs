@@ -1,8 +1,8 @@
 extern crate derin;
-#[macro_use]
-extern crate derin_macros;
 extern crate glutin;
 extern crate gullery;
+#[macro_use]
+extern crate gullery_macros;
 
 use derin::dct::hints::Margins;
 use derin::{SingleContainer, Group, LayoutHorizontal, DirectRender, DirectRenderState};
@@ -21,17 +21,12 @@ struct DD(Option<DirectDraw>);
 
 struct DirectDraw {
     vao: VertexArrayObj<Vertex, ()>,
-    program: Program<Vertex, Uniforms>
+    program: Program<Vertex, ()>
 }
 
 #[derive(TypeGroup, Debug, Clone, Copy)]
 struct Vertex {
     pos: Point2<f32>
-}
-
-#[derive(Uniforms, Clone, Copy)]
-struct Uniforms {
-    transform_matrix: Matrix3<f32>
 }
 
 fn main() {
@@ -78,22 +73,15 @@ fn main() {
 
 impl DirectRenderState for DD
 {
-    type RenderType = (DefaultFramebuffer, BoundBox<Point2<f32>>, OffsetBox<Point2<u32>>, Rc<ContextState>);
-    fn render(&self, &mut (ref mut fb, draw_box, viewport_rect, _): &mut Self::RenderType) {
+    type RenderType = (DefaultFramebuffer, OffsetBox<Point2<u32>>, Rc<ContextState>);
+    fn render(&self, &mut (ref mut fb, viewport_rect, _): &mut Self::RenderType) {
         if let Some(ref draw_params) = self.0 {
             let render_state = RenderState {
                 srgb: true,
                 viewport: viewport_rect,
                 ..RenderState::default()
             };
-            let uniform = Uniforms {
-                transform_matrix: Matrix3::new(
-                    draw_box.width(), 0.0, draw_box.min().x,
-                    0.0, draw_box.height(), draw_box.min().y,
-                    0.0, 0.0, 0.0
-                )
-            };
-            fb.draw(DrawMode::Triangles, .., &draw_params.vao, &draw_params.program, uniform, render_state);
+            fb.draw(DrawMode::Triangles, .., &draw_params.vao, &draw_params.program, (), render_state);
         }
     }
 }
@@ -101,7 +89,6 @@ impl DirectRenderState for DD
 const VERTEX_SHADER: &str = r#"
     #version 330
     in vec2 pos;
-    uniform mat3 transform_matrix;
 
     void main() {
         gl_Position = vec4(vec3(pos, 1.0), 1.0);

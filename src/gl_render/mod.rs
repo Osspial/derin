@@ -208,7 +208,7 @@ impl FrameDraw {
 }
 
 impl PrimFrame for GLFrame {
-    type DirectRender = (DefaultFramebuffer, BoundBox<Point2<f32>>, OffsetBox<Point2<u32>>, Rc<ContextState>);
+    type DirectRender = (DefaultFramebuffer, OffsetBox<Point2<u32>>, Rc<ContextState>);
 }
 
 impl RenderFrame for GLFrame {

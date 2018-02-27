@@ -190,12 +190,6 @@ impl Translator {
                     let mut framebuffer = unsafe{ mem::uninitialized() };
                     mem::swap(&mut framebuffer, &mut draw.fb);
 
-                    let gl_rect = BoundBox::new2(
-                        (abs_rect.min().x as f32 / draw.render_state.viewport.width() as f32) * 2.0 - 1.0,
-                        (abs_rect.min().y as f32 / draw.render_state.viewport.height() as f32) * 2.0 - 1.0,
-                        (abs_rect.max().x as f32 / draw.render_state.viewport.width() as f32) * 2.0 - 1.0,
-                        (abs_rect.max().y as f32 / draw.render_state.viewport.height() as f32) * 2.0 - 1.0,
-                    );
                     let viewport_origin = Point2::new(abs_rect.min().x.max(0) as u32, abs_rect.min().y.max(0) as u32);
                     let viewport_rect = OffsetBox::new2(
                         viewport_origin.x,
@@ -203,7 +197,7 @@ impl Translator {
                         (abs_rect.width() - (viewport_origin.x as i32 - abs_rect.min().x)) as u32,
                         (abs_rect.height() - (viewport_origin.y as i32 - abs_rect.min().y)) as u32,
                     );
-                    let mut draw_tuple = (framebuffer, gl_rect, viewport_rect, draw.context_state.clone());
+                    let mut draw_tuple = (framebuffer, viewport_rect, draw.context_state.clone());
                     render_fn(&mut draw_tuple);
                     mem::swap(&mut draw_tuple.0, &mut draw.fb);
                     mem::forget(draw_tuple.0);
