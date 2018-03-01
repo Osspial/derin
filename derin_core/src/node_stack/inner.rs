@@ -125,7 +125,7 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
 
     #[inline]
     pub fn top_bounds_offset(&self) -> BoundBox<Point2<i32>> {
-        self.top().bounds() + self.top_parent_offset
+        self.top().rect() + self.top_parent_offset
     }
 
     #[inline]
@@ -149,7 +149,7 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
             {
                 let cur_top = self.vec.last_mut().unwrap();
 
-                cur_top.bounds = unsafe{ &*cur_top.node }.bounds();
+                cur_top.bounds = unsafe{ &*cur_top.node }.rect();
                 self.top_parent_offset += cur_top.bounds.min().to_vec();
             }
 

@@ -137,7 +137,7 @@ impl<A, F: RenderFrame, N: Node<A, F>> NodeContainer<F> for SingleContainer<A, F
         let self_summary = NodeSummary {
             node: &self.node as &Node<A, F>,
             ident: NodeIdent::Num(0),
-            rect: self.node.bounds(),
+            rect: self.node.rect(),
             update_tag: self.node.update_tag().clone(),
             index: 0
         };
@@ -153,7 +153,7 @@ impl<A, F: RenderFrame, N: Node<A, F>> NodeContainer<F> for SingleContainer<A, F
               F: 'a
     {
         let self_summary = NodeSummary {
-            rect: self.node.bounds(),
+            rect: self.node.rect(),
             update_tag: self.node.update_tag().clone(),
             node: &mut self.node as &mut Node<A, F>,
             ident: NodeIdent::Num(0),
@@ -418,12 +418,12 @@ impl<F, H> Node<H::Action, F> for Button<H>
     }
 
     #[inline]
-    fn bounds(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<Point2<i32>> {
         self.bounds
     }
 
     #[inline]
-    fn bounds_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
         &mut self.bounds
     }
 
@@ -581,12 +581,12 @@ impl<A, F> Node<A, F> for Label
     }
 
     #[inline]
-    fn bounds(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<Point2<i32>> {
         self.bounds
     }
 
     #[inline]
-    fn bounds_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
         &mut self.bounds
     }
 
@@ -639,12 +639,12 @@ impl<A, F> Node<A, F> for EditBox
     }
 
     #[inline]
-    fn bounds(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<Point2<i32>> {
         self.bounds
     }
 
     #[inline]
-    fn bounds_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
         &mut self.bounds
     }
 
@@ -817,12 +817,12 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
     }
 
     #[inline]
-    fn bounds(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<Point2<i32>> {
         self.bounds
     }
 
     #[inline]
-    fn bounds_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
         self.update_tag.mark_update_layout();
         &mut self.bounds
     }
@@ -978,7 +978,7 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
             let mut rects_iter = rects_vec.drain(..);
             self.container.children_mut::<_, ()>(|summary| {
                 match rects_iter.next() {
-                    Some(rect) => *summary.node.bounds_mut() = rect.unwrap_or(BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF)),
+                    Some(rect) => *summary.node.rect_mut() = rect.unwrap_or(BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF)),
                     None => return LoopFlow::Break(())
                 }
                 LoopFlow::Continue
@@ -999,12 +999,12 @@ impl<A, F, R> Node<A, F> for DirectRender<R>
     }
 
     #[inline]
-    fn bounds(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<Point2<i32>> {
         self.bounds
     }
 
     #[inline]
-    fn bounds_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
         &mut self.bounds
     }
 

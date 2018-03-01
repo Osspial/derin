@@ -302,7 +302,7 @@ impl<'a, A, F: RenderFrame, Root: Node<A, F> + ?Sized> NodeStack<'a, A, F, Root>
 
             let mut top_node_offset = Vector2::new(0, 0);
             self.stack.try_push(|top_node, path| {
-                top_node_offset = top_node.bounds().min().to_vec();
+                top_node_offset = top_node.rect().min().to_vec();
                 match top_node.subtrait_mut() {
                     NodeSubtraitMut::Node(top_node) => {
                         let node_tags = ChildEventRecv::from(top_node.update_tag());

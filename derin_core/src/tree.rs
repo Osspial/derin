@@ -208,8 +208,8 @@ pub enum OnFocusOverflow {
 
 pub trait Node<A, F: RenderFrame> {
     fn update_tag(&self) -> &UpdateTag;
-    fn bounds(&self) -> BoundBox<Point2<i32>>;
-    fn bounds_mut(&mut self) -> &mut BoundBox<Point2<i32>>;
+    fn rect(&self) -> BoundBox<Point2<i32>>;
+    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>>;
     fn render(&self, frame: &mut FrameRectStack<F>);
     fn register_timers(&self, _register: &mut TimerRegister) {}
     fn on_node_event(

@@ -90,7 +90,7 @@ impl<A, N, F> Root<A, N, F>
     #[inline]
     pub fn new(mut root_node: N, theme: F::Theme, dims: DimsBox<Point2<u32>>) -> Root<A, N, F> {
         // TODO: DRAW ROOT AND DO INITIAL LAYOUT
-        *root_node.bounds_mut() = dims.cast().unwrap_or(DimsBox::max_value()).into();
+        *root_node.rect_mut() = dims.cast().unwrap_or(DimsBox::max_value()).into();
         Root {
             id: RootID::new(),
             mouse_pos: Point2::new(-1, -1),

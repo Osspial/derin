@@ -199,7 +199,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 // Resize the window, forcing a full redraw.
 
                 node_stack.move_to_root();
-                *node_stack.top_mut().node.bounds_mut() = new_size.cast::<i32>().unwrap_or(DimsBox::max_value()).into();
+                *node_stack.top_mut().node.rect_mut() = new_size.cast::<i32>().unwrap_or(DimsBox::max_value()).into();
                 *force_full_redraw = true;
             },
             WindowEvent::MouseEnter(enter_pos) => {
@@ -220,7 +220,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
             WindowEvent::MouseExit(exit_pos) => {
                 node_stack.move_to_hover();
                 node_stack.drain_to_root(|node, path, parent_offset| {
-                    let node_offset = node.bounds().min().to_vec() + parent_offset;
+                    let node_offset = node.rect().min().to_vec() + parent_offset;
 
                     let update_tag = try_push_action!(
                         node, path.iter().cloned(),
@@ -488,7 +488,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                     let (node_needs_move_event, node_old_pos, node_offset): (bool, Point2<i32>, Vector2<i32>);
 
                     {
-                        node_offset = node_parent_offset + node.bounds().min().to_vec();
+                        node_offset = node_parent_offset + node.rect().min().to_vec();
                         let update_tag = node.update_tag();
                         new_pos = new_pos_windowspace - node_offset;
 
@@ -526,7 +526,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 let recv_flags = ChildEventRecv::MOUSE_HOVER | ChildEventRecv::KEYBOARD;
                 let button_mask = ChildEventRecv::mouse_button_mask(button);
                 node_stack.move_over_flags(recv_flags, |top_node, path, top_parent_offset| {
-                    let bounds_rootspace = top_node.bounds() + top_parent_offset;
+                    let bounds_rootspace = top_node.rect() + top_parent_offset;
                     let top_node_offset = bounds_rootspace.min.to_vec();
                     let in_node = bounds_rootspace.contains(*mouse_pos);
 
@@ -570,7 +570,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 // Send the mouse up event to the hover node.
                 let mut move_to_tracked = true;
                 node_stack.move_over_flags(ChildEventRecv::MOUSE_HOVER, |node, path, top_parent_offset| {
-                    let bounds_rootspace = node.bounds() + top_parent_offset;
+                    let bounds_rootspace = node.rect() + top_parent_offset;
                     let node_offset = bounds_rootspace.min().to_vec();
                     let in_node = bounds_rootspace.contains(*mouse_pos);
                     let pressed_in_node = node.update_tag().mouse_state.get().mouse_button_sequence().contains(button);
@@ -607,7 +607,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 // send the move event to original presser.
                 if move_to_tracked {
                     node_stack.move_over_flags(button_mask, |node, path, top_parent_offset| {
-                        let bounds_rootspace = node.bounds() + top_parent_offset;
+                        let bounds_rootspace = node.rect() + top_parent_offset;
                         let node_offset = bounds_rootspace.min().to_vec();
                         try_push_action!(
                             node, path.iter().cloned(),
@@ -646,7 +646,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
             },
             WindowEvent::KeyDown(key) => {
                 if let Some(NodePath{ node: focus_node, path, top_parent_offset }) = node_stack.move_to_keyboard_focus() {
-                    let bounds_rootspace = focus_node.bounds() + top_parent_offset;
+                    let bounds_rootspace = focus_node.rect() + top_parent_offset;
                     let node_offset = bounds_rootspace.min().to_vec();
 
                     try_push_action!(focus_node, path.iter().cloned(), (_, _) => NodeEvent::KeyDown(key, *modifiers), to_rootspace: node_offset);
@@ -654,7 +654,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
             },
             WindowEvent::KeyUp(key) => {
                 if let Some(NodePath{ node: focus_node, path, top_parent_offset }) = node_stack.move_to_keyboard_focus() {
-                    let bounds_rootspace = focus_node.bounds() + top_parent_offset;
+                    let bounds_rootspace = focus_node.rect() + top_parent_offset;
                     let node_offset = bounds_rootspace.min().to_vec();
 
                     try_push_action!(focus_node, path.iter().cloned(), (_, _) => NodeEvent::KeyUp(key, *modifiers), to_rootspace: node_offset);
@@ -662,7 +662,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
             },
             WindowEvent::Char(c) => {
                 if let Some(NodePath{ node: focus_node, path, top_parent_offset }) = node_stack.move_to_keyboard_focus() {
-                    let bounds_rootspace = focus_node.bounds() + top_parent_offset;
+                    let bounds_rootspace = focus_node.rect() + top_parent_offset;
                     let node_offset = bounds_rootspace.min().to_vec();
 
                     try_push_action!(focus_node, path.iter().cloned(), (_, _) => NodeEvent::Char(c), to_rootspace: node_offset);
@@ -687,7 +687,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                                 last_trigger: timer.last_trigger,
                                 frequency: timer.frequency,
                                 times_triggered: timer.times_triggered
-                            }, to_rootspace: node.bounds().min().to_vec() + top_parent_offset
+                            }, to_rootspace: node.rect().min().to_vec() + top_parent_offset
                         );
                     }
                 );
@@ -708,7 +708,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                         return;
                     }
                     node.update_tag().has_keyboard_focus.set(false);
-                    let bounds_rootspace = node.bounds() + top_parent_offset;
+                    let bounds_rootspace = node.rect() + top_parent_offset;
                     let node_offset = bounds_rootspace.min().to_vec();
 
                     try_push_action!(node, path.into_iter().cloned() => (*meta_drain), (_, _) => NodeEvent::LoseFocus, to_rootspace: node_offset);
@@ -719,7 +719,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 }
                 if let Some(NodePath{ node, path, top_parent_offset }) = node_stack.move_to_path(node_ident_stack.iter().cloned()) {
                     node.update_tag().has_keyboard_focus.set(true);
-                    let bounds_rootspace = node.bounds() + top_parent_offset;
+                    let bounds_rootspace = node.rect() + top_parent_offset;
                     let node_offset = bounds_rootspace.min().to_vec();
 
                     try_push_action!(node, path.into_iter().cloned() => (*meta_drain), (_, _) => NodeEvent::GainFocus, to_rootspace: node_offset);
@@ -744,7 +744,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                         if let Some(NodePath{ node, path, top_parent_offset }) = node_stack.move_to_path(node_ident_stack.iter().cloned()) {
                             if node.update_tag().has_keyboard_focus.get() {
                                 node.update_tag().has_keyboard_focus.set(false);
-                                let bounds_rootspace = node.bounds() + top_parent_offset;
+                                let bounds_rootspace = node.rect() + top_parent_offset;
                                 let node_offset = bounds_rootspace.min().to_vec();
 
                                 try_push_action!(
@@ -838,7 +838,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                         let mut continue_bubble = true;
                         let mut slice_range = node_stack.depth() + 1..;
                         node_stack.drain_to_root_while(|top_node, ident, parent_offset| {
-                            let node_offset = parent_offset + top_node.bounds().min().to_vec();
+                            let node_offset = parent_offset + top_node.rect().min().to_vec();
                             try_push_action!(
                                 top_node,
                                 ident.into_iter().cloned() => (meta_drain),

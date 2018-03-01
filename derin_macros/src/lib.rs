@@ -177,7 +177,7 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
                     output = quote!{{
                         let flow = for_each_child(_derive_derin::core::tree::NodeSummary {
                             ident: #child_id,
-                            rect: <_ as _derive_derin::core::tree::Node<Self::Action, __F>>::bounds(&self.#widget_ident),
+                            rect: <_ as _derive_derin::core::tree::Node<Self::Action, __F>>::rect(&self.#widget_ident),
                             update_tag: <_ as _derive_derin::core::tree::Node<Self::Action, __F>>::update_tag(&self.#widget_ident).clone(),
                             node: #widget_expr,
                             index
@@ -198,7 +198,7 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
                         for (child_index, child) in (#widget_expr).into_iter().enumerate() {
                             let flow = for_each_child(_derive_derin::core::tree::NodeSummary {
                                 ident: #child_id,
-                                rect: <_ as _derive_derin::core::tree::Node<Self::Action, __F>>::bounds(child),
+                                rect: <_ as _derive_derin::core::tree::Node<Self::Action, __F>>::rect(child),
                                 update_tag: <_ as _derive_derin::core::tree::Node<Self::Action, __F>>::update_tag(child).clone(),
                                 node: child,
                                 index
