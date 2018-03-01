@@ -133,7 +133,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
             ) => {{
                 let node_update_tag = $node.update_tag();
                 let node_offset = $node_offset;
-                let (mbd_array, mbdin_array) = mouse_button_arrays!(node_update_tag, Vector2::new(0, 0));
+                let (mbd_array, mbdin_array) = mouse_button_arrays!(node_update_tag, node_offset);
                 let node_id = node_update_tag.node_id;
 
                 let input_state = InputState {
