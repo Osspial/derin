@@ -4,8 +4,9 @@ mod translate;
 
 use std::rc::Rc;
 use dct::cursor::CursorIcon;
+use dct::hints::SizeBounds;
 
-use cgmath::{Point2, Vector2, EuclideanSpace};
+use cgmath::{Bounded, Point2, Vector2, EuclideanSpace};
 
 use gullery::ContextState;
 use gullery::render_state::{RenderState, BlendFunc, BlendFuncs};
@@ -35,8 +36,8 @@ pub use self::translate::{EditString, Prim, ThemedPrim, RelPoint, RenderString};
 
 pub struct GLRenderer {
     window: GlWindow,
+    client_size_bounds: SizeBounds,
     frame: GLFrame,
-
 }
 
 pub struct GLFrame {
@@ -122,6 +123,7 @@ impl GLRenderer {
                     context_state
                 }
             },
+            client_size_bounds: SizeBounds::default(),
             window,
         })
     }
@@ -169,6 +171,27 @@ impl Renderer for GLRenderer {
         };
         self.window.set_cursor_state(CursorState::Normal).ok();
         self.window.set_cursor(glutin_icon);
+    }
+
+    fn set_size_bounds(&mut self, client_size_bounds: SizeBounds) {
+        if client_size_bounds != self.client_size_bounds {
+            self.client_size_bounds = client_size_bounds;
+            let outer_rect = self.window.get_outer_size().unwrap();
+            let inner_rect = self.window.get_inner_size().unwrap();
+            let x_expand = outer_rect.0 - inner_rect.0;
+            let y_expand = outer_rect.1 - inner_rect.1;
+
+            let min_dimensions = match client_size_bounds.min == DimsBox::new2(0, 0) {
+                true => None,
+                false => Some((client_size_bounds.min.width().max(0) as u32 + x_expand, client_size_bounds.min.height().max(0) as u32 + y_expand))
+            };
+            let max_dimensions = match client_size_bounds.max == DimsBox::max_value() {
+                true => None,
+                false => Some((client_size_bounds.max.width() as u32 + x_expand, client_size_bounds.max.height() as u32 + y_expand))
+            };
+            self.window.set_min_dimensions(min_dimensions);
+            self.window.set_max_dimensions(max_dimensions);
+        }
     }
 
     fn make_frame(&mut self) -> (&mut GLFrame, BoundBox<Point2<i32>>) {

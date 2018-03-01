@@ -29,7 +29,7 @@ use std::cell::RefCell;
 use std::time::Duration;
 use std::marker::PhantomData;
 
-use dct::hints::{WidgetPos, GridSize, Margins, Align2, NodeSpan};
+use dct::hints::{WidgetPos, GridSize, Margins, Align2, NodeSpan, SizeBounds};
 use dct::cursor::CursorIcon;
 use dct::buttons::{Key, ModifierKeys};
 use dle::{GridEngine, UpdateHeapCache, SolveError};
@@ -138,6 +138,7 @@ impl<A, F: RenderFrame, N: Node<A, F>> NodeContainer<F> for SingleContainer<A, F
             node: &self.node as &Node<A, F>,
             ident: NodeIdent::Num(0),
             rect: self.node.rect(),
+            size_bounds: self.node.size_bounds(),
             update_tag: self.node.update_tag().clone(),
             index: 0
         };
@@ -154,6 +155,7 @@ impl<A, F: RenderFrame, N: Node<A, F>> NodeContainer<F> for SingleContainer<A, F
     {
         let self_summary = NodeSummary {
             rect: self.node.rect(),
+            size_bounds: self.node.size_bounds(),
             update_tag: self.node.update_tag().clone(),
             node: &mut self.node as &mut Node<A, F>,
             ident: NodeIdent::Num(0),
@@ -508,7 +510,10 @@ impl<F, H> Node<H::Action, F> for Button<H>
                     self.update_tag.mark_update_timer();
                     self.state
                 },
-                MouseDown{..} => ButtonState::Clicked,
+                MouseDown{..} => {
+                    self.update_tag.mark_update_timer();
+                    ButtonState::Clicked
+                },
                 MouseUp{in_node: true, pressed_in_node, ..} => {
                     match pressed_in_node {
                         true => {
@@ -826,6 +831,9 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
         self.update_tag.mark_update_layout();
         &mut self.bounds
     }
+    fn size_bounds(&self) -> SizeBounds {
+        self.layout_engine.actual_size_bounds()
+    }
 
     fn render(&self, frame: &mut FrameRectStack<F>) {
         frame.upload_primitives([
@@ -966,7 +974,12 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
 
             let num_children = self.num_children();
             self.container.children::<_, ()>(|summary| {
-                hints_vec.push(self.layout.hints(summary.ident, summary.index, num_children).unwrap_or(WidgetPos::default()));
+                let mut layout_hints = self.layout.hints(summary.ident, summary.index, num_children).unwrap_or(WidgetPos::default());
+                layout_hints.size_bounds = SizeBounds {
+                    min: layout_hints.size_bounds.bound_rect(summary.size_bounds.min),
+                    max: layout_hints.size_bounds.bound_rect(summary.size_bounds.max),
+                };
+                hints_vec.push(layout_hints);
                 rects_vec.push(Ok(BoundBox::new2(0, 0, 0, 0)));
                 LoopFlow::Continue
             });

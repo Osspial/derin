@@ -914,9 +914,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                         let mut frame_rect_stack = FrameRectStack::new(frame, base_transform, theme, node_ident_stack);
 
                         if let NodeSubtraitMut::Parent(root_as_parent) = redraw_node.subtrait_mut() {
-                            if root_update.update_layout {
-                                root_as_parent.update_child_layout();
-                            }
+                            update_node_layout(root_id, force_full_redraw, root_as_parent);
                         }
                         if root_update.render_self {
                             redraw_node.render(&mut frame_rect_stack);
@@ -938,6 +936,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 }
             }
 
+            renderer.set_size_bounds(redraw_node.size_bounds());
             *force_full_redraw = false;
         });
 
@@ -968,6 +967,49 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
     }
 }
 
+fn update_node_layout<A, F: RenderFrame>(root_id: RootID, force_full_redraw: bool, node: &mut Parent<A, F>) -> bool {
+    // Loop to re-solve node layout, if children break their size bounds. Is 0..4 so that
+    // it doesn't enter an infinite loop if children can never be properly solved.
+    for _ in 0..4 {
+        let Update {
+            update_child,
+            update_layout,
+            ..
+        } = node.update_tag().needs_update(root_id);
+
+        if update_layout || force_full_redraw {
+            node.update_child_layout();
+            node.update_tag().unmark_update_layout();
+        }
+
+        let mut children_break_bounds = false;
+        if update_child || force_full_redraw {
+            node.children_mut(&mut |children_summaries| {
+                for summary in children_summaries {
+                    let NodeSummary {
+                        node: ref mut child_node,
+                        ..
+                    } = *summary;
+
+                    if let NodeSubtraitMut::Parent(child_node_as_parent) = child_node.subtrait_mut() {
+                        children_break_bounds |= update_node_layout(root_id, force_full_redraw, child_node_as_parent);
+                    }
+
+                    child_node.update_tag().unmark_update_layout();
+                }
+
+                LoopFlow::Continue
+            });
+        }
+
+        if !children_break_bounds {
+            break;
+        }
+    }
+
+    let node_rect = DimsBox::new(node.rect().dims());
+    node.size_bounds().bound_rect(node_rect) != node_rect
+}
 
 struct NodeRenderer<'a, F>
     where F: 'a + RenderFrame
@@ -997,7 +1039,7 @@ impl<'a, F> NodeRenderer<'a, F>
                 let Update {
                     render_self,
                     update_child,
-                    update_layout,
+                    update_layout: _,
                     update_timer: _
                 } = root_update;
 
@@ -1006,9 +1048,6 @@ impl<'a, F> NodeRenderer<'a, F>
                         let mut child_frame = self.frame.enter_child_node(ident);
                         let mut child_frame = child_frame.enter_child_rect(child_rect);
 
-                        if update_layout {
-                            child_node_as_parent.update_child_layout();
-                        }
                         if render_self {
                             child_node_as_parent.render(&mut child_frame);
                         }

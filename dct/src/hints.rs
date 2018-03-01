@@ -178,7 +178,7 @@ impl SizeBounds {
 impl Default for SizeBounds {
     fn default() -> SizeBounds {
         SizeBounds {
-            min: DimsBox::min_value(),
+            min: DimsBox::new2(0, 0),
             max: DimsBox::max_value()
         }
     }
