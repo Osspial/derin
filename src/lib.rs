@@ -38,6 +38,7 @@ use core::event::{NodeEvent, EventOps, FocusChange, InputState};
 use core::render::{RenderFrame, FrameRectStack};
 use core::timer::TimerRegister;
 use core::tree::{NodeIdent, NodeSummary, UpdateTag, NodeSubtrait, NodeSubtraitMut, Node, Parent, OnFocus};
+use core::popup::ChildPopupsMut;
 
 use cgmath::{EuclideanSpace, Point2};
 use cgmath_geometry::{BoundBox, Segment, DimsBox, GeoBox};
@@ -469,13 +470,26 @@ impl<F, H> Node<H::Action, F> for Button<H>
         }
     }
 
-    fn on_node_event(&mut self, event: NodeEvent, input_state: InputState, bubble_source: &[NodeIdent]) -> EventOps<H::Action, F> {
+    fn on_node_event(&mut self, event: NodeEvent, input_state: InputState, popups_opt: Option<ChildPopupsMut<H::Action, F>>, bubble_source: &[NodeIdent]) -> EventOps<H::Action, F> {
         use self::NodeEvent::*;
 
         let (mut action, focus) = (None, None);
         let mut popup = None;
 
         if bubble_source.len() == 0 {
+            if let Some(mut popups) = popups_opt {
+                // Remove mouseover text, if it exists
+                match event {
+                    MouseEnter{..} |
+                    MouseExit{..} |
+                    MouseMove{..} |
+                    MouseDown{..} => {
+                        popups.remove(NodeIdent::Str("mouseover_text"));
+                    },
+                    _ => ()
+                }
+            }
+
             let new_state = match event {
                 MouseEnter{buttons_down_in_node, ..} |
                 MouseExit{buttons_down_in_node, ..} => {
@@ -517,12 +531,13 @@ impl<F, H> Node<H::Action, F> for Button<H>
                     self.update_tag.mark_update_timer();
                     popup = Some((
                         Box::new(Group::new(SingleContainer::new(Label::new("Hello Popup!".to_string())), LayoutHorizontal::default())) as Box<Node<_, F>>,
-                        ::core::event::PopupCreate {
+                        ::core::popup::PopupAttributes {
                             rect: BoundBox::new2(1, 1, 129, 129) + input_state.mouse_pos.to_vec(),
                             title: "".to_string(),
                             decorations: false,
                             tool_window: true,
-                            focusable: false
+                            focusable: false,
+                            ident: NodeIdent::Str("mouseover_text")
                         }
                     ));
                     self.state
@@ -593,7 +608,7 @@ impl<A, F> Node<A, F> for Label
     }
 
     #[inline]
-    fn on_node_event(&mut self, _: NodeEvent, _: InputState, _: &[NodeIdent]) -> EventOps<A, F> {
+    fn on_node_event(&mut self, _: NodeEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[NodeIdent]) -> EventOps<A, F> {
         EventOps {
             action: None,
             focus: None,
@@ -662,7 +677,7 @@ impl<A, F> Node<A, F> for EditBox
         ].iter().cloned());
     }
 
-    fn on_node_event(&mut self, event: NodeEvent, _: InputState, _: &[NodeIdent]) -> EventOps<A, F> {
+    fn on_node_event(&mut self, event: NodeEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[NodeIdent]) -> EventOps<A, F> {
         use self::NodeEvent::*;
         use dct::buttons::MouseButton;
 
@@ -830,7 +845,7 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
     }
 
     #[inline]
-    fn on_node_event(&mut self, _: NodeEvent, _: InputState, _: &[NodeIdent]) -> EventOps<A, F> {
+    fn on_node_event(&mut self, _: NodeEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[NodeIdent]) -> EventOps<A, F> {
         EventOps {
             action: None,
             focus: None,
@@ -1009,7 +1024,7 @@ impl<A, F, R> Node<A, F> for DirectRender<R>
     }
 
     #[inline]
-    fn on_node_event(&mut self, _: NodeEvent, _: InputState, _: &[NodeIdent]) -> EventOps<A, F> {
+    fn on_node_event(&mut self, _: NodeEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[NodeIdent]) -> EventOps<A, F> {
         EventOps {
             action: None,
             focus: None,

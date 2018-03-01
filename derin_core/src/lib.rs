@@ -10,8 +10,10 @@ extern crate arrayvec;
 extern crate itertools;
 
 pub mod timer;
+#[macro_use]
 pub mod tree;
 pub mod event;
+pub mod popup;
 pub mod render;
 mod mbseq;
 mod node_stack;
@@ -21,14 +23,14 @@ mod event_loop_ops;
 use cgmath::{Point2, Bounded};
 use cgmath_geometry::DimsBox;
 
-use std::time::Duration;
 use std::marker::PhantomData;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 use tree::*;
-pub use event_loop_ops::EventLoopOps;
+pub use event_loop_ops::{EventLoopOps, EventLoopResult, PopupDelta};
 use timer::TimerList;
 use event::NodeEvent;
+use popup::{PopupID, PopupMap};
 use render::{Renderer, RenderFrame};
 use mbseq::MouseButtonSequenceTrackPos;
 use node_stack::NodeStackBase;
@@ -45,8 +47,8 @@ pub struct Root<A, N, F>
     mouse_pos: Point2<i32>,
     modifiers: ModifierKeys,
     cursor_icon: CursorIcon,
-
     mouse_buttons_down: MouseButtonSequenceTrackPos,
+
     actions: VecDeque<A>,
     node_stack_base: NodeStackBase<A, F>,
     force_full_redraw: bool,
@@ -56,13 +58,8 @@ pub struct Root<A, N, F>
     timer_list: TimerList,
     pub root_node: N,
     pub theme: F::Theme,
-    popup_nodes: HashMap<PopupID, PopupNode<A, F>>,
+    popup_nodes: PopupMap<A, F>,
     _marker: PhantomData<*const F>
-}
-
-struct PopupNode<A, F: RenderFrame> {
-    node: Box<Node<A, F>>,
-    mouse_pos: Point2<i32>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,14 +81,6 @@ pub enum WindowEvent {
 pub enum LoopFlow<R> {
     Continue,
     Break(R)
-}
-
-#[must_use]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EventLoopResult<R> {
-    pub flow: LoopFlow<R>,
-    pub wait_until_call_timer: Option<Duration>,
-    pub popups: Vec<PopupAttributes>
 }
 
 impl<A, N, F> Root<A, N, F>
@@ -116,7 +105,7 @@ impl<A, N, F> Root<A, N, F>
             meta_tracker: MetaEventTracker::default(),
             timer_list: TimerList::new(None),
             root_node, theme,
-            popup_nodes: HashMap::new(),
+            popup_nodes: PopupMap::new(),
             _marker: PhantomData
         }
     }

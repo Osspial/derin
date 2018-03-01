@@ -5,14 +5,17 @@ use cgmath_geometry::{GeoBox, DimsBox, Segment};
 
 use std::cmp::Ordering;
 
-use {WindowEvent, LoopFlow, Root, EventLoopResult, PopupNode};
+use {WindowEvent, LoopFlow, Root};
 use tree::*;
 use timer::Timer;
+use popup::{PopupSummary, PopupID};
 use event::{NodeEvent, InputState, MouseDown, FocusChange};
 use render::{Renderer, RenderFrame, FrameRectStack};
 use node_stack::{NodePath, NodeStack};
 use meta_tracker::{MetaDrain, MetaEvent, MetaEventVariant};
 use dct::buttons::ModifierKeys;
+
+use std::time::Duration;
 
 pub struct EventLoopOps<'a, A: 'static, N: 'static, F: 'a, R: 'a, G: 'a>
     where N: Node<A, F>,
@@ -23,6 +26,20 @@ pub struct EventLoopOps<'a, A: 'static, N: 'static, F: 'a, R: 'a, G: 'a>
     pub(crate) on_action: &'a mut FnMut(A, &mut N, &mut F::Theme) -> LoopFlow<G>,
     pub(crate) bubble_fallthrough: &'a mut FnMut(NodeEvent, &[NodeIdent]) -> Option<A>,
     pub(crate) with_renderer: &'a mut FnMut(Option<PopupID>, &mut FnMut(&mut R))
+}
+
+#[must_use]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EventLoopResult<R> {
+    pub flow: LoopFlow<R>,
+    pub wait_until_call_timer: Option<Duration>,
+    pub popup_deltas: Vec<PopupDelta>
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PopupDelta {
+    Create(PopupSummary),
+    Remove(PopupID)
 }
 
 impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
@@ -38,6 +55,9 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
     }
     pub fn process_popup_event(&mut self, popup_id: PopupID, event: WindowEvent) -> EventLoopResult<G> {
         self.process_event_inner(Some(popup_id), event)
+    }
+    pub fn remove_popup(&mut self, popup_id: PopupID) {
+        self.root.popup_nodes.remove(popup_id);
     }
 
     fn process_event_inner(&mut self, event_popup_id: Option<PopupID>, event: WindowEvent) -> EventLoopResult<G> {
@@ -67,15 +87,22 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
 
         // let mut cur_popup_id = None;
         let mut popup_map_insert = Vec::new();
+        let mut popup_deltas = Vec::new();
 
         let mut set_cursor_pos = None;
         let mut set_cursor_icon = None;
-        let mut new_popups = Vec::new();
         let mouse_pos: &mut Point2<i32>;
+
+        // If we're performing events on a popup, we remove that popup from the popup map so that
+        // operations can be performed on other popups during event processing. We re-insert it
+        // after all operations have been performed.
+        let mut taken_popup_node = None;
 
         let node_stack_root = match event_popup_id {
             Some(id) => {
-                let popup_node = popup_nodes.get_mut(&id).unwrap();
+                taken_popup_node = Some(popup_nodes.take(id).expect("Bad Popup ID"));
+                let popup_node = taken_popup_node.as_mut().unwrap();
+
                 mouse_pos = &mut popup_node.mouse_pos;
                 &mut *popup_node.node
             },
@@ -104,8 +131,10 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 $node:expr, $path:expr $(=> ($meta_tracker:expr))*,
                 ($mbd_array:tt, $mbdin_array:tt) => $event:expr, to_rootspace: $node_offset:expr $(, bubble ($bubble:expr, $bubble_store:expr, $bubble_path:expr))*
             ) => {{
+                let node_update_tag = $node.update_tag();
                 let node_offset = $node_offset;
-                let (mbd_array, mbdin_array) = mouse_button_arrays!($node.update_tag(), Vector2::new(0, 0));
+                let (mbd_array, mbdin_array) = mouse_button_arrays!(node_update_tag, Vector2::new(0, 0));
+                let node_id = node_update_tag.node_id;
 
                 let input_state = InputState {
                     mouse_pos: *mouse_pos - node_offset,
@@ -118,12 +147,15 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 let event_ops = $node.on_node_event(
                     event,
                     input_state,
+                    popup_nodes.popups_owned_by_mut(node_id),
                     if_tokens!(($($bubble_path)*) {
                         $($bubble_path)*
                     } else {
                         &[]
                     })
                 );
+
+                let node_update_tag = $node.update_tag();
 
                 let ref mut meta_tracker = if_tokens!(($($meta_tracker)*) {
                     $($meta_tracker)*
@@ -134,18 +166,10 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 if let Some(focus) = event_ops.focus {
                     meta_tracker.push_focus(focus, $path);
                 }
-                if let Some((popup_node, popup_create)) = event_ops.popup {
-                    let popup_id = PopupID::new();
-                    popup_map_insert.push((popup_id, popup_node));
-
-                    new_popups.push(PopupAttributes {
-                        rect: popup_create.rect + node_offset,
-                        title: popup_create.title,
-                        decorations: popup_create.decorations,
-                        tool_window: popup_create.tool_window,
-                        focusable: popup_create.focusable,
-                        id: popup_id
-                    });
+                if let Some((popup_node, mut popup_attributes)) = event_ops.popup {
+                    let owner_id = node_update_tag.node_id;
+                    popup_attributes.rect = popup_attributes.rect + node_offset;
+                    popup_map_insert.push((owner_id, popup_node, popup_attributes));
                 }
                 if event_ops.bubble $(& $bubble)* {
                     meta_tracker.push_bubble(
@@ -157,7 +181,6 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 set_cursor_icon = set_cursor_icon.or(event_ops.cursor_icon);
                 $(*$bubble_store = event_ops.bubble;)*
 
-                let node_update_tag = $node.update_tag();
                 node_update_tag.last_event_stamp.set(*event_stamp);
                 let node_update = node_update_tag.needs_update(root_id);
                 if node_update.update_timer {
@@ -861,8 +884,8 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 }
             }
         }
-        let redraw_node = match event_popup_id {
-            Some(id) => &mut *popup_nodes.get_mut(&id).unwrap().node,
+        let redraw_node = match taken_popup_node.as_mut() {
+            Some(popup_node) => &mut *popup_node.node,
             None => root_node
         };
 
@@ -919,14 +942,28 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
         });
 
         drop(redraw_node);
-        popup_nodes.extend(popup_map_insert.drain(..)
-            .map(|(id, node)| (id, PopupNode{ node, mouse_pos: Point2::new(0, 0) }))
-        );
+        // Report popups that need to be created
+        for (owner_id, popup_node, popup_attributes) in popup_map_insert {
+            let popup_id = popup_nodes.insert(owner_id, popup_attributes.ident, popup_node);
+            popup_deltas.push(PopupDelta::Create(PopupSummary {
+                id: popup_id,
+                attributes: popup_attributes
+            }));
+        }
+
+        // Report popups that need to be destroyed.
+        popup_deltas.extend(popup_nodes.popups_removed_by_children()
+            .map(|removed_popup_id| PopupDelta::Remove(removed_popup_id)));
+
+        // If we took a popup node out of the popup map, replace it.
+        if let Some(taken_popup_node) = taken_popup_node {
+            popup_nodes.replace(event_popup_id.unwrap(), taken_popup_node);
+        }
 
         EventLoopResult {
             flow: return_flow,
             wait_until_call_timer: timer_list.time_until_trigger(),
-            popups: new_popups
+            popup_deltas
         }
     }
 }

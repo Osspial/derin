@@ -1,11 +1,11 @@
 use dct::cursor::CursorIcon;
 use dct::buttons::{MouseButton, Key, ModifierKeys};
 use cgmath::{Point2, Vector2};
-use cgmath_geometry::BoundBox;
 use tree::{Node, NodeIdent};
 use arrayvec::ArrayVec;
 use mbseq::{MouseButtonSequence, MouseButtonSequenceTrackPos};
 use render::RenderFrame;
+use popup::PopupAttributes;
 
 use std::time::{Instant, Duration};
 
@@ -16,16 +16,7 @@ pub struct EventOps<A, F: RenderFrame> {
     pub bubble: bool,
     pub cursor_pos: Option<Point2<i32>>,
     pub cursor_icon: Option<CursorIcon>,
-    pub popup: Option<(Box<Node<A, F>>, PopupCreate)>
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PopupCreate {
-    pub rect: BoundBox<Point2<i32>>,
-    pub title: String,
-    pub decorations: bool,
-    pub tool_window: bool,
-    pub focusable: bool
+    pub popup: Option<(Box<Node<A, F>>, PopupAttributes)>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

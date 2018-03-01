@@ -2,9 +2,10 @@ use glutin::*;
 use glutin::{MouseButton as GMouseButton, WindowEvent as GWindowEvent};
 use gl_render::{GLRenderer, GLFrame};
 use dct::buttons::{MouseButton, Key, ModifierKeys};
-use core::{Root, LoopFlow, WindowEvent, EventLoopOps};
-use core::tree::{Node, NodeIdent, PopupID};
+use core::{Root, LoopFlow, WindowEvent, EventLoopOps, PopupDelta};
+use core::tree::{Node, NodeIdent};
 use core::event::NodeEvent;
+use core::popup::PopupID;
 use theme::Theme;
 use gullery::ContextState;
 
@@ -117,7 +118,7 @@ impl<A, N: Node<A, GLFrame>> GlutinWindow<A, N> {
             };
 
             loop {
-                let mut add_popups = Vec::new();
+                let mut popup_deltas = Vec::new();
                 events_loop.run_forever(|glutin_event| {
                     let mut popup_id = None;
                     let derin_event: WindowEvent = match glutin_event {
@@ -159,8 +160,19 @@ impl<A, N: Node<A, GLFrame>> GlutinWindow<A, N> {
                                     }
                                 }
                                 GWindowEvent::Closed => return match popup_id {
-                                    Some(_) => ControlFlow::Continue,
-                                    None => ControlFlow::Break
+                                    Some(popup_id) => {
+                                        event_loop_ops.remove_popup(popup_id);
+
+                                        let removed_renderer = popup_renderers.borrow_mut().remove(&popup_id).unwrap();
+                                        window_popup_map.remove(&removed_renderer.window().id());
+                                        // The popup's context has to be bound when destroying the context.
+                                        unsafe{ removed_renderer.window().make_current().ok() };
+                                        drop(removed_renderer);
+
+                                        ControlFlow::Continue
+                                    },
+                                    None if window_id == primary_renderer.borrow().window().id() => ControlFlow::Break,
+                                    None => ControlFlow::Continue
                                 },
                                 _ => return ControlFlow::Continue
                             }
@@ -188,34 +200,52 @@ impl<A, N: Node<A, GLFrame>> GlutinWindow<A, N> {
                         },
                         LoopFlow::Continue => ()
                     }
-                    if event_result.popups.len() > 0 {
-                        add_popups = event_result.popups;
+                    if event_result.popup_deltas.len() > 0 {
+                        popup_deltas = event_result.popup_deltas;
                         return ControlFlow::Break;
                     }
 
                     ControlFlow::Continue
                 });
-                if add_popups.len() == 0 {
+                if popup_deltas.len() == 0 {
                     break;
                 }
 
                 let mut popup_renderers = popup_renderers.borrow_mut();
-                for popup_attrs in add_popups.drain(..) {
-                    let builder = WindowBuilder::new()
-                        .with_dimensions(popup_attrs.rect.width() as u32, popup_attrs.rect.height() as u32)
-                        .with_visibility(false)
-                        .with_focusability(popup_attrs.focusable)
-                        .with_title(popup_attrs.title)
-                        .is_popup(popup_attrs.tool_window)
-                        .with_decorations(popup_attrs.decorations);
-                    let popup_renderer = unsafe{ GLRenderer::new(events_loop, builder).unwrap() };
-                    let window_pos = primary_renderer.borrow().window().get_inner_position().unwrap();
-                    popup_renderer.window().set_position(popup_attrs.rect.min().x + window_pos.0, popup_attrs.rect.min().y + window_pos.1);
-                    popup_renderer.window().show();
+                for popup_delta in popup_deltas.drain(..) {
+                    match popup_delta {
+                        PopupDelta::Create(popup_summary) => {
+                            let popup_attrs = popup_summary.attributes;
+                            let popup_id = popup_summary.id;
 
-                    window_popup_map.insert(popup_renderer.window().id(), popup_attrs.id);
-                    popup_renderers.insert(popup_attrs.id, popup_renderer);
-                    active_renderer.set(Some(popup_attrs.id));
+                            let builder = WindowBuilder::new()
+                                .with_dimensions(popup_attrs.rect.width() as u32, popup_attrs.rect.height() as u32)
+                                .with_visibility(false)
+                                .with_focusability(popup_attrs.focusable)
+                                .with_title(popup_attrs.title)
+                                .is_popup(popup_attrs.tool_window)
+                                .with_decorations(popup_attrs.decorations);
+                            let popup_renderer = unsafe{ GLRenderer::new(events_loop, builder).unwrap() };
+                            let window_pos = primary_renderer.borrow().window().get_inner_position().unwrap();
+                            popup_renderer.window().set_position(popup_attrs.rect.min().x + window_pos.0, popup_attrs.rect.min().y + window_pos.1);
+                            popup_renderer.window().show();
+
+                            window_popup_map.insert(popup_renderer.window().id(), popup_id);
+                            popup_renderers.insert(popup_id, popup_renderer);
+                            active_renderer.set(Some(popup_id));
+                        },
+                        PopupDelta::Remove(popup_id) => {
+                            let removed_renderer = popup_renderers.remove(&popup_id).unwrap();
+                            window_popup_map.remove(&removed_renderer.window().id());
+                            // The popup's context has to be bound when destroying the context.
+                            unsafe{ removed_renderer.window().make_current().ok() };
+                            drop(removed_renderer);
+
+                            // Reset the context to the primary window.
+                            unsafe{ primary_renderer.borrow().window().make_current().ok() };
+                            active_renderer.set(None);
+                        }
+                    }
                 }
             }
             ret
@@ -233,7 +263,7 @@ impl<A, N: Node<A, GLFrame>> GlutinWindow<A, N> {
                         hashmap_cell = popup_renderers.borrow_mut();
                         hashmap_cell.get_mut(&popup_id).unwrap()
                     },
-                    _ => {
+                    None => {
                         primary_cell = primary_renderer.borrow_mut();
                         &mut *primary_cell
                     }

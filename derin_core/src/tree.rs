@@ -9,6 +9,7 @@ use dct::buttons::MouseButton;
 use event::{NodeEvent, EventOps, InputState};
 use render::{RenderFrame, FrameRectStack};
 use timer::TimerRegister;
+use popup::ChildPopupsMut;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NodeIdent {
@@ -139,7 +140,6 @@ macro_rules! id {
 
 id!(pub(crate) RootID let id; {assert!(id < UPDATE_MASK)});
 id!(pub(crate) NodeID);
-id!(pub PopupID);
 
 
 macro_rules! subtrait_enums {
@@ -182,16 +182,6 @@ subtrait_enums! {subtraits {
     Node(Node<A, F>) fn as_node
 }}
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PopupAttributes {
-    pub rect: BoundBox<Point2<i32>>,
-    pub title: String,
-    pub decorations: bool,
-    pub tool_window: bool,
-    pub focusable: bool,
-    pub id: PopupID
-}
-
 /// Behavior when another node attempts to focus a given node.
 ///
 /// Note that this is *ignored* if the attempt to focus came from the return value of this node's
@@ -222,7 +212,13 @@ pub trait Node<A, F: RenderFrame> {
     fn bounds_mut(&mut self) -> &mut BoundBox<Point2<i32>>;
     fn render(&self, frame: &mut FrameRectStack<F>);
     fn register_timers(&self, _register: &mut TimerRegister) {}
-    fn on_node_event(&mut self, event: NodeEvent, input_state: InputState, source_child: &[NodeIdent]) -> EventOps<A, F>;
+    fn on_node_event(
+        &mut self,
+        event: NodeEvent,
+        input_state: InputState,
+        popups: Option<ChildPopupsMut<A, F>>,
+        source_child: &[NodeIdent]
+    ) -> EventOps<A, F>;
     fn subtrait(&self) -> NodeSubtrait<A, F>;
     fn subtrait_mut(&mut self) -> NodeSubtraitMut<A, F>;
 
