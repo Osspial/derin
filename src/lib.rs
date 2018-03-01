@@ -25,7 +25,7 @@ pub mod theme;
 use self::gl_render::{ThemedPrim, Prim, PrimFrame, RelPoint, EditString, RenderString};
 
 use std::mem;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::time::Duration;
 use std::marker::PhantomData;
 
@@ -35,7 +35,7 @@ use dct::buttons::{Key, ModifierKeys};
 use dle::{GridEngine, UpdateHeapCache, SolveError};
 use core::LoopFlow;
 use core::event::{NodeEvent, EventOps, FocusChange, InputState};
-use core::render::{RenderFrame, FrameRectStack};
+use core::render::{RenderFrame, FrameRectStack, Theme as CoreTheme};
 use core::timer::TimerRegister;
 use core::tree::{NodeIdent, NodeSummary, UpdateTag, NodeSubtrait, NodeSubtraitMut, Node, Parent, OnFocus};
 use core::popup::ChildPopupsMut;
@@ -258,7 +258,8 @@ pub struct Button<H: ButtonHandler> {
     state: ButtonState,
     handler: H,
     string: RenderString,
-    waiting_for_mouseover: bool
+    waiting_for_mouseover: bool,
+    size_bounds: Cell<SizeBounds>
 }
 
 #[derive(Debug, Clone)]
@@ -273,6 +274,7 @@ pub struct EditBox {
     update_tag: UpdateTag,
     bounds: BoundBox<Point2<i32>>,
     string: EditString,
+    size_bounds: Cell<SizeBounds>
 }
 
 #[derive(Debug, Clone)]
@@ -317,7 +319,8 @@ impl<H: ButtonHandler> Button<H> {
             state: ButtonState::Normal,
             handler,
             string: RenderString::new(string),
-            waiting_for_mouseover: false
+            waiting_for_mouseover: false,
+            size_bounds: Cell::new(SizeBounds::default())
         }
     }
 
@@ -356,6 +359,7 @@ impl EditBox {
             update_tag: UpdateTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             string: EditString::new(RenderString::new(string)),
+            size_bounds: Cell::new(SizeBounds::default())
         }
     }
 
@@ -429,6 +433,10 @@ impl<F, H> Node<H::Action, F> for Button<H>
         &mut self.bounds
     }
 
+    fn size_bounds(&self) -> SizeBounds {
+        self.size_bounds.get()
+    }
+
     fn render(&self, frame: &mut FrameRectStack<F>) {
         let image_str = match self.state {
             ButtonState::Normal    => "Button::Normal",
@@ -437,6 +445,9 @@ impl<F, H> Node<H::Action, F> for Button<H>
             ButtonState::Disabled  => "Button::Disabled",
             ButtonState::Defaulted => "Button::Defaulted"
         };
+        let mut size_bounds = self.size_bounds.get();
+        size_bounds.min = frame.theme().node_theme(image_str).icon.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
+        self.size_bounds.set(size_bounds);
 
         frame.upload_primitives([
             ThemedPrim {
@@ -653,7 +664,16 @@ impl<A, F> Node<A, F> for EditBox
         &mut self.bounds
     }
 
+    #[inline]
+    fn size_bounds(&self) -> SizeBounds {
+        self.size_bounds.get()
+    }
+
     fn render(&self, frame: &mut FrameRectStack<F>) {
+        let mut size_bounds = self.size_bounds.get();
+        size_bounds.min = frame.theme().node_theme("EditBox").icon.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
+        self.size_bounds.set(size_bounds);
+
         frame.upload_primitives([
             ThemedPrim {
                 theme_path: "EditBox",

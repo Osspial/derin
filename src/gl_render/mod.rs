@@ -73,7 +73,7 @@ struct GLUniforms<'a> {
     tex_atlas: &'a Texture<Rgba<Nu8>, SimpleTex<DimsBox<Point2<u32>>>>
 }
 
-pub trait PrimFrame: RenderFrame<Primitive=ThemedPrim<<Self as PrimFrame>::DirectRender>> {
+pub trait PrimFrame: RenderFrame<Primitive=ThemedPrim<<Self as PrimFrame>::DirectRender>, Theme=Theme> {
     type DirectRender;
 }
 

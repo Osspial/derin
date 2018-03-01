@@ -172,3 +172,13 @@ impl Default for Theme {
         theme
     }
 }
+
+impl Image {
+    pub fn min_size(&self) -> DimsBox<Point2<i32>> {
+        match self.rescale {
+            RescaleRules::StretchOnPixelCenter |
+            RescaleRules::Stretch => DimsBox::new2(0, 0),
+            RescaleRules::Slice(margins) => DimsBox::new2(margins.width() as i32, margins.height() as i32)
+        }
+    }
+}

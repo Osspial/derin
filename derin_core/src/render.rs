@@ -61,6 +61,11 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
         }
     }
 
+    #[inline(always)]
+    pub fn theme(&self) -> &F::Theme {
+        self.theme
+    }
+
     #[inline]
     pub fn upload_primitives<I>(&mut self, prim_iter: I)
         where I: Iterator<Item=F::Primitive>
