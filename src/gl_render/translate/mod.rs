@@ -121,6 +121,7 @@ impl Translator {
 
                     draw.vertices.extend(ImageTranslate::new(
                         abs_rect,
+                        parent_rect,
                         atlas_rect,
                         Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
                         image.rescale

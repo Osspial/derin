@@ -271,7 +271,7 @@ const VERT_SHADER: &str = r#"
     out vec4 frag_color;
 
     void main() {
-        gl_Position = vec4(vec2(1.0, -1.0) * (vec2(loc) / vec2(window_size) - 0.5) * 2.0, 0.0, 1.0);
+        gl_Position = vec4(vec2(1.0, -1.0) * (vec2(loc) / vec2(window_size) - 0.5) * 2.0, 1.0, 1.0);
         frag_color = color;
         tex_coord_out = (tex_coord) / vec2(atlas_size);
     }

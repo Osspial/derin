@@ -24,7 +24,6 @@ use std::cell::{Ref, RefCell};
 pub(in gl_render) struct TextTranslate<'a> {
     glyph_draw: GlyphDraw<'a>,
 
-    rect: BoundBox<Point2<i32>>,
     glyph_slice_index: usize,
     glyph_slice: Ref<'a, [RenderGlyph]>,
     highlight_range: Range<usize>,
@@ -71,6 +70,7 @@ struct RenderStringCell {
 }
 
 struct GlyphDraw<'a> {
+    rect: BoundBox<Point2<i32>>,
     face: &'a mut Face<()>,
     atlas: &'a mut Atlas,
     text_style: ThemeText,
@@ -206,10 +206,9 @@ impl<'a> TextTranslate<'a> {
         let (ascender, descender) = ((font_metrics.ascender / 64) as i32, (font_metrics.descender / 64) as i32);
 
         TextTranslate {
-            rect,
             glyph_slice_index: 0,
             glyph_slice: render_string.reshape_glyphs(rect, shape_text, &text_style, face, dpi),
-            glyph_draw: GlyphDraw{ face, atlas, text_style, dpi },
+            glyph_draw: GlyphDraw{ face, atlas, text_style, dpi, rect },
             highlight_range,
             cursor_pos,
             string_len: render_string.string.len(),
@@ -561,28 +560,27 @@ impl<'a> Iterator for TextTranslate<'a> {
                         ref mut glyph_vertex_iter,
                         ref mut highlight_vertex_iter,
                         ref mut cursor_vertex_iter,
-                        rect,
                     } = *self;
                     let next_glyph_opt = glyph_slice.get(*glyph_slice_index);
 
                     *cursor_vertex_iter = cursor_pos.and_then(|pos| {
                         let str_index = next_glyph_opt.map(|g| g.str_index).unwrap_or(0);
-                        let highlight_rect_opt = next_glyph_opt.map(|g| g.highlight_rect + rect.min().to_vec());
+                        let highlight_rect_opt = next_glyph_opt.map(|g| g.highlight_rect + glyph_draw.rect.min().to_vec());
                         let base_pos = if pos == str_index {
                             highlight_rect_opt.map(|r| r.min()).or(Some(
                                 Point2 {
                                     x: match glyph_draw.text_style.justify.x {
                                         Align::Start |
                                         Align::Stretch => 0,
-                                        Align::Center => rect.width() as i32 / 2,
-                                        Align::End => rect.width()
+                                        Align::Center => glyph_draw.rect.width() as i32 / 2,
+                                        Align::End => glyph_draw.rect.width()
                                     },
                                     y: match glyph_draw.text_style.justify.y {
-                                        Align::Center => rect.height() as i32 / 2,
-                                        Align::End => rect.height() as i32,
+                                        Align::Center => glyph_draw.rect.height() as i32 / 2,
+                                        Align::End => glyph_draw.rect.height() as i32,
                                         _ => 0
                                     } - font_descender
-                                } + rect.min().to_vec()
+                                } + glyph_draw.rect.min().to_vec()
                             ))
                         } else if pos == str_index + 1 && pos == string_len {
                             highlight_rect_opt.map(|r| Point2::new(r.max().x, r.min().y))
@@ -592,6 +590,7 @@ impl<'a> Iterator for TextTranslate<'a> {
                             *cursor_pos = None;
                             ImageTranslate::new(
                                 BoundBox::new(pos, pos + Vector2::new(1, font_ascender - font_descender)),
+                                glyph_draw.rect,
                                 glyph_draw.atlas.white().cast().unwrap_or(OffsetBox::new2(0, 0, 0, 0)),
                                 glyph_draw.text_style.color,
                                 RescaleRules::StretchOnPixelCenter
@@ -612,7 +611,7 @@ impl<'a> Iterator for TextTranslate<'a> {
                             next_glyph.pos,
                             glyph_index,
                             is_highlighted,
-                            rect
+                            glyph_draw.rect
                         )
                     );
 
@@ -642,10 +641,11 @@ impl<'a> Iterator for TextTranslate<'a> {
 
                             let mut highlight_rect = next_glyph.highlight_rect;
                             highlight_rect.max.x = highlight_rect_end;
-                            highlight_rect = highlight_rect + rect.min().to_vec();
+                            highlight_rect = highlight_rect + glyph_draw.rect.min().to_vec();
 
                             Some(ImageTranslate::new(
                                 highlight_rect,
+                                glyph_draw.rect,
                                 glyph_draw.atlas.white().cast().unwrap_or(OffsetBox::new2(0, 0, 0, 0)),
                                 glyph_draw.text_style.highlight_bg_color,
                                 RescaleRules::StretchOnPixelCenter
@@ -763,6 +763,7 @@ impl<'a> GlyphDraw<'a> {
 
         ImageTranslate::new(
             glyph_rect,
+            self.rect,
             atlas_rect.cast::<u16>().unwrap_or(OffsetBox::new2(0, 0, 0, 0)),
             match is_highlighted {
                 false => text_style.color,
