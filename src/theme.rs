@@ -37,7 +37,8 @@ pub struct ThemeText {
     pub highlight_text_color: Rgba<Nu8>,
     pub face_size: u32,
     pub tab_size: u32,
-    pub justify: Align2
+    pub justify: Align2,
+    pub margins: Margins<u16>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -129,6 +130,7 @@ impl Default for Theme {
                             face_size: 16 * 64,
                             tab_size: 8,
                             justify: Align2::new(Align::Start, Align::Start),
+                            margins: Margins::new($border, $border, $border, $border)
                         }),
                         icon: Some(Rc::new(Image {
                             pixels: unsafe {
@@ -164,6 +166,7 @@ impl Default for Theme {
                     face_size: 16 * 64,
                     tab_size: 8,
                     justify: Align2::new(Align::Center, Align::Start),
+                    margins: Margins::default()
                 }),
                 icon: None
             }

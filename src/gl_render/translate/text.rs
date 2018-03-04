@@ -189,7 +189,7 @@ impl<'a> TextTranslate<'a> {
     }
 
     fn new_raw<'b, F>(
-        rect: BoundBox<Point2<i32>>,
+        mut rect: BoundBox<Point2<i32>>,
         text_style: ThemeText,
         face: &'a mut Face<()>,
         dpi: DPI,
@@ -204,6 +204,10 @@ impl<'a> TextTranslate<'a> {
         let face_size = FaceSize::new(text_style.face_size, text_style.face_size);
         let font_metrics = face.metrics_sized(face_size, dpi).unwrap();
         let (ascender, descender) = ((font_metrics.ascender / 64) as i32, (font_metrics.descender / 64) as i32);
+        rect.min.x += text_style.margins.left as i32;
+        rect.max.x -= text_style.margins.right as i32;
+        rect.min.y += text_style.margins.top as i32;
+        rect.max.y -= text_style.margins.bottom as i32;
 
         TextTranslate {
             glyph_slice_index: 0,
