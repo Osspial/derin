@@ -29,6 +29,14 @@ pub enum RescaleRules {
     Slice(Margins<u16>)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum LineWrap {
+    /// Disallow all line breaks, including explicit ones (such as from `'\n'`).
+    None,
+    /// Allow line breaks at break points, as defined by [UAX #14](https://unicode.org/reports/tr14/).
+    Normal
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ThemeText {
     pub face: ThemeFace,
@@ -38,7 +46,8 @@ pub struct ThemeText {
     pub face_size: u32,
     pub tab_size: u32,
     pub justify: Align2,
-    pub margins: Margins<u16>
+    pub margins: Margins<u16>,
+    pub line_wrap: LineWrap
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -130,7 +139,8 @@ impl Default for Theme {
                             face_size: 16 * 64,
                             tab_size: 8,
                             justify: Align2::new(Align::Start, Align::Start),
-                            margins: Margins::new($border, $border, $border, $border)
+                            margins: Margins::new($border, $border, $border, $border),
+                            line_wrap: LineWrap::None
                         }),
                         icon: Some(Rc::new(Image {
                             pixels: unsafe {
@@ -166,7 +176,8 @@ impl Default for Theme {
                     face_size: 16 * 64,
                     tab_size: 8,
                     justify: Align2::new(Align::Center, Align::Start),
-                    margins: Margins::default()
+                    margins: Margins::default(),
+                    line_wrap: LineWrap::None
                 }),
                 icon: None
             }

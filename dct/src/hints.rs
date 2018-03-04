@@ -150,11 +150,19 @@ pub struct SizeBounds {
 }
 
 impl SizeBounds {
+    #[inline]
     pub fn new(min: DimsBox<Point2<Px>>, max: DimsBox<Point2<Px>>) -> SizeBounds {
-        SizeBounds {
-            min: min,
-            max: max
-        }
+        SizeBounds{ min, max }
+    }
+
+    #[inline]
+    pub fn new_min(min: DimsBox<Point2<Px>>) -> SizeBounds {
+        SizeBounds{ min, ..SizeBounds::default() }
+    }
+
+    #[inline]
+    pub fn new_max(max: DimsBox<Point2<Px>>) -> SizeBounds {
+        SizeBounds{ max, ..SizeBounds::default() }
     }
 
     /// Bound a rectangle to be within the size bounds.

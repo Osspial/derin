@@ -1,7 +1,7 @@
 use gl_render::GLVertex;
 use gl_render::atlas::Atlas;
 use gl_render::translate::image::ImageTranslate;
-use theme::{ThemeText, RescaleRules};
+use theme::{ThemeText, RescaleRules, LineWrap};
 
 use cgmath::{EuclideanSpace, ElementWise, Point2, Vector2};
 use cgmath_geometry::{BoundBox, DimsBox, OffsetBox, Segment, GeoBox};
@@ -67,6 +67,7 @@ struct RenderStringCell {
     text_style: ThemeText,
     dpi: DPI,
     draw_rect: BoundBox<Point2<i32>>,
+    min_size: DimsBox<Point2<i32>>
 }
 
 struct GlyphDraw<'a> {
@@ -90,6 +91,7 @@ struct GlyphIter {
 
     font_ascender: i32,
     font_descender: i32,
+    line_height: i32,
 
     tab_advance: i32,
     bounds_width: i32,
@@ -353,11 +355,11 @@ impl GlyphIter {
             }
 
             // If the segment hasn't moved the cursor beyond the line's length, append it to the run.
-            if line_advance <= rect.width() as i32 {
+            if line_advance <= rect.width() as i32 || text_style.line_wrap == LineWrap::None {
                 run = run.append_run(segment_run);
             }
 
-            if segment.hard_break || line_advance > rect.width() as i32 {
+            if (segment.hard_break || line_advance > rect.width() as i32) && text_style.line_wrap != LineWrap::None {
                 glyph_items.insert(run_insert_index, GlyphItem::Run(run.ends_line()));
 
                 num_lines += 1;
@@ -430,6 +432,7 @@ impl GlyphIter {
 
             font_ascender: ascender,
             font_descender: descender,
+            line_height,
 
             on_hard_break: false,
             tab_advance,
@@ -798,6 +801,11 @@ impl RenderString {
         &mut self.string
     }
 
+    #[inline]
+    pub fn min_size(&self) -> DimsBox<Point2<i32>> {
+        self.cell.borrow().as_ref().map(|c| c.min_size).unwrap_or(DimsBox::new2(0, 0))
+    }
+
     fn reshape_glyphs<'a, F>(&self,
         rect: BoundBox<Point2<i32>>,
         shape_text: F,
@@ -830,7 +838,8 @@ impl RenderString {
                         shaped_glyphs: Vec::new(),
                         text_style: text_style.clone(),
                         dpi,
-                        draw_rect: rect
+                        draw_rect: rect,
+                        min_size: DimsBox::new2(0, 0)
                     });
                     cell_opt.as_mut().unwrap()
                 }
@@ -838,7 +847,16 @@ impl RenderString {
             if !use_cached_glyphs {
                 let shaped_buffer = shape_text(&self.string, face);
                 cell.shaped_glyphs.clear();
-                cell.shaped_glyphs.extend(GlyphIter::new(rect, shaped_buffer, text_style, face, dpi));
+                let mut glyph_iter = GlyphIter::new(rect, shaped_buffer, text_style, face, dpi);
+                cell.shaped_glyphs.extend(&mut glyph_iter);
+                cell.min_size = match text_style.line_wrap {
+                    LineWrap::None => DimsBox::new2(
+                        // withholding the +1 leads to clipping bugs so I'm just including it
+                        glyph_iter.cursor.x - glyph_iter.line_start_x + 1,
+                        glyph_iter.line_height + -glyph_iter.font_descender
+                    ),
+                    _ => DimsBox::new2(0, 0)
+                };
             }
         }
 

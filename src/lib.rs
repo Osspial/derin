@@ -445,9 +445,6 @@ impl<F, H> Node<H::Action, F> for Button<H>
             ButtonState::Disabled  => "Button::Disabled",
             ButtonState::Defaulted => "Button::Defaulted"
         };
-        let mut size_bounds = self.size_bounds.get();
-        size_bounds.min = frame.theme().node_theme(image_str).icon.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
-        self.size_bounds.set(size_bounds);
 
         frame.upload_primitives([
             ThemedPrim {
@@ -475,6 +472,13 @@ impl<F, H> Node<H::Action, F> for Button<H>
                 prim: Prim::String(&self.string)
             }
         ].iter().cloned());
+
+        let mut size_bounds = self.size_bounds.get();
+        size_bounds.min = frame.theme().node_theme(image_str).icon.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
+        let render_string_min = self.string.min_size();
+        size_bounds.min.dims.x += render_string_min.width();
+        size_bounds.min.dims.y += render_string_min.height();
+        self.size_bounds.set(size_bounds);
     }
 
     fn register_timers(&self, register: &mut TimerRegister) {
@@ -606,6 +610,10 @@ impl<A, F> Node<A, F> for Label
         &mut self.bounds
     }
 
+    fn size_bounds(&self) -> SizeBounds {
+        SizeBounds::new_min(self.string.min_size())
+    }
+
     fn render(&self, frame: &mut FrameRectStack<F>) {
         frame.upload_primitives([
             ThemedPrim {
@@ -670,10 +678,6 @@ impl<A, F> Node<A, F> for EditBox
     }
 
     fn render(&self, frame: &mut FrameRectStack<F>) {
-        let mut size_bounds = self.size_bounds.get();
-        size_bounds.min = frame.theme().node_theme("EditBox").icon.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
-        self.size_bounds.set(size_bounds);
-
         frame.upload_primitives([
             ThemedPrim {
                 theme_path: "EditBox",
@@ -700,6 +704,12 @@ impl<A, F> Node<A, F> for EditBox
                 prim: Prim::EditString(&self.string)
             }
         ].iter().cloned());
+
+        let mut size_bounds = self.size_bounds.get();
+        size_bounds.min = frame.theme().node_theme("EditBox").icon.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
+        let render_string_min = self.string.render_string.min_size();
+        size_bounds.min.dims.y += render_string_min.height();
+        self.size_bounds.set(size_bounds);
     }
 
     fn on_node_event(&mut self, event: NodeEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[NodeIdent]) -> EventOps<A, F> {
