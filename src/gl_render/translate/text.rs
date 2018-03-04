@@ -407,7 +407,7 @@ impl GlyphIter {
         let (ascender, descender) = ((font_metrics.ascender / 64) as i32, (font_metrics.descender / 64) as i32);
 
         let v_advance = match text_style.justify.y {
-            Align::Stretch => (rect.height() / num_lines) as i32,
+            Align::Stretch => (rect.height() / (num_lines + 1)) as i32,
             _ => line_height
         };
 
