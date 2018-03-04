@@ -29,6 +29,7 @@ pub(in gl_render) struct TextTranslate<'a> {
     highlight_range: Range<usize>,
     cursor_pos: Option<usize>,
     string_len: usize,
+    offset: Vector2<i32>,
 
     font_ascender: i32,
     font_descender: i32,
@@ -57,6 +58,7 @@ pub struct EditString {
 
 #[derive(Debug, Clone)]
 pub struct RenderString {
+    pub offset: Vector2<i32>,
     string: String,
     cell: RefCell<Option<RenderStringCell>>
 }
@@ -217,6 +219,8 @@ impl<'a> TextTranslate<'a> {
             glyph_draw: GlyphDraw{ face, atlas, text_style, dpi, rect },
             highlight_range,
             cursor_pos,
+            offset: render_string.offset,
+
             string_len: render_string.string.len(),
             font_ascender: ascender,
             font_descender: descender,
@@ -561,6 +565,7 @@ impl<'a> Iterator for TextTranslate<'a> {
                         ref highlight_range,
                         ref mut cursor_pos,
                         ref mut glyph_draw,
+                        offset,
                         string_len,
                         font_ascender,
                         font_descender,
@@ -568,7 +573,11 @@ impl<'a> Iterator for TextTranslate<'a> {
                         ref mut highlight_vertex_iter,
                         ref mut cursor_vertex_iter,
                     } = *self;
-                    let next_glyph_opt = glyph_slice.get(*glyph_slice_index);
+                    macro_rules! get_glyph_slice {
+                        (range $i:expr) => {{glyph_slice.get($i).iter().flat_map(|g| g.iter()).cloned().map(|g| g.offset(offset))}};
+                        ($i:expr) => {{glyph_slice.get($i).cloned().map(|g| g.offset(offset))}};
+                    }
+                    let next_glyph_opt = get_glyph_slice!(*glyph_slice_index);
 
                     *cursor_vertex_iter = cursor_pos.and_then(|pos| {
                         let str_index = next_glyph_opt.map(|g| g.str_index).unwrap_or(0);
@@ -630,18 +639,18 @@ impl<'a> Iterator for TextTranslate<'a> {
                         ) ||
                         (
                             is_highlighted &&
-                            Some(next_glyph.pos.y) != self.glyph_slice.get(*glyph_slice_index - 2).map(|g| g.pos.y)
+                            Some(next_glyph.pos.y) != get_glyph_slice!(*glyph_slice_index - 2).map(|g| g.pos.y)
                         );
                     *highlight_vertex_iter = match starts_highlight_rect {
                         true => {
-                            let mut dummy_last_glyph = *self.glyph_slice.last().unwrap();
+                            let mut dummy_last_glyph = get_glyph_slice!(self.glyph_slice.len() - 1).unwrap();
                             dummy_last_glyph.pos.x += dummy_last_glyph.highlight_rect.width();
                             dummy_last_glyph.highlight_rect.min.x += dummy_last_glyph.highlight_rect.width();
                             dummy_last_glyph.highlight_rect.max.x = dummy_last_glyph.highlight_rect.min.x;
                             dummy_last_glyph.str_index += 1;
 
-                            let highlight_rect_end = self.glyph_slice[*glyph_slice_index..]
-                                .iter().cloned().chain(Some(dummy_last_glyph))
+                            let highlight_rect_end = get_glyph_slice!(range *glyph_slice_index..)
+                                .chain(Some(dummy_last_glyph))
                                 .take_while(|g| g.pos.y == next_glyph.pos.y)
                                 .take_while(|g| g.str_index <= highlight_range.end)
                                 .last().unwrap().pos.x;
@@ -785,6 +794,7 @@ impl<'a> GlyphDraw<'a> {
 impl RenderString {
     pub fn new(string: String) -> RenderString {
         RenderString {
+            offset: Vector2::new(0, 0),
             string,
             cell: RefCell::new(None)
         }
@@ -863,8 +873,10 @@ impl RenderString {
         Ref::map(self.cell.borrow(), |c| &c.as_ref().unwrap().shaped_glyphs[..])
     }
 
-    fn selection_glyph_iter<'a>(&'a mut self) -> impl 'a + Iterator<Item=RenderGlyph> + DoubleEndedIterator {
-        let empty_iter = [].iter().cloned().chain(None);
+    fn glyph_iter<'a>(&'a mut self) -> impl 'a + Iterator<Item=RenderGlyph> + DoubleEndedIterator {
+        let glyph_offset = self.offset;
+        let offset_glyph = move |g: RenderGlyph| g.offset(glyph_offset);
+        let empty_iter = [].iter().cloned().chain(None).map(offset_glyph.clone());
 
         let shaped_glyphs = match *self.cell.get_mut() {
             Some(ref cell) => &cell.shaped_glyphs,
@@ -882,7 +894,7 @@ impl RenderString {
                 str_index: self.string.len(),
                 glyph_index: None
             };
-            shaped_glyphs.iter().cloned().chain(Some(dummy_last_glyph))
+            shaped_glyphs.iter().cloned().chain(Some(dummy_last_glyph)).map(offset_glyph)
         } else {
             empty_iter
         }
@@ -966,7 +978,7 @@ impl EditString {
             }}
         }
 
-        let glyph_iter = render_string.selection_glyph_iter();
+        let glyph_iter = render_string.glyph_iter();
         match dist.signum() {
              0 => return,
              1 => search_for_glyph!(glyph_iter),
@@ -1128,5 +1140,13 @@ impl EditString {
         self.render_string.string_mut().drain(drain_range.clone());
         self.highlight_range = 0..0;
         self.cursor_pos = drain_range.start;
+    }
+}
+
+impl RenderGlyph {
+    fn offset(mut self, offset: Vector2<i32>) -> RenderGlyph {
+        self.pos += offset;
+        self.highlight_rect = self.highlight_rect + offset;
+        self
     }
 }
