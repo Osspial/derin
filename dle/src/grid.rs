@@ -1,7 +1,7 @@
 use Tr;
 use dct::Px;
 use cgmath::Point2;
-use dct::hints::{GridSize, TrRange, TrackHints};
+use dct::layout::{GridSize, TrRange, TrackHints};
 
 use std::cmp;
 use std::fmt::{Debug, Formatter, Error};

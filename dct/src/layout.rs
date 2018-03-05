@@ -65,21 +65,18 @@ impl From<RangeTo<Tr>> for TrRange {
 
 two_axis_type!{
     #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct NodeSizing(Option<Tr>);
-
-    #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct GridSize(Tr);
 
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct NodeSpan(Into<TrRange>);
+    pub struct WidgetSpan(Into<TrRange>);
 
     #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct Align2(Align);
 }
 
-impl Default for NodeSpan {
-    fn default() -> NodeSpan {
-        NodeSpan::new(0..0, 0..0)
+impl Default for WidgetSpan {
+    fn default() -> WidgetSpan {
+        WidgetSpan::new(0..0, 0..0)
     }
 }
 
@@ -102,13 +99,13 @@ impl Default for Align {
 #[derive(Default, Debug, Clone, Copy)]
 pub struct WidgetPos {
     pub size_bounds: SizeBounds,
-    pub node_span: NodeSpan,
+    pub node_span: WidgetSpan,
     pub place_in_cell: Align2,
     pub margins: Margins<Px>
 }
 
 impl WidgetPos {
-    pub fn new(size_bounds: SizeBounds, node_span: NodeSpan, place_in_cell: Align2, margins: Margins<Px>) -> WidgetPos {
+    pub fn new(size_bounds: SizeBounds, node_span: WidgetSpan, place_in_cell: Align2, margins: Margins<Px>) -> WidgetPos {
         WidgetPos {
             size_bounds: size_bounds,
             node_span: node_span,

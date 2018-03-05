@@ -5,7 +5,7 @@ use core::popup::ChildPopupsMut;
 
 use cgmath::Point2;
 use cgmath_geometry::BoundBox;
-use dct::hints::SizeBounds;
+use dct::layout::SizeBounds;
 
 use gl_render::{ThemedPrim, PrimFrame, RenderString, RelPoint, Prim};
 

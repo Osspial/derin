@@ -2,7 +2,7 @@ use tree::NodeIdent;
 use cgmath::Point2;
 use cgmath_geometry::BoundBox;
 use dct::cursor::CursorIcon;
-use dct::hints::SizeBounds;
+use dct::layout::SizeBounds;
 
 pub trait Renderer {
     type Frame: RenderFrame;

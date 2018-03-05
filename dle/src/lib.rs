@@ -11,7 +11,7 @@ mod grid;
 use dct::Px;
 use cgmath::{Point2, Vector2, EuclideanSpace};
 use cgmath_geometry::{DimsBox, BoundBox, GeoBox};
-use dct::hints::{Fr, Tr, Align2, Align, GridSize, WidgetPos, TrackHints, SizeBounds, Margins};
+use dct::layout::{Fr, Tr, Align2, Align, GridSize, WidgetPos, TrackHints, SizeBounds, Margins};
 use grid::{TrackVec, SizeResult};
 
 use std::cmp;

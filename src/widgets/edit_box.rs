@@ -6,7 +6,7 @@ use core::timer::TimerRegister;
 
 use cgmath::Point2;
 use cgmath_geometry::{BoundBox, DimsBox, GeoBox, Segment};
-use dct::hints::SizeBounds;
+use dct::layout::SizeBounds;
 use dct::cursor::CursorIcon;
 use dct::buttons::{Key, ModifierKeys};
 

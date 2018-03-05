@@ -4,7 +4,7 @@ mod translate;
 
 use std::rc::Rc;
 use dct::cursor::CursorIcon;
-use dct::hints::SizeBounds;
+use dct::layout::SizeBounds;
 
 use cgmath::{Bounded, Point2, Vector2, EuclideanSpace};
 

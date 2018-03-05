@@ -6,7 +6,7 @@ use cgmath_geometry::BoundBox;
 
 use mbseq::MouseButtonSequence;
 use dct::buttons::MouseButton;
-use dct::hints::SizeBounds;
+use dct::layout::SizeBounds;
 use event::{NodeEvent, EventOps, InputState};
 use render::{RenderFrame, FrameRectStack};
 use timer::TimerRegister;

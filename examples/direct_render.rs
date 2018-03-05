@@ -4,7 +4,7 @@ extern crate gullery;
 extern crate gullery_macros;
 
 use derin::{Window, WindowAttributes};
-use derin::dct::hints::Margins;
+use derin::dct::layout::Margins;
 use derin::layout::LayoutHorizontal;
 use derin::container::SingleContainer;
 use derin::widgets::{Group, DirectRender, DirectRenderState};

@@ -1,4 +1,4 @@
-use dct::hints::{WidgetPos, GridSize, Margins, Align2, NodeSpan};
+use dct::layout::{WidgetPos, GridSize, Margins, Align2, WidgetSpan};
 use core::tree::NodeIdent;
 
 pub trait GridLayout {
@@ -24,7 +24,7 @@ impl GridLayout for LayoutHorizontal {
         match node_index >= num_nodes {
             true => None,
             false => Some(WidgetPos {
-                node_span: NodeSpan::new(node_index as u32, 0),
+                node_span: WidgetSpan::new(node_index as u32, 0),
                 margins: self.widget_margins,
                 place_in_cell: self.widget_place,
                 ..WidgetPos::default()
@@ -56,7 +56,7 @@ impl GridLayout for LayoutVertical {
         match node_index >= num_nodes {
             true => None,
             false => Some(WidgetPos {
-                node_span: NodeSpan::new(0, node_index as u32),
+                node_span: WidgetSpan::new(0, node_index as u32),
                 margins: self.widget_margins,
                 place_in_cell: self.widget_place,
                 ..WidgetPos::default()

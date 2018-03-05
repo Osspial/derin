@@ -4,7 +4,7 @@ use gullery::glsl::Nu8;
 
 use cgmath::Point2;
 use cgmath_geometry::DimsBox;
-use dct::hints::{Align, Align2, Margins};
+use dct::layout::{Align, Align2, Margins};
 
 use std::io;
 use std::rc::Rc;

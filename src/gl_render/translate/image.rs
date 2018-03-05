@@ -7,7 +7,7 @@ use cgmath_geometry::{OffsetBox, BoundBox, GeoBox};
 
 use theme::RescaleRules;
 
-use dct::hints::Margins;
+use dct::layout::Margins;
 
 pub(in gl_render) struct ImageTranslate {
     verts: TranslateVerts,

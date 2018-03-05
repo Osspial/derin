@@ -6,7 +6,7 @@ use core::popup::ChildPopupsMut;
 
 use cgmath::Point2;
 use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
-use dct::hints::{SizeBounds, WidgetPos};
+use dct::layout::{SizeBounds, WidgetPos};
 
 use container::WidgetContainer;
 use layout::GridLayout;
