@@ -39,9 +39,11 @@ enum TimerPark {
 }
 
 impl<A, N: Node<A, GLFrame>> GlutinWindow<A, N> {
-    pub unsafe fn new(window_builder: WindowBuilder, root: N, theme: Theme) -> Result<GlutinWindow<A, N>, CreationError> {
+    pub unsafe fn new(attributes: WindowAttributes, root: N, theme: Theme) -> Result<GlutinWindow<A, N>, CreationError> {
         let events_loop = EventsLoop::new();
-        let renderer = GLRenderer::new(&events_loop, window_builder)?;
+        let mut builder = WindowBuilder::new();
+        builder.window = attributes;
+        let renderer = GLRenderer::new(&events_loop, builder)?;
 
         let timer_sync = Arc::new(Mutex::new(TimerPark::Indefinite));
         let timer_sync_timer_thread = timer_sync.clone();

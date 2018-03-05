@@ -1,13 +1,15 @@
 extern crate derin;
-extern crate glutin;
 extern crate gullery;
 #[macro_use]
 extern crate gullery_macros;
 
+use derin::{Window, WindowAttributes};
 use derin::dct::hints::Margins;
-use derin::{SingleContainer, Group, LayoutHorizontal, DirectRender, DirectRenderState};
+use derin::layout::LayoutHorizontal;
+use derin::container::SingleContainer;
+use derin::widgets::{Group, DirectRender, DirectRenderState};
 use derin::core::LoopFlow;
-use derin::geometry::{BoundBox, OffsetBox, Point2, Matrix3, GeoBox};
+use derin::geometry::{OffsetBox, Point2};
 
 use gullery::ContextState;
 use gullery::buffers::*;
@@ -36,11 +38,13 @@ fn main() {
     );
     let theme = derin::theme::Theme::default();
 
-    let window_builder = glutin::WindowBuilder::new()
-        .with_dimensions(256, 256)
-        .with_title("Direct Render Example");
+    let window_attributes = WindowAttributes {
+        dimensions: Some((256, 256)),
+        title: "Direct Render Example".to_string(),
+        ..WindowAttributes::default()
+    };
 
-    let mut window = unsafe{ derin::glutin_window::GlutinWindow::new(window_builder, direct_draw_ui, theme).unwrap() };
+    let mut window = unsafe{ Window::new(window_attributes, direct_draw_ui, theme).unwrap() };
     let context_state = window.context_state();
     {
         let direct = &mut window.root_mut().container_mut().node.render_state_mut();

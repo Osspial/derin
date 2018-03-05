@@ -13,7 +13,7 @@ use proc_macro::TokenStream;
 use syn::*;
 use quote::Tokens;
 
-#[proc_macro_derive(NodeContainer, attributes(derin))]
+#[proc_macro_derive(WidgetContainer, attributes(derin))]
 pub fn derive_node_container(input_tokens: TokenStream) -> TokenStream {
     let input = input_tokens.to_string();
     let item = syn::parse_derive_input(&input).expect("Attempted derive on non-item");
@@ -110,7 +110,7 @@ fn impl_node_container(derive_input: &DeriveInput) -> Tokens {
         const #dummy_const: () = {
             extern crate derin as _derive_derin;
 
-            impl #impl_generics _derive_derin::NodeContainer<__F> for #ident #ty_generics #where_clause {
+            impl #impl_generics _derive_derin::container::WidgetContainer<__F> for #ident #ty_generics #where_clause {
                 type Action = #action_ty;
 
                 #[inline]

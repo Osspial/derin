@@ -1,13 +1,14 @@
 extern crate derin;
 #[macro_use]
 extern crate derin_macros;
-extern crate glutin;
 
+use derin::{Window, WindowAttributes};
 use derin::dct::hints::Margins;
-use derin::{Button, Group, Label, LayoutHorizontal};
+use derin::layout::LayoutHorizontal;
+use derin::widgets::{Button, Group, Label};
 use derin::core::LoopFlow;
 
-#[derive(NodeContainer)]
+#[derive(WidgetContainer)]
 #[derin(action = "i32")]
 struct Counter {
     increment: Button<Option<i32>>,
@@ -27,11 +28,13 @@ fn main() {
     );
     let theme = derin::theme::Theme::default();
 
-    let window_builder = glutin::WindowBuilder::new()
-        .with_dimensions(400, 50)
-        .with_title("Counter Example");
+    let window_attributes = WindowAttributes {
+        dimensions: Some((400, 50)),
+        title: "Counter Example".to_string(),
+        ..WindowAttributes::default()
+    };
 
-    let mut window = unsafe{ derin::glutin_window::GlutinWindow::new(window_builder, counter_ui, theme).unwrap() };
+    let mut window = unsafe{ Window::new(window_attributes, counter_ui, theme).unwrap() };
     let _: Option<()> = window.run_forever(
         |value_delta, counter_ui, _| {
             value += value_delta;
