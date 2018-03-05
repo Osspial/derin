@@ -5,8 +5,7 @@
 //! Included are the aforementioned [widgets], a [desktop window builder][window], an [OpenGL-powered
 //! renderer][renderer], and utilities for [creating your own widgets and renderers][custom].
 //!
-//! ## Getting Started
-//! ### Installing External Libraries
+//! ## Installing External Libraries
 //! Derin currently relies on two external libraries to handle text rendering: Freetype and Harfbuzz.
 //! Harfbuzz is built and statically linked by `rustc`, and should lead to little trouble while
 //! building (although Windows users getting build errors are encouraged to use the `MSVC` toolchain
@@ -48,16 +47,16 @@ pub use glutin_window::GlutinWindow as Window;
 pub use glutin::WindowAttributes;
 pub use core::LoopFlow;
 
+/// `WidgetEvent` type and associated helpers.
+pub mod event {
+    pub use core::event::{EventOps, InputState, MouseDown, FocusChange, WidgetEvent};
+    pub use dct::buttons::{ModifierKeys, Key, MouseButton};
+}
+
 /// Types used to assemble widget geometry.
 ///
 /// The types within this module are all re-exported, either from `cgmath` or `cgmath-geometry`.
 pub mod geometry {
     pub use cgmath::{Point2, Vector2};
     pub use cgmath_geometry::{GeoBox, DimsBox, BoundBox, OffsetBox, Line, Ray, Segment, Linear, Intersection};
-}
-
-/// `WidgetEvent` type and associated helpers.
-pub mod event {
-    pub use core::event::{EventOps, InputState, MouseDown, FocusChange, WidgetEvent};
-    pub use dct::buttons::{ModifierKeys, Key, MouseButton};
 }

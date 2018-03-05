@@ -1,10 +1,38 @@
+//! Types used to specify children of container widgets.
+//!
+//! This module's primary functionality is in the `WidgetContainer` trait, and an implementation
+//! which contains a single widget is provided with the `SingleContainer` struct.
 use std::marker::PhantomData;
 
 use core::LoopFlow;
 use core::render::RenderFrame;
 use core::tree::{WidgetIdent, WidgetSummary, Widget};
 
+/// Designates a struct that contains other widgets.
+///
+/// This is used in conjunction with container widgets, such as [`Group`]. This usually shouldn't be
+/// directly implemented; you're encouraged to derive it with the macro included in `derin_macros`.
+/// Using this macro properly requires a few extra annotations within the type:
+/// * `#[derin(action = "$action_type")]` is placed on the struct itself, and is used to set the
+///   `Action` type.
+/// * `#[derin(collection = "$type_in_collection")]` is placed on fields within the struct which aren't
+///   themselves widgets, but are instead collections of widgets, such as `Vec`.
+///
+/// # Example
+/// ```
+/// pub struct SimpleAction;
+///
+/// #[derive(WidgetContainer)]
+/// #[derin(action = "SimpleAction")]
+/// struct Container {
+///     label: Label,
+///     edit_box: EditBox,
+///     #[derin(collection = "Button<Option<GalleryEvent>>")]
+///     buttons: Vec<Button<Option<GalleryEvent>>>
+/// }
+/// ```
 pub trait WidgetContainer<F: RenderFrame> {
+    /// The action created by the container's child widgets.
     type Action;
 
     /// Get the number of children stored within the container.
@@ -76,13 +104,16 @@ pub trait WidgetContainer<F: RenderFrame> {
     }
 }
 
+/// A container that contains a single widget.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SingleContainer<A, F: RenderFrame, N: Widget<A, F>> {
+    /// A widget.
     pub widget: N,
     _marker: PhantomData<(A, F)>
 }
 
 impl<A, F: RenderFrame, N: Widget<A, F>> SingleContainer<A, F, N> {
+    /// Creates a new container containing the given widget.
     #[inline(always)]
     pub fn new(widget: N) -> SingleContainer<A, F, N> {
         SingleContainer{ widget, _marker: PhantomData }

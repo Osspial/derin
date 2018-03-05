@@ -213,7 +213,7 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
 
             let num_children = self.num_children();
             self.container.children::<_, ()>(|summary| {
-                let mut layout_hints = self.layout.hints(summary.ident, summary.index, num_children).unwrap_or(WidgetPos::default());
+                let mut layout_hints = self.layout.positions(summary.ident, summary.index, num_children).unwrap_or(WidgetPos::default());
                 layout_hints.size_bounds = SizeBounds {
                     min: layout_hints.size_bounds.bound_rect(summary.size_bounds.min),
                     max: layout_hints.size_bounds.bound_rect(summary.size_bounds.max),

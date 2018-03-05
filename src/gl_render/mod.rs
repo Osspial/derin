@@ -1,3 +1,7 @@
+//! Implements the default OpenGL renderer.
+//!
+//! Unless you're creating your own widgets, you generally shouldn't have to look at this module.
+
 mod atlas;
 mod font_cache;
 mod translate;

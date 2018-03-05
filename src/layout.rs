@@ -1,8 +1,10 @@
+//! Utilities for specifying the layout of widgets.
 pub use dct::layout::{Align2, GridSize, Margins, SizeBounds, TrRange, TrackHints, WidgetPos, WidgetSpan};
 use core::tree::WidgetIdent;
 
+/// Places widgets in a resizable grid-based layout.
 pub trait GridLayout {
-    fn hints(&self, widget_ident: WidgetIdent, widget_index: usize, num_widgets: usize) -> Option<WidgetPos>;
+    fn positions(&self, widget_ident: WidgetIdent, widget_index: usize, num_widgets: usize) -> Option<WidgetPos>;
     fn grid_size(&self, num_widgets: usize) -> GridSize;
 }
 
@@ -20,7 +22,7 @@ impl LayoutHorizontal {
 }
 
 impl GridLayout for LayoutHorizontal {
-    fn hints(&self, _: WidgetIdent, widget_index: usize, num_widgets: usize) -> Option<WidgetPos> {
+    fn positions(&self, _: WidgetIdent, widget_index: usize, num_widgets: usize) -> Option<WidgetPos> {
         match widget_index >= num_widgets {
             true => None,
             false => Some(WidgetPos {
@@ -52,7 +54,7 @@ impl LayoutVertical {
 }
 
 impl GridLayout for LayoutVertical {
-    fn hints(&self, _: WidgetIdent, widget_index: usize, num_widgets: usize) -> Option<WidgetPos> {
+    fn positions(&self, _: WidgetIdent, widget_index: usize, num_widgets: usize) -> Option<WidgetPos> {
         match widget_index >= num_widgets {
             true => None,
             false => Some(WidgetPos {

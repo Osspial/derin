@@ -9,21 +9,46 @@ use popup::PopupAttributes;
 
 use std::time::{Instant, Duration};
 
+/// The set of operations to be performed after an event is processed by a widget.
 #[derive(Default)]
 pub struct EventOps<A, F: RenderFrame> {
+    /// Deliver the given action to the Derin action loop.
     pub action: Option<A>,
+    /// Change the keyboard focus to the given widget.
+    ///
+    /// Sending this results in the currently focused widget recieving a `LoseFocus` event and the
+    /// newly focused widget recieving a `GainFocus` event, as long as the focus isn't being set to
+    /// the currently focused widget, in which case no events are delivered.
     pub focus: Option<FocusChange>,
+    /// Bubble the event to the parent widget.
     pub bubble: bool,
+    /// Set the mouse cursor to the given position in the widget.
     pub cursor_pos: Option<Point2<i32>>,
+    /// Set the mouse cursor's icon to the given icon.
+    ///
+    /// Note that this change is permanent, and isn't reset to the default cursor until another
+    /// `cursor_icon` operation is recieved.
     pub cursor_icon: Option<CursorIcon>,
+    /// Create a popup window with the given attributes.
+    ///
+    /// This *does not count as a child widget*, and events bubbled from the popup will not be
+    /// delivered to the current widget.
     pub popup: Option<(Box<Widget<A, F>>, PopupAttributes)>
 }
 
+/// Changes the keyboard focus, removing the focus from another widget if necessary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum FocusChange {
+    /// Give keyboard focus to the widget after the widget sending a focus request.
     Next,
+    /// Give keyboard focus to the widget before the widget sending a focus request.
     Prev,
+    /// Give keyboard focus to the current widget.
     Take,
+    /// Remove keyboard focus from the current widget.
+    ///
+    /// Note that, if another widget has keyboard focus, this event *does not remove focus from
+    /// the other widget*. It only removes focus if the current widget has focus.
     Remove
 }
 
@@ -98,6 +123,7 @@ pub enum WidgetEvent<'a> {
     }
 }
 
+/// Non-borrowing equivalents of the `WidgetEvent` enum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum WidgetEventOwned {
     MouseEnter {
