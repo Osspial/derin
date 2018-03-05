@@ -3,8 +3,8 @@ use glutin::{MouseButton as GMouseButton, WindowEvent as GWindowEvent};
 use gl_render::{GLRenderer, GLFrame};
 use dct::buttons::{MouseButton, Key, ModifierKeys};
 use core::{Root, LoopFlow, WindowEvent, EventLoopOps, PopupDelta};
-use core::tree::{Node, NodeIdent};
-use core::event::NodeEvent;
+use core::tree::{Widget, WidgetIdent};
+use core::event::WidgetEvent;
 use core::popup::PopupID;
 use theme::Theme;
 use gullery::ContextState;
@@ -20,7 +20,7 @@ use cgmath_geometry::{DimsBox, GeoBox};
 
 use parking_lot::Mutex;
 
-pub struct GlutinWindow<A: 'static, N: 'static + Node<A, GLFrame>> {
+pub struct GlutinWindow<A: 'static, N: 'static + Widget<A, GLFrame>> {
     primary_renderer: RefCell<GLRenderer>,
     window_popup_map: HashMap<WindowId, PopupID>,
     popup_renderers: RefCell<HashMap<PopupID, GLRenderer>>,
@@ -38,7 +38,7 @@ enum TimerPark {
     Abort
 }
 
-impl<A, N: Node<A, GLFrame>> GlutinWindow<A, N> {
+impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
     pub unsafe fn new(attributes: WindowAttributes, root: N, theme: Theme) -> Result<GlutinWindow<A, N>, CreationError> {
         let events_loop = EventsLoop::new();
         let mut builder = WindowBuilder::new();
@@ -86,16 +86,16 @@ impl<A, N: Node<A, GLFrame>> GlutinWindow<A, N> {
     }
 
     pub fn root(&self) -> &N {
-        &self.root.root_node
+        &self.root.root_widget
     }
 
     pub fn root_mut(&mut self) -> &mut N {
-        &mut self.root.root_node
+        &mut self.root.root_widget
     }
 
     pub fn run_forever<F, FF, R>(&mut self, on_action: F, on_fallthrough: FF) -> Option<R>
         where F: FnMut(A, &mut N, &mut Theme) -> LoopFlow<R>,
-              FF: FnMut(NodeEvent, &[NodeIdent]) -> Option<A>
+              FF: FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
     {
         let GlutinWindow {
             ref mut primary_renderer,
@@ -280,7 +280,7 @@ impl<A, N: Node<A, GLFrame>> GlutinWindow<A, N> {
     }
 }
 
-impl<A, N: Node<A, GLFrame>> Drop for GlutinWindow<A, N> {
+impl<A, N: Widget<A, GLFrame>> Drop for GlutinWindow<A, N> {
     fn drop(&mut self) {
         *self.timer_sync.lock() = TimerPark::Abort;
         self.timer_thread_handle.thread().unpark();

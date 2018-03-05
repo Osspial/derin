@@ -51,7 +51,7 @@ pub struct ThemeText {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ThemeNode {
+pub struct ThemeWidget {
     pub text: Option<ThemeText>,
     pub icon: Option<Rc<Image>>,
 }
@@ -64,7 +64,7 @@ pub struct ThemeFace {
 }
 
 pub struct Theme {
-    map: HashMap<String, ThemeNode>
+    map: HashMap<String, ThemeWidget>
 }
 
 
@@ -95,18 +95,18 @@ impl Theme {
         }
     }
 
-    pub fn insert_node(&mut self, key: String, theme: ThemeNode) -> Option<ThemeNode> {
+    pub fn insert_widget(&mut self, key: String, theme: ThemeWidget) -> Option<ThemeWidget> {
         self.map.insert(key, theme)
     }
 }
 
 impl CoreTheme for Theme {
     type Key = str;
-    type ThemeValue = ThemeNode;
+    type ThemeValue = ThemeWidget;
 
-    fn node_theme(&self, path: &str) -> ThemeNode {
+    fn widget_theme(&self, path: &str) -> ThemeWidget {
         self.map.get(path).cloned().unwrap_or(
-            ThemeNode {
+            ThemeWidget {
                 text: None,
                 icon: None
             }
@@ -127,9 +127,9 @@ impl Default for Theme {
                 // Read the next frame. Currently this function should only called once.
                 // The default options
                 reader.next_frame(&mut image).unwrap();
-                theme.insert_node(
+                theme.insert_widget(
                     $name.to_string(),
-                    ThemeNode {
+                    ThemeWidget {
                         text: Some(ThemeText {
                             // TODO: DON'T LOAD FROM SRC
                             face: ThemeFace::new("./src/default_theme_resources/DejaVuSans.ttf", 0).unwrap(),
@@ -165,9 +165,9 @@ impl Default for Theme {
         upload_image!("Button::Hover", "./default_theme_resources/button.hover.png", 32, 4);
         upload_image!("Button::Clicked", "./default_theme_resources/button.clicked.png", 32, 4);
         upload_image!("EditBox", "./default_theme_resources/editbox.png", 8, 3);
-        theme.insert_node(
+        theme.insert_widget(
             "Label".to_string(),
-            ThemeNode {
+            ThemeWidget {
                 text: Some(ThemeText {
                     face: ThemeFace::new("./src/default_theme_resources/DejaVuSans.ttf", 0).unwrap(),
                     color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),

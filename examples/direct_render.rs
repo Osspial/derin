@@ -47,7 +47,7 @@ fn main() {
     let mut window = unsafe{ Window::new(window_attributes, direct_draw_ui, theme).unwrap() };
     let context_state = window.context_state();
     {
-        let direct = &mut window.root_mut().container_mut().node.render_state_mut();
+        let direct = &mut window.root_mut().container_mut().widget.render_state_mut();
         direct.0 = Some(DirectDraw {
             vao: VertexArrayObj::new_noindex(
                 Buffer::with_data(

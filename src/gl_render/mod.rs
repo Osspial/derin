@@ -27,7 +27,7 @@ use glutin::*;
 
 use theme::Theme;
 use core::render::{Renderer, RenderFrame};
-use core::tree::NodeIdent;
+use core::tree::WidgetIdent;
 
 use self::atlas::Atlas;
 use self::font_cache::FontCache;
@@ -239,7 +239,7 @@ impl RenderFrame for GLFrame {
     type Primitive = ThemedPrim<<Self as PrimFrame>::DirectRender>;
     type Theme = Theme;
 
-    fn upload_primitives<I>(&mut self, _ident: &[NodeIdent], theme: &Theme, transform: &BoundBox<Point2<i32>>, prim_iter: I)
+    fn upload_primitives<I>(&mut self, _ident: &[WidgetIdent], theme: &Theme, transform: &BoundBox<Point2<i32>>, prim_iter: I)
         where I: Iterator<Item=ThemedPrim<<GLFrame as PrimFrame>::DirectRender>>
     {
         self.poly_translator.translate_prims(

@@ -1,6 +1,6 @@
 use core::LoopFlow;
-use core::event::{EventOps, NodeEvent, InputState};
-use core::tree::{NodeIdent, UpdateTag, NodeSummary, NodeSubtrait, NodeSubtraitMut, Node, Parent, OnFocus};
+use core::event::{EventOps, WidgetEvent, InputState};
+use core::tree::{WidgetIdent, UpdateTag, WidgetSummary, WidgetSubtrait, WidgetSubtraitMut, Widget, Parent, OnFocus};
 use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 
@@ -50,7 +50,7 @@ impl<C, L> Group<C, L>
     }
 }
 
-impl<A, F, C, L> Node<A, F> for Group<C, L>
+impl<A, F, C, L> Widget<A, F> for Group<C, L>
     where F: PrimFrame,
           C: WidgetContainer<F, Action=A>,
           L: GridLayout
@@ -92,7 +92,7 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
     }
 
     #[inline]
-    fn on_node_event(&mut self, _: NodeEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[NodeIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, _: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
         EventOps {
             action: None,
             focus: None,
@@ -104,13 +104,13 @@ impl<A, F, C, L> Node<A, F> for Group<C, L>
     }
 
     #[inline]
-    fn subtrait(&self) -> NodeSubtrait<A, F> {
-        NodeSubtrait::Parent(self)
+    fn subtrait(&self) -> WidgetSubtrait<A, F> {
+        WidgetSubtrait::Parent(self)
     }
 
     #[inline]
-    fn subtrait_mut(&mut self) -> NodeSubtraitMut<A, F> {
-        NodeSubtraitMut::Parent(self)
+    fn subtrait_mut(&mut self) -> WidgetSubtraitMut<A, F> {
+        WidgetSubtraitMut::Parent(self)
     }
 
     fn accepts_focus(&self) -> OnFocus {
@@ -129,14 +129,14 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
         self.container.num_children()
     }
 
-    fn child(&self, node_ident: NodeIdent) -> Option<NodeSummary<&Node<A, F>>> {
-        self.container.child(node_ident)
+    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>> {
+        self.container.child(widget_ident)
     }
-    fn child_mut(&mut self, node_ident: NodeIdent) -> Option<NodeSummary<&mut Node<A, F>>> {
-        self.container.child_mut(node_ident)
+    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>> {
+        self.container.child_mut(widget_ident)
     }
 
-    fn children<'a>(&'a self, for_each: &mut FnMut(&[NodeSummary<&'a Node<A, F>>]) -> LoopFlow<()>) {
+    fn children<'a>(&'a self, for_each: &mut FnMut(&[WidgetSummary<&'a Widget<A, F>>]) -> LoopFlow<()>) {
         let mut child_avec: ArrayVec<[_; CHILD_BATCH_SIZE]> = ArrayVec::new();
 
         self.container.children::<_, ()>(|summary| {
@@ -160,7 +160,7 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
         }
     }
 
-    fn children_mut<'a>(&'a mut self, for_each: &mut FnMut(&mut [NodeSummary<&'a mut Node<A, F>>]) -> LoopFlow<()>) {
+    fn children_mut<'a>(&'a mut self, for_each: &mut FnMut(&mut [WidgetSummary<&'a mut Widget<A, F>>]) -> LoopFlow<()>) {
         let mut child_avec: ArrayVec<[_; CHILD_BATCH_SIZE]> = ArrayVec::new();
 
         self.container.children_mut::<_, ()>(|summary| {
@@ -184,10 +184,10 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
         }
     }
 
-    fn child_by_index(&self, index: usize) -> Option<NodeSummary<&Node<A, F>>> {
+    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>> {
         self.container.child_by_index(index)
     }
-    fn child_by_index_mut(&mut self, index: usize) -> Option<NodeSummary<&mut Node<A, F>>> {
+    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
         self.container.child_by_index_mut(index)
     }
 
@@ -230,7 +230,7 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
             let mut rects_iter = rects_vec.drain(..);
             self.container.children_mut::<_, ()>(|summary| {
                 match rects_iter.next() {
-                    Some(rect) => *summary.node.rect_mut() = rect.unwrap_or(BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF)),
+                    Some(rect) => *summary.widget.rect_mut() = rect.unwrap_or(BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF)),
                     None => return LoopFlow::Break(())
                 }
                 LoopFlow::Continue

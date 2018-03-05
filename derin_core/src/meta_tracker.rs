@@ -1,5 +1,5 @@
-use event::{FocusChange, NodeEventOwned};
-use tree::NodeIdent;
+use event::{FocusChange, WidgetEventOwned};
+use tree::WidgetIdent;
 use std::cmp;
 use std::ops::RangeFrom;
 use itertools::Itertools;
@@ -15,33 +15,33 @@ pub(crate) struct MetaDrain<'a> {
     code_vec: &'a mut Vec<MetaCode>
 }
 
-pub(crate) struct MetaEvent<I: Iterator<Item=NodeIdent>> {
+pub(crate) struct MetaEvent<I: Iterator<Item=WidgetIdent>> {
     pub source: I,
     pub variant: MetaEventVariant
 }
 
 pub(crate) enum MetaEventVariant {
     FocusChange(FocusChange),
-    EventBubble(NodeEventOwned)
+    EventBubble(WidgetEventOwned)
 }
 
 #[derive(Debug, Clone, Copy)]
 enum MetaCode {
     FocusChange(FocusChange),
-    EventBubble(NodeEventOwned),
-    Ident(NodeIdent)
+    EventBubble(WidgetEventOwned),
+    Ident(WidgetIdent)
 }
 
 impl MetaEventTracker {
     pub fn push_focus<I>(&mut self, focus: FocusChange, at_path: I)
-        where I: IntoIterator<Item=NodeIdent>
+        where I: IntoIterator<Item=WidgetIdent>
     {
         self.code_vec.push(MetaCode::FocusChange(focus));
         self.code_vec.extend(at_path.into_iter().map(|i| MetaCode::Ident(i)));
     }
 
-    pub fn push_bubble<I>(&mut self, event: NodeEventOwned, at_path: I)
-        where I: IntoIterator<Item=NodeIdent>
+    pub fn push_bubble<I>(&mut self, event: WidgetEventOwned, at_path: I)
+        where I: IntoIterator<Item=WidgetIdent>
     {
         self.code_vec.push(MetaCode::EventBubble(event));
         self.code_vec.extend(at_path.into_iter().map(|i| MetaCode::Ident(i)));
@@ -57,14 +57,14 @@ impl MetaEventTracker {
 
 impl<'a> MetaDrain<'a> {
     pub fn push_focus<I>(&mut self, focus: FocusChange, at_path: I)
-        where I: IntoIterator<Item=NodeIdent>
+        where I: IntoIterator<Item=WidgetIdent>
     {
         self.code_vec.push(MetaCode::FocusChange(focus));
         self.code_vec.extend(at_path.into_iter().map(|i| MetaCode::Ident(i)));
     }
 
-    pub fn push_bubble<I>(&mut self, event: NodeEventOwned, at_path: I)
-        where I: IntoIterator<Item=NodeIdent>
+    pub fn push_bubble<I>(&mut self, event: WidgetEventOwned, at_path: I)
+        where I: IntoIterator<Item=WidgetIdent>
     {
         self.code_vec.push(MetaCode::EventBubble(event));
         self.code_vec.extend(at_path.into_iter().map(|i| MetaCode::Ident(i)));
@@ -77,7 +77,7 @@ impl<'a> MetaDrain<'a> {
     //     }
     // }
 
-    pub fn next<'b>(&'b mut self) -> Option<MetaEvent<impl 'b + Iterator<Item=NodeIdent>>> {
+    pub fn next<'b>(&'b mut self) -> Option<MetaEvent<impl 'b + Iterator<Item=WidgetIdent>>> {
         let variant = match self.index.next().and_then(|i| self.code_vec.get(i).cloned())? {
             MetaCode::FocusChange(f) => MetaEventVariant::FocusChange(f),
             MetaCode::EventBubble(e) => MetaEventVariant::EventBubble(e),
@@ -130,15 +130,15 @@ mod tests {
     #[test]
     fn focus_push_drain() {
         let mut focus_tracker = MetaEventTracker::default();
-        focus_tracker.push_focus(FocusChange::Next, [NodeIdent::Num(0), NodeIdent::Str("hello")].into_iter().cloned());
-        focus_tracker.push_focus(FocusChange::Prev, [NodeIdent::Str("goodbye"), NodeIdent::Str("again"), NodeIdent::Num(3)].into_iter().cloned());
+        focus_tracker.push_focus(FocusChange::Next, [WidgetIdent::Num(0), WidgetIdent::Str("hello")].into_iter().cloned());
+        focus_tracker.push_focus(FocusChange::Prev, [WidgetIdent::Str("goodbye"), WidgetIdent::Str("again"), WidgetIdent::Num(3)].into_iter().cloned());
 
         {
         let mut drain = focus_tracker.drain_meta();
             let (focus, mut iter) = drain.next().unwrap();
             assert_eq!(FocusChange::Next, focus);
-            assert_eq!(Some(NodeIdent::Num(0)), iter.next());
-            assert_eq!(Some(NodeIdent::Str("hello")), iter.next());
+            assert_eq!(Some(WidgetIdent::Num(0)), iter.next());
+            assert_eq!(Some(WidgetIdent::Str("hello")), iter.next());
             assert_eq!(None, iter.next());
         }
 
@@ -146,9 +146,9 @@ mod tests {
         let mut drain = focus_tracker.drain_meta();
             let (focus, mut iter) = drain.next().unwrap();
             assert_eq!(FocusChange::Prev, focus);
-            assert_eq!(Some(NodeIdent::Str("goodbye")), iter.next());
-            assert_eq!(Some(NodeIdent::Str("again")), iter.next());
-            assert_eq!(Some(NodeIdent::Num(3)), iter.next());
+            assert_eq!(Some(WidgetIdent::Str("goodbye")), iter.next());
+            assert_eq!(Some(WidgetIdent::Str("again")), iter.next());
+            assert_eq!(Some(WidgetIdent::Num(3)), iter.next());
             assert_eq!(None, iter.next());
         }
 

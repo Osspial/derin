@@ -1,5 +1,5 @@
-use core::event::{EventOps, NodeEvent, InputState};
-use core::tree::{NodeIdent, UpdateTag, NodeSubtrait, NodeSubtraitMut, Node, };
+use core::event::{EventOps, WidgetEvent, InputState};
+use core::tree::{WidgetIdent, UpdateTag, WidgetSubtrait, WidgetSubtraitMut, Widget, };
 use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 
@@ -43,7 +43,7 @@ impl<R: DirectRenderState> DirectRender<R> {
     }
 }
 
-impl<A, F, R> Node<A, F> for DirectRender<R>
+impl<A, F, R> Widget<A, F> for DirectRender<R>
     where R: DirectRenderState + 'static,
           F: PrimFrame<DirectRender = R::RenderType>
 {
@@ -78,7 +78,7 @@ impl<A, F, R> Node<A, F> for DirectRender<R>
     }
 
     #[inline]
-    fn on_node_event(&mut self, _: NodeEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[NodeIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, _: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
         EventOps {
             action: None,
             focus: None,
@@ -90,12 +90,12 @@ impl<A, F, R> Node<A, F> for DirectRender<R>
     }
 
     #[inline]
-    fn subtrait(&self) -> NodeSubtrait<A, F> {
-        NodeSubtrait::Node(self)
+    fn subtrait(&self) -> WidgetSubtrait<A, F> {
+        WidgetSubtrait::Widget(self)
     }
 
     #[inline]
-    fn subtrait_mut(&mut self) -> NodeSubtraitMut<A, F> {
-        NodeSubtraitMut::Node(self)
+    fn subtrait_mut(&mut self) -> WidgetSubtraitMut<A, F> {
+        WidgetSubtraitMut::Widget(self)
     }
 }

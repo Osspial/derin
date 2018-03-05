@@ -1,5 +1,5 @@
-use core::event::{EventOps, NodeEvent, InputState, FocusChange};
-use core::tree::{NodeIdent, UpdateTag, NodeSubtrait, NodeSubtraitMut, Node};
+use core::event::{EventOps, WidgetEvent, InputState, FocusChange};
+use core::tree::{WidgetIdent, UpdateTag, WidgetSubtrait, WidgetSubtraitMut, Widget};
 use core::render::{FrameRectStack, Theme};
 use core::popup::ChildPopupsMut;
 use core::timer::TimerRegister;
@@ -45,7 +45,7 @@ impl EditBox {
     }
 }
 
-impl<A, F> Node<A, F> for EditBox
+impl<A, F> Widget<A, F> for EditBox
     where F: PrimFrame
 {
     #[inline]
@@ -97,14 +97,14 @@ impl<A, F> Node<A, F> for EditBox
         ].iter().cloned());
 
         let mut size_bounds = self.size_bounds.get();
-        size_bounds.min = frame.theme().node_theme("EditBox").icon.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
+        size_bounds.min = frame.theme().widget_theme("EditBox").icon.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
         let render_string_min = self.string.render_string.min_size();
         size_bounds.min.dims.y += render_string_min.height();
         self.size_bounds.set(size_bounds);
     }
 
-    fn on_node_event(&mut self, event: NodeEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[NodeIdent]) -> EventOps<A, F> {
-        use self::NodeEvent::*;
+    fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
+        use self::WidgetEvent::*;
         use dct::buttons::MouseButton;
 
         let allow_char = |c| match c {
@@ -167,7 +167,7 @@ impl<A, F> Node<A, F> for EditBox
                     .mark_render_self()
                     .mark_update_timer();
             }
-            MouseDown{in_node: true, button, pos} => {
+            MouseDown{in_widget: true, button, pos} => {
                 focus = Some(FocusChange::Take);
                 if button == MouseButton::Left {
                     self.string.select_on_line(Segment::new(pos, pos));
@@ -179,15 +179,15 @@ impl<A, F> Node<A, F> for EditBox
             MouseUp{button: MouseButton::Left, ..} => {
                 self.update_tag.mark_render_self();
             }
-            MouseDown{in_node: false, ..} => {
+            MouseDown{in_widget: false, ..} => {
                 focus = Some(FocusChange::Remove);
                 self.string.draw_cursor = false;
                 self.update_tag
                     .mark_render_self()
                     .mark_update_timer();
             },
-            MouseMove{new_pos, buttons_down_in_node, ..} => {
-                if let Some(down) = buttons_down_in_node.iter().find(|d| d.button == MouseButton::Left) {
+            MouseMove{new_pos, buttons_down_in_widget, ..} => {
+                if let Some(down) = buttons_down_in_widget.iter().find(|d| d.button == MouseButton::Left) {
                     self.string.select_on_line(Segment::new(down.down_pos, new_pos));
                     self.update_tag.mark_render_self();
                 }
@@ -222,12 +222,12 @@ impl<A, F> Node<A, F> for EditBox
     }
 
     #[inline]
-    fn subtrait(&self) -> NodeSubtrait<A, F> {
-        NodeSubtrait::Node(self)
+    fn subtrait(&self) -> WidgetSubtrait<A, F> {
+        WidgetSubtrait::Widget(self)
     }
 
     #[inline]
-    fn subtrait_mut(&mut self) -> NodeSubtraitMut<A, F> {
-        NodeSubtraitMut::Node(self)
+    fn subtrait_mut(&mut self) -> WidgetSubtraitMut<A, F> {
+        WidgetSubtraitMut::Widget(self)
     }
 }

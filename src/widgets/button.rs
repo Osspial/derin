@@ -1,5 +1,5 @@
-use core::event::{EventOps, NodeEvent, InputState};
-use core::tree::{NodeIdent, UpdateTag, NodeSubtrait, NodeSubtraitMut, Node};
+use core::event::{EventOps, WidgetEvent, InputState};
+use core::tree::{WidgetIdent, UpdateTag, WidgetSubtrait, WidgetSubtraitMut, Widget};
 use core::render::{FrameRectStack, Theme};
 use core::popup::ChildPopupsMut;
 use core::timer::TimerRegister;
@@ -70,7 +70,7 @@ impl<H: ButtonHandler> Button<H> {
     }
 }
 
-impl<F, H> Node<H::Action, F> for Button<H>
+impl<F, H> Widget<H::Action, F> for Button<H>
     where F: PrimFrame,
           H: ButtonHandler
 {
@@ -130,7 +130,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
         ].iter().cloned());
 
         let mut size_bounds = self.size_bounds.get();
-        size_bounds.min = frame.theme().node_theme(image_str).icon.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
+        size_bounds.min = frame.theme().widget_theme(image_str).icon.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
         let render_string_min = self.string.min_size();
         size_bounds.min.dims.x += render_string_min.width();
         size_bounds.min.dims.y += render_string_min.height();
@@ -143,8 +143,8 @@ impl<F, H> Node<H::Action, F> for Button<H>
         }
     }
 
-    fn on_node_event(&mut self, event: NodeEvent, input_state: InputState, popups_opt: Option<ChildPopupsMut<H::Action, F>>, bubble_source: &[NodeIdent]) -> EventOps<H::Action, F> {
-        use self::NodeEvent::*;
+    fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, popups_opt: Option<ChildPopupsMut<H::Action, F>>, bubble_source: &[WidgetIdent]) -> EventOps<H::Action, F> {
+        use self::WidgetEvent::*;
 
         let (mut action, focus) = (None, None);
         let mut popup = None;
@@ -157,19 +157,19 @@ impl<F, H> Node<H::Action, F> for Button<H>
                     MouseExit{..} |
                     MouseMove{..} |
                     MouseDown{..} => {
-                        popups.remove(NodeIdent::Str("mouseover_text"));
+                        popups.remove(WidgetIdent::Str("mouseover_text"));
                     },
                     _ => ()
                 }
             }
 
             let new_state = match event {
-                MouseEnter{buttons_down_in_node, ..} |
-                MouseExit{buttons_down_in_node, ..} => {
+                MouseEnter{buttons_down_in_widget, ..} |
+                MouseExit{buttons_down_in_widget, ..} => {
                     self.waiting_for_mouseover = false;
                     self.update_tag.mark_update_timer();
 
-                    match (buttons_down_in_node.is_empty(), event) {
+                    match (buttons_down_in_widget.is_empty(), event) {
                         (true, MouseEnter{..}) => ButtonState::Hover,
                         (true, MouseExit{..}) => ButtonState::Normal,
                         (false, _) => self.state,
@@ -185,8 +185,8 @@ impl<F, H> Node<H::Action, F> for Button<H>
                     self.update_tag.mark_update_timer();
                     ButtonState::Clicked
                 },
-                MouseUp{in_node: true, pressed_in_node, ..} => {
-                    match pressed_in_node {
+                MouseUp{in_widget: true, pressed_in_widget, ..} => {
+                    match pressed_in_widget {
                         true => {
                             action = self.handler.on_click();
                             ButtonState::Hover
@@ -194,7 +194,7 @@ impl<F, H> Node<H::Action, F> for Button<H>
                         false => self.state
                     }
                 },
-                MouseUp{in_node: false, ..} => ButtonState::Normal,
+                MouseUp{in_widget: false, ..} => ButtonState::Normal,
                 MouseEnterChild{..} |
                 MouseExitChild{..} => unreachable!(),
                 GainFocus => ButtonState::Hover,
@@ -206,14 +206,14 @@ impl<F, H> Node<H::Action, F> for Button<H>
                     self.waiting_for_mouseover = false;
                     self.update_tag.mark_update_timer();
                     // popup = Some((
-                    //     Box::new(Group::new(SingleContainer::new(Label::new("Hello Popup!".to_string())), LayoutHorizontal::default())) as Box<Node<_, F>>,
+                    //     Box::new(Group::new(SingleContainer::new(Label::new("Hello Popup!".to_string())), LayoutHorizontal::default())) as Box<Widget<_, F>>,
                     //     ::core::popup::PopupAttributes {
                     //         rect: BoundBox::new2(1, 1, 129, 129) + input_state.mouse_pos.to_vec(),
                     //         title: "".to_string(),
                     //         decorations: false,
                     //         tool_window: true,
                     //         focusable: false,
-                    //         ident: NodeIdent::Str("mouseover_text")
+                    //         ident: WidgetIdent::Str("mouseover_text")
                     //     }
                     // ));
                     self.state
@@ -238,12 +238,12 @@ impl<F, H> Node<H::Action, F> for Button<H>
     }
 
     #[inline]
-    fn subtrait(&self) -> NodeSubtrait<H::Action, F> {
-        NodeSubtrait::Node(self)
+    fn subtrait(&self) -> WidgetSubtrait<H::Action, F> {
+        WidgetSubtrait::Widget(self)
     }
 
     #[inline]
-    fn subtrait_mut(&mut self) -> NodeSubtraitMut<H::Action, F> {
-        NodeSubtraitMut::Node(self)
+    fn subtrait_mut(&mut self) -> WidgetSubtraitMut<H::Action, F> {
+        WidgetSubtraitMut::Widget(self)
     }
 }

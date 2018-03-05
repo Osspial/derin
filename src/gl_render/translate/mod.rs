@@ -113,9 +113,9 @@ impl Translator {
 
         for (abs_rect, prim) in prim_rect_iter {
             let theme_path = unsafe{ &*prim.theme_path };
-            let node_theme = theme.node_theme(theme_path);
+            let widget_theme = theme.widget_theme(theme_path);
 
-            match (prim.prim, node_theme.icon, node_theme.text) {
+            match (prim.prim, widget_theme.icon, widget_theme.text) {
                 (Prim::Image, Some(image), _) => {
                     let atlas_rect = draw.atlas.image_rect(theme_path, || (&image.pixels, image.dims)).cast::<u16>().unwrap();
 

@@ -99,16 +99,16 @@ impl Default for Align {
 #[derive(Default, Debug, Clone, Copy)]
 pub struct WidgetPos {
     pub size_bounds: SizeBounds,
-    pub node_span: WidgetSpan,
+    pub widget_span: WidgetSpan,
     pub place_in_cell: Align2,
     pub margins: Margins<Px>
 }
 
 impl WidgetPos {
-    pub fn new(size_bounds: SizeBounds, node_span: WidgetSpan, place_in_cell: Align2, margins: Margins<Px>) -> WidgetPos {
+    pub fn new(size_bounds: SizeBounds, widget_span: WidgetSpan, place_in_cell: Align2, margins: Margins<Px>) -> WidgetPos {
         WidgetPos {
             size_bounds: size_bounds,
-            node_span: node_span,
+            widget_span: widget_span,
             place_in_cell: place_in_cell,
             margins: margins
         }

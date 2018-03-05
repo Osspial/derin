@@ -266,8 +266,8 @@ impl GridEngine {
 
             let mut solvable_index = 0;
             for (hint, widget_rect) in hints.iter().zip(rects.iter_mut()) {
-                if 0 < hint.node_span.x.size(0, 1) &&
-                   0 < hint.node_span.y.size(0, 1)
+                if 0 < hint.widget_span.x.size(0, 1) &&
+                   0 < hint.widget_span.y.size(0, 1)
                 {
                     let &mut UpdateHeapCache {
                         ref mut rigid_tracks_widget,
@@ -314,7 +314,7 @@ impl GridEngine {
                             let mut px_widget = 0;
                             let mut min_size_debt = widget_size_bounds.min.$size();
 
-                            if let Some(track_slice) = grid.$track_range(hint.node_span.$axis) {
+                            if let Some(track_slice) = grid.$track_range(hint.widget_span.$axis) {
                                 for (index, track) in track_slice.iter().enumerate() {
                                     let track_fr_size = track.hints().fr_size;
                                     px_widget += track.size();
@@ -339,7 +339,7 @@ impl GridEngine {
 
                                     let mut rigid_index = 0;
                                     while let Some(track_index) = rigid_tracks_widget.get(rigid_index).cloned() {
-                                        let track = &mut grid.$track_range_mut(hint.node_span.$axis).unwrap()[track_index as usize];
+                                        let track = &mut grid.$track_range_mut(hint.widget_span.$axis).unwrap()[track_index as usize];
                                         let expansion = rigid_expand + (expand_rem != 0) as Px;
 
                                         if track.min_size() + expansion <= track.max_size() {
@@ -422,8 +422,8 @@ impl GridEngine {
                     let widget_origin_rect = DimsBox::new2(size_x, size_y);
 
                     if let Some(offset) = grid.get_cell_offset(
-                        hint.node_span.x.start.unwrap_or(0),
-                        hint.node_span.y.start.unwrap_or(0)
+                        hint.widget_span.x.start.unwrap_or(0),
+                        hint.widget_span.y.start.unwrap_or(0)
                     ) {
                         let outer_rect = BoundBox::from(widget_origin_rect) + offset.to_vec();
                         let cell_hinter = CellHinter::new(outer_rect, hint.place_in_cell);

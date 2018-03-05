@@ -1,6 +1,6 @@
 use std::mem;
 use render::RenderFrame;
-use tree::{Node, NodeIdent, NodeSummary, RootID, Update};
+use tree::{Widget, WidgetIdent, WidgetSummary, RootID, Update};
 
 use cgmath::{EuclideanSpace, Point2, Vector2};
 use cgmath_geometry::{BoundBox, GeoBox};
@@ -8,28 +8,28 @@ use cgmath_geometry::{BoundBox, GeoBox};
 // TODO: GET CODE REVIEWED FOR SAFETY
 
 struct StackElement<'a, A, F: RenderFrame> {
-    node: *mut (Node<A, F> + 'a),
+    widget: *mut (Widget<A, F> + 'a),
     bounds: BoundBox<Point2<i32>>,
     index: usize
 }
 
 pub(crate) struct NRAllocCache<A, F: RenderFrame> {
     vec: Vec<StackElement<'static, A, F>>,
-    ident_vec: Vec<NodeIdent>
+    ident_vec: Vec<WidgetIdent>
 }
 
 pub struct NRVec<'a, A: 'a, F: 'a + RenderFrame> {
     cache: &'a mut Vec<StackElement<'static, A, F>>,
     vec: Vec<StackElement<'a, A, F>>,
-    ident_vec: &'a mut Vec<NodeIdent>,
+    ident_vec: &'a mut Vec<WidgetIdent>,
     top_parent_offset: Vector2<i32>,
     root_id: RootID
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct NodePath<'a, N: 'a + ?Sized> {
-    pub node: &'a mut N,
-    pub path: &'a [NodeIdent],
+pub struct WidgetPath<'a, N: 'a + ?Sized> {
+    pub widget: &'a mut N,
+    pub path: &'a [WidgetIdent],
     pub top_parent_offset: Vector2<i32>
 }
 
@@ -41,7 +41,7 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
         }
     }
 
-    pub fn use_cache<'a>(&'a mut self, node: &mut (Node<A, F> + 'a), root_id: RootID) -> NRVec<'a, A, F> {
+    pub fn use_cache<'a>(&'a mut self, widget: &mut (Widget<A, F> + 'a), root_id: RootID) -> NRVec<'a, A, F> {
         let mut cache_swap = Vec::new();
         mem::swap(&mut cache_swap, &mut self.vec);
 
@@ -53,11 +53,11 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
         let ident_vec = &mut self.ident_vec;
 
         vec.push(StackElement {
-            node: node,
+            widget: widget,
             bounds: BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF),
             index: 0
         });
-        ident_vec.push(NodeIdent::Num(0));
+        ident_vec.push(WidgetIdent::Num(0));
 
         NRVec {
             cache: &mut self.vec,
@@ -70,21 +70,21 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
 
 impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     #[inline]
-    pub fn top(&self) -> &(Node<A, F> + 'a) {
-        self.vec.last().map(|n| unsafe{ &*n.node }).unwrap()
+    pub fn top(&self) -> &(Widget<A, F> + 'a) {
+        self.vec.last().map(|n| unsafe{ &*n.widget }).unwrap()
     }
 
     #[inline]
-    pub fn top_mut(&mut self) -> NodePath<Node<A, F> + 'a> {
-        NodePath {
-            node: self.vec.last_mut().map(|n| unsafe{ &mut *n.node }).unwrap(),
+    pub fn top_mut(&mut self) -> WidgetPath<Widget<A, F> + 'a> {
+        WidgetPath {
+            widget: self.vec.last_mut().map(|n| unsafe{ &mut *n.widget }).unwrap(),
             path: &self.ident_vec,
             top_parent_offset: self.top_parent_offset()
         }
     }
 
     #[inline]
-    pub fn top_ident(&self) -> NodeIdent {
+    pub fn top_ident(&self) -> WidgetIdent {
         *self.ident_vec.last().unwrap()
     }
 
@@ -100,9 +100,9 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     #[inline]
     pub fn truncate(&mut self, len: usize) {
         assert_ne!(0, len);
-        for node_slice in self.vec[len-1..].windows(2).rev() {
-            let parent = unsafe{ &*node_slice[0].node };
-            let child = unsafe{ &*node_slice[1].node };
+        for widget_slice in self.vec[len-1..].windows(2).rev() {
+            let parent = unsafe{ &*widget_slice[0].widget };
+            let child = unsafe{ &*widget_slice[1].widget };
 
             if child.update_tag().needs_update(self.root_id) != Update::default() {
                 parent.update_tag().mark_update_child_immutable();
@@ -129,32 +129,32 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn nodes<'b>(&'b self) -> impl 'b + Iterator<Item=&'a Node<A, F>> + DoubleEndedIterator + ExactSizeIterator {
-        self.vec.iter().map(|n| unsafe{ &*n.node })
+    pub fn widgets<'b>(&'b self) -> impl 'b + Iterator<Item=&'a Widget<A, F>> + DoubleEndedIterator + ExactSizeIterator {
+        self.vec.iter().map(|n| unsafe{ &*n.widget })
     }
 
     #[inline]
-    pub fn ident(&self) -> &[NodeIdent] {
+    pub fn ident(&self) -> &[WidgetIdent] {
         debug_assert_eq!(self.ident_vec.len(), self.vec.len());
         &self.ident_vec
     }
 
     #[inline]
-    pub fn try_push<G>(&mut self, with_top: G) -> Option<NodeSummary<&'a mut Node<A, F>>>
-        where G: FnOnce(&'a mut Node<A, F>, &[NodeIdent]) -> Option<NodeSummary<&'a mut Node<A, F>>>
+    pub fn try_push<G>(&mut self, with_top: G) -> Option<WidgetSummary<&'a mut Widget<A, F>>>
+        where G: FnOnce(&'a mut Widget<A, F>, &[WidgetIdent]) -> Option<WidgetSummary<&'a mut Widget<A, F>>>
     {
-        let new_top_opt = with_top(unsafe{ mem::transmute(self.top_mut().node) }, &self.ident_vec );
+        let new_top_opt = with_top(unsafe{ mem::transmute(self.top_mut().widget) }, &self.ident_vec );
         if let Some(new_top_summary) = new_top_opt {
-            assert_ne!(new_top_summary.node as *mut Node<A, F>, self.top_mut().node as *mut _);
+            assert_ne!(new_top_summary.widget as *mut Widget<A, F>, self.top_mut().widget as *mut _);
             {
                 let cur_top = self.vec.last_mut().unwrap();
 
-                cur_top.bounds = unsafe{ &*cur_top.node }.rect();
+                cur_top.bounds = unsafe{ &*cur_top.widget }.rect();
                 self.top_parent_offset += cur_top.bounds.min().to_vec();
             }
 
             self.vec.push(StackElement {
-                node: new_top_summary.node,
+                widget: new_top_summary.widget,
                 bounds: BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF),
                 index: new_top_summary.index
             });
@@ -166,20 +166,20 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn pop(&mut self) -> Option<&'a mut Node<A, F>> {
+    pub fn pop(&mut self) -> Option<&'a mut Widget<A, F>> {
         // Ensure the base is never popped
         if self.vec.len() == 1 {
             return None;
         }
 
-        let popped = self.vec.pop().map(|n| unsafe{ &mut *n.node }).unwrap();
+        let popped = self.vec.pop().map(|n| unsafe{ &mut *n.widget }).unwrap();
         self.ident_vec.pop();
         let last_mut = self.vec.last_mut().unwrap();
         self.top_parent_offset -= last_mut.bounds.min().to_vec();
         last_mut.bounds = BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF);
 
         if popped.update_tag().needs_update(self.root_id) != Update::default() {
-            self.top_mut().node.update_tag().mark_update_child_immutable();
+            self.top_mut().widget.update_tag().mark_update_child_immutable();
         }
 
 

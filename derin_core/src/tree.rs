@@ -7,13 +7,13 @@ use cgmath_geometry::BoundBox;
 use mbseq::MouseButtonSequence;
 use dct::buttons::MouseButton;
 use dct::layout::SizeBounds;
-use event::{NodeEvent, EventOps, InputState};
+use event::{WidgetEvent, EventOps, InputState};
 use render::{RenderFrame, FrameRectStack};
 use timer::TimerRegister;
 use popup::ChildPopupsMut;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum NodeIdent {
+pub enum WidgetIdent {
     Str(&'static str),
     Num(u32),
     StrCollection(&'static str, u32),
@@ -30,18 +30,18 @@ pub(crate) struct Update {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum MouseState {
-    /// The mouse is hovering over the given node.
+    /// The mouse is hovering over the given widget.
     Hovering(Point2<i32>, MouseButtonSequence),
-    /// The mouse isn't hovering over the node, but the node is still receiving mouse events.
+    /// The mouse isn't hovering over the widget, but the widget is still receiving mouse events.
     Tracking(Point2<i32>, MouseButtonSequence),
-    /// The node is not aware of the current mouse position and is receiving no events.
+    /// The widget is not aware of the current mouse position and is receiving no events.
     Untracked
 }
 
 #[derive(Debug, Clone)]
 pub struct UpdateTag {
     last_root: Cell<u32>,
-    pub(crate) node_id: NodeID,
+    pub(crate) widget_id: WidgetID,
     pub(crate) last_event_stamp: Cell<u32>,
     pub(crate) mouse_state: Cell<MouseState>,
     pub(crate) has_keyboard_focus: Cell<bool>,
@@ -96,9 +96,9 @@ impl From<MouseButtonSequence> for ChildEventRecv {
 impl<'a> From<&'a UpdateTag> for ChildEventRecv {
     #[inline]
     fn from(update_tag: &'a UpdateTag) -> ChildEventRecv {
-        let node_mb_flags = ChildEventRecv::from(update_tag.mouse_state.get().mouse_button_sequence());
+        let widget_mb_flags = ChildEventRecv::from(update_tag.mouse_state.get().mouse_button_sequence());
 
-        node_mb_flags |
+        widget_mb_flags |
         match update_tag.mouse_state.get() {
             MouseState::Hovering(_, _) => ChildEventRecv::MOUSE_HOVER,
             MouseState::Tracking(_, _)  |
@@ -140,36 +140,36 @@ macro_rules! id {
 }
 
 id!(pub(crate) RootID let id; {assert!(id < UPDATE_MASK)});
-id!(pub(crate) NodeID);
+id!(pub(crate) WidgetID);
 
 
 macro_rules! subtrait_enums {
     (subtraits {
         $( $Variant:ident($SubTrait:ty) fn $as_variant:ident ),+
     }) => {
-        pub enum NodeSubtrait<'a, A: 'a, F: 'a + RenderFrame> {
+        pub enum WidgetSubtrait<'a, A: 'a, F: 'a + RenderFrame> {
             $( $Variant(&'a $SubTrait) ),+
         }
 
-        pub enum NodeSubtraitMut<'a, A: 'a, F: 'a + RenderFrame> {
+        pub enum WidgetSubtraitMut<'a, A: 'a, F: 'a + RenderFrame> {
             $( $Variant(&'a mut $SubTrait) ),+
         }
 
-        impl<'a, A, F: RenderFrame> NodeSubtrait<'a, A, F> {
+        impl<'a, A, F: RenderFrame> WidgetSubtrait<'a, A, F> {
             $(
                 pub fn $as_variant(self) -> Option<&'a $SubTrait> {
                     match self {
-                        NodeSubtrait::$Variant(v) => Some(v),
+                        WidgetSubtrait::$Variant(v) => Some(v),
                         _ => None
                     }
                 }
             )+
         }
-        impl<'a, A, F: RenderFrame> NodeSubtraitMut<'a, A, F> {
+        impl<'a, A, F: RenderFrame> WidgetSubtraitMut<'a, A, F> {
             $(
                 pub fn $as_variant(self) -> Option<&'a mut $SubTrait> {
                     match self {
-                        NodeSubtraitMut::$Variant(v) => Some(v),
+                        WidgetSubtraitMut::$Variant(v) => Some(v),
                         _ => None
                     }
                 }
@@ -180,47 +180,47 @@ macro_rules! subtrait_enums {
 
 subtrait_enums! {subtraits {
     Parent(Parent<A, F>) fn as_parent,
-    Node(Node<A, F>) fn as_node
+    Widget(Widget<A, F>) fn as_widget
 }}
 
-/// Behavior when another node attempts to focus a given node.
+/// Behavior when another widget attempts to focus a given widget.
 ///
-/// Note that this is *ignored* if the attempt to focus came from the return value of this node's
-/// `on_node_event` function.
+/// Note that this is *ignored* if the attempt to focus came from the return value of this widget's
+/// `on_widget_event` function.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OnFocus {
-    /// Accept focus, and send a `GainFocus` event to this node. Is default.
+    /// Accept focus, and send a `GainFocus` event to this widget. Is default.
     Accept,
-    /// Don't accept focus, and try to focus the next node.
+    /// Don't accept focus, and try to focus the next widget.
     Skip,
     FocusChild
 }
 
 /// Configures where to deliver focus when a child send a `FocusChange::Next` or `FocusChange::Prev`,
-/// and there is no next/previous node to deliver focus to.
+/// and there is no next/previous widget to deliver focus to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum OnFocusOverflow {
-    /// Go the the parent node and attempt to deliver focus to the next node on the parent's level.
+    /// Go the the parent widget and attempt to deliver focus to the next widget on the parent's level.
     /// Is default.
     Continue,
-    /// Wrap focus around, returning focus to the first/last node on the current level.
+    /// Wrap focus around, returning focus to the first/last widget on the current level.
     Wrap
 }
 
-pub trait Node<A, F: RenderFrame> {
+pub trait Widget<A, F: RenderFrame> {
     fn update_tag(&self) -> &UpdateTag;
     fn rect(&self) -> BoundBox<Point2<i32>>;
     fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>>;
     fn render(&self, frame: &mut FrameRectStack<F>);
-    fn on_node_event(
+    fn on_widget_event(
         &mut self,
-        event: NodeEvent,
+        event: WidgetEvent,
         input_state: InputState,
         popups: Option<ChildPopupsMut<A, F>>,
-        source_child: &[NodeIdent]
+        source_child: &[WidgetIdent]
     ) -> EventOps<A, F>;
-    fn subtrait(&self) -> NodeSubtrait<A, F>;
-    fn subtrait_mut(&mut self) -> NodeSubtraitMut<A, F>;
+    fn subtrait(&self) -> WidgetSubtrait<A, F>;
+    fn subtrait_mut(&mut self) -> WidgetSubtraitMut<A, F>;
 
     fn size_bounds(&self) -> SizeBounds {
         SizeBounds::default()
@@ -232,26 +232,26 @@ pub trait Node<A, F: RenderFrame> {
 }
 
 #[derive(Debug, Clone)]
-pub struct NodeSummary<N: ?Sized> {
-    pub ident: NodeIdent,
+pub struct WidgetSummary<N: ?Sized> {
+    pub ident: WidgetIdent,
     pub rect: BoundBox<Point2<i32>>,
     pub size_bounds: SizeBounds,
     pub update_tag: UpdateTag,
     pub index: usize,
-    pub node: N,
+    pub widget: N,
 }
 
-pub trait Parent<A, F: RenderFrame>: Node<A, F> {
+pub trait Parent<A, F: RenderFrame>: Widget<A, F> {
     fn num_children(&self) -> usize;
 
-    fn child(&self, node_ident: NodeIdent) -> Option<NodeSummary<&Node<A, F>>>;
-    fn child_mut(&mut self, node_ident: NodeIdent) -> Option<NodeSummary<&mut Node<A, F>>>;
+    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>>;
+    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>>;
 
-    fn child_by_index(&self, index: usize) -> Option<NodeSummary<&Node<A, F>>>;
-    fn child_by_index_mut(&mut self, index: usize) -> Option<NodeSummary<&mut Node<A, F>>>;
+    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>>;
+    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>>;
 
-    fn children<'a>(&'a self, for_each: &mut FnMut(&[NodeSummary<&'a Node<A, F>>]) -> LoopFlow<()>);
-    fn children_mut<'a>(&'a mut self, for_each: &mut FnMut(&mut [NodeSummary<&'a mut Node<A, F>>]) -> LoopFlow<()>);
+    fn children<'a>(&'a self, for_each: &mut FnMut(&[WidgetSummary<&'a Widget<A, F>>]) -> LoopFlow<()>);
+    fn children_mut<'a>(&'a mut self, for_each: &mut FnMut(&mut [WidgetSummary<&'a mut Widget<A, F>>]) -> LoopFlow<()>);
 
     fn update_child_layout(&mut self);
 
@@ -287,7 +287,7 @@ impl UpdateTag {
     pub fn new() -> UpdateTag {
         UpdateTag {
             last_root: Cell::new(UPDATE_MASK),
-            node_id: NodeID::new(),
+            widget_id: WidgetID::new(),
             last_event_stamp: Cell::new(0),
             mouse_state: Cell::new(MouseState::Untracked),
             has_keyboard_focus: Cell::new(false),

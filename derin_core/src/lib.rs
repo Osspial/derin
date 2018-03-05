@@ -16,7 +16,7 @@ pub mod event;
 pub mod popup;
 pub mod render;
 mod mbseq;
-mod node_stack;
+mod widget_stack;
 mod meta_tracker;
 mod event_loop_ops;
 
@@ -29,17 +29,17 @@ use std::collections::VecDeque;
 use tree::*;
 pub use event_loop_ops::{EventLoopOps, EventLoopResult, PopupDelta};
 use timer::TimerList;
-use event::NodeEvent;
+use event::WidgetEvent;
 use popup::{PopupID, PopupMap};
 use render::{Renderer, RenderFrame};
 use mbseq::MouseButtonSequenceTrackPos;
-use node_stack::NodeStackBase;
+use widget_stack::WidgetStackBase;
 use meta_tracker::MetaEventTracker;
 use dct::buttons::{MouseButton, Key, ModifierKeys};
 use dct::cursor::CursorIcon;
 
 pub struct Root<A, N, F>
-    where N: Node<A, F> + 'static,
+    where N: Widget<A, F> + 'static,
           A: 'static,
           F: RenderFrame + 'static
 {
@@ -50,15 +50,15 @@ pub struct Root<A, N, F>
     mouse_buttons_down: MouseButtonSequenceTrackPos,
 
     actions: VecDeque<A>,
-    node_stack_base: NodeStackBase<A, F>,
+    widget_stack_base: WidgetStackBase<A, F>,
     force_full_redraw: bool,
     event_stamp: u32,
-    node_ident_stack: Vec<NodeIdent>,
+    widget_ident_stack: Vec<WidgetIdent>,
     meta_tracker: MetaEventTracker,
     timer_list: TimerList,
-    pub root_node: N,
+    pub root_widget: N,
     pub theme: F::Theme,
-    popup_nodes: PopupMap<A, F>,
+    popup_widgets: PopupMap<A, F>,
     _marker: PhantomData<*const F>
 }
 
@@ -84,13 +84,13 @@ pub enum LoopFlow<R> {
 }
 
 impl<A, N, F> Root<A, N, F>
-    where N: Node<A, F>,
+    where N: Widget<A, F>,
           F: RenderFrame
 {
     #[inline]
-    pub fn new(mut root_node: N, theme: F::Theme, dims: DimsBox<Point2<u32>>) -> Root<A, N, F> {
+    pub fn new(mut root_widget: N, theme: F::Theme, dims: DimsBox<Point2<u32>>) -> Root<A, N, F> {
         // TODO: DRAW ROOT AND DO INITIAL LAYOUT
-        *root_node.rect_mut() = dims.cast().unwrap_or(DimsBox::max_value()).into();
+        *root_widget.rect_mut() = dims.cast().unwrap_or(DimsBox::max_value()).into();
         Root {
             id: RootID::new(),
             mouse_pos: Point2::new(-1, -1),
@@ -98,14 +98,14 @@ impl<A, N, F> Root<A, N, F>
             modifiers: ModifierKeys::empty(),
             cursor_icon: CursorIcon::default(),
             actions: VecDeque::new(),
-            node_stack_base: NodeStackBase::new(),
+            widget_stack_base: WidgetStackBase::new(),
             force_full_redraw: false,
             event_stamp: 1,
-            node_ident_stack: Vec::new(),
+            widget_ident_stack: Vec::new(),
             meta_tracker: MetaEventTracker::default(),
             timer_list: TimerList::new(None),
-            root_node, theme,
-            popup_nodes: PopupMap::new(),
+            root_widget, theme,
+            popup_widgets: PopupMap::new(),
             _marker: PhantomData
         }
     }
@@ -114,7 +114,7 @@ impl<A, N, F> Root<A, N, F>
         &mut self,
         mut gen_events: impl FnMut(&mut EventLoopOps<A, N, F, R, G>) -> Option<G>,
         mut on_action: impl FnMut(A, &mut N, &mut F::Theme) -> LoopFlow<G>,
-        mut bubble_fallthrough: impl FnMut(NodeEvent, &[NodeIdent]) -> Option<A>,
+        mut bubble_fallthrough: impl FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>,
         mut with_renderer: impl FnMut(Option<PopupID>, &mut FnMut(&mut R))
     ) -> Option<G>
         where R: Renderer<Frame=F>

@@ -1,9 +1,9 @@
 use dct::layout::{WidgetPos, GridSize, Margins, Align2, WidgetSpan};
-use core::tree::NodeIdent;
+use core::tree::WidgetIdent;
 
 pub trait GridLayout {
-    fn hints(&self, node_ident: NodeIdent, node_index: usize, num_nodes: usize) -> Option<WidgetPos>;
-    fn grid_size(&self, num_nodes: usize) -> GridSize;
+    fn hints(&self, widget_ident: WidgetIdent, widget_index: usize, num_widgets: usize) -> Option<WidgetPos>;
+    fn grid_size(&self, num_widgets: usize) -> GridSize;
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -20,11 +20,11 @@ impl LayoutHorizontal {
 }
 
 impl GridLayout for LayoutHorizontal {
-    fn hints(&self, _: NodeIdent, node_index: usize, num_nodes: usize) -> Option<WidgetPos> {
-        match node_index >= num_nodes {
+    fn hints(&self, _: WidgetIdent, widget_index: usize, num_widgets: usize) -> Option<WidgetPos> {
+        match widget_index >= num_widgets {
             true => None,
             false => Some(WidgetPos {
-                node_span: WidgetSpan::new(node_index as u32, 0),
+                widget_span: WidgetSpan::new(widget_index as u32, 0),
                 margins: self.widget_margins,
                 place_in_cell: self.widget_place,
                 ..WidgetPos::default()
@@ -33,8 +33,8 @@ impl GridLayout for LayoutHorizontal {
     }
 
     #[inline]
-    fn grid_size(&self, num_nodes: usize) -> GridSize {
-        GridSize::new(num_nodes as u32, 1)
+    fn grid_size(&self, num_widgets: usize) -> GridSize {
+        GridSize::new(num_widgets as u32, 1)
     }
 }
 
@@ -52,11 +52,11 @@ impl LayoutVertical {
 }
 
 impl GridLayout for LayoutVertical {
-    fn hints(&self, _: NodeIdent, node_index: usize, num_nodes: usize) -> Option<WidgetPos> {
-        match node_index >= num_nodes {
+    fn hints(&self, _: WidgetIdent, widget_index: usize, num_widgets: usize) -> Option<WidgetPos> {
+        match widget_index >= num_widgets {
             true => None,
             false => Some(WidgetPos {
-                node_span: WidgetSpan::new(0, node_index as u32),
+                widget_span: WidgetSpan::new(0, widget_index as u32),
                 margins: self.widget_margins,
                 place_in_cell: self.widget_place,
                 ..WidgetPos::default()
@@ -65,7 +65,7 @@ impl GridLayout for LayoutVertical {
     }
 
     #[inline]
-    fn grid_size(&self, num_nodes: usize) -> GridSize {
-        GridSize::new(1, num_nodes as u32)
+    fn grid_size(&self, num_widgets: usize) -> GridSize {
+        GridSize::new(1, num_widgets as u32)
     }
 }

@@ -1,4 +1,4 @@
-use tree::NodeIdent;
+use tree::WidgetIdent;
 use cgmath::Point2;
 use cgmath_geometry::BoundBox;
 use dct::cursor::CursorIcon;
@@ -20,7 +20,7 @@ pub trait RenderFrame: 'static {
     type Theme: Theme;
     type Primitive: Copy;
 
-    fn upload_primitives<I>(&mut self, node_ident: &[NodeIdent], theme: &Self::Theme, transform: &Self::Transform, prim_iter: I)
+    fn upload_primitives<I>(&mut self, widget_ident: &[WidgetIdent], theme: &Self::Theme, transform: &Self::Transform, prim_iter: I)
         where I: Iterator<Item=Self::Primitive>;
     fn child_rect_transform(self_transform: &Self::Transform, child_rect: BoundBox<Point2<i32>>) -> Self::Transform;
 }
@@ -28,7 +28,7 @@ pub trait RenderFrame: 'static {
 pub trait Theme {
     type Key: ?Sized;
     type ThemeValue;
-    fn node_theme(&self, key: &Self::Key) -> Self::ThemeValue;
+    fn widget_theme(&self, key: &Self::Key) -> Self::ThemeValue;
 }
 
 pub struct FrameRectStack<'a, F: 'a + RenderFrame> {
@@ -37,8 +37,8 @@ pub struct FrameRectStack<'a, F: 'a + RenderFrame> {
 
     theme: &'a F::Theme,
 
-    pop_node_ident: bool,
-    node_ident: &'a mut Vec<NodeIdent>,
+    pop_widget_ident: bool,
+    widget_ident: &'a mut Vec<WidgetIdent>,
 }
 
 impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
@@ -47,7 +47,7 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
         frame: &'a mut F,
         base_transform: F::Transform,
         theme: &'a F::Theme,
-        node_ident_vec: &'a mut Vec<NodeIdent>
+        widget_ident_vec: &'a mut Vec<WidgetIdent>
     ) -> FrameRectStack<'a, F>
     {
         FrameRectStack {
@@ -56,8 +56,8 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
 
             theme,
 
-            pop_node_ident: false,
-            node_ident: node_ident_vec
+            pop_widget_ident: false,
+            widget_ident: widget_ident_vec
         }
     }
 
@@ -70,8 +70,8 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
     pub fn upload_primitives<I>(&mut self, prim_iter: I)
         where I: Iterator<Item=F::Primitive>
     {
-        let node_ident = &self.node_ident;
-        self.frame.upload_primitives(node_ident, self.theme, &self.transform, prim_iter)
+        let widget_ident = &self.widget_ident;
+        self.frame.upload_primitives(widget_ident, self.theme, &self.transform, prim_iter)
     }
 
     #[inline]
@@ -80,27 +80,27 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
             frame: self.frame,
             transform: F::child_rect_transform(&self.transform, child_rect),
             theme: self.theme,
-            node_ident: self.node_ident,
-            pop_node_ident: false,
+            widget_ident: self.widget_ident,
+            pop_widget_ident: false,
         }
     }
 
-    pub(crate) fn enter_child_node<'b>(&'b mut self, child_ident: NodeIdent) -> FrameRectStack<'b, F> {
-        self.node_ident.push(child_ident);
+    pub(crate) fn enter_child_widget<'b>(&'b mut self, child_ident: WidgetIdent) -> FrameRectStack<'b, F> {
+        self.widget_ident.push(child_ident);
         FrameRectStack {
             frame: self.frame,
             transform: self.transform,
             theme: self.theme,
-            node_ident: self.node_ident,
-            pop_node_ident: true,
+            widget_ident: self.widget_ident,
+            pop_widget_ident: true,
         }
     }
 }
 
 impl<'a, F: RenderFrame> Drop for FrameRectStack<'a, F> {
     fn drop(&mut self) {
-        if self.pop_node_ident {
-            self.node_ident.pop().expect("Too many pops");
+        if self.pop_widget_ident {
+            self.widget_ident.pop().expect("Too many pops");
         }
     }
 }

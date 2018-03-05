@@ -1,5 +1,5 @@
 use std::time::{Duration, Instant};
-use tree::NodeID;
+use tree::WidgetID;
 use std::cmp;
 use std::ops::Range;
 
@@ -16,7 +16,7 @@ pub(crate) struct TriggeredTimers<'a> {
 }
 
 pub struct TimerRegister<'a> {
-    node_id: NodeID,
+    widget_id: WidgetID,
     new_timers: Vec<TimerProto>,
     timer_list: &'a mut TimerList
 }
@@ -38,7 +38,7 @@ struct ExtraProto {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct Timer {
     pub name: &'static str,
-    pub node_id: NodeID,
+    pub widget_id: WidgetID,
     pub start_time: Instant,
     pub last_trigger: Instant,
     pub frequency: Duration,
@@ -54,9 +54,9 @@ impl TimerList {
         }
     }
 
-    pub fn new_timer_register(&mut self, node_id: NodeID) -> TimerRegister {
+    pub fn new_timer_register(&mut self, widget_id: WidgetID) -> TimerRegister {
         TimerRegister {
-            node_id,
+            widget_id,
             new_timers: Vec::new(),
             timer_list: self
         }
@@ -109,13 +109,13 @@ impl<'a> Drop for TimerRegister<'a> {
     fn drop(&mut self) {
         let TimerRegister {
             ref mut new_timers,
-            node_id,
+            widget_id,
             ref mut timer_list
         } = *self;
 
         // Update any timers that are already in the register.
         timer_list.timers_by_dist.retain(|timer| {
-            if timer.node_id != node_id {
+            if timer.widget_id != widget_id {
                 return true;
             }
 
@@ -139,7 +139,7 @@ impl<'a> Drop for TimerRegister<'a> {
         let cur_time = Instant::now();
         let mut new_timers = new_timers.drain(..).map(|p| Timer {
             name: p.name,
-            node_id: node_id,
+            widget_id: widget_id,
             start_time: p.extra_proto.map(|p| p.start_time).unwrap_or(cur_time),
             last_trigger: p.extra_proto.map(|p| p.last_trigger).unwrap_or(cur_time - p.frequency),
             frequency: p.frequency,
@@ -198,7 +198,7 @@ impl Timer {
     fn max_frequency(cur_time: Instant) -> Timer {
         Timer {
             name: "",
-            node_id: NodeID::dummy(),
+            widget_id: WidgetID::dummy(),
             start_time: cur_time,
             last_trigger: cur_time,
             frequency: Duration::new(!0, 0),
