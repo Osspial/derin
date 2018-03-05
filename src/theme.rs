@@ -12,6 +12,7 @@ use std::path::Path;
 use std::collections::HashMap;
 
 use core::render::Theme as CoreTheme;
+pub use dct::cursor::CursorIcon;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Image {

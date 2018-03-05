@@ -3,12 +3,10 @@ extern crate gullery;
 #[macro_use]
 extern crate gullery_macros;
 
-use derin::{Window, WindowAttributes};
-use derin::dct::layout::Margins;
-use derin::layout::LayoutHorizontal;
+use derin::{LoopFlow, Window, WindowAttributes};
+use derin::layout::{Margins, LayoutHorizontal};
 use derin::container::SingleContainer;
 use derin::widgets::{Group, DirectRender, DirectRenderState};
-use derin::core::LoopFlow;
 use derin::geometry::{OffsetBox, Point2};
 
 use gullery::ContextState;

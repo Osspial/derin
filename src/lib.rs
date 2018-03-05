@@ -1,9 +1,9 @@
 #![feature(slice_rotate, nll, range_contains, conservative_impl_trait, universal_impl_trait, clone_closures)]
 
-pub extern crate dct;
+extern crate dct;
 extern crate dat;
 extern crate dle;
-pub extern crate derin_core as core;
+extern crate derin_core as core;
 extern crate cgmath;
 extern crate cgmath_geometry;
 extern crate gullery;
@@ -25,10 +25,16 @@ pub mod layout;
 pub mod theme;
 pub mod widgets;
 
+pub use glutin_window::GlutinWindow as Window;
+pub use glutin::WindowAttributes;
+pub use core::LoopFlow;
+
 pub mod geometry {
     pub use cgmath::*;
     pub use cgmath_geometry::*;
 }
 
-pub use glutin_window::GlutinWindow as Window;
-pub use glutin::WindowAttributes;
+pub mod event {
+    pub use core::event::{EventOps, InputState, MouseDown, FocusChange, WidgetEvent};
+    pub use dct::buttons::{ModifierKeys, Key, MouseButton};
+}

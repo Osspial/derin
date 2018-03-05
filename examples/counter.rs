@@ -2,11 +2,9 @@ extern crate derin;
 #[macro_use]
 extern crate derin_macros;
 
-use derin::{Window, WindowAttributes};
-use derin::dct::layout::Margins;
-use derin::layout::LayoutHorizontal;
+use derin::{Window, WindowAttributes, LoopFlow};
+use derin::layout::{Margins, LayoutHorizontal};
 use derin::widgets::{Button, Group, Label};
-use derin::core::LoopFlow;
 
 #[derive(WidgetContainer)]
 #[derin(action = "i32")]

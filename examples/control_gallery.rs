@@ -2,11 +2,9 @@ extern crate derin;
 #[macro_use]
 extern crate derin_macros;
 
-use derin::{Window, WindowAttributes};
-use derin::dct::layout::Margins;
-use derin::layout::{LayoutHorizontal, LayoutVertical};
+use derin::{LoopFlow, Window, WindowAttributes};
+use derin::layout::{Margins, LayoutHorizontal, LayoutVertical};
 use derin::widgets::{Button, EditBox, Group, Label};
-use derin::core::LoopFlow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum GalleryEvent {

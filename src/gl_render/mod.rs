@@ -26,7 +26,7 @@ use cgmath_geometry::{BoundBox, OffsetBox, DimsBox, GeoBox};
 use glutin::*;
 
 use theme::Theme;
-use core::render::{Renderer, RenderFrame};
+pub use core::render::{Renderer, RenderFrame};
 use core::tree::WidgetIdent;
 
 use self::atlas::Atlas;

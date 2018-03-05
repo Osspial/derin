@@ -1,4 +1,4 @@
-use dct::layout::{WidgetPos, GridSize, Margins, Align2, WidgetSpan};
+pub use dct::layout::{Align2, GridSize, Margins, SizeBounds, TrRange, TrackHints, WidgetPos, WidgetSpan};
 use core::tree::WidgetIdent;
 
 pub trait GridLayout {

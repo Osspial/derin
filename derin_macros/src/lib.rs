@@ -120,7 +120,7 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
 
                 #[allow(unused_assignments)]
                 fn children<'a, __G, __R>(&'a self, mut for_each_child: __G) -> Option<__R>
-                    where __G: FnMut(_derive_derin::core::tree::WidgetSummary<&'a _derive_derin::core::tree::Widget<Self::Action, __F>>) -> _derive_derin::core::LoopFlow<__R>,
+                    where __G: FnMut(_derive_derin::widgets::WidgetSummary<&'a _derive_derin::widgets::Widget<Self::Action, __F>>) -> _derive_derin::LoopFlow<__R>,
                           Self::Action: 'a,
                           __F: 'a
                 {
@@ -131,7 +131,7 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
 
                 #[allow(unused_assignments)]
                 fn children_mut<'a, __G, __R>(&'a mut self, mut for_each_child: __G) -> Option<__R>
-                    where __G: FnMut(_derive_derin::core::tree::WidgetSummary<&'a mut _derive_derin::core::tree::Widget<Self::Action, __F>>) -> _derive_derin::core::LoopFlow<__R>,
+                    where __G: FnMut(_derive_derin::widgets::WidgetSummary<&'a mut _derive_derin::widgets::Widget<Self::Action, __F>>) -> _derive_derin::LoopFlow<__R>,
                           Self::Action: 'a,
                           __F: 'a
                 {
@@ -170,20 +170,20 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
             match widget_field {
                 WidgetField::Widget(field) => {
                     let child_id = match field.ident {
-                        Some(_) => quote!(_derive_derin::core::tree::WidgetIdent::Str(stringify!(#widget_ident))),
-                        None => quote!(_derive_derin::core::tree::WidgetIdent::Num(#widget_ident))
+                        Some(_) => quote!(_derive_derin::widgets::WidgetIdent::Str(stringify!(#widget_ident))),
+                        None => quote!(_derive_derin::widgets::WidgetIdent::Num(#widget_ident))
                     };
 
                     output = quote!{{
-                        let flow = for_each_child(_derive_derin::core::tree::WidgetSummary {
+                        let flow = for_each_child(_derive_derin::widgets::WidgetSummary {
                             ident: #child_id,
-                            rect: <_ as _derive_derin::core::tree::Widget<Self::Action, __F>>::rect(&self.#widget_ident),
-                            size_bounds: <_ as _derive_derin::core::tree::Widget<Self::Action, __F>>::size_bounds(&self.#widget_ident),
-                            update_tag: <_ as _derive_derin::core::tree::Widget<Self::Action, __F>>::update_tag(&self.#widget_ident).clone(),
+                            rect: <_ as _derive_derin::widgets::Widget<Self::Action, __F>>::rect(&self.#widget_ident),
+                            size_bounds: <_ as _derive_derin::widgets::Widget<Self::Action, __F>>::size_bounds(&self.#widget_ident),
+                            update_tag: <_ as _derive_derin::widgets::Widget<Self::Action, __F>>::update_tag(&self.#widget_ident).clone(),
                             widget: #widget_expr,
                             index
                         });
-                        if let _derive_derin::core::LoopFlow::Break(b) = flow {
+                        if let _derive_derin::LoopFlow::Break(b) = flow {
                             return Some(b);
                         }
                         index += 1;
@@ -191,21 +191,21 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
                 },
                 WidgetField::Collection(field, _) => {
                     let child_id = match field.ident {
-                        Some(_) => quote!(_derive_derin::core::tree::WidgetIdent::StrCollection(stringify!(#widget_ident), child_index as u32)),
-                        None => quote!(_derive_derin::core::tree::WidgetIdent::NumCollection(#widget_ident, child_index as u32))
+                        Some(_) => quote!(_derive_derin::widgets::WidgetIdent::StrCollection(stringify!(#widget_ident), child_index as u32)),
+                        None => quote!(_derive_derin::widgets::WidgetIdent::NumCollection(#widget_ident, child_index as u32))
                     };
 
                     output = quote!{{
                         for (child_index, child) in (#widget_expr).into_iter().enumerate() {
-                            let flow = for_each_child(_derive_derin::core::tree::WidgetSummary {
+                            let flow = for_each_child(_derive_derin::widgets::WidgetSummary {
                                 ident: #child_id,
-                                rect: <_ as _derive_derin::core::tree::Widget<Self::Action, __F>>::rect(child),
-                                size_bounds: <_ as _derive_derin::core::tree::Widget<Self::Action, __F>>::size_bounds(child),
-                                update_tag: <_ as _derive_derin::core::tree::Widget<Self::Action, __F>>::update_tag(child).clone(),
+                                rect: <_ as _derive_derin::widgets::Widget<Self::Action, __F>>::rect(child),
+                                size_bounds: <_ as _derive_derin::widgets::Widget<Self::Action, __F>>::size_bounds(child),
+                                update_tag: <_ as _derive_derin::widgets::Widget<Self::Action, __F>>::update_tag(child).clone(),
                                 widget: child,
                                 index
                             });
-                            if let _derive_derin::core::LoopFlow::Break(b) = flow {
+                            if let _derive_derin::LoopFlow::Break(b) = flow {
                                 return Some(b);
                             }
                             index += 1;
@@ -270,7 +270,7 @@ fn expand_generics(generics: &Generics, action_ty: &Ty, widget_fields: &[WidgetF
         bounds: vec![TyParamBound::Trait(
             PolyTraitRef {
                 bound_lifetimes: Vec::new(),
-                trait_ref: syn::parse_path("_derive_derin::core::render::RenderFrame").unwrap()
+                trait_ref: syn::parse_path("_derive_derin::gl_render::RenderFrame").unwrap()
             },
             TraitBoundModifier::None
         )]
@@ -284,7 +284,7 @@ fn expand_generics(generics: &Generics, action_ty: &Ty, widget_fields: &[WidgetF
             bounds: vec![TyParamBound::Trait(
                 PolyTraitRef{
                     bound_lifetimes: Vec::new(),
-                    trait_ref: syn::parse_path(&quote!(_derive_derin::core::tree::Widget<#action_ty, __F>).to_string()).unwrap(),
+                    trait_ref: syn::parse_path(&quote!(_derive_derin::widgets::Widget<#action_ty, __F>).to_string()).unwrap(),
                 },
                 TraitBoundModifier::None
             )]

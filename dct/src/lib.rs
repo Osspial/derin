@@ -10,5 +10,4 @@ pub type Px = i32;
 mod macros;
 pub mod buttons;
 pub mod layout;
-pub mod color;
 pub mod cursor;
