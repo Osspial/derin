@@ -1,4 +1,23 @@
 #![feature(slice_rotate, nll, range_contains, conservative_impl_trait, universal_impl_trait, clone_closures)]
+//! # The Derin User Interface Library
+//! The Derin User Interface Library aims to be a simple, albeit powerful, set of widgets and
+//! containers that makes it easy to design and compose your own complex desktop GUI applications.
+//! Included are the aforementioned [widgets], a [desktop window builder][window], an [OpenGL-powered
+//! renderer][renderer], and utilities for [creating your own widgets and renderers][custom].
+//!
+//! ## Getting Started
+//! ### Installing External Libraries
+//! Derin currently relies on two external libraries to handle text rendering: Freetype and Harfbuzz.
+//! Harfbuzz is built and statically linked by `rustc`, and should lead to little trouble while
+//! building (although Windows users getting build errors are encouraged to use the `MSVC` toolchain
+//! over the GCC toolchain). The other, Freetype, is dynamically linked, and may require extra steps
+//! to use on Windows. Documentation on getting it working can be found [here][freetype-build].
+//!
+//! [widgets]: widgets/index.html
+//! [window]: struct.Window.html
+//! [renderer]: gl_render/struct.GLRenderer.html
+//! [custom]: ../derin_core/index.html
+//! [freetype-build]: https://github.com/PistonDevelopers/freetype-sys/blob/master/README.md
 
 extern crate dct;
 extern crate dat;
@@ -29,11 +48,15 @@ pub use glutin_window::GlutinWindow as Window;
 pub use glutin::WindowAttributes;
 pub use core::LoopFlow;
 
+/// Types used to assemble widget geometry.
+///
+/// The types within this module are all re-exported, either from `cgmath` or `cgmath-geometry`.
 pub mod geometry {
-    pub use cgmath::*;
-    pub use cgmath_geometry::*;
+    pub use cgmath::{Point2, Vector2};
+    pub use cgmath_geometry::{GeoBox, DimsBox, BoundBox, OffsetBox, Line, Ray, Segment, Linear, Intersection};
 }
 
+/// `WidgetEvent` type and associated helpers.
 pub mod event {
     pub use core::event::{EventOps, InputState, MouseDown, FocusChange, WidgetEvent};
     pub use dct::buttons::{ModifierKeys, Key, MouseButton};
