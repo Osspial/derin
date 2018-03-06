@@ -144,7 +144,7 @@ impl Default for Theme {
         let mut theme = Theme::empty();
 
         macro_rules! upload_image {
-            ($name:expr, $path:expr, $dims:expr, $border:expr) => {{
+            ($name:expr, $path:expr, $dims:expr, $border:expr, $align:expr) => {{
                 let image_png = png::Decoder::new(::std::io::Cursor::new(&include_bytes!($path)[..]));
                 let (info, mut reader) = image_png.read_info().unwrap();
                 // Allocate the output buffer.
@@ -163,7 +163,7 @@ impl Default for Theme {
                             highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
                             face_size: 16 * 64,
                             tab_size: 8,
-                            justify: Align2::new(Align::Start, Align::Start),
+                            justify: $align,
                             margins: Margins::new($border, $border, $border, $border),
                             line_wrap: LineWrap::None
                         }),
@@ -185,11 +185,11 @@ impl Default for Theme {
             }}
         }
 
-        upload_image!("Group", "./default_theme_resources/group.png", 3, 1);
-        upload_image!("Button::Normal", "./default_theme_resources/button.normal.png", 32, 4);
-        upload_image!("Button::Hover", "./default_theme_resources/button.hover.png", 32, 4);
-        upload_image!("Button::Clicked", "./default_theme_resources/button.clicked.png", 32, 4);
-        upload_image!("EditBox", "./default_theme_resources/editbox.png", 8, 3);
+        upload_image!("Group", "./default_theme_resources/group.png", 3, 1, Align2::new(Align::Start, Align::Start));
+        upload_image!("Button::Normal", "./default_theme_resources/button.normal.png", 32, 4, Align2::new(Align::Center, Align::Center));
+        upload_image!("Button::Hover", "./default_theme_resources/button.hover.png", 32, 4, Align2::new(Align::Center, Align::Center));
+        upload_image!("Button::Clicked", "./default_theme_resources/button.clicked.png", 32, 4, Align2::new(Align::Center, Align::Center));
+        upload_image!("EditBox", "./default_theme_resources/editbox.png", 8, 3, Align2::new(Align::Start, Align::Center));
         theme.insert_widget(
             "Label".to_string(),
             ThemeWidget {
