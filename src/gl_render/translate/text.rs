@@ -208,6 +208,7 @@ impl<'a> TextTranslate<'a> {
         let face_size = FaceSize::new(text_style.face_size, text_style.face_size);
         let font_metrics = face.metrics_sized(face_size, dpi).unwrap();
         let (ascender, descender) = ((font_metrics.ascender / 64) as i32, (font_metrics.descender / 64) as i32);
+
         rect.min.x += text_style.margins.left as i32;
         rect.max.x -= text_style.margins.right as i32;
         rect.min.y += text_style.margins.top as i32;
@@ -224,6 +225,7 @@ impl<'a> TextTranslate<'a> {
             string_len: render_string.string.len(),
             font_ascender: ascender,
             font_descender: descender,
+
             highlight_vertex_iter: None,
             glyph_vertex_iter: None,
             cursor_vertex_iter: None
@@ -592,10 +594,11 @@ impl<'a> Iterator for TextTranslate<'a> {
                                         Align::End => glyph_draw.rect.width()
                                     },
                                     y: match glyph_draw.text_style.justify.y {
-                                        Align::Center => glyph_draw.rect.height() as i32 / 2,
-                                        Align::End => glyph_draw.rect.height() as i32,
-                                        _ => 0
-                                    } - font_descender
+                                        Align::Start => -font_descender,
+                                        Align::Stretch => glyph_draw.rect.height() as i32 / 2 - font_ascender,
+                                        Align::Center => (glyph_draw.rect.height() as i32 - font_ascender - font_descender) / 2,
+                                        Align::End => glyph_draw.rect.height() as i32 - font_ascender,
+                                    }
                                 } + glyph_draw.rect.min().to_vec()
                             ))
                         } else if pos == str_index + 1 && pos == string_len {
