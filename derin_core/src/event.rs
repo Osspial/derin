@@ -52,73 +52,138 @@ pub enum FocusChange {
     Remove
 }
 
+/// Information regarding a pressed mouse button.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MouseDown {
+    /// Which mouse button was pressed.
     pub button: MouseButton,
+    /// The position at which the button was pressed, relative to the widget's origin.
     pub down_pos: Point2<i32>
 }
 
+/// The general state of user input devices when an event has occured.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InputState<'a> {
+    /// The mouse buttons that have been pressed inside of the window.
     pub mouse_buttons_down: &'a [MouseDown],
+    /// The mouse buttons that have been pressed inside of the widget.
     pub mouse_buttons_down_in_widget: &'a [MouseDown],
+    /// The position of the mouse, relative to the widget's origin.
     pub mouse_pos: Point2<i32>,
+    /// The modifier keys that have been pressed down.
     pub modifiers: ModifierKeys
 }
 
+/// Direct user input and timers, which are recieved and handled by widgets through the
+/// `on_widget_event` function.
+///
+/// This is delivered to the widget in a few situtations:
+/// * When the mouse is hovering over the widget, all mouse events are delivered.
+/// * When the mouse was clicked within the widget, mouse movement events and `MouseUp` for the
+///   pressed button are delivered.
+/// * When the widget has recieved keyboard focus, all user input events are delivered.
+/// * When the given amount of time has passed from a timer registered in `register_timers`, a
+///  `Timer` event is delivered.
+///
+/// All point coordinates are given relative to the widget's origin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WidgetEvent<'a> {
+    /// The mouse cursor has entered the widget at the given position.
     MouseEnter {
+        /// The position where the mouse entered the widget.
         enter_pos: Point2<i32>,
         buttons_down: &'a [MouseDown],
         buttons_down_in_widget: &'a [MouseDown]
     },
+    /// The mouse cursor has exited the widget at the given position.
     MouseExit {
+        /// The position where the mouse exited the widget.
         exit_pos: Point2<i32>,
         buttons_down: &'a [MouseDown],
         buttons_down_in_widget: &'a [MouseDown]
     },
+    /// The mouse cursor has entered a child at a given position.
     MouseEnterChild {
+        /// The position where the cursor entered the child.
         enter_pos: Point2<i32>,
         buttons_down: &'a [MouseDown],
         buttons_down_in_widget: &'a [MouseDown],
+        /// The identifier of the child entered.
         child: WidgetIdent
     },
+    /// The mouse cursor has exitd a child at a given position.
     MouseExitChild {
+        /// The position where the cursor exited the child.
         exit_pos: Point2<i32>,
         buttons_down: &'a [MouseDown],
         buttons_down_in_widget: &'a [MouseDown],
+        /// The identifier of the child entered.
         child: WidgetIdent
     },
+    /// The mouse cursor has been moved to a new position.
     MouseMove {
+        /// The position of the cursor, before it moved.
         old_pos: Point2<i32>,
+        /// The position the cursor was moved to.
         new_pos: Point2<i32>,
+        /// Whether or not the cursor was moved to a position within the widget.
         in_widget: bool,
         buttons_down: &'a [MouseDown],
         buttons_down_in_widget: &'a [MouseDown]
     },
+    /// A mouse button has been pressed.
     MouseDown {
+        /// The position of the cursor when the button was pressed.
         pos: Point2<i32>,
+        /// Whether or not the button was pressed inside of the widget.
+        ///
+        /// If the widget doesn't have keyboard focus, this will always be `true`.
         in_widget: bool,
+        /// The button that was pressed.
         button: MouseButton
     },
+    /// A mouse button has been released.
+    ///
+    /// A `MouseUp` event will always be delivered for any given `MouseDown` event.
     MouseUp {
+        /// The position of the cursor when the button was released.
         pos: Point2<i32>,
+        /// Whether or not the button was released inside of the widget.
         in_widget: bool,
+        /// Whether or not the button was pressed inside of the widget.
         pressed_in_widget: bool,
+        /// The the position of the cursor when the button was pressed.
         down_pos: Point2<i32>,
+        /// The button that was released.
         button: MouseButton
     },
+    /// The widget has gained keyboard focus.
     GainFocus,
+    /// The widget has lost keyboard focus.
     LoseFocus,
+    /// The given character has been inputted by the user.
+    ///
+    /// This includes the effects of any modifier keys on the character - for example, if the `A` key
+    /// is pressed while `Shift` is being held down, this will give the `'A'` character.
     Char(char),
+    /// The given key has been pressed on the keyboard.
     KeyDown(Key, ModifierKeys),
+    /// The given key has been released on the keyboard.
     KeyUp(Key, ModifierKeys),
+    /// Enough time has elapsed for a registered timer to be triggered.
     Timer {
+        /// The name of the timer.
         name: &'static str,
+        /// The time at which the timer was registered.
         start_time: Instant,
+        /// The time at which the timer was last triggered.
         last_trigger: Instant,
+        /// The minimum duration which must pass between timer triggers.
+        ///
+        /// This isn't necessarily the actual time which has passed between triggers; a longer time
+        /// may have elapsed since the last trigger.
         frequency: Duration,
+        /// The number of times this timer has been triggered, not including this trigger.
         times_triggered: u64
     }
 }
@@ -182,6 +247,7 @@ pub(crate) enum WidgetEventOwned {
 }
 
 impl<'a> WidgetEvent<'a> {
+    /// Shift coordinates within the widget by the specified vector.
     pub fn translate(self, dir: Vector2<i32>) -> WidgetEvent<'a> {
         match self {
             WidgetEvent::MouseEnter{ enter_pos, buttons_down, buttons_down_in_widget } =>

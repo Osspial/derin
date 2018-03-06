@@ -8,14 +8,14 @@
 //! ## Installing External Libraries
 //! Derin currently relies on two external libraries to handle text rendering: Freetype and Harfbuzz.
 //! Harfbuzz is built and statically linked by `rustc`, and should lead to little trouble while
-//! building (although Windows users getting build errors are encouraged to use the `MSVC` toolchain
+//! building (although Windows users getting build errors are encouraged to use the MSVC toolchain
 //! over the GCC toolchain). The other, Freetype, is dynamically linked, and may require extra steps
 //! to use on Windows. Documentation on getting it working can be found [here][freetype-build].
 //!
 //! [widgets]: widgets/index.html
 //! [window]: struct.Window.html
 //! [renderer]: gl_render/struct.GLRenderer.html
-//! [custom]: ../derin_core/index.html
+//! [custom]: ./widgets/custom/index.html
 //! [freetype-build]: https://github.com/PistonDevelopers/freetype-sys/blob/master/README.md
 
 extern crate dct;

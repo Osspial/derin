@@ -97,7 +97,7 @@ impl<A, F> Widget<A, F> for EditBox
         ].iter().cloned());
 
         let mut size_bounds = self.size_bounds.get();
-        size_bounds.min = frame.theme().widget_theme("EditBox").icon.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
+        size_bounds.min = frame.theme().widget_theme("EditBox").image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
         let render_string_min = self.string.render_string.min_size();
         size_bounds.min.dims.y += render_string_min.height();
         self.size_bounds.set(size_bounds);

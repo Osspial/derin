@@ -1,3 +1,5 @@
+//! Types used to specify how widgets should be drawn.
+
 use png;
 use gullery::colors::Rgba;
 use gullery::glsl::Nu8;
@@ -14,6 +16,7 @@ use std::collections::HashMap;
 use core::render::Theme as CoreTheme;
 pub use dct::cursor::CursorIcon;
 
+/// An RGBA representation of an image.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Image {
     pub pixels: Vec<Rgba<Nu8>>,
@@ -21,15 +24,20 @@ pub struct Image {
     pub rescale: RescaleRules
 }
 
+/// The algorithm used to rescale an image.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RescaleRules {
+    /// Rescale the image by uniformily stretching it out, from its edges.
     Stretch,
     /// Similar to stretch, but begins sampling image half a pixel away from the border. Can
     /// eliminate border artifacts in some scenarios.
     StretchOnPixelCenter,
+    /// Perform nine-slicing on the provided image, stretching out the center of the image while
+    /// keeping the borders of the image a constant size.
     Slice(Margins<u16>)
 }
 
+/// The algorithm used to determine where line breaks occur in text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LineWrap {
     /// Disallow all line breaks, including explicit ones (such as from `'\n'`).
@@ -38,23 +46,36 @@ pub enum LineWrap {
     Normal
 }
 
+/// Collection of information used to determine how to render text in a widget.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ThemeText {
+    /// A handle to the font face used to draw the text.
     pub face: ThemeFace,
+    /// The color to draw text.
     pub color: Rgba<Nu8>,
+    /// The color of the highlight when highlighting text.
     pub highlight_bg_color: Rgba<Nu8>,
+    /// The color of highlighted text.
     pub highlight_text_color: Rgba<Nu8>,
+    /// The size of the text being drawn, in 64ths of a [point].
+    ///
+    /// [point]: https://en.wikipedia.org/wiki/Point_(typography)
     pub face_size: u32,
+    /// The number of spaces contained within a tab stop.
     pub tab_size: u32,
+    /// The horizontal and vertical justification of the text.
     pub justify: Align2,
+    /// The number of pixels on the sides of a draw box in which text shouldn't be drawn.
     pub margins: Margins<u16>,
+    /// The line wrapping algorithm.
     pub line_wrap: LineWrap
 }
 
+/// The text style and image used to draw a widget with a given style.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ThemeWidget {
     pub text: Option<ThemeText>,
-    pub icon: Option<Rc<Image>>,
+    pub image: Option<Rc<Image>>,
 }
 
 /// Reference-counted face handle. This is cheap to clone.
@@ -70,6 +91,7 @@ pub struct Theme {
 
 
 impl ThemeFace {
+    /// Create a new face, referencing the font file at the provided path.
     #[inline]
     pub fn new<P: AsRef<Path>>(path: P, face_index: i32) -> Result<ThemeFace, io::Error> {
         Ok(ThemeFace {
@@ -78,11 +100,13 @@ impl ThemeFace {
         })
     }
 
+    /// Retrieve the path of the font file.
     #[inline]
     pub fn font_path(&self) -> &Path {
         &self.font_path
     }
 
+    /// Gets the index of the face within the font file.
     #[inline]
     pub fn face_index(&self) -> i32 {
         self.face_index
@@ -109,7 +133,7 @@ impl CoreTheme for Theme {
         self.map.get(path).cloned().unwrap_or(
             ThemeWidget {
                 text: None,
-                icon: None
+                image: None
             }
         )
     }
@@ -143,7 +167,7 @@ impl Default for Theme {
                             margins: Margins::new($border, $border, $border, $border),
                             line_wrap: LineWrap::None
                         }),
-                        icon: Some(Rc::new(Image {
+                        image: Some(Rc::new(Image {
                             pixels: unsafe {
                                 Vec::from_raw_parts(
                                     image.as_mut_ptr() as *mut _,
@@ -180,7 +204,7 @@ impl Default for Theme {
                     margins: Margins::default(),
                     line_wrap: LineWrap::None
                 }),
-                icon: None
+                image: None
             }
         );
 

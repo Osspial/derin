@@ -1,3 +1,4 @@
+/// A button on the mouse.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MouseButton {
@@ -18,17 +19,25 @@ const MOUSE_X2: u8 = 0b101;
 pub const MOUSE_INT_MASK: u16 = 0b111;
 #[doc(hidden)]
 pub const MOUSE_INT_MASK_LEN: u16 = 3;
+#[doc(hidden)]
 pub const NUM_MOUSE_BUTTONS: usize = 5;
 
 bitflags!{
+    /// A set of flags that contains the state of the keyboard's modifier keys.
     pub struct ModifierKeys: u8 {
+        /// The Shift key.
         const SHIFT = 1 << 0;
+        /// The Control key.
         const CTRL  = 1 << 1;
+        /// The Alt Key.
         const ALT   = 1 << 2;
+        /// On Windows and Linux, the key between Control and Alt. On OSX, the key between Control
+        /// and Command.
         const LOGO  = 1 << 3;
     }
 }
 
+/// A key on the keyboard.
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Key {
@@ -52,16 +61,26 @@ pub enum Key {
     Delete,
     Help,
 
-    Key0,
-    Key1,
-    Key2,
-    Key3,
-    Key4,
-    Key5,
-    Key6,
-    Key7,
-    Key8,
-    Key9,
+    /// The `0` key above the alphabetic keys.
+    Alpha0,
+    /// The `1` key above the alphabetic keys.
+    Alpha1,
+    /// The `2` key above the alphabetic keys.
+    Alpha2,
+    /// The `3` key above the alphabetic keys.
+    Alpha3,
+    /// The `4` key above the alphabetic keys.
+    Alpha4,
+    /// The `5` key above the alphabetic keys.
+    Alpha5,
+    /// The `6` key above the alphabetic keys.
+    Alpha6,
+    /// The `7` key above the alphabetic keys.
+    Alpha7,
+    /// The `8` key above the alphabetic keys.
+    Alpha8,
+    /// The `9` key above the alphabetic keys.
+    Alpha9,
 
     A,
     B,
