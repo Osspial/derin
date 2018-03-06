@@ -4,7 +4,7 @@ extern crate derin_macros;
 
 use derin::{Window, WindowAttributes, LoopFlow};
 use derin::layout::{Margins, LayoutHorizontal};
-use derin::widgets::{Button, Group, Label};
+use derin::widgets::{Button, Group, Label, Contents};
 
 #[derive(WidgetContainer)]
 #[derin(action = "i32")]
@@ -18,9 +18,9 @@ fn main() {
     let mut value = 0;
     let mut counter_ui = Group::new(
         Counter {
-            increment: Button::new("Increment".to_string(), Some(1)),
-            decrement: Button::new("Decrement".to_string(), Some(-1)),
-            label: Label::new(value.to_string())
+            increment: Button::new(Contents::Text("Increment".to_string()), Some(1)),
+            decrement: Button::new(Contents::Text("Decrement".to_string()), Some(-1)),
+            label: Label::new(Contents::Text(value.to_string()))
         },
         LayoutHorizontal::new(Margins::new(8, 8, 8, 8), Default::default())
     );
@@ -36,7 +36,7 @@ fn main() {
     let _: Option<()> = window.run_forever(
         |value_delta, counter_ui, _| {
             value += value_delta;
-            *counter_ui.container_mut().label.string_mut() = value.to_string();
+            *counter_ui.container_mut().label.contents_mut().as_text().unwrap() = value.to_string();
             LoopFlow::Continue
         },
         |_, _| None

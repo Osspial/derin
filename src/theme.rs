@@ -16,6 +16,11 @@ use std::collections::HashMap;
 use core::render::Theme as CoreTheme;
 pub use dct::cursor::CursorIcon;
 
+pub mod color {
+    pub use gullery::colors::Rgba;
+    pub use gullery::glsl::Nu8;
+}
+
 /// An RGBA representation of an image.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Image {
@@ -34,7 +39,8 @@ pub enum RescaleRules {
     StretchOnPixelCenter,
     /// Perform nine-slicing on the provided image, stretching out the center of the image while
     /// keeping the borders of the image a constant size.
-    Slice(Margins<u16>)
+    Slice(Margins<u16>),
+    Align(Align2)
 }
 
 /// The algorithm used to determine where line breaks occur in text.
@@ -215,9 +221,10 @@ impl Default for Theme {
 impl Image {
     pub fn min_size(&self) -> DimsBox<Point2<i32>> {
         match self.rescale {
+            RescaleRules::Align(_) => self.dims.cast().unwrap_or(DimsBox::new2(i32::max_value(), i32::max_value())),
             RescaleRules::StretchOnPixelCenter |
             RescaleRules::Stretch => DimsBox::new2(0, 0),
-            RescaleRules::Slice(margins) => DimsBox::new2(margins.width() as i32, margins.height() as i32)
+            RescaleRules::Slice(margins) => DimsBox::new2(margins.width() as i32, margins.height() as i32),
         }
     }
 }

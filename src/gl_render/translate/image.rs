@@ -7,7 +7,7 @@ use cgmath_geometry::{OffsetBox, BoundBox, GeoBox};
 
 use theme::RescaleRules;
 
-use dct::layout::Margins;
+use dct::layout::{Align, Margins};
 
 pub(in gl_render) struct ImageTranslate {
     verts: TranslateVerts,
@@ -47,37 +47,37 @@ impl ImageTranslate {
             top: clipped_rect.min().y - rect.min().y,
             bottom: rect.max().y - clipped_rect.max().y
         };
-        let mut atlas_rect = BoundBox::from(atlas_rect).cast::<f32>().unwrap();
+        let mut atlas_rect_clipped = BoundBox::from(atlas_rect).cast::<f32>().unwrap();
         let atlas_clip_margins = Margins {
-            left: clip_margins.left as f32 * (atlas_rect.width() / rect.width() as f32),
-            right: clip_margins.right as f32 * (atlas_rect.width() / rect.width() as f32),
-            top: clip_margins.top as f32 * (atlas_rect.height() / rect.height() as f32),
-            bottom: clip_margins.bottom as f32 * (atlas_rect.height() / rect.height() as f32),
+            left: clip_margins.left as f32 * (atlas_rect_clipped.width() / rect.width() as f32),
+            right: clip_margins.right as f32 * (atlas_rect_clipped.width() / rect.width() as f32),
+            top: clip_margins.top as f32 * (atlas_rect_clipped.height() / rect.height() as f32),
+            bottom: clip_margins.bottom as f32 * (atlas_rect_clipped.height() / rect.height() as f32),
         };
-        atlas_rect.min.x += atlas_clip_margins.left;
-        atlas_rect.max.x -= atlas_clip_margins.right;
-        atlas_rect.min.y += atlas_clip_margins.top;
-        atlas_rect.max.y -= atlas_clip_margins.bottom;
+        atlas_rect_clipped.min.x += atlas_clip_margins.left;
+        atlas_rect_clipped.max.x -= atlas_clip_margins.right;
+        atlas_rect_clipped.min.y += atlas_clip_margins.top;
+        atlas_rect_clipped.max.y -= atlas_clip_margins.bottom;
 
         let tl_out = GLVertex {
             loc: min,
             color,
-            tex_coord: atlas_rect.min()
+            tex_coord: atlas_rect_clipped.min()
         };
         let tr_out = GLVertex {
             loc: Point2::new(max.x, min.y),
             color,
-            tex_coord: Point2::new(atlas_rect.max().x, atlas_rect.min().y)
+            tex_coord: Point2::new(atlas_rect_clipped.max().x, atlas_rect_clipped.min().y)
         };
         let br_out = GLVertex {
             loc: max,
             color,
-            tex_coord: atlas_rect.max()
+            tex_coord: atlas_rect_clipped.max()
         };
         let bl_out = GLVertex {
             loc: Point2::new(min.x, max.y),
             color,
-            tex_coord: Point2::new(atlas_rect.min().x, atlas_rect.max().y)
+            tex_coord: Point2::new(atlas_rect_clipped.min().x, atlas_rect_clipped.max().y)
         };
 
         macro_rules! derived_verts {
@@ -135,6 +135,49 @@ impl ImageTranslate {
                     tr: derived_verts!(tr_out, -(loc_margins.right, atlas_margins.right), +(loc_margins.top, atlas_margins.top)),
                     br: derived_verts!(br_out, -(loc_margins.right, atlas_margins.right), -(loc_margins.bottom, atlas_margins.bottom)),
                     bl: derived_verts!(bl_out, +(loc_margins.left, atlas_margins.left), -(loc_margins.bottom, atlas_margins.bottom)),
+                }
+            }
+            (false, RescaleRules::Align(alignment)) => {
+                let get_dims = |align, atlas_size, fill_size| {
+                    let (min, max) = match align {
+                        Align::Start => (0, atlas_size),
+                        Align::Center => ((fill_size - atlas_size) / 2, (fill_size + atlas_size) / 2),
+                        Align::End => (fill_size - atlas_size, fill_size),
+                        Align::Stretch => (0, fill_size)
+                    };
+                    (min, max)
+                };
+
+                let (min_x, max_x) = get_dims(alignment.x, atlas_rect.width() as i32, rect.width());
+                let (min_y, max_y) = get_dims(alignment.y, atlas_rect.height() as i32, rect.height());
+
+                let bound_x = |i: i32| i.min(clipped_rect.max().x).max(clipped_rect.min().x);
+                let bound_y = |i: i32| i.min(clipped_rect.max().y).max(clipped_rect.min().y);
+                let bounds = BoundBox::new2(
+                    bound_x(min_x + rect.min.x),
+                    bound_y(min_y + rect.min.y),
+                    bound_x(max_x + rect.min.x),
+                    bound_y(max_y + rect.min.y),
+                );
+
+
+                TranslateVerts::Stretch {
+                    tl: GLVertex {
+                        loc: bounds.min(),
+                        ..tl_out
+                    },
+                    tr: GLVertex {
+                        loc: Point2::new(bounds.max.x, bounds.min.y),
+                        ..tr_out
+                    },
+                    br: GLVertex {
+                        loc: bounds.max,
+                        ..br_out
+                    },
+                    bl: GLVertex {
+                        loc: Point2::new(bounds.min.x, bounds.max.y),
+                        ..bl_out
+                    }
                 }
             }
         };

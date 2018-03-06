@@ -4,7 +4,7 @@ extern crate derin_macros;
 
 use derin::{LoopFlow, Window, WindowAttributes};
 use derin::layout::{Margins, LayoutHorizontal, LayoutVertical};
-use derin::widgets::{Button, EditBox, Group, Label};
+use derin::widgets::{Contents, Button, EditBox, Group, Label};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum GalleryEvent {
@@ -30,10 +30,10 @@ struct NestedContainer {
 fn main() {
     let group = Group::new(
         BasicContainer {
-            button: Button::new("Add Button".to_string(), Some(GalleryEvent::NewButton)),
+            button: Button::new(Contents::Text("New Button".to_string()), Some(GalleryEvent::NewButton)),
             nested: Group::new(
                 NestedContainer {
-                    label: Label::new("Nested Container".to_string()),
+                    label: Label::new(Contents::Text("Nested Container".to_string())),
                     edit_box: EditBox::new("A Text Box".to_string()),
                     buttons: Vec::new(),
                 },
@@ -53,7 +53,7 @@ fn main() {
     let mut window = unsafe{ Window::new(window_attributes, group, theme).unwrap() };
     let _: Option<()> = window.run_forever(
         |event, root, _| {
-            root.container_mut().nested.container_mut().buttons.push(Button::new("An added button".to_string(), None));
+            root.container_mut().nested.container_mut().buttons.push(Button::new(Contents::Text("An added button".to_string()), None));
             println!("{:?}", event);
             LoopFlow::Continue
         },

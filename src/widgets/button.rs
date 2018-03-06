@@ -1,3 +1,4 @@
+use widgets::{Contents, ContentsInner};
 use core::event::{EventOps, WidgetEvent, InputState};
 use core::tree::{WidgetIdent, UpdateTag, WidgetSubtrait, WidgetSubtraitMut, Widget};
 use core::render::{FrameRectStack, Theme};
@@ -8,7 +9,7 @@ use cgmath::Point2;
 use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
 use dct::layout::SizeBounds;
 
-use gl_render::{ThemedPrim, PrimFrame, RenderString, RelPoint, Prim};
+use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 
 use std::cell::Cell;
 use std::time::Duration;
@@ -32,8 +33,8 @@ pub enum ButtonState {
     Normal,
     Hover,
     Clicked,
-    Disabled,
-    Defaulted
+    // Disabled,
+    // Defaulted
 }
 
 #[derive(Debug, Clone)]
@@ -42,31 +43,31 @@ pub struct Button<H: ButtonHandler> {
     bounds: BoundBox<Point2<i32>>,
     state: ButtonState,
     handler: H,
-    string: RenderString,
+    contents: ContentsInner,
     waiting_for_mouseover: bool,
     size_bounds: Cell<SizeBounds>
 }
 
 impl<H: ButtonHandler> Button<H> {
-    pub fn new(string: String, handler: H) -> Button<H> {
+    pub fn new(contents: Contents<String>, handler: H) -> Button<H> {
         Button {
             update_tag: UpdateTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             state: ButtonState::Normal,
             handler,
-            string: RenderString::new(string),
+            contents: contents.to_inner(),
             waiting_for_mouseover: false,
             size_bounds: Cell::new(SizeBounds::default())
         }
     }
 
-    pub fn string(&self) -> &str {
-        self.string.string()
+    pub fn contents(&self) -> Contents<&str> {
+        self.contents.borrow()
     }
 
-    pub fn string_mut(&mut self) -> &mut String {
+    pub fn contents_mut(&mut self) -> Contents<&mut String> {
         self.update_tag.mark_render_self();
-        self.string.string_mut()
+        self.contents.borrow_mut()
     }
 }
 
@@ -98,8 +99,8 @@ impl<F, H> Widget<H::Action, F> for Button<H>
             ButtonState::Normal    => "Button::Normal",
             ButtonState::Hover     => "Button::Hover",
             ButtonState::Clicked   => "Button::Clicked",
-            ButtonState::Disabled  => "Button::Disabled",
-            ButtonState::Defaulted => "Button::Defaulted"
+            // ButtonState::Disabled  => "Button::Disabled",
+            // ButtonState::Defaulted => "Button::Defaulted"
         };
 
         frame.upload_primitives([
@@ -115,23 +116,12 @@ impl<F, H> Widget<H::Action, F> for Button<H>
                 ),
                 prim: Prim::Image
             },
-            ThemedPrim {
-                theme_path: image_str,
-                min: Point2::new(
-                    RelPoint::new(-1.0, 0),
-                    RelPoint::new(-1.0, 0),
-                ),
-                max: Point2::new(
-                    RelPoint::new( 1.0, 0),
-                    RelPoint::new( 1.0, 0)
-                ),
-                prim: Prim::String(&self.string)
-            }
+            self.contents.to_prim(image_str)
         ].iter().cloned());
 
         let mut size_bounds = self.size_bounds.get();
         size_bounds.min = frame.theme().widget_theme(image_str).image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
-        let render_string_min = self.string.min_size();
+        let render_string_min = self.contents.min_size(frame.theme());
         size_bounds.min.dims.x += render_string_min.width();
         size_bounds.min.dims.y += render_string_min.height();
         self.size_bounds.set(size_bounds);
