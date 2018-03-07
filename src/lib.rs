@@ -1,4 +1,4 @@
-#![feature(slice_rotate, nll, range_contains, conservative_impl_trait, universal_impl_trait, clone_closures)]
+#![feature(slice_rotate, nll, range_contains, conservative_impl_trait, universal_impl_trait, clone_closures, inclusive_range, inclusive_range_syntax)]
 //! # The Derin User Interface Library
 //! The Derin User Interface Library aims to be a simple, albeit powerful, set of widgets and
 //! containers that makes it easy to design and compose your own complex desktop GUI applications.
