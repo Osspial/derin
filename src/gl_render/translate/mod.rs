@@ -38,33 +38,10 @@ pub struct RelPoint {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Prim<D> {
     Image,
-    String(*const RenderString),
-    EditString(*const EditString),
-    DirectRender(*const Fn(&mut D))
+    String(*mut RenderString),
+    EditString(*mut EditString),
+    DirectRender(*mut FnMut(&mut D))
 }
-
-impl<D> Clone for Prim<D> {
-    fn clone(&self) -> Prim<D> {
-        match *self {
-            Prim::Image => Prim::Image,
-            Prim::String(s) => Prim::String(s),
-            Prim::EditString(s) => Prim::EditString(s),
-            Prim::DirectRender(f) => Prim::DirectRender(f)
-        }
-    }
-}
-impl<D> Clone for ThemedPrim<D> {
-    fn clone(&self) -> ThemedPrim<D> {
-        ThemedPrim {
-            theme_path: self.theme_path,
-            min: self.min,
-            max: self.max,
-            prim: self.prim,
-        }
-    }
-}
-impl<D> Copy for Prim<D> {}
-impl<D> Copy for ThemedPrim<D> {}
 
 impl RelPoint {
     #[inline]
@@ -130,7 +107,7 @@ impl Translator {
                 (Prim::String(render_string), _, Some(theme_text)) => {
                     match draw.font_cache.face(theme_text.face.clone()) {
                         Ok(face) => {
-                            let render_string = unsafe{ &*render_string };
+                            let render_string = unsafe{ &mut *render_string };
 
                             draw.vertices.extend(TextTranslate::new_rs(
                                 abs_rect,
@@ -159,7 +136,7 @@ impl Translator {
                 (Prim::EditString(edit_string), _, Some(theme_text)) => {
                     match draw.font_cache.face(theme_text.face.clone()) {
                         Ok(face) => {
-                            let edit_string = unsafe{ &*edit_string };
+                            let edit_string = unsafe{ &mut *edit_string };
 
                             draw.vertices.extend(TextTranslate::new_es(
                                 abs_rect,
@@ -187,7 +164,7 @@ impl Translator {
                 },
                 (Prim::DirectRender(render_fn), _, _) => {
                     draw.draw_contents();
-                    let render_fn = unsafe{ &*render_fn };
+                    let render_fn = unsafe{ &mut *render_fn };
                     let mut framebuffer = unsafe{ mem::uninitialized() };
                     mem::swap(&mut framebuffer, &mut draw.fb);
 

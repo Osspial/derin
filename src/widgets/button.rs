@@ -11,8 +11,9 @@ use dct::layout::SizeBounds;
 
 use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 
-use std::cell::Cell;
 use std::time::Duration;
+
+use arrayvec::ArrayVec;
 
 pub trait ButtonHandler {
     type Action: 'static;
@@ -45,7 +46,7 @@ pub struct Button<H: ButtonHandler> {
     handler: H,
     contents: ContentsInner,
     waiting_for_mouseover: bool,
-    size_bounds: Cell<SizeBounds>
+    size_bounds: SizeBounds
 }
 
 impl<H: ButtonHandler> Button<H> {
@@ -57,7 +58,7 @@ impl<H: ButtonHandler> Button<H> {
             handler,
             contents: contents.to_inner(),
             waiting_for_mouseover: false,
-            size_bounds: Cell::new(SizeBounds::default())
+            size_bounds: SizeBounds::default()
         }
     }
 
@@ -91,10 +92,10 @@ impl<F, H> Widget<H::Action, F> for Button<H>
     }
 
     fn size_bounds(&self) -> SizeBounds {
-        self.size_bounds.get()
+        self.size_bounds
     }
 
-    fn render(&self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut FrameRectStack<F>) {
         let image_str = match self.state {
             ButtonState::Normal    => "Button::Normal",
             ButtonState::Hover     => "Button::Hover",
@@ -103,7 +104,7 @@ impl<F, H> Widget<H::Action, F> for Button<H>
             // ButtonState::Defaulted => "Button::Defaulted"
         };
 
-        frame.upload_primitives([
+        frame.upload_primitives(ArrayVec::from([
             ThemedPrim {
                 theme_path: image_str,
                 min: Point2::new(
@@ -117,14 +118,12 @@ impl<F, H> Widget<H::Action, F> for Button<H>
                 prim: Prim::Image
             },
             self.contents.to_prim(image_str)
-        ].iter().cloned());
+        ]).into_iter());
 
-        let mut size_bounds = self.size_bounds.get();
-        size_bounds.min = frame.theme().widget_theme(image_str).image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
+        self.size_bounds.min = frame.theme().widget_theme(image_str).image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
         let render_string_min = self.contents.min_size(frame.theme());
-        size_bounds.min.dims.x += render_string_min.width();
-        size_bounds.min.dims.y += render_string_min.height();
-        self.size_bounds.set(size_bounds);
+        self.size_bounds.min.dims.x += render_string_min.width();
+        self.size_bounds.min.dims.y += render_string_min.height();
     }
 
     fn register_timers(&self, register: &mut TimerRegister) {

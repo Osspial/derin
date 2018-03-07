@@ -12,17 +12,17 @@ use dct::buttons::{Key, ModifierKeys};
 
 use gl_render::{ThemedPrim, PrimFrame, RenderString, EditString, RelPoint, Prim};
 
-use std::cell::Cell;
 use std::time::Duration;
 
 use clipboard::{ClipboardContext, ClipboardProvider};
+use arrayvec::ArrayVec;
 
 #[derive(Debug, Clone)]
 pub struct EditBox {
     update_tag: UpdateTag,
     bounds: BoundBox<Point2<i32>>,
     string: EditString,
-    size_bounds: Cell<SizeBounds>
+    size_bounds: SizeBounds
 }
 
 impl EditBox {
@@ -31,7 +31,7 @@ impl EditBox {
             update_tag: UpdateTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             string: EditString::new(RenderString::new(string)),
-            size_bounds: Cell::new(SizeBounds::default())
+            size_bounds: SizeBounds::default()
         }
     }
 
@@ -65,11 +65,11 @@ impl<A, F> Widget<A, F> for EditBox
 
     #[inline]
     fn size_bounds(&self) -> SizeBounds {
-        self.size_bounds.get()
+        self.size_bounds
     }
 
-    fn render(&self, frame: &mut FrameRectStack<F>) {
-        frame.upload_primitives([
+    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+        frame.upload_primitives(ArrayVec::from([
             ThemedPrim {
                 theme_path: "EditBox",
                 min: Point2::new(
@@ -92,15 +92,13 @@ impl<A, F> Widget<A, F> for EditBox
                     RelPoint::new( 1.0, 0),
                     RelPoint::new( 1.0, 0)
                 ),
-                prim: Prim::EditString(&self.string)
+                prim: Prim::EditString(&mut self.string)
             }
-        ].iter().cloned());
+        ]).into_iter());
 
-        let mut size_bounds = self.size_bounds.get();
-        size_bounds.min = frame.theme().widget_theme("EditBox").image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
+        self.size_bounds.min = frame.theme().widget_theme("EditBox").image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
         let render_string_min = self.string.render_string.min_size();
-        size_bounds.min.dims.y += render_string_min.height();
-        self.size_bounds.set(size_bounds);
+        self.size_bounds.min.dims.y += render_string_min.height();
     }
 
     fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {

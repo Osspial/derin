@@ -62,9 +62,9 @@ impl Contents<String> {
 }
 
 impl ContentsInner {
-    fn to_prim<D>(&self, background_name: &str) -> ThemedPrim<D> {
+    fn to_prim<D>(&mut self, background_name: &str) -> ThemedPrim<D> {
         match *self {
-            ContentsInner::Text(ref s) => ThemedPrim {
+            ContentsInner::Text(ref mut s) => ThemedPrim {
                 theme_path: background_name,
                 min: Point2::new(
                     RelPoint::new(-1.0, 0),
@@ -91,14 +91,14 @@ impl ContentsInner {
         }
     }
 
-    pub fn borrow(&self) -> Contents<&str> {
+    fn borrow(&self) -> Contents<&str> {
         match *self {
             ContentsInner::Text(ref t) => Contents::Text(t.string()),
             ContentsInner::Image(ref s) => Contents::Image(s)
         }
     }
 
-    pub fn borrow_mut(&mut self) -> Contents<&mut String> {
+    fn borrow_mut(&mut self) -> Contents<&mut String> {
         match *self {
             ContentsInner::Text(ref mut t) => Contents::Text(t.string_mut()),
             ContentsInner::Image(ref mut s) => Contents::Image(s)

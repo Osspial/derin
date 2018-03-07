@@ -10,14 +10,12 @@ use dct::layout::SizeBounds;
 
 use gl_render::PrimFrame;
 
-use std::cell::Cell;
-
 #[derive(Debug, Clone)]
 pub struct Label {
     update_tag: UpdateTag,
     bounds: BoundBox<Point2<i32>>,
     contents: ContentsInner,
-    min_size: Cell<DimsBox<Point2<i32>>>
+    min_size: DimsBox<Point2<i32>>
 }
 
 impl Label {
@@ -26,7 +24,7 @@ impl Label {
             update_tag: UpdateTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             contents: contents.to_inner(),
-            min_size: Cell::new(DimsBox::new2(0, 0))
+            min_size: DimsBox::new2(0, 0)
         }
     }
 
@@ -59,14 +57,12 @@ impl<A, F> Widget<A, F> for Label
     }
 
     fn size_bounds(&self) -> SizeBounds {
-        SizeBounds::new_min(self.min_size.get())
+        SizeBounds::new_min(self.min_size)
     }
 
-    fn render(&self, frame: &mut FrameRectStack<F>) {
-        frame.upload_primitives([
-            self.contents.to_prim("Label")
-        ].iter().cloned());
-        self.min_size.set(self.contents.min_size(frame.theme()));
+    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+        frame.upload_primitives(Some(self.contents.to_prim("Label")).into_iter());
+        self.min_size = self.contents.min_size(frame.theme());
     }
 
     #[inline]

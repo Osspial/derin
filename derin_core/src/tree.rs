@@ -211,7 +211,7 @@ pub trait Widget<A, F: RenderFrame> {
     fn update_tag(&self) -> &UpdateTag;
     fn rect(&self) -> BoundBox<Point2<i32>>;
     fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>>;
-    fn render(&self, frame: &mut FrameRectStack<F>);
+    fn render(&mut self, frame: &mut FrameRectStack<F>);
     fn on_widget_event(
         &mut self,
         event: WidgetEvent,

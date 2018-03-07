@@ -21,7 +21,7 @@ pub struct DirectRender<R>
 pub trait DirectRenderState {
     type RenderType;
 
-    fn render(&self, _: &mut Self::RenderType);
+    fn render(&mut self, _: &mut Self::RenderType);
 }
 
 impl<R: DirectRenderState> DirectRender<R> {
@@ -62,7 +62,8 @@ impl<A, F, R> Widget<A, F> for DirectRender<R>
         &mut self.bounds
     }
 
-    fn render(&self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+        let mut draw_fn = |render_type: &mut R::RenderType| self.render_state.render(render_type);
         frame.upload_primitives(Some(ThemedPrim {
             theme_path: "DirectRender",
             min: Point2::new(
@@ -73,7 +74,7 @@ impl<A, F, R> Widget<A, F> for DirectRender<R>
                 RelPoint::new( 1.0, 0),
                 RelPoint::new( 1.0, 0)
             ),
-            prim: unsafe{ Prim::DirectRender(mem::transmute((&|render_type: &mut R::RenderType| self.render_state.render(render_type)) as &Fn(&mut R::RenderType))) }
+            prim: unsafe{ Prim::DirectRender(mem::transmute((&mut draw_fn) as &mut FnMut(&mut R::RenderType))) }
         }).into_iter());
     }
 

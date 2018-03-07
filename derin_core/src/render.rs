@@ -18,7 +18,7 @@ pub trait Renderer {
 pub trait RenderFrame: 'static {
     type Transform: Copy;
     type Theme: Theme;
-    type Primitive: Copy;
+    type Primitive;
 
     fn upload_primitives<I>(&mut self, widget_ident: &[WidgetIdent], theme: &Self::Theme, transform: &Self::Transform, prim_iter: I)
         where I: Iterator<Item=Self::Primitive>;

@@ -18,14 +18,13 @@ use itertools::Itertools;
 use std::{cmp, vec};
 use std::cmp::Ordering;
 use std::ops::Range;
-use std::cell::{Ref, RefCell};
 
 
 pub(in gl_render) struct TextTranslate<'a> {
     glyph_draw: GlyphDraw<'a>,
 
     glyph_slice_index: usize,
-    glyph_slice: Ref<'a, [RenderGlyph]>,
+    glyph_slice: &'a [RenderGlyph],
     highlight_range: Range<usize>,
     cursor_pos: Option<usize>,
     string_len: usize,
@@ -60,16 +59,16 @@ pub struct EditString {
 pub struct RenderString {
     pub offset: Vector2<i32>,
     string: String,
-    cell: RefCell<Option<RenderStringCell>>
+    min_size: DimsBox<Point2<i32>>,
+    draw_data: Option<StringDrawData>
 }
 
 #[derive(Debug, Clone)]
-struct RenderStringCell {
+struct StringDrawData {
     shaped_glyphs: Vec<RenderGlyph>,
     text_style: ThemeText,
     dpi: DPI,
     draw_rect: BoundBox<Point2<i32>>,
-    min_size: DimsBox<Point2<i32>>
 }
 
 struct GlyphDraw<'a> {
@@ -163,7 +162,7 @@ impl<'a> TextTranslate<'a> {
         dpi: DPI,
         atlas: &'a mut Atlas,
         shape_text: F,
-        render_string: &'a RenderString
+        render_string: &'a mut RenderString
     ) -> TextTranslate<'a>
         where F: FnOnce(&str, &mut Face<()>) -> &'b ShapedBuffer
     {
@@ -177,13 +176,13 @@ impl<'a> TextTranslate<'a> {
         dpi: DPI,
         atlas: &'a mut Atlas,
         shape_text: F,
-        edit_string: &'a EditString
+        edit_string: &'a mut EditString
     ) -> TextTranslate<'a>
         where F: FnOnce(&str, &mut Face<()>) -> &'b ShapedBuffer
     {
         Self::new_raw(
             rect, text_style, face, dpi, atlas,
-            shape_text, &edit_string.render_string,
+            shape_text, &mut edit_string.render_string,
             edit_string.highlight_range.clone(),
             match edit_string.draw_cursor && edit_string.highlight_range.len() == 0 {
                 true => Some(edit_string.cursor_pos),
@@ -199,7 +198,7 @@ impl<'a> TextTranslate<'a> {
         dpi: DPI,
         atlas: &'a mut Atlas,
         shape_text: F,
-        render_string: &'a RenderString,
+        render_string: &'a mut RenderString,
         highlight_range: Range<usize>,
         cursor_pos: Option<usize>,
     ) -> TextTranslate<'a>
@@ -216,8 +215,6 @@ impl<'a> TextTranslate<'a> {
 
         TextTranslate {
             glyph_slice_index: 0,
-            glyph_slice: render_string.reshape_glyphs(rect, shape_text, &text_style, face, dpi),
-            glyph_draw: GlyphDraw{ face, atlas, text_style, dpi, rect },
             highlight_range,
             cursor_pos,
             offset: render_string.offset,
@@ -225,6 +222,9 @@ impl<'a> TextTranslate<'a> {
             string_len: render_string.string.len(),
             font_ascender: ascender,
             font_descender: descender,
+
+            glyph_slice: render_string.reshape_glyphs(rect, shape_text, &text_style, face, dpi),
+            glyph_draw: GlyphDraw{ face, atlas, text_style, dpi, rect },
 
             highlight_vertex_iter: None,
             glyph_vertex_iter: None,
@@ -799,7 +799,8 @@ impl RenderString {
         RenderString {
             offset: Vector2::new(0, 0),
             string,
-            cell: RefCell::new(None)
+            min_size: DimsBox::new2(0, 0),
+            draw_data: None
         }
     }
 
@@ -810,70 +811,67 @@ impl RenderString {
 
     #[inline]
     pub fn string_mut(&mut self) -> &mut String {
-        self.cell.get_mut().as_mut().map(|cell| cell.shaped_glyphs.clear());
+        if let Some(ref mut draw_data) = self.draw_data {
+            draw_data.shaped_glyphs.clear();
+        }
         &mut self.string
     }
 
     #[inline]
     pub fn min_size(&self) -> DimsBox<Point2<i32>> {
-        self.cell.borrow().as_ref().map(|c| c.min_size).unwrap_or(DimsBox::new2(0, 0))
+        self.min_size
     }
 
-    fn reshape_glyphs<'a, F>(&self,
+    fn reshape_glyphs<'a, F>(&mut self,
         rect: BoundBox<Point2<i32>>,
         shape_text: F,
         text_style: &ThemeText,
         face: &mut Face<()>,
         dpi: DPI
-    ) -> Ref<[RenderGlyph]>
+    ) -> &[RenderGlyph]
         where F: FnOnce(&str, &mut Face<()>) -> &'a ShapedBuffer
     {
-        {
-            let mut cell_opt = self.cell.borrow_mut();
-            let use_cached_glyphs: bool;
-            let cell = match *cell_opt {
-                Some(ref mut cell) => {
-                    use_cached_glyphs =
-                        cell.shaped_glyphs.len() != 0 &&
-                        (text_style, dpi, rect) ==
-                        (&cell.text_style, cell.dpi, cell.draw_rect);
+        let use_cached_glyphs: bool;
+        match self.draw_data {
+            Some(ref mut draw_data) => {
+                use_cached_glyphs =
+                    draw_data.shaped_glyphs.len() != 0 &&
+                    (text_style, dpi, rect) ==
+                    (&draw_data.text_style, draw_data.dpi, draw_data.draw_rect);
 
-                    // Update cell contents to reflect new values
-                    cell.text_style = text_style.clone();
-                    cell.dpi = dpi;
-                    cell.draw_rect = rect;
-
-                    cell
-                },
-                None => {
-                    use_cached_glyphs = false;
-                    *cell_opt = Some(RenderStringCell {
-                        shaped_glyphs: Vec::new(),
-                        text_style: text_style.clone(),
-                        dpi,
-                        draw_rect: rect,
-                        min_size: DimsBox::new2(0, 0)
-                    });
-                    cell_opt.as_mut().unwrap()
-                }
-            };
-            if !use_cached_glyphs {
-                let shaped_buffer = shape_text(&self.string, face);
-                cell.shaped_glyphs.clear();
-                let mut glyph_iter = GlyphIter::new(rect, shaped_buffer, text_style, face, dpi);
-                cell.shaped_glyphs.extend(&mut glyph_iter);
-                cell.min_size = match text_style.line_wrap {
-                    LineWrap::None => DimsBox::new2(
-                        // withholding the +1 leads to clipping bugs so I'm just including it
-                        glyph_iter.cursor.x - glyph_iter.line_start_x + 1,
-                        glyph_iter.line_height + -glyph_iter.font_descender
-                    ),
-                    _ => DimsBox::new2(0, 0)
-                };
+                // Update draw_data contents to reflect new values
+                draw_data.text_style = text_style.clone();
+                draw_data.dpi = dpi;
+                draw_data.draw_rect = rect;
+            },
+            None => {
+                use_cached_glyphs = false;
+                self.draw_data = Some(StringDrawData {
+                    shaped_glyphs: Vec::new(),
+                    text_style: text_style.clone(),
+                    dpi,
+                    draw_rect: rect,
+                });
             }
         }
+        let draw_data = self.draw_data.as_mut().unwrap();
 
-        Ref::map(self.cell.borrow(), |c| &c.as_ref().unwrap().shaped_glyphs[..])
+        if !use_cached_glyphs {
+            let shaped_buffer = shape_text(&self.string, face);
+            draw_data.shaped_glyphs.clear();
+            let mut glyph_iter = GlyphIter::new(rect, shaped_buffer, text_style, face, dpi);
+            draw_data.shaped_glyphs.extend(&mut glyph_iter);
+            self.min_size = match text_style.line_wrap {
+                LineWrap::None => DimsBox::new2(
+                    // withholding the +1 leads to clipping bugs so I'm just including it
+                    glyph_iter.cursor.x - glyph_iter.line_start_x + 1,
+                    glyph_iter.line_height + -glyph_iter.font_descender
+                ),
+                _ => DimsBox::new2(0, 0)
+            };
+        }
+
+        &draw_data.shaped_glyphs[..]
     }
 
     fn glyph_iter<'a>(&'a mut self) -> impl 'a + Iterator<Item=RenderGlyph> + DoubleEndedIterator {
@@ -881,8 +879,8 @@ impl RenderString {
         let offset_glyph = move |g: RenderGlyph| g.offset(glyph_offset);
         let empty_iter = [].iter().cloned().chain(None).map(offset_glyph.clone());
 
-        let shaped_glyphs = match *self.cell.get_mut() {
-            Some(ref cell) => &cell.shaped_glyphs,
+        let shaped_glyphs = match self.draw_data {
+            Some(ref draw_data) => &draw_data.shaped_glyphs,
             None => return empty_iter
         };
 
@@ -1048,12 +1046,10 @@ impl EditString {
     }
 
     pub fn select_on_line(&mut self, segment: Segment<Point2<i32>>) {
-        let cell = self.render_string.cell.borrow();
-        let cell = match *cell {
-            Some(ref cell) => cell,
+        let shaped_glyphs = match self.render_string.draw_data {
+            Some(ref draw_data) => &draw_data.shaped_glyphs,
             None => {self.highlight_range = 0..0; return}
         };
-        let shaped_glyphs = &cell.shaped_glyphs;
 
         // let mut min_y_dist = None;
         let dist = |min: i32, max: i32, point: i32| match (min.cmp(&point), max.cmp(&point)) {

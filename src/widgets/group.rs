@@ -74,8 +74,8 @@ impl<A, F, C, L> Widget<A, F> for Group<C, L>
         self.layout_engine.actual_size_bounds()
     }
 
-    fn render(&self, frame: &mut FrameRectStack<F>) {
-        frame.upload_primitives([
+    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+        frame.upload_primitives(ArrayVec::from([
             ThemedPrim {
                 theme_path: "Group",
                 min: Point2::new(
@@ -88,7 +88,7 @@ impl<A, F, C, L> Widget<A, F> for Group<C, L>
                 ),
                 prim: Prim::Image
             }
-        ].iter().cloned());
+        ]).into_iter());
     }
 
     #[inline]

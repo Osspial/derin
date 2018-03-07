@@ -76,7 +76,7 @@ fn main() {
 impl DirectRenderState for DD
 {
     type RenderType = (DefaultFramebuffer, OffsetBox<Point2<u32>>, Rc<ContextState>);
-    fn render(&self, &mut (ref mut fb, viewport_rect, _): &mut Self::RenderType) {
+    fn render(&mut self, &mut (ref mut fb, viewport_rect, _): &mut Self::RenderType) {
         if let Some(ref draw_params) = self.0 {
             let render_state = RenderState {
                 srgb: true,
