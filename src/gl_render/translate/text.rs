@@ -857,7 +857,6 @@ impl RenderString {
         }
 
         let draw_data = self.draw_data.as_mut().unwrap();
-        let offset = &mut self.offset;
         if !use_cached_glyphs {
             let shaped_buffer = shape_text(&self.string, face);
             draw_data.shaped_glyphs.clear();
@@ -878,21 +877,26 @@ impl RenderString {
         if let Some(cursor_pos) = cursor_pos_opt {
             let (draw_width, draw_height) = (draw_data.draw_rect.width(), draw_data.draw_rect.height());
 
-            let mut offset = Vector2::new(0, 0);
-            if let Some(cursor_glyph) = self.glyph_iter().skip_while(|glyph| glyph.str_index != cursor_pos).next() {
-            //     let cursor_x = cursor_glyph.highlight_rect.min.x;
-            //     let cursor_y_range = cursor_glyph.highlight_rect.min.y..=cursor_glyph.highlight_rect.max.y;
+            // Used to work around ICE
+            fn get_glyph(s: &RenderString, cursor_pos: usize) -> Option<RenderGlyph> {
+                s.glyph_iter().skip_while(|glyph| glyph.str_index != cursor_pos).next()
+            }
 
-            //     offset.x += match () {
-            //         _ if cursor_x < 0 => cursor_x - 0,
-            //         _ if draw_width < cursor_x => cursor_x - draw_width,
-            //         _ => 0
-            //     };
-            //     offset.y += match () {
-            //         _ if cursor_y_range.start < 0 => -cursor_y_range.start,
-            //         _ if draw_height < cursor_y_range.end => draw_height - cursor_y_range.end,
-            //         _ => 0
-            //     };
+            let mut offset = Vector2::new(0, 0);
+            if let Some(cursor_glyph) = get_glyph(self, cursor_pos) {
+                let cursor_x = cursor_glyph.highlight_rect.min.x;
+                let cursor_y_range = cursor_glyph.highlight_rect.min.y..=cursor_glyph.highlight_rect.max.y;
+
+                offset.x += match () {
+                    _ if cursor_x < 0 => -cursor_x,
+                    _ if draw_width < cursor_x => draw_width - cursor_x - 1,
+                    _ => 0
+                };
+                offset.y += match () {
+                    _ if cursor_y_range.start < 0 => -cursor_y_range.start,
+                    _ if draw_height < cursor_y_range.end => draw_height - cursor_y_range.end,
+                    _ => 0
+                };
             }
 
             self.offset += offset;
@@ -901,7 +905,7 @@ impl RenderString {
         &self.draw_data.as_ref().unwrap().shaped_glyphs[..]
     }
 
-    fn glyph_iter<'a>(&'a mut self) -> impl 'a + Iterator<Item=RenderGlyph> + DoubleEndedIterator {
+    fn glyph_iter<'a>(&'a self) -> impl 'a + Iterator<Item=RenderGlyph> + DoubleEndedIterator {
         let glyph_offset = self.offset;
         let offset_glyph = move |g: RenderGlyph| g.offset(glyph_offset);
         let empty_iter = [].iter().cloned().chain(None).map(offset_glyph.clone());
