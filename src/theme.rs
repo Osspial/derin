@@ -208,7 +208,7 @@ impl Default for Theme {
                     tab_size: 8,
                     justify: Align2::new(Align::Center, Align::Start),
                     margins: Margins::default(),
-                    line_wrap: LineWrap::None
+                    line_wrap: LineWrap::Normal
                 }),
                 image: None
             }

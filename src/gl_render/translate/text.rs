@@ -223,7 +223,7 @@ impl<'a> TextTranslate<'a> {
             font_ascender: ascender,
             font_descender: descender,
 
-            glyph_slice: render_string.reshape_glyphs(rect, shape_text, &text_style, face, dpi),
+            glyph_slice: render_string.reshape_glyphs(rect, shape_text, &text_style, face, dpi, cursor_pos),
             glyph_draw: GlyphDraw{ face, atlas, text_style, dpi, rect },
 
             highlight_vertex_iter: None,
@@ -827,7 +827,8 @@ impl RenderString {
         shape_text: F,
         text_style: &ThemeText,
         face: &mut Face<()>,
-        dpi: DPI
+        dpi: DPI,
+        cursor_pos_opt: Option<usize>
     ) -> &[RenderGlyph]
         where F: FnOnce(&str, &mut Face<()>) -> &'a ShapedBuffer
     {
@@ -854,13 +855,15 @@ impl RenderString {
                 });
             }
         }
-        let draw_data = self.draw_data.as_mut().unwrap();
 
+        let draw_data = self.draw_data.as_mut().unwrap();
         if !use_cached_glyphs {
             let shaped_buffer = shape_text(&self.string, face);
             draw_data.shaped_glyphs.clear();
+
             let mut glyph_iter = GlyphIter::new(rect, shaped_buffer, text_style, face, dpi);
             draw_data.shaped_glyphs.extend(&mut glyph_iter);
+
             self.min_size = match text_style.line_wrap {
                 LineWrap::None => DimsBox::new2(
                     // withholding the +1 leads to clipping bugs so I'm just including it
@@ -871,10 +874,39 @@ impl RenderString {
             };
         }
 
-        &draw_data.shaped_glyphs[..]
+        if let Some(cursor_pos) = cursor_pos_opt {
+            let (draw_width, draw_height) = (draw_data.draw_rect.width(), draw_data.draw_rect.height());
+
+            // Used to work around ICE
+            fn get_glyph(s: &RenderString, cursor_pos: usize) -> Option<RenderGlyph> {
+                s.glyph_iter().skip_while(|glyph| glyph.str_index != cursor_pos).next()
+            }
+
+            let mut offset = Vector2::new(0, 0);
+            if let Some(cursor_glyph) = get_glyph(self, cursor_pos) {
+                let cursor_x = cursor_glyph.highlight_rect.min.x;
+                let cursor_y_start = cursor_glyph.highlight_rect.min.y;
+                let cursor_y_end = cursor_glyph.highlight_rect.max.y;
+
+                offset.x += match () {
+                    _ if cursor_x < 0 => -cursor_x,
+                    _ if draw_width < cursor_x => draw_width - cursor_x - 1,
+                    _ => 0
+                };
+                offset.y += match () {
+                    _ if cursor_y_start < 0 => -cursor_y_start,
+                    _ if draw_height < cursor_y_end => draw_height - cursor_y_end,
+                    _ => 0
+                };
+            }
+
+            self.offset += offset;
+        }
+
+        &self.draw_data.as_ref().unwrap().shaped_glyphs[..]
     }
 
-    fn glyph_iter<'a>(&'a mut self) -> impl 'a + Iterator<Item=RenderGlyph> + DoubleEndedIterator {
+    fn glyph_iter<'a>(&'a self) -> impl 'a + Iterator<Item=RenderGlyph> + DoubleEndedIterator {
         let glyph_offset = self.offset;
         let offset_glyph = move |g: RenderGlyph| g.offset(glyph_offset);
         let empty_iter = [].iter().cloned().chain(None).map(offset_glyph.clone());
@@ -958,7 +990,7 @@ impl EditString {
                             line_delta += 1;
                             cur_line_y = glyph.highlight_rect.min.y;
                             if line_delta > dist.abs() {
-                                return;
+                                break;
                             }
 
                             min_dist_x = glyph_dist_x;
