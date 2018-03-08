@@ -84,15 +84,34 @@ pub trait PrimFrame: RenderFrame<Primitive=ThemedPrim<<Self as PrimFrame>::Direc
 
 impl GLRenderer {
     pub unsafe fn new(events_loop: &EventsLoop, window_builder: WindowBuilder) -> Result<GLRenderer, CreationError> {
+        let show_window = window_builder.window.visible;
         let window = {
-            let context_builder = ContextBuilder::new()
-                // .with_gl_profile(GlProfile::Core)
-                .with_gl(GlRequest::GlThenGles {
-                    opengl_version: (3, 1),
-                    opengles_version: (3, 0)
-                });
-            GlWindow::new(window_builder, context_builder, events_loop)?
+            let window_builder_no_show = window_builder.with_visibility(false);
+            let make_window = |version, profile_opt| {
+                let mut context_builder =
+                    ContextBuilder::new()
+                        .with_gl(GlRequest::GlThenGles {
+                            opengl_version: version,
+                            opengles_version: (3, 0)
+                        });
+                context_builder.gl_attr.profile = profile_opt;
+                GlWindow::new(
+                    window_builder_no_show.clone(),
+                    context_builder,
+                    events_loop
+                )
+            };
+
+                         make_window((3, 3), Some(GlProfile::Core))
+            .or_else(|_| make_window((3, 3), Some(GlProfile::Compatibility)))
+            .or_else(|_| make_window((3, 3), None))
+            .or_else(|_| make_window((3, 1), Some(GlProfile::Core)))
+            .or_else(|_| make_window((3, 1), Some(GlProfile::Compatibility)))
+            .or_else(|_| make_window((3, 1), None))?
         };
+        if show_window {
+            window.show();
+        }
 
         window.context().make_current().unwrap();
         let context_state = ContextState::new(|f| window.context().get_proc_address(f));
@@ -263,7 +282,7 @@ impl RenderFrame for GLFrame {
 }
 
 const VERT_SHADER: &str = r#"
-    #version 330
+    #version 140
     in ivec2 loc;
     in vec4 color;
     in vec2 tex_coord;
@@ -282,7 +301,7 @@ const VERT_SHADER: &str = r#"
 "#;
 
 const FRAG_SHADER: &str = r#"
-    #version 330
+    #version 140
     in vec4 frag_color;
     in vec2 tex_coord_out;
 
