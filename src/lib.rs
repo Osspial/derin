@@ -12,11 +12,17 @@
 //! over the GCC toolchain). The other, Freetype, is dynamically linked, and may require extra steps
 //! to use on Windows. Documentation on getting it working can be found [here][freetype-build].
 //!
+//! ## Reading This Documentation
+//! There are three key parts of Derin that are essential for getting started creating UIs: [window
+//! creation][window], [widgets], and [UI hierarchy creation][container]. New users are advised to
+//! look at those pages first, before browsing other sections of the documentation.
+//!
 //! [widgets]: widgets/index.html
 //! [window]: struct.Window.html
 //! [renderer]: gl_render/struct.GLRenderer.html
-//! [custom]: ./widgets/custom/index.html
+//! [custom]: widgets/custom/index.html
 //! [freetype-build]: https://github.com/PistonDevelopers/freetype-sys/blob/master/README.md
+//! [container]: container/trait.WidgetContainer.html
 
 extern crate dct;
 extern crate dat;

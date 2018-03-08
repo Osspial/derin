@@ -24,9 +24,12 @@ pub mod custom {
     pub use core::tree::{UpdateTag, Widget, WidgetSummary, WidgetIdent, WidgetSubtrait, WidgetSubtraitMut};
 }
 
+/// What should be drawn inside of a label, or other widgets that contains a label.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Contents<C> {
+pub enum Contents<C=String> {
+    /// Draw the text given in the string field.
     Text(C),
+    /// Draw the theme image with the given name.
     Image(C)
 }
 
