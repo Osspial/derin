@@ -27,7 +27,6 @@ pub(in gl_render) struct TextTranslate<'a> {
     glyph_slice: &'a [RenderGlyph],
     highlight_range: Range<usize>,
     cursor_pos: Option<usize>,
-    string_len: usize,
     offset: Vector2<i32>,
 
     font_ascender: i32,
@@ -219,7 +218,6 @@ impl<'a> TextTranslate<'a> {
             cursor_pos,
             offset: render_string.offset,
 
-            string_len: render_string.string.len(),
             font_ascender: ascender,
             font_descender: descender,
 
@@ -264,6 +262,7 @@ impl GlyphIter {
         let (mut line_advance, mut num_lines) = (0, 0);
         // The places where a `Line` or `Run` should be inserted into `glyph_items`.
         let (mut line_insert_index, mut run_insert_index) = (glyph_items.len(), glyph_items.len());
+        let mut ends_with_newline = false;
 
         while let Some(segment) = shaped_text.get_segment(segment_index) {
             // Create an iterator over every glyph in the segment.
@@ -275,10 +274,11 @@ impl GlyphIter {
             let mut segment_run = Run::default();
             // The number of `Word` and `Whitespace` items in the segment.
             let mut segment_item_count = 0;
+            let mut trailing_newline_glyph = None;
 
             // Loop over the glyphs, alternating between inserting renderable glyphs and
             // whitespace. First half handles renderable, second half whitespace.
-            while glyphs.peek().is_some() {
+            'segment_glyphs: while glyphs.peek().is_some() {
                 // Add sequence of renderable glyphs.
 
                 let word_insert_index = glyph_items.len();
@@ -307,7 +307,7 @@ impl GlyphIter {
                 let mut whitespace_insert_index = glyph_items.len();
                 macro_rules! push_whitespace {
                     () => {{
-                        if whitespace_advance != 0 {
+                        if whitespace_advance == 0 {
                             line_advance += whitespace_advance;
                             segment_run = segment_run.append_run(Run::tail_whitespace(whitespace_advance));
                             glyph_items.insert(
@@ -328,17 +328,11 @@ impl GlyphIter {
                     }}
                 }
 
-                for (glyph, c) in glyphs.peeking_take_while(|&(_, c)| c.is_whitespace()) {
-                    match c == '\t' {
-                        false => {
-                            whitespace_glyph_count += 1;
-                            segment_item_count += 1;
-                            glyph_items.push(GlyphItem::WhitespaceGlyph(glyph));
-                            whitespace_advance += glyph.advance.x
-                        },
+                for (mut glyph, c) in glyphs.peeking_take_while(|&(_, c)| c.is_whitespace()) {
+                    match c {
                         // If the whitespace is a tab, push all the accumulated whitespace, begin a
                         // new run and mark off the old run.
-                        true => {
+                        '\t' => {
                             push_whitespace!();
 
                             // Move the advance to the next tab stop.
@@ -353,7 +347,21 @@ impl GlyphIter {
                             run = Run::default();
                             segment_run = Run::default();
                             run_insert_index = glyph_items.len();
+                        },
+                        '\r' |
+                        '\n' => {
+                            glyph.advance.x = 0;
+                            trailing_newline_glyph = Some(glyph);
+
+                            push_whitespace!();
+                            break 'segment_glyphs;
                         }
+                        _ => {
+                            whitespace_glyph_count += 1;
+                            segment_item_count += 1;
+                            glyph_items.push(GlyphItem::WhitespaceGlyph(glyph));
+                            whitespace_advance += glyph.advance.x
+                        },
                     }
                 }
 
@@ -365,7 +373,8 @@ impl GlyphIter {
                 run = run.append_run(segment_run);
             }
 
-            if (segment.hard_break || line_advance > rect.width() as i32) && text_style.line_wrap != LineWrap::None {
+            let is_hard_break = segment.break_type.is_hard_break();
+            if (is_hard_break || line_advance > rect.width() as i32) && text_style.line_wrap != LineWrap::None {
                 glyph_items.insert(run_insert_index, GlyphItem::Run(run.ends_line()));
 
                 num_lines += 1;
@@ -373,7 +382,7 @@ impl GlyphIter {
                     // Happens if the last segment ran over the rectangle length.
                     true => {
                         line_advance -= run.trailing_whitespace + segment_run.advance();
-                        glyph_items.insert(line_insert_index, GlyphItem::Line{ advance: line_advance, hard_break: segment.hard_break });
+                        glyph_items.insert(line_insert_index, GlyphItem::Line{ advance: line_advance, hard_break: is_hard_break });
 
                         line_advance = segment_run.advance();
                         run = segment_run;
@@ -385,7 +394,7 @@ impl GlyphIter {
                     // Happens if we've hit a hard break and the last segment isn't overflowing the rectangle.
                     false => {
                         line_advance -= run.trailing_whitespace;
-                        glyph_items.insert(line_insert_index, GlyphItem::Line{ advance: line_advance, hard_break: segment.hard_break });
+                        glyph_items.insert(line_insert_index, GlyphItem::Line{ advance: line_advance, hard_break: is_hard_break });
 
                         line_advance = 0;
                         run = Run::default();
@@ -395,15 +404,27 @@ impl GlyphIter {
                     }
                 }
 
+                if let Some(glyph) = trailing_newline_glyph {
+                    glyph_items.push(
+                        GlyphItem::Whitespace {
+                            glyph_count: 0,
+                            advance: 0
+                        }
+                    );
+                    glyph_items.push(GlyphItem::WhitespaceGlyph(glyph));
+                    ends_with_newline = true;
+                } else {
+                    ends_with_newline = false;
+                }
             }
 
             segment_index += 1;
         }
 
-        if run != Run::default() {
+        if run != Run::default() || ends_with_newline {
             glyph_items.insert(run_insert_index, GlyphItem::Run(run));
         }
-        if line_advance != 0 {
+        if line_advance != 0 || ends_with_newline {
             glyph_items.insert(line_insert_index, GlyphItem::Line{ advance: line_advance, hard_break: true });
             num_lines += 1;
         }
@@ -568,7 +589,6 @@ impl<'a> Iterator for TextTranslate<'a> {
                         ref mut cursor_pos,
                         ref mut glyph_draw,
                         offset,
-                        string_len,
                         font_ascender,
                         font_descender,
                         ref mut glyph_vertex_iter,
@@ -582,10 +602,20 @@ impl<'a> Iterator for TextTranslate<'a> {
                     let next_glyph_opt = get_glyph_slice!(*glyph_slice_index);
 
                     *cursor_vertex_iter = cursor_pos.and_then(|pos| {
-                        let str_index = next_glyph_opt.map(|g| g.str_index).unwrap_or(0);
-                        let highlight_rect_opt = next_glyph_opt.map(|g| g.highlight_rect + glyph_draw.rect.min().to_vec());
-                        let base_pos = if pos == str_index {
-                            highlight_rect_opt.map(|r| r.min()).or(Some(
+                        let base_pos = match next_glyph_opt {
+                            Some(next_glyph) => {
+                                let str_index = next_glyph.str_index;
+                                let highlight_rect = next_glyph.highlight_rect + glyph_draw.rect.min().to_vec();
+
+                                if pos == str_index && pos == 0 {
+                                    Some(highlight_rect.min())
+                                } else if pos == str_index + 1 {
+                                    Some(Point2::new(highlight_rect.max().x, highlight_rect.min().y))
+                                } else {
+                                    None
+                                }
+                            },
+                            None if pos == 0 => Some(
                                 Point2 {
                                     x: match glyph_draw.text_style.justify.x {
                                         Align::Start |
@@ -600,10 +630,9 @@ impl<'a> Iterator for TextTranslate<'a> {
                                         Align::End => glyph_draw.rect.height() as i32 - font_ascender,
                                     }
                                 } + glyph_draw.rect.min().to_vec()
-                            ))
-                        } else if pos == str_index + 1 && pos == string_len {
-                            highlight_rect_opt.map(|r| Point2::new(r.max().x, r.min().y))
-                        } else {None};
+                            ),
+                            None => None
+                        };
 
                         base_pos.map(|pos| {
                             *cursor_pos = None;
@@ -646,17 +675,10 @@ impl<'a> Iterator for TextTranslate<'a> {
                         );
                     *highlight_vertex_iter = match starts_highlight_rect {
                         true => {
-                            let mut dummy_last_glyph = get_glyph_slice!(self.glyph_slice.len() - 1).unwrap();
-                            dummy_last_glyph.pos.x += dummy_last_glyph.highlight_rect.width();
-                            dummy_last_glyph.highlight_rect.min.x += dummy_last_glyph.highlight_rect.width();
-                            dummy_last_glyph.highlight_rect.max.x = dummy_last_glyph.highlight_rect.min.x;
-                            dummy_last_glyph.str_index += 1;
-
                             let highlight_rect_end = get_glyph_slice!(range *glyph_slice_index..)
-                                .chain(Some(dummy_last_glyph))
                                 .take_while(|g| g.pos.y == next_glyph.pos.y)
-                                .take_while(|g| g.str_index <= highlight_range.end)
-                                .last().unwrap().pos.x;
+                                .take_while(|g| g.str_index < highlight_range.end)
+                                .last().unwrap_or(next_glyph).highlight_rect.max().x;
 
                             let mut highlight_rect = next_glyph.highlight_rect;
                             highlight_rect.max.x = highlight_rect_end;
