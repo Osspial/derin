@@ -5,12 +5,14 @@ mod direct_render;
 mod edit_box;
 mod group;
 mod label;
+mod slider;
 
 pub use self::button::*;
 pub use self::direct_render::*;
 pub use self::edit_box::*;
 pub use self::group::*;
 pub use self::label::*;
+pub use self::slider::*;
 
 use gl_render::{Prim, ThemedPrim, RenderString, RelPoint};
 use cgmath::Point2;

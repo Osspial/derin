@@ -139,7 +139,7 @@ impl Default for TrackHints {
 }
 
 // This is #[repr(C)] because of stupid evil pointer hacks in dww.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct SizeBounds {
     pub min: DimsBox<Point2<Px>>,

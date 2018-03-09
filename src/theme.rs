@@ -6,7 +6,7 @@ use gullery::glsl::Nu8;
 
 use cgmath::Point2;
 use cgmath_geometry::DimsBox;
-use dct::layout::{Align, Align2, Margins};
+use dct::layout::{Align, Align2, Margins, SizeBounds};
 
 use std::io;
 use std::rc::Rc;
@@ -26,7 +26,8 @@ pub mod color {
 pub struct Image {
     pub pixels: Vec<Rgba<Nu8>>,
     pub dims: DimsBox<Point2<u32>>,
-    pub rescale: RescaleRules
+    pub rescale: RescaleRules,
+    pub size_bounds: SizeBounds
 }
 
 /// The algorithm used to rescale an image.
@@ -182,7 +183,11 @@ impl Default for Theme {
                                 )
                             },
                             dims: DimsBox::new2($dims, $dims),
-                            rescale: RescaleRules::Slice(Margins::new($border, $border, $border, $border))
+                            rescale: RescaleRules::Slice(Margins::new($border, $border, $border, $border)),
+                            size_bounds: SizeBounds {
+                                min: DimsBox::new2($border * 2, $border * 2),
+                                ..SizeBounds::default()`
+                            }
                         }))
                     }
                 );
@@ -210,7 +215,8 @@ impl Default for Theme {
                     margins: Margins::default(),
                     line_wrap: LineWrap::Normal
                 }),
-                image: None
+                image: None,
+                size_bounds: SizeBounds::default()
             }
         );
 
