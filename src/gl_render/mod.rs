@@ -105,6 +105,9 @@ impl GLRenderer {
                          make_window((3, 3), Some(GlProfile::Core))
             .or_else(|_| make_window((3, 3), Some(GlProfile::Compatibility)))
             .or_else(|_| make_window((3, 3), None))
+            .or_else(|_| make_window((3, 2), Some(GlProfile::Core)))
+            .or_else(|_| make_window((3, 2), Some(GlProfile::Compatibility)))
+            .or_else(|_| make_window((3, 2), None))
             .or_else(|_| make_window((3, 1), Some(GlProfile::Core)))
             .or_else(|_| make_window((3, 1), Some(GlProfile::Compatibility)))
             .or_else(|_| make_window((3, 1), None))?
