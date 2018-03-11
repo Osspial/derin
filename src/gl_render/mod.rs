@@ -10,7 +10,7 @@ use std::rc::Rc;
 use dct::cursor::CursorIcon;
 use dct::layout::SizeBounds;
 
-use cgmath::{Bounded, Point2, Vector2, EuclideanSpace};
+use cgmath::{Array, Bounded, Point2, Vector2, EuclideanSpace};
 
 use gullery::ContextState;
 use gullery::render_state::{RenderState, BlendFunc, BlendFuncs};
@@ -61,6 +61,8 @@ struct FrameDraw {
     fb: DefaultFramebuffer,
     program: Program<GLVertex, GLUniforms<'static>>,
     vao: VertexArrayObj<GLVertex, ()>,
+    window_dims: DimsBox<Point2<u32>>,
+    scale_factor: f32
 }
 
 #[derive(TypeGroup, Debug, Clone, Copy)]
@@ -73,7 +75,7 @@ struct GLVertex {
 #[derive(Uniforms, Clone, Copy)]
 struct GLUniforms<'a> {
     atlas_size: Vector2<u32>,
-    window_size: Point2<u32>,
+    window_size: Point2<f32>,
     tex_atlas: &'a Texture<Rgba<Nu8>, SimpleTex<DimsBox<Point2<u32>>>>
 }
 
@@ -146,7 +148,9 @@ impl GLRenderer {
                     },
                     program,
                     gl_tex_atlas,
-                    context_state
+                    context_state,
+                    window_dims: DimsBox::new2(0, 0),
+                    scale_factor: 1.0
                 }
             },
             client_size_bounds: SizeBounds::default(),
@@ -198,6 +202,9 @@ impl Renderer for GLRenderer {
         self.window.set_cursor_state(CursorState::Normal).ok();
         self.window.set_cursor(glutin_icon);
     }
+    fn resized(&mut self, new_size: DimsBox<Point2<u32>>) {
+        self.window.context().resize(new_size.width(), new_size.height());
+    }
 
     fn set_size_bounds(&mut self, client_size_bounds: SizeBounds) {
         if client_size_bounds != self.client_size_bounds {
@@ -222,7 +229,12 @@ impl Renderer for GLRenderer {
 
     fn make_frame(&mut self) -> (&mut GLFrame, BoundBox<Point2<i32>>) {
         let (width, height) = self.window.get_inner_size().unwrap();
-        self.frame.draw.render_state.viewport = DimsBox::new2(width, height).into();
+        let scale_factor = self.window.hidpi_factor();
+        self.frame.draw.window_dims = DimsBox::new2(width, height);
+        self.frame.draw.scale_factor = scale_factor;
+        let width_scaled = (width as f32 * scale_factor) as u32;
+        let height_scaled = (height as f32 * scale_factor) as u32;
+        self.frame.draw.render_state.viewport = DimsBox::new2(width_scaled, height_scaled).into();
         self.frame.draw.fb.clear_color(Rgba::new(0., 0., 0., 0.));
 
         (&mut self.frame, BoundBox::new2(0, 0, width as i32, height as i32))
@@ -245,7 +257,7 @@ impl FrameDraw {
 
         let uniform = GLUniforms {
             atlas_size: self.gl_tex_atlas.dims().dims,
-            window_size: Point2::from_vec(self.render_state.viewport.dims()),
+            window_size: Point2::from_vec(self.window_dims.dims.cast::<f32>().unwrap_or(Vector2::from_value(f32::max_value()))),
             tex_atlas: &self.gl_tex_atlas
         };
 
@@ -269,10 +281,11 @@ impl RenderFrame for GLFrame {
     fn upload_primitives<I>(&mut self, _ident: &[WidgetIdent], theme: &Theme, transform: &BoundBox<Point2<i32>>, prim_iter: I)
         where I: Iterator<Item=ThemedPrim<<GLFrame as PrimFrame>::DirectRender>>
     {
+        let dpi_axis = 72;// (72. * self.draw.scale_factor) as u32;
         self.poly_translator.translate_prims(
             *transform,
             theme,
-            DPI::new(72, 72), // TODO: REPLACE HARDCODED VALUE
+            DPI::new(dpi_axis, dpi_axis), // TODO: REPLACE HARDCODED VALUE
             prim_iter,
             &mut self.draw
         );
@@ -292,15 +305,15 @@ const VERT_SHADER: &str = r#"
     in vec2 tex_coord;
 
     uniform uvec2 atlas_size;
-    uniform uvec2 window_size;
+    uniform vec2 window_size;
 
     out vec2 tex_coord_out;
     out vec4 frag_color;
 
     void main() {
-        gl_Position = vec4(vec2(1.0, -1.0) * (vec2(loc) / vec2(window_size) - 0.5) * 2.0, 1.0, 1.0);
+        gl_Position = vec4(vec2(1.0, -1.0) * (vec2(loc) / window_size - 0.5) * 2.0, 1.0, 1.0);
         frag_color = color;
-        tex_coord_out = (tex_coord) / vec2(atlas_size);
+        tex_coord_out = tex_coord / vec2(atlas_size);
     }
 "#;
 

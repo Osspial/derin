@@ -126,10 +126,17 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                     let derin_event: WindowEvent = match glutin_event {
                         Event::WindowEvent{window_id, event} => {
                             popup_id = window_popup_map.get(&window_id).cloned();
+                            let scale_factor = match popup_id {
+                                None => primary_renderer.borrow().window().hidpi_factor(),
+                                Some(id) => popup_renderers.borrow().get(&id).unwrap().window().hidpi_factor()
+                            };
+                            macro_rules! scale {
+                                ($val:expr) => {{($val as f32 / scale_factor) as _}}
+                            }
                             match event {
                                 GWindowEvent::CursorMoved{position, modifiers, ..} => {
                                     event_loop_ops.set_modifiers(map_modifiers(modifiers));
-                                    WindowEvent::MouseMove(Point2::new(position.0 as i32, position.1 as i32))
+                                    WindowEvent::MouseMove(Point2::new(scale!(position.0), scale!(position.1)))
                                 },
                                 GWindowEvent::CursorEntered{..} => WindowEvent::MouseEnter(Point2::new(0, 0)),
                                 GWindowEvent::CursorLeft{..} => WindowEvent::MouseExit(Point2::new(0, 0)),
@@ -148,7 +155,7 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                                         ElementState::Released => WindowEvent::MouseUp(button)
                                     }
                                 }
-                                GWindowEvent::Resized(width, height) => WindowEvent::WindowResize(DimsBox::new2(width, height)),
+                                GWindowEvent::Resized(width, height) => WindowEvent::WindowResize(DimsBox::new2(scale!(width), scale!(height))),
                                 GWindowEvent::ReceivedCharacter(c) => WindowEvent::Char(c),
                                 GWindowEvent::KeyboardInput{ input, .. } => {
                                     if let Some(key) = input.virtual_keycode.and_then(map_key) {

@@ -899,6 +899,9 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                     *cursor_icon = set_icon;
                 }
             }
+            if let WindowEvent::WindowResize(new_dims) = event {
+                renderer.resized(new_dims);
+            }
 
 
             // Draw the widget tree.
