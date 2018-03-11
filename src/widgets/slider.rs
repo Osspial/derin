@@ -8,19 +8,27 @@ use cgmath::Point2;
 use cgmath_geometry::{BoundBox, DimsBox};
 use dct::layout::SizeBounds;
 
-use gl_render::PrimFrame;
+use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
+
+use arrayvec::ArrayVec;
 
 #[derive(Debug, Clone)]
 pub struct Slider {
     update_tag: UpdateTag,
     bounds: BoundBox<Point2<i32>>,
+    value: f32,
+    min: f32,
+    max: f32,
 }
 
 impl Slider {
-    pub fn new(contents: Contents<String>) -> Slider {
+    pub fn new() -> Slider {
         Slider {
             update_tag: UpdateTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
+            value: 0.0,
+            min: 0.0,
+            max: 1.0
         }
     }
 }
@@ -43,7 +51,34 @@ impl<A, F> Widget<A, F> for Slider
         &mut self.bounds
     }
 
-    fn render(&mut self, frame: &mut FrameRectStack<F>) {}
+    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+        frame.upload_primitives(ArrayVec::from([
+            ThemedPrim {
+                theme_path: "Slider::Bar",
+                min: Point2::new(
+                    RelPoint::new(-1.0, 0),
+                    RelPoint::new(-1.0, 0),
+                ),
+                max: Point2::new(
+                    RelPoint::new( 1.0, 0),
+                    RelPoint::new( 1.0, 0)
+                ),
+                prim: Prim::Image
+            },
+            ThemedPrim {
+                theme_path: "Slider::Bar",
+                min: Point2::new(
+                    RelPoint::new(-1.0, 0),
+                    RelPoint::new(-1.0, 0),
+                ),
+                max: Point2::new(
+                    RelPoint::new( 1.0, 0),
+                    RelPoint::new( 1.0, 0)
+                ),
+                prim: Prim::Image
+            },
+        ]).into_iter());
+    }
 
     #[inline]
     fn on_widget_event(&mut self, _: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {

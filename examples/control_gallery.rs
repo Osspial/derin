@@ -4,7 +4,7 @@ extern crate derin_macros;
 
 use derin::{LoopFlow, Window, WindowAttributes};
 use derin::layout::{Margins, LayoutHorizontal, LayoutVertical};
-use derin::widgets::{Contents, Button, EditBox, Group, Label};
+use derin::widgets::{Contents, Button, EditBox, Group, Label, Slider};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum GalleryEvent {
@@ -23,6 +23,7 @@ struct BasicContainer {
 struct NestedContainer {
     label: Label,
     edit_box: EditBox,
+    slider: Slider,
     #[derin(collection = "Button<Option<GalleryEvent>>")]
     buttons: Vec<Button<Option<GalleryEvent>>>
 }
@@ -34,6 +35,7 @@ fn main() {
             nested: Group::new(
                 NestedContainer {
                     label: Label::new(Contents::Text("Nested Container".to_string())),
+                    slider: Slider::new(),
                     edit_box: EditBox::new("A Text Box".to_string()),
                     buttons: Vec::new(),
                 },
