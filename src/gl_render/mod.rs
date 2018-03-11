@@ -223,6 +223,7 @@ impl Renderer for GLRenderer {
     fn make_frame(&mut self) -> (&mut GLFrame, BoundBox<Point2<i32>>) {
         let (width, height) = self.window.get_inner_size().unwrap();
         self.frame.draw.render_state.viewport = DimsBox::new2(width, height).into();
+        self.frame.draw.fb.clear_color(Rgba::new(0., 0., 0., 0.));
 
         (&mut self.frame, BoundBox::new2(0, 0, width as i32, height as i32))
     }
