@@ -1,8 +1,8 @@
 mod image;
 mod text;
 
-use cgmath::Point2;
-use cgmath_geometry::{GeoBox, OffsetBox, BoundBox};
+use cgmath::{Point2, EuclideanSpace};
+use cgmath_geometry::{GeoBox, OffsetBox, BoundBox, DimsBox};
 use glyphydog::{ShapedBuffer, Shaper, FaceSize, DPI};
 
 use gullery::glsl::{Nu8, Ni32};
@@ -26,7 +26,9 @@ pub struct ThemedPrim<D> {
     pub theme_path: *const str,
     pub min: Point2<RelPoint>,
     pub max: Point2<RelPoint>,
-    pub prim: Prim<D>
+    pub prim: Prim<D>,
+    /// Optionally outputs the widget's transformed pixel rectangle.
+    pub rect_px_out: Option<*mut BoundBox<Point2<i32>>>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -78,17 +80,17 @@ impl Translator {
             let parent_dims = parent_rect.dims();
 
             let bl = Point2 {
-                x: parent_center.x + parent_dims.x * Ni32::from_bounded(p.min.x.frac_origin) / 2,
-                y: parent_center.y + parent_dims.y * Ni32::from_bounded(p.min.y.frac_origin) / 2
+                x: parent_center.x + (parent_dims.x as f32 * p.min.x.frac_origin) as i32 / 2 + p.min.x.pixel_pos,
+                y: parent_center.y + (parent_dims.y as f32 * p.min.y.frac_origin) as i32 / 2 + p.min.y.pixel_pos
             };
             let tr = Point2 {
-                x: parent_center.x + parent_dims.x * Ni32::from_bounded(p.max.x.frac_origin) / 2,
-                y: parent_center.y + parent_dims.y * Ni32::from_bounded(p.max.y.frac_origin) / 2
+                x: parent_center.x + (parent_dims.x as f32 * p.max.x.frac_origin) as i32 / 2 + p.max.x.pixel_pos,
+                y: parent_center.y + (parent_dims.y as f32 * p.max.y.frac_origin) as i32 / 2 + p.max.y.pixel_pos
             };
             (BoundBox::new2(bl.x, bl.y, tr.x, tr.y), p)
         });
 
-        for (abs_rect, prim) in prim_rect_iter {
+        for (mut abs_rect, prim) in prim_rect_iter {
             let theme_path = unsafe{ &*prim.theme_path };
             let widget_theme = theme.widget_theme(theme_path);
 
@@ -96,17 +98,31 @@ impl Translator {
                 (Prim::Image, Some(image), _) => {
                     let atlas_rect = draw.atlas.image_rect(theme_path, || (&image.pixels, image.dims)).cast::<u16>().unwrap();
 
-                    draw.vertices.extend(ImageTranslate::new(
+                    let abs_rect_dims = abs_rect.dims();
+                    let abs_rect_dims_bounded = image.size_bounds.bound_rect(DimsBox::new(abs_rect_dims));
+                    abs_rect.max.x = abs_rect.min.x + abs_rect_dims_bounded.width();
+                    abs_rect.max.y = abs_rect.min.y + abs_rect_dims_bounded.height();
+                    abs_rect = abs_rect + (abs_rect_dims - abs_rect_dims_bounded.dims) / 2;
+
+                    let image_translate = ImageTranslate::new(
                         abs_rect,
                         parent_rect,
                         atlas_rect,
                         Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
                         image.rescale
-                    ));
+                    );
+                    if let (Some(rect_px_out), Some(image_rect)) = (prim.rect_px_out, image_translate.rect()) {
+                        unsafe{ *rect_px_out = image_rect - parent_rect.min().to_vec() };
+                    }
+
+                    draw.vertices.extend(image_translate);
                 },
                 (Prim::String(render_string), _, Some(theme_text)) => {
                     match draw.font_cache.face(theme_text.face.clone()) {
                         Ok(face) => {
+                            if let Some(rect_px_out) = prim.rect_px_out {
+                                unsafe{ *rect_px_out = abs_rect - parent_rect.min().to_vec() };
+                            }
                             let render_string = unsafe{ &mut *render_string };
 
                             draw.vertices.extend(TextTranslate::new_rs(
@@ -136,6 +152,9 @@ impl Translator {
                 (Prim::EditString(edit_string), _, Some(theme_text)) => {
                     match draw.font_cache.face(theme_text.face.clone()) {
                         Ok(face) => {
+                            if let Some(rect_px_out) = prim.rect_px_out {
+                                unsafe{ *rect_px_out = abs_rect - parent_rect.min().to_vec() };
+                            }
                             let edit_string = unsafe{ &mut *edit_string };
 
                             draw.vertices.extend(TextTranslate::new_es(

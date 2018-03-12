@@ -74,7 +74,8 @@ impl<A, F, R> Widget<A, F> for DirectRender<R>
                 RelPoint::new( 1.0, 0),
                 RelPoint::new( 1.0, 0)
             ),
-            prim: unsafe{ Prim::DirectRender(mem::transmute((&mut draw_fn) as &mut FnMut(&mut R::RenderType))) }
+            prim: unsafe{ Prim::DirectRender(mem::transmute((&mut draw_fn) as &mut FnMut(&mut R::RenderType))) },
+            rect_px_out: None
         }).into_iter());
     }
 

@@ -80,7 +80,8 @@ impl<A, F> Widget<A, F> for EditBox
                     RelPoint::new( 1.0, 0),
                     RelPoint::new( 1.0, 0)
                 ),
-                prim: Prim::Image
+                prim: Prim::Image,
+                rect_px_out: None
             },
             ThemedPrim {
                 theme_path: "EditBox",
@@ -92,7 +93,8 @@ impl<A, F> Widget<A, F> for EditBox
                     RelPoint::new( 1.0, 0),
                     RelPoint::new( 1.0, 0)
                 ),
-                prim: Prim::EditString(&mut self.string)
+                prim: Prim::EditString(&mut self.string),
+                rect_px_out: None
             }
         ]).into_iter());
 

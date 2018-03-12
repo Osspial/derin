@@ -5,16 +5,18 @@ mod direct_render;
 mod edit_box;
 mod group;
 mod label;
+mod slider;
 
 pub use self::button::*;
 pub use self::direct_render::*;
 pub use self::edit_box::*;
 pub use self::group::*;
 pub use self::label::*;
+pub use self::slider::*;
 
 use gl_render::{Prim, ThemedPrim, RenderString, RelPoint};
 use cgmath::Point2;
-use cgmath_geometry::DimsBox;
+use cgmath_geometry::{BoundBox, DimsBox};
 use theme::Theme;
 use core::render::Theme as CoreTheme;
 
@@ -65,7 +67,7 @@ impl Contents<String> {
 }
 
 impl ContentsInner {
-    fn to_prim<D>(&mut self, background_name: &str) -> ThemedPrim<D> {
+    fn to_prim<D>(&mut self, background_name: &str, rect_px_out: Option<&mut BoundBox<Point2<i32>>>) -> ThemedPrim<D> {
         match *self {
             ContentsInner::Text(ref mut s) => ThemedPrim {
                 theme_path: background_name,
@@ -78,6 +80,7 @@ impl ContentsInner {
                     RelPoint::new( 1.0, 0)
                 ),
                 prim: Prim::String(s),
+                rect_px_out: rect_px_out.map(|r| r as *mut BoundBox<Point2<i32>>)
             },
             ContentsInner::Image(ref i) => ThemedPrim {
                 theme_path: &**i,
@@ -89,7 +92,8 @@ impl ContentsInner {
                     RelPoint::new( 1.0, 0),
                     RelPoint::new( 1.0, 0)
                 ),
-                prim: Prim::Image
+                prim: Prim::Image,
+                rect_px_out: rect_px_out.map(|r| r as *mut BoundBox<Point2<i32>>)
             }
         }
     }

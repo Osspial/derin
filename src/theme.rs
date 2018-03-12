@@ -6,7 +6,7 @@ use gullery::glsl::Nu8;
 
 use cgmath::Point2;
 use cgmath_geometry::DimsBox;
-use dct::layout::{Align, Align2, Margins};
+use dct::layout::{Align, Align2, Margins, SizeBounds};
 
 use std::io;
 use std::rc::Rc;
@@ -26,7 +26,8 @@ pub mod color {
 pub struct Image {
     pub pixels: Vec<Rgba<Nu8>>,
     pub dims: DimsBox<Point2<u32>>,
-    pub rescale: RescaleRules
+    pub rescale: RescaleRules,
+    pub size_bounds: SizeBounds
 }
 
 /// The algorithm used to rescale an image.
@@ -149,15 +150,29 @@ impl Default for Theme {
     fn default() -> Theme {
         let mut theme = Theme::empty();
 
+        let image_buf = |png_buf| {
+            let image_png = png::Decoder::new(::std::io::Cursor::new(png_buf));
+            let (info, mut reader) = image_png.read_info().unwrap();
+            // Allocate the output buffer.
+            let mut image = vec![0; info.buffer_size()];
+            // Read the next frame. Currently this function should only called once.
+            // The default options
+            reader.next_frame(&mut image).unwrap();
+            let image_resized = unsafe {
+                Vec::from_raw_parts(
+                    image.as_mut_ptr() as *mut _,
+                    image.len() / 4,
+                    image.capacity() / 4
+                )
+            };
+            ::std::mem::forget(image);
+            image_resized
+        };
+        macro_rules! image_buf {
+            ($path:expr) => {{image_buf(&include_bytes!($path)[..])}}
+        }
         macro_rules! upload_image {
-            ($name:expr, $path:expr, $dims:expr, $border:expr, $align:expr) => {{
-                let image_png = png::Decoder::new(::std::io::Cursor::new(&include_bytes!($path)[..]));
-                let (info, mut reader) = image_png.read_info().unwrap();
-                // Allocate the output buffer.
-                let mut image = vec![0; info.buffer_size()];
-                // Read the next frame. Currently this function should only called once.
-                // The default options
-                reader.next_frame(&mut image).unwrap();
+            ($name:expr, $path:expr, $dims:expr, $border:expr, $text_align:expr) => {{
                 theme.insert_widget(
                     $name.to_string(),
                     ThemeWidget {
@@ -169,33 +184,59 @@ impl Default for Theme {
                             highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
                             face_size: 16 * 64,
                             tab_size: 8,
-                            justify: $align,
+                            justify: $text_align,
                             margins: Margins::new($border, $border, $border, $border),
                             line_wrap: LineWrap::Normal
                         }),
                         image: Some(Rc::new(Image {
-                            pixels: unsafe {
-                                Vec::from_raw_parts(
-                                    image.as_mut_ptr() as *mut _,
-                                    image.len() / 4,
-                                    image.capacity() / 4
-                                )
-                            },
-                            dims: DimsBox::new2($dims, $dims),
-                            rescale: RescaleRules::Slice(Margins::new($border, $border, $border, $border))
+                            pixels: image_buf!($path),
+                            dims: DimsBox::new2($dims.0, $dims.1),
+                            rescale: RescaleRules::Slice(Margins::new($border, $border, $border, $border)),
+                            size_bounds: SizeBounds {
+                                min: DimsBox::new2($border * 2, $border * 2),
+                                ..SizeBounds::default()
+                            }
                         }))
                     }
                 );
-
-                ::std::mem::forget(image);
             }}
         }
 
-        upload_image!("Group", "./default_theme_resources/group.png", 3, 1, Align2::new(Align::Start, Align::Start));
-        upload_image!("Button::Normal", "./default_theme_resources/button.normal.png", 32, 4, Align2::new(Align::Center, Align::Center));
-        upload_image!("Button::Hover", "./default_theme_resources/button.hover.png", 32, 4, Align2::new(Align::Center, Align::Center));
-        upload_image!("Button::Clicked", "./default_theme_resources/button.clicked.png", 32, 4, Align2::new(Align::Center, Align::Center));
-        upload_image!("EditBox", "./default_theme_resources/editbox.png", 8, 3, Align2::new(Align::Start, Align::Center));
+        upload_image!("Group", "./default_theme_resources/group.png", (3, 3), 1, Align2::new(Align::Start, Align::Start));
+        upload_image!("Button::Normal", "./default_theme_resources/button.normal.png", (32, 32), 4, Align2::new(Align::Center, Align::Center));
+        upload_image!("Button::Hover", "./default_theme_resources/button.hover.png", (32, 32), 4, Align2::new(Align::Center, Align::Center));
+        upload_image!("Button::Clicked", "./default_theme_resources/button.clicked.png", (32, 32), 4, Align2::new(Align::Center, Align::Center));
+        upload_image!("EditBox", "./default_theme_resources/editbox.png", (8, 8), 3, Align2::new(Align::Start, Align::Center));
+        theme.insert_widget(
+            "Slider::Bar".to_string(),
+            ThemeWidget {
+                text: None,
+                image: Some(Rc::new(Image {
+                    pixels: image_buf!("./default_theme_resources/slider_bar.png"),
+                    dims: DimsBox::new2(32, 8),
+                    rescale: RescaleRules::Slice(Margins::new(4, 4, 4, 4)),
+                    size_bounds: SizeBounds {
+                        min: DimsBox::new2(32, 8),
+                        max: DimsBox::new2(i32::max_value(), 8)
+                    }
+                }))
+            }
+        );
+        theme.insert_widget(
+            "Slider::Head".to_string(),
+            ThemeWidget {
+                text: None,
+                image: Some(Rc::new(Image {
+                    pixels: image_buf!("./default_theme_resources/slider_head.png"),
+                    dims: DimsBox::new2(8, 16),
+                    rescale: RescaleRules::Align(Align2::new(Align::Center, Align::Center)),
+                    size_bounds: SizeBounds {
+                        min: DimsBox::new2(8, 16),
+                        ..SizeBounds::default()
+                    }
+                }))
+            }
+        );
         theme.insert_widget(
             "Label".to_string(),
             ThemeWidget {
@@ -220,11 +261,12 @@ impl Default for Theme {
 
 impl Image {
     pub fn min_size(&self) -> DimsBox<Point2<i32>> {
-        match self.rescale {
-            RescaleRules::Align(_) => self.dims.cast().unwrap_or(DimsBox::new2(i32::max_value(), i32::max_value())),
-            RescaleRules::StretchOnPixelCenter |
-            RescaleRules::Stretch => DimsBox::new2(0, 0),
-            RescaleRules::Slice(margins) => DimsBox::new2(margins.width() as i32, margins.height() as i32),
-        }
+        self.size_bounds.min
+        // match self.rescale {
+        //     RescaleRules::Align(_) => self.dims.cast().unwrap_or(DimsBox::new2(i32::max_value(), i32::max_value())),
+        //     RescaleRules::StretchOnPixelCenter |
+        //     RescaleRules::Stretch => DimsBox::new2(0, 0),
+        //     RescaleRules::Slice(margins) => DimsBox::new2(margins.width() as i32, margins.height() as i32),
+        // }
     }
 }

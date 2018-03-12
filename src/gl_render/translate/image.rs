@@ -40,44 +40,47 @@ impl ImageTranslate {
             }
         };
         let (min, max) = (clipped_rect.min(), clipped_rect.max());
+        let gen_corners = || {
 
-        let clip_margins = Margins {
-            left: clipped_rect.min().x - rect.min().x,
-            right: rect.max().x - clipped_rect.max().x,
-            top: clipped_rect.min().y - rect.min().y,
-            bottom: rect.max().y - clipped_rect.max().y
-        };
-        let mut atlas_rect_clipped = BoundBox::from(atlas_rect).cast::<f32>().unwrap();
-        let atlas_clip_margins = Margins {
-            left: clip_margins.left as f32 * (atlas_rect_clipped.width() / rect.width() as f32),
-            right: clip_margins.right as f32 * (atlas_rect_clipped.width() / rect.width() as f32),
-            top: clip_margins.top as f32 * (atlas_rect_clipped.height() / rect.height() as f32),
-            bottom: clip_margins.bottom as f32 * (atlas_rect_clipped.height() / rect.height() as f32),
-        };
-        atlas_rect_clipped.min.x += atlas_clip_margins.left;
-        atlas_rect_clipped.max.x -= atlas_clip_margins.right;
-        atlas_rect_clipped.min.y += atlas_clip_margins.top;
-        atlas_rect_clipped.max.y -= atlas_clip_margins.bottom;
+            let clip_margins = Margins {
+                left: clipped_rect.min().x - rect.min().x,
+                right: rect.max().x - clipped_rect.max().x,
+                top: clipped_rect.min().y - rect.min().y,
+                bottom: rect.max().y - clipped_rect.max().y
+            };
+            let mut atlas_rect_clipped = BoundBox::from(atlas_rect).cast::<f32>().unwrap();
+            let atlas_clip_margins = Margins {
+                left: clip_margins.left as f32 * (atlas_rect_clipped.width() / rect.width() as f32),
+                right: clip_margins.right as f32 * (atlas_rect_clipped.width() / rect.width() as f32),
+                top: clip_margins.top as f32 * (atlas_rect_clipped.height() / rect.height() as f32),
+                bottom: clip_margins.bottom as f32 * (atlas_rect_clipped.height() / rect.height() as f32),
+            };
+            atlas_rect_clipped.min.x += atlas_clip_margins.left;
+            atlas_rect_clipped.max.x -= atlas_clip_margins.right;
+            atlas_rect_clipped.min.y += atlas_clip_margins.top;
+            atlas_rect_clipped.max.y -= atlas_clip_margins.bottom;
 
-        let tl_out = GLVertex {
-            loc: min,
-            color,
-            tex_coord: atlas_rect_clipped.min()
-        };
-        let tr_out = GLVertex {
-            loc: Point2::new(max.x, min.y),
-            color,
-            tex_coord: Point2::new(atlas_rect_clipped.max().x, atlas_rect_clipped.min().y)
-        };
-        let br_out = GLVertex {
-            loc: max,
-            color,
-            tex_coord: atlas_rect_clipped.max()
-        };
-        let bl_out = GLVertex {
-            loc: Point2::new(min.x, max.y),
-            color,
-            tex_coord: Point2::new(atlas_rect_clipped.min().x, atlas_rect_clipped.max().y)
+            let tl_out = GLVertex {
+                loc: min,
+                color,
+                tex_coord: atlas_rect_clipped.min()
+            };
+            let tr_out = GLVertex {
+                loc: Point2::new(max.x, min.y),
+                color,
+                tex_coord: Point2::new(atlas_rect_clipped.max().x, atlas_rect_clipped.min().y)
+            };
+            let br_out = GLVertex {
+                loc: max,
+                color,
+                tex_coord: atlas_rect_clipped.max()
+            };
+            let bl_out = GLVertex {
+                loc: Point2::new(min.x, max.y),
+                color,
+                tex_coord: Point2::new(atlas_rect_clipped.min().x, atlas_rect_clipped.max().y)
+            };
+            (tl_out, tr_out, br_out, bl_out, clip_margins, atlas_clip_margins)
         };
 
         macro_rules! derived_verts {
@@ -104,19 +107,27 @@ impl ImageTranslate {
         }
         let verts = match (min == max, rescale) {
             (true, _) => TranslateVerts::None,
-            (false, RescaleRules::Stretch) => TranslateVerts::Stretch {
-                tl: tl_out,
-                tr: tr_out,
-                br: br_out,
-                bl: bl_out,
+            (false, RescaleRules::Stretch) => {
+                let (tl_out, tr_out, br_out, bl_out, _, _) = gen_corners();
+                TranslateVerts::Stretch {
+                    tl: tl_out,
+                    tr: tr_out,
+                    br: br_out,
+                    bl: bl_out,
+                }
             },
-            (false, RescaleRules::StretchOnPixelCenter) => TranslateVerts::Stretch {
-                tl: derived_verts!(tl_out, +(0., 0.), +(0., 0.))[2],
-                tr: derived_verts!(tr_out, -(0., 0.), +(0., 0.))[2],
-                br: derived_verts!(br_out, -(0., 0.), -(0., 0.))[2],
-                bl: derived_verts!(bl_out, +(0., 0.), -(0., 0.))[2],
+            (false, RescaleRules::StretchOnPixelCenter) => {
+                let (tl_out, tr_out, br_out, bl_out, _, _) = gen_corners();
+                TranslateVerts::Stretch {
+                    tl: derived_verts!(tl_out, +(0., 0.), +(0., 0.))[2],
+                    tr: derived_verts!(tr_out, -(0., 0.), +(0., 0.))[2],
+                    br: derived_verts!(br_out, -(0., 0.), -(0., 0.))[2],
+                    bl: derived_verts!(bl_out, +(0., 0.), -(0., 0.))[2],
+                }
             },
             (false, RescaleRules::Slice(margins)) => {
+                let (tl_out, tr_out, br_out, bl_out, clip_margins, atlas_clip_margins) = gen_corners();
+
                 let atlas_margins = Margins::new(
                     margins.left as f32 - atlas_clip_margins.left,
                     margins.top as f32 - atlas_clip_margins.right,
@@ -159,24 +170,45 @@ impl ImageTranslate {
                     bound_x(max_x + rect.min.x),
                     bound_y(max_y + rect.min.y),
                 );
+                let clip_margins = Margins {
+                    left: min_x - (bounds.min.x - rect.min.x),
+                    right: max_x - (bounds.max.x - rect.min.x),
+                    top: min_y - (bounds.min.y - rect.min.y),
+                    bottom: max_y - (bounds.max.y - rect.min.y),
+                };
 
+                let mut atlas_rect_clipped = BoundBox::from(atlas_rect).cast::<f32>().unwrap();
+                let atlas_clip_margins = Margins {
+                    left: clip_margins.left as f32 * (atlas_rect_clipped.width() / rect.width() as f32),
+                    right: clip_margins.right as f32 * (atlas_rect_clipped.width() / rect.width() as f32),
+                    top: clip_margins.top as f32 * (atlas_rect_clipped.height() / rect.height() as f32),
+                    bottom: clip_margins.bottom as f32 * (atlas_rect_clipped.height() / rect.height() as f32),
+                };
+                atlas_rect_clipped.min.x += atlas_clip_margins.left;
+                atlas_rect_clipped.max.x -= atlas_clip_margins.right;
+                atlas_rect_clipped.min.y += atlas_clip_margins.top;
+                atlas_rect_clipped.max.y -= atlas_clip_margins.bottom;
 
                 TranslateVerts::Stretch {
                     tl: GLVertex {
                         loc: bounds.min(),
-                        ..tl_out
+                        color,
+                        tex_coord: atlas_rect_clipped.min()
                     },
                     tr: GLVertex {
                         loc: Point2::new(bounds.max.x, bounds.min.y),
-                        ..tr_out
+                        color,
+                        tex_coord: Point2::new(atlas_rect_clipped.max().x, atlas_rect_clipped.min().y)
                     },
                     br: GLVertex {
                         loc: bounds.max,
-                        ..br_out
+                        color,
+                        tex_coord: atlas_rect_clipped.max()
                     },
                     bl: GLVertex {
                         loc: Point2::new(bounds.min.x, bounds.max.y),
-                        ..bl_out
+                        color,
+                        tex_coord: Point2::new(atlas_rect_clipped.min().x, atlas_rect_clipped.max().y)
                     }
                 }
             }
@@ -185,6 +217,14 @@ impl ImageTranslate {
         ImageTranslate {
             verts,
             cur_vertex: 0
+        }
+    }
+
+    pub fn rect(&self) -> Option<BoundBox<Point2<i32>>> {
+        match self.verts {
+            TranslateVerts::Stretch{tl, br, ..} => Some(BoundBox::new(tl.loc, br.loc)),
+            TranslateVerts::Slice{tl, br, ..} => Some(BoundBox::new(tl[0].loc, br[0].loc)),
+            TranslateVerts::None => None
         }
     }
 }

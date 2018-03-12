@@ -115,9 +115,10 @@ impl<F, H> Widget<H::Action, F> for Button<H>
                     RelPoint::new( 1.0, 0),
                     RelPoint::new( 1.0, 0)
                 ),
-                prim: Prim::Image
+                prim: Prim::Image,
+                rect_px_out: None
             },
-            self.contents.to_prim(image_str)
+            self.contents.to_prim(image_str, None)
         ]).into_iter());
 
         self.size_bounds.min = frame.theme().widget_theme(image_str).image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));

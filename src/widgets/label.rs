@@ -61,7 +61,7 @@ impl<A, F> Widget<A, F> for Label
     }
 
     fn render(&mut self, frame: &mut FrameRectStack<F>) {
-        frame.upload_primitives(Some(self.contents.to_prim("Label")).into_iter());
+        frame.upload_primitives(Some(self.contents.to_prim("Label", None)).into_iter());
         self.min_size = self.contents.min_size(frame.theme());
     }
 

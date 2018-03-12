@@ -86,7 +86,8 @@ impl<A, F, C, L> Widget<A, F> for Group<C, L>
                     RelPoint::new( 1.0, 0),
                     RelPoint::new( 1.0, 0)
                 ),
-                prim: Prim::Image
+                prim: Prim::Image,
+                rect_px_out: None
             }
         ]).into_iter());
     }
