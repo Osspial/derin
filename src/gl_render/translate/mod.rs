@@ -5,7 +5,7 @@ use cgmath::{Point2, EuclideanSpace};
 use cgmath_geometry::{GeoBox, OffsetBox, BoundBox, DimsBox};
 use glyphydog::{ShapedBuffer, Shaper, FaceSize, DPI};
 
-use gullery::glsl::{Nu8, Ni32};
+use gullery::glsl::Nu8;
 use gullery::colors::Rgba;
 
 use gl_render::{FrameDraw, GLFrame, PrimFrame};

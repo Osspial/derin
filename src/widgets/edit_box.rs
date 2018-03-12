@@ -1,5 +1,5 @@
 use core::event::{EventOps, WidgetEvent, InputState, FocusChange};
-use core::tree::{WidgetIdent, UpdateTag, WidgetSubtrait, WidgetSubtraitMut, Widget};
+use core::tree::{WidgetIdent, UpdateTag, Widget};
 use core::render::{FrameRectStack, Theme};
 use core::popup::ChildPopupsMut;
 use core::timer::TimerRegister;
@@ -219,15 +219,5 @@ impl<A, F> Widget<A, F> for EditBox
         if self.update_tag.has_keyboard_focus() {
             register.add_timer("cursor_flash", Duration::new(1, 0)/2, true);
         }
-    }
-
-    #[inline]
-    fn subtrait(&self) -> WidgetSubtrait<A, F> {
-        WidgetSubtrait::Widget(self)
-    }
-
-    #[inline]
-    fn subtrait_mut(&mut self) -> WidgetSubtraitMut<A, F> {
-        WidgetSubtraitMut::Widget(self)
     }
 }

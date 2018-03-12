@@ -23,7 +23,7 @@ pub trait RenderFrame: 'static {
 
     fn upload_primitives<I>(&mut self, widget_ident: &[WidgetIdent], theme: &Self::Theme, transform: &Self::Transform, prim_iter: I)
         where I: Iterator<Item=Self::Primitive>;
-    fn child_rect_transform(self_transform: &Self::Transform, child_rect: BoundBox<Point2<i32>>) -> Self::Transform;
+    fn child_rect_transform(self_transform: &Self::Transform, child_rect: BoundBox<Point2<i32>>) -> Option<Self::Transform>;
 }
 
 pub trait Theme {
@@ -76,14 +76,14 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
     }
 
     #[inline]
-    pub fn enter_child_rect<'b>(&'b mut self, child_rect: BoundBox<Point2<i32>>) -> FrameRectStack<'b, F> {
-        FrameRectStack {
+    pub fn enter_child_rect<'b>(&'b mut self, child_rect: BoundBox<Point2<i32>>) -> Option<FrameRectStack<'b, F>> {
+        Some(FrameRectStack {
             frame: self.frame,
-            transform: F::child_rect_transform(&self.transform, child_rect),
+            transform: F::child_rect_transform(&self.transform, child_rect)?,
             theme: self.theme,
             widget_ident: self.widget_ident,
             pop_widget_ident: false,
-        }
+        })
     }
 
     pub(crate) fn enter_child_widget<'b>(&'b mut self, child_ident: WidgetIdent) -> FrameRectStack<'b, F> {

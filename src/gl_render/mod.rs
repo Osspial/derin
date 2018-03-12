@@ -292,9 +292,9 @@ impl RenderFrame for GLFrame {
     }
 
     #[inline]
-    fn child_rect_transform(rect: &BoundBox<Point2<i32>>, child_rect: BoundBox<Point2<i32>>) -> BoundBox<Point2<i32>> {
+    fn child_rect_transform(rect: &BoundBox<Point2<i32>>, child_rect: BoundBox<Point2<i32>>) -> Option<BoundBox<Point2<i32>>> {
         let trans = child_rect + rect.min().to_vec();
-        trans
+        Some(trans)
     }
 }
 

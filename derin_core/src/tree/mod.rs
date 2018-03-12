@@ -1,4 +1,7 @@
+pub(crate) mod dyn;
+
 use std::cell::Cell;
+use dyn::ParentDyn;
 
 use LoopFlow;
 use cgmath::Point2;
@@ -143,46 +146,6 @@ id!(pub(crate) RootID let id; {assert!(id < UPDATE_MASK)});
 id!(pub(crate) WidgetID);
 
 
-macro_rules! subtrait_enums {
-    (subtraits {
-        $( $Variant:ident($SubTrait:ty) fn $as_variant:ident ),+
-    }) => {
-        pub enum WidgetSubtrait<'a, A: 'a, F: 'a + RenderFrame> {
-            $( $Variant(&'a $SubTrait) ),+
-        }
-
-        pub enum WidgetSubtraitMut<'a, A: 'a, F: 'a + RenderFrame> {
-            $( $Variant(&'a mut $SubTrait) ),+
-        }
-
-        impl<'a, A, F: RenderFrame> WidgetSubtrait<'a, A, F> {
-            $(
-                pub fn $as_variant(self) -> Option<&'a $SubTrait> {
-                    match self {
-                        WidgetSubtrait::$Variant(v) => Some(v),
-                        _ => None
-                    }
-                }
-            )+
-        }
-        impl<'a, A, F: RenderFrame> WidgetSubtraitMut<'a, A, F> {
-            $(
-                pub fn $as_variant(self) -> Option<&'a mut $SubTrait> {
-                    match self {
-                        WidgetSubtraitMut::$Variant(v) => Some(v),
-                        _ => None
-                    }
-                }
-            )+
-        }
-    }
-}
-
-subtrait_enums! {subtraits {
-    Parent(Parent<A, F>) fn as_parent,
-    Widget(Widget<A, F>) fn as_widget
-}}
-
 /// Behavior when another widget attempts to focus a given widget.
 ///
 /// Note that this is *ignored* if the attempt to focus came from the return value of this widget's
@@ -219,8 +182,6 @@ pub trait Widget<A, F: RenderFrame> {
         popups: Option<ChildPopupsMut<A, F>>,
         source_child: &[WidgetIdent]
     ) -> EventOps<A, F>;
-    fn subtrait(&self) -> WidgetSubtrait<A, F>;
-    fn subtrait_mut(&mut self) -> WidgetSubtraitMut<A, F>;
 
     fn size_bounds(&self) -> SizeBounds {
         SizeBounds::default()
@@ -228,6 +189,16 @@ pub trait Widget<A, F: RenderFrame> {
     fn register_timers(&self, _register: &mut TimerRegister) {}
     fn accepts_focus(&self) -> OnFocus {
         OnFocus::default()
+    }
+
+    #[doc(hidden)]
+    fn as_parent(&self) -> Option<&ParentDyn<A, F>> {
+        ParentDyn::from_widget(self)
+    }
+
+    #[doc(hidden)]
+    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<A, F>> {
+        ParentDyn::from_widget_mut(self)
     }
 }
 
@@ -250,8 +221,12 @@ pub trait Parent<A, F: RenderFrame>: Widget<A, F> {
     fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>>;
     fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>>;
 
-    fn children<'a>(&'a self, for_each: &mut FnMut(&[WidgetSummary<&'a Widget<A, F>>]) -> LoopFlow<()>);
-    fn children_mut<'a>(&'a mut self, for_each: &mut FnMut(&mut [WidgetSummary<&'a mut Widget<A, F>>]) -> LoopFlow<()>);
+    fn children<'a, G, R>(&'a self, for_each: G) -> Option<R>
+        where A: 'a,
+              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow<R>;
+    fn children_mut<'a, G, R>(&'a mut self, for_each: G) -> Option<R>
+        where A: 'a,
+              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow<R>;
 
     fn update_child_layout(&mut self);
 

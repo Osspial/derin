@@ -1,5 +1,5 @@
 use core::event::{EventOps, WidgetEvent, InputState};
-use core::tree::{WidgetIdent, UpdateTag, WidgetSubtrait, WidgetSubtraitMut, Widget, };
+use core::tree::{WidgetIdent, UpdateTag, Widget, };
 use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 
@@ -89,15 +89,5 @@ impl<A, F, R> Widget<A, F> for DirectRender<R>
             cursor_icon: None,
             popup: None
         }
-    }
-
-    #[inline]
-    fn subtrait(&self) -> WidgetSubtrait<A, F> {
-        WidgetSubtrait::Widget(self)
-    }
-
-    #[inline]
-    fn subtrait_mut(&mut self) -> WidgetSubtraitMut<A, F> {
-        WidgetSubtraitMut::Widget(self)
     }
 }

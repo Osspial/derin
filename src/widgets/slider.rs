@@ -1,5 +1,5 @@
 use event::{EventOps, WidgetEvent, InputState, MouseButton};
-use core::tree::{WidgetIdent, UpdateTag, WidgetSubtrait, WidgetSubtraitMut, Widget};
+use core::tree::{WidgetIdent, UpdateTag, Widget};
 use core::render::{FrameRectStack, Theme};
 use core::popup::ChildPopupsMut;
 use theme::RescaleRules;
@@ -205,15 +205,5 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
             cursor_icon: None,
             popup: None
         }
-    }
-
-    #[inline]
-    fn subtrait(&self) -> WidgetSubtrait<H::Action, F> {
-        WidgetSubtrait::Widget(self)
-    }
-
-    #[inline]
-    fn subtrait_mut(&mut self) -> WidgetSubtraitMut<H::Action, F> {
-        WidgetSubtraitMut::Widget(self)
     }
 }

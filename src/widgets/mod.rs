@@ -23,7 +23,7 @@ use core::render::Theme as CoreTheme;
 /// The `Widget` trait, as well as associated types used to create custom widgets.
 pub mod custom {
     pub use core::timer::TimerRegister;
-    pub use core::tree::{UpdateTag, Widget, WidgetSummary, WidgetIdent, WidgetSubtrait, WidgetSubtraitMut};
+    pub use core::tree::{UpdateTag, Widget, WidgetSummary, WidgetIdent};
 }
 
 /// What should be drawn inside of a label, or other widgets that contains a label.

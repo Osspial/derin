@@ -1,19 +1,19 @@
-use arrayvec::ArrayVec;
-
-use cgmath::{EuclideanSpace, Point2, Vector2, Array, Bounded};
+use cgmath::{Point2, Array, Bounded};
 use cgmath_geometry::{GeoBox, DimsBox, Segment};
 
 use std::cmp::Ordering;
 
 use {WindowEvent, LoopFlow, Root};
 use tree::*;
+use tree::dyn::*;
 use timer::Timer;
 use popup::{PopupSummary, PopupID};
-use event::{WidgetEvent, InputState, MouseDown, FocusChange};
+use event::{WidgetEvent, FocusChange};
 use render::{Renderer, RenderFrame, FrameRectStack};
 use widget_stack::{WidgetPath, WidgetStack};
 use meta_tracker::{MetaDrain, MetaEvent, MetaEventVariant};
 use dct::buttons::ModifierKeys;
+use offset_widget::*;
 
 use std::time::Duration;
 
@@ -113,39 +113,20 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
         };
         let mut widget_stack = widget_stack_base.use_stack_dyn(widget_stack_root, root_id);
 
-        macro_rules! mouse_button_arrays {
-            ($update_tag:expr, $root_offset:expr) => {{
-                let shift_button = move |mut down: MouseDown| {
-                    down.down_pos -= $root_offset;
-                    down
-                };
-                let mbd_array: ArrayVec<[_; 5]> = mouse_buttons_down.clone().into_iter().map(&shift_button).collect();
-                let mbdin_array: ArrayVec<[_; 5]> = $update_tag.mouse_state.get().mouse_button_sequence()
-                    .into_iter().filter_map(|b| mouse_buttons_down.contains(b)).map(shift_button).collect();
-                (mbd_array, mbdin_array)
-            }}
-        }
-
         macro_rules! try_push_action {
             (
                 $widget:expr, $path:expr $(=> ($meta_tracker:expr))*,
-                $event:expr, to_rootspace: $widget_offset:expr $(, bubble ($bubble:expr, $bubble_store:expr, $bubble_path:expr))*
+                $event:expr $(, bubble ($bubble:expr, $bubble_store:expr, $bubble_path:expr))*
             ) => {{
                 let widget_update_tag = $widget.update_tag();
-                let widget_offset = $widget_offset;
-                let (mbd_array, mbdin_array) = mouse_button_arrays!(widget_update_tag, widget_offset);
                 let widget_id = widget_update_tag.widget_id;
 
-                let input_state = InputState {
-                    mouse_pos: *mouse_pos - widget_offset,
-                    modifiers: *modifiers,
-                    mouse_buttons_down: &mbd_array,
-                    mouse_buttons_down_in_widget: &mbdin_array
-                };
                 let event = $event;
                 let event_ops = $widget.on_widget_event(
                     event,
-                    input_state,
+                    *mouse_pos,
+                    &mouse_buttons_down,
+                    *modifiers,
                     popup_widgets.popups_owned_by_mut(widget_id),
                     if_tokens!(($($bubble_path)*) {
                         $($bubble_path)*
@@ -165,18 +146,17 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 if let Some(focus) = event_ops.focus {
                     meta_tracker.push_focus(focus, $path);
                 }
-                if let Some((popup_widget, mut popup_attributes)) = event_ops.popup {
+                if let Some((popup_widget, popup_attributes)) = event_ops.popup {
                     let owner_id = widget_update_tag.widget_id;
-                    popup_attributes.rect = popup_attributes.rect + widget_offset;
                     popup_map_insert.push((owner_id, popup_widget, popup_attributes));
                 }
                 if event_ops.bubble $(& $bubble)* {
                     meta_tracker.push_bubble(
-                        event.translate(widget_offset).into(),
+                        event,
                         $path
                     );
                 }
-                set_cursor_pos = set_cursor_pos.or(event_ops.cursor_pos.map(|p| p + widget_offset));
+                set_cursor_pos = set_cursor_pos.or(event_ops.cursor_pos);
                 set_cursor_icon = set_cursor_icon.or(event_ops.cursor_icon);
                 $(*$bubble_store = event_ops.bubble;)*
 
@@ -198,16 +178,15 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 // Resize the window, forcing a full redraw.
 
                 widget_stack.move_to_root();
-                *widget_stack.top_mut().widget.rect_mut() = new_size.cast::<i32>().unwrap_or(DimsBox::max_value()).into();
+                widget_stack.top().widget.set_rect(new_size.cast::<i32>().unwrap_or(DimsBox::max_value()).into());
                 *force_full_redraw = true;
             },
             WindowEvent::MouseEnter(enter_pos) => {
-                let WidgetPath{ widget: root_widget, path: root_path, .. } = widget_stack.move_to_root();
+                let WidgetPath{ widget: mut root_widget, path: root_path, .. } = widget_stack.move_to_root();
 
                 let top_update_tag = try_push_action!(
                     root_widget, root_path.iter().cloned(),
-                    WidgetEvent::MouseEnter(enter_pos),
-                    to_rootspace: Vector2::new(0, 0)
+                    WidgetEvent::MouseEnter(enter_pos)
                 );
 
                 let top_mbseq = top_update_tag.mouse_state.get().mouse_button_sequence();
@@ -215,13 +194,10 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
             },
             WindowEvent::MouseExit(exit_pos) => {
                 widget_stack.move_to_hover();
-                widget_stack.drain_to_root(|widget, path, parent_offset| {
-                    let widget_offset = widget.rect().min().to_vec() + parent_offset;
-
+                widget_stack.drain_to_root(|mut widget, path| {
                     let update_tag = try_push_action!(
                         widget, path.iter().cloned(),
-                        WidgetEvent::MouseExit(exit_pos - widget_offset),
-                        to_rootspace: widget_offset
+                        WidgetEvent::MouseExit(exit_pos)
                     );
 
 
@@ -235,25 +211,15 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
             },
 
 
-            WindowEvent::MouseMove(new_pos_windowspace) if new_pos_windowspace != *mouse_pos => {
+            WindowEvent::MouseMove(new_pos) if new_pos != *mouse_pos => {
                 // Update the stored mouse position
-                *mouse_pos = new_pos_windowspace;
+                *mouse_pos = new_pos;
 
                 loop {
                     widget_stack.move_to_hover();
 
-                    // Calculate the bounds of the hovered widget in window-space, and use that to get hovered
-                    // widget's upper-right corner in window space (the offset).
-                    let top_bounds_windowspace = widget_stack.top_bounds_offset();
-                    let top_bounds_offset = top_bounds_windowspace.min().to_vec();
-
-                    // Use the position of the widget's upper-right corner to turn the window-space coordinates
-                    // into widget-space coordinates.
-                    let top_bounds = top_bounds_windowspace - top_bounds_offset;
-                    let new_pos = new_pos_windowspace - top_bounds_offset;
-
                     // Get a read-only copy of the update tag.
-                    let update_tag_copy = widget_stack.top().update_tag().clone();
+                    let update_tag_copy = widget_stack.top().widget.update_tag().clone();
 
                     if let MouseState::Hovering(widget_old_pos, mbseq) = update_tag_copy.mouse_state.get() {
                         let move_line = Segment {
@@ -263,28 +229,25 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
 
                         // SEND MOVE ACTION
                         {
-                            let WidgetPath{ widget, path, .. } = widget_stack.top_mut();
+                            let WidgetPath{ mut widget, path, .. } = widget_stack.top();
                             try_push_action!(
                                 widget, path.iter().cloned(),
                                 WidgetEvent::MouseMove {
                                     old_pos: widget_old_pos,
                                     new_pos: new_pos,
                                     in_widget: true,
-                                }, to_rootspace: top_bounds_offset
+                                }
                             );
                         }
 
-                        // Get the bounds of the widget after the widget has potentially been moved by the
-                        // move action.
-                        let new_top_bounds_windowspace = widget_stack.top_bounds_offset();
-                        let new_top_bounds = new_top_bounds_windowspace - top_bounds_offset;
-
-                        match new_top_bounds.contains(new_pos) {
+                        let top_bounds = widget_stack.top().widget.rect();
+                        match top_bounds.contains(new_pos) {
                             true => {
                                 // Whether or not to update the child layout.
                                 let update_layout: bool;
                                 {
-                                    let top_update_tag = widget_stack.top().update_tag();
+                                    let top = widget_stack.top().widget;
+                                    let top_update_tag = top.update_tag();
                                     top_update_tag.mouse_state.set(MouseState::Hovering(new_pos, mbseq));
 
                                     // Store whether or not the layout needs to be updated. We can set that the layout
@@ -296,108 +259,93 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
 
                                 // Send actions to the child widget. If the hover widget isn't a parent, there's
                                 // nothing we need to do.
-                                let WidgetPath{ widget: top_widget, path: top_path, .. } = widget_stack.top_mut();
-                                match top_widget.subtrait_mut() {
-                                    WidgetSubtraitMut::Widget(_) => (),
-                                    WidgetSubtraitMut::Parent(top_widget_as_parent) => {
-                                        // Actually update the layout, if necessary.
+                                let WidgetPath{ widget: mut top_widget, path: top_path, .. } = widget_stack.top();
+                                if let Some(mut top_widget_as_parent) = top_widget.as_parent_mut() {
+                                    // Actually update the layout, if necessary.
+                                    if update_layout {
+                                        top_widget_as_parent.update_child_layout();
+                                    }
+
+                                    struct EnterChildData {
+                                        child_ident: WidgetIdent,
+                                        enter_pos: Point2<i32>
+                                    }
+                                    let mut enter_child: Option<EnterChildData> = None;
+
+                                    // Figure out if the cursor has moved into a child widget, and send the relevant events if
+                                    // we have.
+                                    top_widget_as_parent.children_mut(|mut child_summary| {
+                                        if !child_summary.rect.contains(new_pos) {
+                                            return LoopFlow::Continue;
+                                        }
+
+                                        let WidgetSummary {
+                                            widget: ref mut child,
+                                            rect: child_bounds,
+                                            ident: child_ident,
+                                            ..
+                                        } = child_summary;
+
+                                        // Find the exact location where the cursor entered the child widget. This is
+                                        // done in the child's parent's coordinate space (i.e. the currently hovered
+                                        // widget), and is translated to the child's coordinate space when we enter the
+                                        // child.
+                                        let enter_pos = child_bounds.intersect_line(move_line).0
+                                            .unwrap_or(new_pos);
+
+                                        // Get the mouse buttons already down in the child, and set the mouse
+                                        // state to hover.
+                                        let child_mbdin;
+                                        {
+                                            let child_update_tag = child.update_tag();
+                                            child_mbdin = child_update_tag.mouse_state.get().mouse_button_sequence();
+                                            child_update_tag.mouse_state.set(MouseState::Hovering(
+                                                widget_old_pos,
+                                                child_mbdin
+                                            ));
+                                        }
+
+                                        // SEND ENTER ACTION TO CHILD
+                                        try_push_action!(
+                                            child, top_path.iter().cloned().chain(Some(child_ident)),
+                                            WidgetEvent::MouseEnter(enter_pos)
+                                        );
+
+                                        // Store the information relating to the child we entered,
+                                        enter_child = Some(EnterChildData{ child_ident, enter_pos });
+
+                                        // We `continue` the loop after this, but the continue is handled by the
+                                        // `enter_child` check below.
+                                        LoopFlow::Break(())
+                                    });
+
+                                    if let Some(EnterChildData{ child_ident, enter_pos }) = enter_child {
+                                        // SEND CHILD ENTER ACTION
+                                        try_push_action!(
+                                            top_widget_as_parent, top_path.iter().cloned(),
+                                            WidgetEvent::MouseEnterChild {
+                                                enter_pos,
+                                                child: child_ident
+                                            }
+                                        );
+
+                                        // Update the layout again, if the events we've sent have triggered a
+                                        // relayout.
+                                        let update_layout: bool;
+                                        {
+                                            let top_update_tag = top_widget_as_parent.update_tag();
+                                            match mbseq.len() {
+                                                0 => top_update_tag.mouse_state.set(MouseState::Untracked),
+                                                _ => top_update_tag.mouse_state.set(MouseState::Tracking(new_pos, mbseq))
+                                            }
+                                            top_update_tag.child_event_recv.set(top_update_tag.child_event_recv.get() | ChildEventRecv::MOUSE_HOVER);
+                                            update_layout = top_update_tag.needs_update(root_id).update_layout;
+                                        }
                                         if update_layout {
                                             top_widget_as_parent.update_child_layout();
                                         }
 
-                                        struct EnterChildData {
-                                            child_ident: WidgetIdent,
-                                            enter_pos: Point2<i32>,
-                                            child_pos_offset: Vector2<i32>
-                                        }
-                                        let mut enter_child: Option<EnterChildData> = None;
-
-                                        // Figure out if the cursor has moved into a child widget, and send the relevant events if
-                                        // we have.
-                                        top_widget_as_parent.children_mut(&mut |summary_list| {
-                                            let mut child_summary = None;
-                                            for summary in summary_list {
-                                                if summary.rect.contains(new_pos) {
-                                                    child_summary = Some(summary);
-                                                    break;
-                                                }
-                                            }
-                                            let child_summary = match child_summary {
-                                                Some(summary) => summary,
-                                                None => return LoopFlow::Continue
-                                            };
-
-                                            let WidgetSummary {
-                                                widget: ref mut child,
-                                                rect: child_bounds,
-                                                ident: child_ident,
-                                                ..
-                                            } = *child_summary;
-
-                                            let child_pos_offset = child_bounds.min().to_vec();
-
-                                            // Find the exact location where the cursor entered the child widget. This is
-                                            // done in the child's parent's coordinate space (i.e. the currently hovered
-                                            // widget), and is translated to the child's coordinate space when we enter the
-                                            // child.
-                                            let enter_pos = child_bounds.intersect_line(move_line).0
-                                                .unwrap_or(new_pos);
-
-                                            // Get the mouse buttons already down in the child, and set the mouse
-                                            // state to hover.
-                                            let child_mbdin;
-                                            {
-                                                let child_update_tag = child.update_tag();
-                                                child_mbdin = child_update_tag.mouse_state.get().mouse_button_sequence();
-                                                child_update_tag.mouse_state.set(MouseState::Hovering(
-                                                    widget_old_pos - child_pos_offset,
-                                                    child_mbdin
-                                                ));
-                                            }
-
-                                            // SEND ENTER ACTION TO CHILD
-                                            try_push_action!(
-                                                child, top_path.iter().cloned().chain(Some(child_ident)),
-                                                WidgetEvent::MouseEnter(enter_pos - child_pos_offset),
-                                                to_rootspace: child_pos_offset
-                                            );
-
-                                            // Store the information relating to the child we entered,
-                                            enter_child = Some(EnterChildData{ child_ident, enter_pos, child_pos_offset });
-
-                                            // We `continue` the loop after this, but the continue is handled by the
-                                            // `enter_child` check below.
-                                            LoopFlow::Break(())
-                                        });
-
-                                        if let Some(EnterChildData{ child_ident, enter_pos, child_pos_offset }) = enter_child {
-                                            // SEND CHILD ENTER ACTION
-                                            try_push_action!(
-                                                top_widget_as_parent, top_path.iter().cloned(),
-                                                WidgetEvent::MouseEnterChild {
-                                                    enter_pos,
-                                                    child: child_ident
-                                                }, to_rootspace: child_pos_offset
-                                            );
-
-                                            // Update the layout again, if the events we've sent have triggered a
-                                            // relayout.
-                                            let update_layout: bool;
-                                            {
-                                                let top_update_tag = top_widget_as_parent.update_tag();
-                                                match mbseq.len() {
-                                                    0 => top_update_tag.mouse_state.set(MouseState::Untracked),
-                                                    _ => top_update_tag.mouse_state.set(MouseState::Tracking(new_pos, mbseq))
-                                                }
-                                                top_update_tag.child_event_recv.set(top_update_tag.child_event_recv.get() | ChildEventRecv::MOUSE_HOVER);
-                                                update_layout = top_update_tag.needs_update(root_id).update_layout;
-                                            }
-                                            if update_layout {
-                                                top_widget_as_parent.update_child_layout();
-                                            }
-
-                                            continue;
-                                        }
+                                        continue;
                                     }
                                 }
                             },
@@ -406,16 +354,16 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                                 let mouse_exit = top_bounds.intersect_line(move_line).1.unwrap_or(new_pos);
 
                                 {
-                                    let WidgetPath{ widget, path, .. } = widget_stack.top_mut();
+                                    let WidgetPath{ mut widget, path, .. } = widget_stack.top();
                                     try_push_action!(
                                         widget, path.iter().cloned(),
-                                        WidgetEvent::MouseExit(mouse_exit),
-                                        to_rootspace: top_bounds_offset
+                                        WidgetEvent::MouseExit(mouse_exit)
                                     );
                                 }
 
                                 {
-                                    let top_update_tag = widget_stack.top().update_tag();
+                                    let top = widget_stack.top().widget;
+                                    let top_update_tag = top.update_tag();
                                     match mbseq.len() {
                                         0 => top_update_tag.mouse_state.set(MouseState::Untracked),
                                         _ => top_update_tag.mouse_state.set(MouseState::Tracking(new_pos, mbseq))
@@ -424,25 +372,24 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
 
                                 // Send the exit action and mark the parent as hovered, as long as we aren't at the root.
                                 if 0 < widget_stack.depth() {
-                                    let top_parent_offset = widget_stack.top_parent_offset();
-                                    let child_exit_pos = mouse_exit - top_parent_offset;
                                     let child_ident = widget_stack.top_ident();
 
                                     widget_stack.pop();
                                     {
-                                        let WidgetPath{ widget, path, .. } = widget_stack.top_mut();
+                                        let WidgetPath{ mut widget, path, .. } = widget_stack.top();
                                         try_push_action!(
                                             widget, path.iter().cloned(),
                                             WidgetEvent::MouseExitChild {
-                                                exit_pos: child_exit_pos,
+                                                exit_pos: mouse_exit,
                                                 child: child_ident
-                                            }, to_rootspace: top_parent_offset
+                                            }
                                         );
                                     }
 
-                                    let top_update_tag = widget_stack.top().update_tag();
+                                    let top = widget_stack.top().widget;
+                                    let top_update_tag = top.update_tag();
                                     let top_mbseq = top_update_tag.mouse_state.get().mouse_button_sequence();
-                                    top_update_tag.mouse_state.set(MouseState::Hovering(child_exit_pos, top_mbseq));
+                                    top_update_tag.mouse_state.set(MouseState::Hovering(mouse_exit, top_mbseq));
                                     top_update_tag.child_event_recv.set(top_update_tag.child_event_recv.get() & !ChildEventRecv::MOUSE_HOVER);
 
                                     continue;
@@ -456,7 +403,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
 
                         let top_update_tag = root.update_tag();
                         let top_mbseq = top_update_tag.mouse_state.get().mouse_button_sequence();
-                        top_update_tag.mouse_state.set(MouseState::Hovering(new_pos_windowspace, top_mbseq));
+                        top_update_tag.mouse_state.set(MouseState::Hovering(new_pos, top_mbseq));
                         continue;
                     }
 
@@ -464,14 +411,11 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 }
 
                 // Send move events to widgets that are being click-dragged but aren't being hovered.
-                widget_stack.move_over_flags(ChildEventRecv::MOUSE_BUTTONS, |widget, path, widget_parent_offset| {
-                    let new_pos: Point2<i32>;
-                    let (widget_needs_move_event, widget_old_pos, widget_offset): (bool, Point2<i32>, Vector2<i32>);
+                widget_stack.move_over_flags(ChildEventRecv::MOUSE_BUTTONS, |mut widget, path| {
+                    let (widget_needs_move_event, widget_old_pos): (bool, Point2<i32>);
 
                     {
-                        widget_offset = widget_parent_offset + widget.rect().min().to_vec();
                         let update_tag = widget.update_tag();
-                        new_pos = new_pos_windowspace - widget_offset;
 
                         widget_needs_move_event = update_tag.last_event_stamp.get() != *event_stamp;
                         match update_tag.mouse_state.get() {
@@ -491,11 +435,9 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                                 old_pos: widget_old_pos,
                                 new_pos: new_pos,
                                 in_widget: false,
-                            }, to_rootspace: widget_offset
+                            }
                         );
                     }
-
-                    widget.update_tag()
                 });
             },
             WindowEvent::MouseMove(_) => (),
@@ -504,18 +446,16 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
             WindowEvent::MouseDown(button) => {
                 let recv_flags = ChildEventRecv::MOUSE_HOVER | ChildEventRecv::KEYBOARD;
                 let button_mask = ChildEventRecv::mouse_button_mask(button);
-                widget_stack.move_over_flags(recv_flags, |top_widget, path, top_parent_offset| {
-                    let bounds_rootspace = top_widget.rect() + top_parent_offset;
-                    let top_widget_offset = bounds_rootspace.min.to_vec();
-                    let in_widget = bounds_rootspace.contains(*mouse_pos);
+                widget_stack.move_over_flags(recv_flags, |mut top_widget, path| {
+                    let in_widget = top_widget.rect().contains(*mouse_pos);
 
                     try_push_action!(
                         top_widget, path.iter().cloned(),
                         WidgetEvent::MouseDown {
-                            pos: *mouse_pos - top_widget_offset,
+                            pos: *mouse_pos,
                             in_widget,
                             button
-                        }, to_rootspace: top_widget_offset
+                        }
                     );
 
                     let top_update_tag = top_widget.update_tag();
@@ -530,12 +470,11 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                     if in_widget {
                         top_update_tag.child_event_recv.set(top_update_tag.child_event_recv.get() | button_mask)
                     }
-                    top_update_tag
                 });
                 mouse_buttons_down.push_button(button, *mouse_pos);
 
                 widget_stack.move_to_hover();
-                widget_stack.drain_to_root(|widget, _, _| {
+                widget_stack.drain_to_root(|widget, _| {
                     let widget_update_tag = widget.update_tag();
                     widget_update_tag.child_event_recv.set(widget_update_tag.child_event_recv.get() | button_mask);
                 });
@@ -548,10 +487,8 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
 
                 // Send the mouse up event to the hover widget.
                 let mut move_to_tracked = true;
-                widget_stack.move_over_flags(ChildEventRecv::MOUSE_HOVER, |widget, path, top_parent_offset| {
-                    let bounds_rootspace = widget.rect() + top_parent_offset;
-                    let widget_offset = bounds_rootspace.min().to_vec();
-                    let in_widget = bounds_rootspace.contains(*mouse_pos);
+                widget_stack.move_over_flags(ChildEventRecv::MOUSE_HOVER, |mut widget, path| {
+                    let in_widget = widget.rect().contains(*mouse_pos);
                     let pressed_in_widget = widget.update_tag().mouse_state.get().mouse_button_sequence().contains(button);
                     // If the hover widget wasn't the one where the mouse was originally pressed, ensure that
                     // we move to the widget where it was pressed.
@@ -560,12 +497,12 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                     try_push_action!(
                         widget, path.iter().cloned(),
                         WidgetEvent::MouseUp {
-                            pos: *mouse_pos - widget_offset,
-                            down_pos: down_pos_rootspace - widget_offset,
+                            pos: *mouse_pos,
+                            down_pos: down_pos_rootspace,
                             in_widget,
                             pressed_in_widget,
                             button
-                        }, to_rootspace: widget_offset
+                        }
                     );
 
                     let update_tag = widget.update_tag();
@@ -578,25 +515,22 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                         MouseState::Tracking(..) => unreachable!()
                     };
                     update_tag.mouse_state.set(set_mouse_state);
-
-                    update_tag
                 });
 
                 // If the hover widget wasn't the widget where the mouse button was originally pressed,
                 // send the move event to original presser.
                 if move_to_tracked {
-                    widget_stack.move_over_flags(button_mask, |widget, path, top_parent_offset| {
-                        let bounds_rootspace = widget.rect() + top_parent_offset;
-                        let widget_offset = bounds_rootspace.min().to_vec();
+                    widget_stack.move_over_flags(button_mask, |mut widget, path| {
+                        let widget_rect = widget.rect();
                         try_push_action!(
                             widget, path.iter().cloned(),
                             WidgetEvent::MouseUp {
-                                pos: *mouse_pos - widget_offset,
-                                down_pos: down_pos_rootspace - widget_offset,
-                                in_widget: bounds_rootspace.contains(*mouse_pos),
+                                pos: *mouse_pos,
+                                down_pos: down_pos_rootspace,
+                                in_widget: widget_rect.contains(*mouse_pos),
                                 pressed_in_widget: true,
                                 button
-                            }, to_rootspace: widget_offset
+                            }
                         );
 
                         let update_tag = widget.update_tag();
@@ -613,8 +547,6 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                             MouseState::Hovering(mouse_pos, mut top_mbseq) => MouseState::Hovering(mouse_pos, *top_mbseq.release_button(button))
                         };
                         update_tag.mouse_state.set(set_mouse_state);
-
-                        update_tag
                     });
                 }
 
@@ -624,27 +556,18 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 }
             },
             WindowEvent::KeyDown(key) => {
-                if let Some(WidgetPath{ widget: focus_widget, path, top_parent_offset }) = widget_stack.move_to_keyboard_focus() {
-                    let bounds_rootspace = focus_widget.rect() + top_parent_offset;
-                    let widget_offset = bounds_rootspace.min().to_vec();
-
-                    try_push_action!(focus_widget, path.iter().cloned(), WidgetEvent::KeyDown(key, *modifiers), to_rootspace: widget_offset);
+                if let Some(WidgetPath{ widget: mut focus_widget, path }) = widget_stack.move_to_keyboard_focus() {
+                    try_push_action!(focus_widget, path.iter().cloned(), WidgetEvent::KeyDown(key, *modifiers));
                 }
             },
             WindowEvent::KeyUp(key) => {
-                if let Some(WidgetPath{ widget: focus_widget, path, top_parent_offset }) = widget_stack.move_to_keyboard_focus() {
-                    let bounds_rootspace = focus_widget.rect() + top_parent_offset;
-                    let widget_offset = bounds_rootspace.min().to_vec();
-
-                    try_push_action!(focus_widget, path.iter().cloned(), WidgetEvent::KeyUp(key, *modifiers), to_rootspace: widget_offset);
+                if let Some(WidgetPath{ widget: mut focus_widget, path }) = widget_stack.move_to_keyboard_focus() {
+                    try_push_action!(focus_widget, path.iter().cloned(), WidgetEvent::KeyUp(key, *modifiers));
                 }
             },
             WindowEvent::Char(c) => {
-                if let Some(WidgetPath{ widget: focus_widget, path, top_parent_offset }) = widget_stack.move_to_keyboard_focus() {
-                    let bounds_rootspace = focus_widget.rect() + top_parent_offset;
-                    let widget_offset = bounds_rootspace.min().to_vec();
-
-                    try_push_action!(focus_widget, path.iter().cloned(), WidgetEvent::Char(c), to_rootspace: widget_offset);
+                if let Some(WidgetPath{ widget: mut focus_widget, path  }) = widget_stack.move_to_keyboard_focus() {
+                    try_push_action!(focus_widget, path.iter().cloned(), WidgetEvent::Char(c));
                 }
             },
             WindowEvent::Timer => {
@@ -655,7 +578,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 }
                 widget_stack.move_over_widgets(
                     triggered_timers.iter().cloned().map(timer_widget_id),
-                    |widget, path, timer_index, top_parent_offset| {
+                    |mut widget, path, timer_index| {
                         let timer = triggered_timers[timer_index];
                         try_push_action!(
                             widget,
@@ -666,7 +589,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                                 last_trigger: timer.last_trigger,
                                 frequency: timer.frequency,
                                 times_triggered: timer.times_triggered
-                            }, to_rootspace: widget.rect().min().to_vec() + top_parent_offset
+                            }
                         );
                     }
                 );
@@ -682,26 +605,21 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 widget_ident_stack: &[WidgetIdent],
                 meta_drain: &mut MetaDrain
             | {
-                if let Some(WidgetPath{ widget, path, top_parent_offset }) = widget_stack.move_to_keyboard_focus() {
+                if let Some(WidgetPath{ mut widget, path }) = widget_stack.move_to_keyboard_focus() {
                     if path == widget_ident_stack {
                         return;
                     }
                     widget.update_tag().has_keyboard_focus.set(false);
-                    let bounds_rootspace = widget.rect() + top_parent_offset;
-                    let widget_offset = bounds_rootspace.min().to_vec();
 
-                    try_push_action!(widget, path.into_iter().cloned() => (*meta_drain), WidgetEvent::LoseFocus, to_rootspace: widget_offset);
+                    try_push_action!(widget, path.into_iter().cloned() => (*meta_drain), WidgetEvent::LoseFocus);
 
                     for update_tag in widget_stack.widgets().map(|n| n.update_tag()) {
                         update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
                     }
                 }
-                if let Some(WidgetPath{ widget, path, top_parent_offset }) = widget_stack.move_to_path(widget_ident_stack.iter().cloned()) {
+                if let Some(WidgetPath{ mut widget, path }) = widget_stack.move_to_path(widget_ident_stack.iter().cloned()) {
                     widget.update_tag().has_keyboard_focus.set(true);
-                    let bounds_rootspace = widget.rect() + top_parent_offset;
-                    let widget_offset = bounds_rootspace.min().to_vec();
-
-                    try_push_action!(widget, path.into_iter().cloned() => (*meta_drain), WidgetEvent::GainFocus, to_rootspace: widget_offset);
+                    try_push_action!(widget, path.into_iter().cloned() => (*meta_drain), WidgetEvent::GainFocus);
 
                     widget_stack.pop();
                     for update_tag in widget_stack.widgets().map(|n| n.update_tag()) {
@@ -720,16 +638,14 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
             match meta_variant {
                 MetaEventVariant::FocusChange(focus) => match focus {
                     FocusChange::Remove => {
-                        if let Some(WidgetPath{ widget, path, top_parent_offset }) = widget_stack.move_to_path(widget_ident_stack.iter().cloned()) {
+                        if let Some(WidgetPath{ mut widget, path }) = widget_stack.move_to_path(widget_ident_stack.iter().cloned()) {
                             if widget.update_tag().has_keyboard_focus.get() {
                                 widget.update_tag().has_keyboard_focus.set(false);
-                                let bounds_rootspace = widget.rect() + top_parent_offset;
-                                let widget_offset = bounds_rootspace.min().to_vec();
 
                                 try_push_action!(
                                     widget,
                                     path.into_iter().cloned() => (meta_drain),
-                                    WidgetEvent::LoseFocus, to_rootspace: widget_offset
+                                    WidgetEvent::LoseFocus
                                 );
                                 for update_tag in widget_stack.widgets().map(|n| n.update_tag()) {
                                     update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
@@ -761,7 +677,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                                     OnFocus::Skip => continue,
                                     OnFocus::FocusChild => {
                                         widget_stack.try_push(|top, _| {
-                                            let top_parent = top.subtrait_mut().as_parent()?;
+                                            let top_parent = top.as_parent_mut()?;
                                             let child_index = match sibling_dist.signum() {
                                                 -1 => top_parent.num_children() - 1,
                                                 1 => 0,
@@ -793,8 +709,8 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                                         },
                                         None => {
                                             match sibling_dist {
-                                                -1 => widget_stack.try_push(|n, _| n.subtrait_mut().as_parent().and_then(|p| p.child_by_index_mut(p.num_children() - 1))),
-                                                1 => widget_stack.try_push(|n, _| n.subtrait_mut().as_parent().and_then(|p| p.child_by_index_mut(0))),
+                                                -1 => widget_stack.try_push(|n, _| n.as_parent_mut().and_then(|p| p.child_by_index_mut(p.num_children() - 1))),
+                                                1 => widget_stack.try_push(|n, _| n.as_parent_mut().and_then(|p| p.child_by_index_mut(0))),
                                                 _ => unreachable!()
                                             };
                                             advance_to_sibling = false;
@@ -816,13 +732,11 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
 
                     let mut continue_bubble = true;
                     let mut slice_range = widget_stack.depth() + 1..;
-                    widget_stack.drain_to_root_while(|top_widget, ident, parent_offset| {
-                        let widget_offset = parent_offset + top_widget.rect().min().to_vec();
+                    widget_stack.drain_to_root_while(|mut top_widget, ident| {
                         try_push_action!(
                             top_widget,
                             ident.into_iter().cloned() => (meta_drain),
-                            event.translate(-widget_offset),
-                            to_rootspace: widget_offset,
+                            event,
                             bubble (false, &mut continue_bubble, &widget_ident_stack[slice_range.clone()])
                         );
                         slice_range.start -= 1;
@@ -894,14 +808,14 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                         let (frame, base_transform) = renderer.make_frame();
                         let mut frame_rect_stack = FrameRectStack::new(frame, base_transform, theme, widget_ident_stack);
 
-                        if let WidgetSubtraitMut::Parent(root_as_parent) = redraw_widget.subtrait_mut() {
+                        if let Some(root_as_parent) = redraw_widget.as_parent_mut() {
                             update_widget_layout(root_id, force_full_redraw, root_as_parent);
                         }
                         if root_update.render_self {
                             redraw_widget.render(&mut frame_rect_stack);
                         }
                         if root_update.update_child {
-                            if let WidgetSubtraitMut::Parent(root_as_parent) = redraw_widget.subtrait_mut() {
+                            if let Some(root_as_parent) = redraw_widget.as_parent_mut() {
                                 WidgetRenderer {
                                     root_id: root_id,
                                     frame: frame_rect_stack,
@@ -948,7 +862,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
     }
 }
 
-fn update_widget_layout<A, F: RenderFrame>(root_id: RootID, force_full_redraw: bool, widget: &mut Parent<A, F>) -> bool {
+fn update_widget_layout<A, F: RenderFrame>(root_id: RootID, force_full_redraw: bool, widget: &mut ParentDyn<A, F>) -> bool {
     // Loop to re-solve widget layout, if children break their size bounds. Is 0..4 so that
     // it doesn't enter an infinite loop if children can never be properly solved.
     for _ in 0..4 {
@@ -966,13 +880,13 @@ fn update_widget_layout<A, F: RenderFrame>(root_id: RootID, force_full_redraw: b
         let mut children_break_bounds = false;
         if update_child || force_full_redraw {
             widget.children_mut(&mut |children_summaries| {
-                for summary in children_summaries {
+                for mut summary in children_summaries {
                     let WidgetSummary {
                         widget: ref mut child_widget,
                         ..
-                    } = *summary;
+                    } = summary;
 
-                    if let WidgetSubtraitMut::Parent(child_widget_as_parent) = child_widget.subtrait_mut() {
+                    if let Some(child_widget_as_parent) = child_widget.as_parent_mut() {
                         children_break_bounds |= update_widget_layout(root_id, force_full_redraw, child_widget_as_parent);
                     }
 
@@ -1004,15 +918,15 @@ struct WidgetRenderer<'a, F>
 impl<'a, F> WidgetRenderer<'a, F>
     where F: 'a + RenderFrame
 {
-    fn render_widget_children<A>(&mut self, parent: &mut Parent<A, F>) {
+    fn render_widget_children<A>(&mut self, parent: &mut ParentDyn<A, F>) {
         parent.children_mut(&mut |children_summaries| {
-            for summary in children_summaries {
+            for mut summary in children_summaries {
                 let WidgetSummary {
                     widget: ref mut child_widget,
                     ident,
                     rect: child_rect,
                     ..
-                } = *summary;
+                } = summary;
 
                 let mut root_update = child_widget.update_tag().needs_update(self.root_id);
                 root_update.render_self |= self.force_full_redraw;
@@ -1024,29 +938,27 @@ impl<'a, F> WidgetRenderer<'a, F>
                     update_timer: _
                 } = root_update;
 
-                match child_widget.subtrait_mut() {
-                    WidgetSubtraitMut::Parent(child_widget_as_parent) => {
-                        let mut child_frame = self.frame.enter_child_widget(ident);
-                        let mut child_frame = child_frame.enter_child_rect(child_rect);
-
-                        if render_self {
-                            child_widget_as_parent.render(&mut child_frame);
-                        }
-                        if update_child {
-                            WidgetRenderer {
-                                root_id: self.root_id,
-                                frame: child_frame,
-                                force_full_redraw: self.force_full_redraw,
-                                theme: self.theme
-                            }.render_widget_children(child_widget_as_parent);
+                match child_widget.as_parent_mut() {
+                    Some(child_widget_as_parent) => {
+                        if let Some(mut child_frame) = self.frame.enter_child_widget(ident).enter_child_rect(child_rect) {
+                            if render_self {
+                                child_widget_as_parent.render(&mut child_frame);
+                            }
+                            if update_child {
+                                WidgetRenderer {
+                                    root_id: self.root_id,
+                                    frame: child_frame,
+                                    force_full_redraw: self.force_full_redraw,
+                                    theme: self.theme
+                                }.render_widget_children(child_widget_as_parent);
+                            }
                         }
                     },
-                    WidgetSubtraitMut::Widget(child_widget) => {
+                    None => {
                         if render_self {
-                            let mut child_frame = self.frame.enter_child_widget(ident);
-                            let mut child_frame = child_frame.enter_child_rect(child_rect);
-
-                            child_widget.render(&mut child_frame);
+                            if let Some(mut child_frame) = self.frame.enter_child_widget(ident).enter_child_rect(child_rect) {
+                                child_widget.render(&mut child_frame);
+                            }
                         }
                     }
                 }

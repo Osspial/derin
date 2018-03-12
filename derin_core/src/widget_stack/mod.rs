@@ -4,13 +4,15 @@ use LoopFlow;
 use std::cmp::{Ordering, Ord};
 use std::iter::{DoubleEndedIterator, ExactSizeIterator};
 use render::RenderFrame;
-use tree::{Widget, WidgetSummary, Parent, WidgetIdent, ChildEventRecv, UpdateTag, WidgetSubtraitMut, RootID, WidgetID};
+use tree::{Widget, WidgetSummary, WidgetIdent, ChildEventRecv, UpdateTag, RootID, WidgetID};
+use tree::dyn::ParentDyn;
 
 use self::inner::{NRAllocCache, NRVec};
 pub use self::inner::WidgetPath;
 
-use cgmath::{Point2, Vector2, EuclideanSpace};
-use cgmath_geometry::{BoundBox, GeoBox};
+use cgmath::{Vector2, EuclideanSpace};
+use cgmath_geometry::GeoBox;
+use offset_widget::{OffsetWidget, OffsetWidgetTrait, OffsetWidgetTraitAs};
 
 pub(crate) struct WidgetStackBase<A, F: RenderFrame> {
     stack: NRAllocCache<A, F>
@@ -45,19 +47,19 @@ impl<A, F: RenderFrame> WidgetStackBase<A, F> {
 
 impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, Root> {
     pub fn drain_to_root<G>(&mut self, mut for_each: G) -> WidgetPath<Root>
-        where G: FnMut(&mut Widget<A, F>, &[WidgetIdent], Vector2<i32>)
+        where G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent])
     {
-        self.drain_to_root_while(|widget, ident, offset| {for_each(widget, ident, offset); true}).unwrap()
+        self.drain_to_root_while(|widget, ident| {for_each(widget, ident); true}).unwrap()
     }
 
     pub fn drain_to_root_while<G>(&mut self, mut for_each: G) -> Option<WidgetPath<Root>>
-        where G: FnMut(&mut Widget<A, F>, &[WidgetIdent], Vector2<i32>) -> bool
+        where G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent]) -> bool
     {
         let mut continue_drain = true;
         while self.stack.len() > 1 && continue_drain {
             {
-                let WidgetPath{ widget, path, top_parent_offset } = self.stack.top_mut();
-                continue_drain = for_each(widget, path, top_parent_offset);
+                let top = self.stack.top();
+                continue_drain = for_each(top.widget, top.path);
             }
             self.stack.pop();
         }
@@ -66,14 +68,14 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
             return None;
         }
 
-        let top_mut = self.stack.top_mut();
-        for_each(top_mut.widget, top_mut.path, Vector2::new(0, 0));
+        let top = self.stack.top();
+        for_each(top.widget, top.path);
 
-        assert_eq!(self.root as *mut () as usize, top_mut.widget as *mut _ as *mut () as usize);
+        let mut top = self.stack.top();
+        assert_eq!(self.root as *mut () as usize, top.widget.inner_mut() as *mut _ as *mut () as usize);
         Some(WidgetPath {
-            widget: unsafe{ &mut *self.root },
-            path: top_mut.path,
-            top_parent_offset: Vector2::new(0, 0)
+            widget: OffsetWidget::new(unsafe{ &mut *self.root }, Vector2::new(0, 0)),
+            path: top.path
         })
     }
 
@@ -81,18 +83,17 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
     pub fn move_to_root(&mut self) -> WidgetPath<Root> {
         self.stack.truncate(1);
 
-        let top_mut = self.stack.top_mut();
-        assert_eq!(self.root as *mut () as usize, top_mut.widget as *mut _ as *mut () as usize);
+        let mut top = self.stack.top();
+        assert_eq!(self.root as *mut () as usize, top.widget.inner_mut() as *mut _ as *mut () as usize);
         WidgetPath {
-            widget: unsafe{ &mut *self.root },
-            path: top_mut.path,
-            top_parent_offset: Vector2::new(0, 0)
+            widget: OffsetWidget::new(unsafe{ &mut *self.root }, Vector2::new(0, 0)),
+            path: top.path
         }
     }
 
-    pub fn move_to_sibling_delta(&mut self, sibling_dist: isize) -> Result<WidgetPath<Widget<A, F> + 'a>, Ordering> {
+    pub fn move_to_sibling_delta(&mut self, sibling_dist: isize) -> Result<WidgetPath<Widget<A, F>>, Ordering> {
         if sibling_dist == 0 {
-            return Ok(self.stack.top_mut());
+            return Ok(self.stack.top());
         }
 
         let top_index = self.stack.top_index();
@@ -100,50 +101,48 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         let left_cmp = sibling_index.cmp(&0);
         self.stack.pop().ok_or(left_cmp)?;
 
-        let parent = self.stack.top().subtrait().as_parent().unwrap();
-        let right_cmp = sibling_index.cmp(&(parent.num_children() as isize));
+        let num_children = self.stack.top().widget.as_parent_mut().unwrap().num_children();
+        let right_cmp = sibling_index.cmp(&(num_children as isize));
 
         match (left_cmp, right_cmp) {
             (Ordering::Greater, Ordering::Less) |
             (Ordering::Equal, Ordering::Less) => {
                 let child = self.stack.try_push(|widget, _|
-                    widget.subtrait_mut().as_parent().unwrap().child_by_index_mut(sibling_index as usize)
+                    widget.as_parent_mut().unwrap().child_by_index_mut(sibling_index as usize)
                 ).unwrap();
                 Ok(WidgetPath {
-                    widget: child.widget,
-                    path: self.stack.ident(),
-                    top_parent_offset: self.top_parent_offset()
+                    widget: OffsetWidget::new(child.widget, self.stack.top_parent_offset()),
+                    path: self.stack.ident()
                 })
             },
             _ => {
                 self.stack.try_push(|widget, _|
-                    widget.subtrait_mut().as_parent().unwrap().child_by_index_mut(top_index)
+                    widget.as_parent_mut().unwrap().child_by_index_mut(top_index)
                 ).unwrap();
                 Err(left_cmp)
             }
         }
     }
 
-    pub fn move_to_sibling_index(&mut self, sibling_index: usize) -> Result<WidgetPath<Widget<A, F> + 'a>, Ordering> {
+    pub fn move_to_sibling_index(&mut self, sibling_index: usize) -> Result<WidgetPath<Widget<A, F>>, Ordering> {
         let top_index = self.stack.top_index();
         if self.stack.pop().is_none() {
             return match sibling_index {
-                0 => Ok(self.stack.top_mut()),
+                0 => Ok(self.stack.top()),
                 _ => Err(Ordering::Greater)
             };
         }
         let child = self.stack.try_push(|widget, _|
-            widget.subtrait_mut().as_parent().unwrap().child_by_index_mut(sibling_index)
+            widget.as_parent_mut().unwrap().child_by_index_mut(sibling_index)
         );
         match child {
             Some(child) => Ok(WidgetPath {
-                widget: child.widget,
-                path: self.stack.ident(),
-                top_parent_offset: self.top_parent_offset()
+                widget: OffsetWidget::new(child.widget, self.stack.top_parent_offset()),
+                path: self.stack.ident()
             }),
             None => {
                 self.stack.try_push(|widget, _|
-                    widget.subtrait_mut().as_parent().unwrap().child_by_index_mut(top_index)
+                    widget.as_parent_mut().unwrap().child_by_index_mut(top_index)
                 ).unwrap();
                 Err(Ordering::Greater)
             }
@@ -151,13 +150,8 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
     }
 
     #[inline]
-    pub fn top(&self) -> &Widget<A, F> {
+    pub fn top(&mut self) -> WidgetPath<Widget<A, F>> {
         self.stack.top()
-    }
-
-    #[inline]
-    pub fn top_mut(&mut self) -> WidgetPath<Widget<A, F> + 'a> {
-        self.stack.top_mut()
     }
 
     #[inline]
@@ -170,8 +164,8 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         self.stack.ident()
     }
 
-    pub fn parent(&self) -> Option<&Parent<A, F>> {
-        self.stack.widgets().rev().skip(1).next().map(|n| n.subtrait().as_parent().unwrap())
+    pub fn parent(&self) -> Option<&ParentDyn<A, F>> {
+        self.stack.widgets().rev().skip(1).next().map(|n| n.as_parent().unwrap())
     }
 
     #[inline]
@@ -199,33 +193,20 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
     #[inline]
     pub fn move_to_hover(&mut self) {
         // Move to the MOUSE_HOVER tagged widget.
-        self.move_over_flags(ChildEventRecv::MOUSE_HOVER, |widget, _, _| widget.update_tag());
+        self.move_over_flags(ChildEventRecv::MOUSE_HOVER, |_, _| {});
     }
 
     #[inline]
-    pub fn move_to_keyboard_focus(&mut self) -> Option<WidgetPath<Widget<A, F> + 'a>> {
+    pub fn move_to_keyboard_focus(&mut self) -> Option<WidgetPath<Widget<A, F>>> {
         let mut found_widget = false;
-        self.move_over_flags(ChildEventRecv::KEYBOARD, |widget, _, _| {
-            found_widget = true;
-            widget.update_tag()
-        });
+        self.move_over_flags(ChildEventRecv::KEYBOARD, |_, _| found_widget = true);
         match found_widget {
             false => None,
-            true => Some(self.top_mut())
+            true => Some(self.top())
         }
     }
 
-    #[inline]
-    pub fn top_parent_offset(&self) -> Vector2<i32> {
-        self.stack.top_parent_offset()
-    }
-
-    #[inline]
-    pub fn top_bounds_offset(&self) -> BoundBox<Point2<i32>> {
-        self.stack.top_bounds_offset()
-    }
-
-    pub fn move_to_path<I>(&mut self, ident_path: I) -> Option<WidgetPath<Widget<A, F> + 'a>>
+    pub fn move_to_path<I>(&mut self, ident_path: I) -> Option<WidgetPath<Widget<A, F>>>
         where I: IntoIterator<Item=WidgetIdent>
     {
         let mut ident_path_iter = ident_path.into_iter().peekable();
@@ -250,7 +231,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         let mut valid_path = true;
         for ident in ident_path_iter {
             valid_path = self.stack.try_push(|widget, _| {
-                if let WidgetSubtraitMut::Parent(widget_as_parent) = widget.subtrait_mut() {
+                if let Some(widget_as_parent) = widget.as_parent_mut() {
                     widget_as_parent.child_mut(ident)
                 } else {
                     None
@@ -263,7 +244,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         }
 
         match valid_path {
-            true => Some(self.stack.top_mut()),
+            true => Some(self.stack.top()),
             false => None
         }
     }
@@ -271,7 +252,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
     /// Returns number of widgets visited. `for_each_flag` takes widget at flag, ident path of widget,
     /// and Vector2 giving offset from root of the widget's parent.
     pub fn move_over_flags<G>(&mut self, mut flags: ChildEventRecv, mut for_each_flag: G) -> usize
-        where for<'b> G: FnMut(&'b mut Widget<A, F>, &[WidgetIdent], Vector2<i32>) -> &'b UpdateTag
+        where G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent])
     {
         assert_ne!(self.stack.widgets().len(), 0);
 
@@ -303,11 +284,13 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
             let mut top_widget_offset = Vector2::new(0, 0);
             self.stack.try_push(|top_widget, path| {
                 top_widget_offset = top_widget.rect().min().to_vec();
-                match top_widget.subtrait_mut() {
-                    WidgetSubtraitMut::Widget(top_widget) => {
+                match top_widget.as_parent_mut() {
+                    None => {
                         let widget_tags = ChildEventRecv::from(top_widget.update_tag());
                         if widget_tags & flag_trail_flags != ChildEventRecv::empty() {
-                            let update_tag = for_each_flag(top_widget, path, top_parent_offset);
+                            for_each_flag(OffsetWidget::new(top_widget, top_parent_offset), path);
+
+                            let update_tag = top_widget.update_tag();
                             let flags_removed = flag_trail_flags - ChildEventRecv::from(update_tag);
                             widgets_visited += 1;
                             remove_flags |= flags_removed;
@@ -318,7 +301,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
 
                         None
                     },
-                    WidgetSubtraitMut::Parent(top_widget_as_parent) => {
+                    Some(top_widget_as_parent) => {
                         let mut child_ident = None;
 
                         top_widget_as_parent.children(&mut |children_summaries| {
@@ -355,7 +338,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
 
     pub(crate) fn move_over_widgets<I, G>(&mut self, widget_ids: I, mut for_each_widget: G)
         where I: IntoIterator<Item=WidgetID> + ExactSizeIterator + Clone,
-              G: FnMut(&mut Widget<A, F>, &[WidgetIdent], usize, Vector2<i32>)
+              G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent], usize)
     {
         self.move_to_root();
         let mut widgets_left = widget_ids.len();
@@ -366,11 +349,11 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
                 let top_id = top_widget.update_tag().widget_id;
 
                 if let Some((iter_index, _)) = widget_ids.clone().into_iter().enumerate().find(|&(_, id)| id == top_id) {
-                    for_each_widget(top_widget, top_path, iter_index, top_parent_offset);
+                    for_each_widget(OffsetWidget::new(top_widget, top_parent_offset), top_path, iter_index);
                     widgets_left -= 1;
                 }
 
-                if let Some(top_widget_as_parent) = top_widget.subtrait_mut().as_parent() {
+                if let Some(top_widget_as_parent) = top_widget.as_parent_mut() {
                     return top_widget_as_parent.child_by_index_mut(child_index);
                 }
 

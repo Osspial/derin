@@ -1,4 +1,4 @@
-#![feature(conservative_impl_trait, universal_impl_trait, range_contains, nll)]
+#![feature(conservative_impl_trait, universal_impl_trait, range_contains, nll, specialization)]
 
 extern crate cgmath;
 extern crate cgmath_geometry;
@@ -18,6 +18,7 @@ pub mod render;
 mod mbseq;
 mod widget_stack;
 mod meta_tracker;
+mod offset_widget;
 mod event_loop_ops;
 
 use cgmath::{Point2, Bounded};

@@ -1,6 +1,6 @@
 use core::LoopFlow;
 use core::event::{EventOps, WidgetEvent, InputState};
-use core::tree::{WidgetIdent, UpdateTag, WidgetSummary, WidgetSubtrait, WidgetSubtraitMut, Widget, Parent, OnFocus};
+use core::tree::{WidgetIdent, UpdateTag, WidgetSummary, Widget, Parent, OnFocus};
 use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 
@@ -104,22 +104,10 @@ impl<A, F, C, L> Widget<A, F> for Group<C, L>
         }
     }
 
-    #[inline]
-    fn subtrait(&self) -> WidgetSubtrait<A, F> {
-        WidgetSubtrait::Parent(self)
-    }
-
-    #[inline]
-    fn subtrait_mut(&mut self) -> WidgetSubtraitMut<A, F> {
-        WidgetSubtraitMut::Parent(self)
-    }
-
     fn accepts_focus(&self) -> OnFocus {
         OnFocus::FocusChild
     }
 }
-
-const CHILD_BATCH_SIZE: usize = 24;
 
 impl<A, F, C, L> Parent<A, F> for Group<C, L>
     where F: PrimFrame,
@@ -137,52 +125,18 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
         self.container.child_mut(widget_ident)
     }
 
-    fn children<'a>(&'a self, for_each: &mut FnMut(&[WidgetSummary<&'a Widget<A, F>>]) -> LoopFlow<()>) {
-        let mut child_avec: ArrayVec<[_; CHILD_BATCH_SIZE]> = ArrayVec::new();
-
-        self.container.children::<_, ()>(|summary| {
-            match child_avec.try_push(summary) {
-                Ok(()) => (),
-                Err(caperr) => {
-                    match for_each(&child_avec) {
-                        LoopFlow::Break(_) => return LoopFlow::Break(()),
-                        LoopFlow::Continue => ()
-                    }
-                    child_avec.clear();
-                    child_avec.push(caperr.element());
-                }
-            }
-
-            LoopFlow::Continue
-        });
-
-        if child_avec.len() != 0 {
-            let _ = for_each(&child_avec);
-        }
+    fn children<'a, G, R>(&'a self, mut for_each: G) -> Option<R>
+        where A: 'a,
+              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow<R>
+    {
+        self.container.children(|summary| for_each(summary))
     }
 
-    fn children_mut<'a>(&'a mut self, for_each: &mut FnMut(&mut [WidgetSummary<&'a mut Widget<A, F>>]) -> LoopFlow<()>) {
-        let mut child_avec: ArrayVec<[_; CHILD_BATCH_SIZE]> = ArrayVec::new();
-
-        self.container.children_mut::<_, ()>(|summary| {
-            match child_avec.try_push(summary) {
-                Ok(()) => (),
-                Err(caperr) => {
-                    match for_each(&mut child_avec) {
-                        LoopFlow::Break(_) => return LoopFlow::Break(()),
-                        LoopFlow::Continue => ()
-                    }
-                    child_avec.clear();
-                    child_avec.push(caperr.element());
-                }
-            }
-
-            LoopFlow::Continue
-        });
-
-        if child_avec.len() != 0 {
-            let _ = for_each(&mut child_avec);
-        }
+    fn children_mut<'a, G, R>(&'a mut self, mut for_each: G) -> Option<R>
+        where A: 'a,
+              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow<R>
+    {
+        self.container.children_mut(|summary| for_each(summary))
     }
 
     fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>> {
