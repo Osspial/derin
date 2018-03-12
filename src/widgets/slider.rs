@@ -5,13 +5,19 @@ use core::popup::ChildPopupsMut;
 use theme::RescaleRules;
 use gullery::glsl::Ni32;
 
-use cgmath::{EuclideanSpace, Point2};
+use cgmath::Point2;
 use cgmath_geometry::{BoundBox, GeoBox};
 
 use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 
+pub trait SliderHandler {
+    type Action: 'static;
+
+    fn on_move(&mut self, old_value: f32, new_value: f32) -> Option<Self::Action>;
+}
+
 #[derive(Debug, Clone)]
-pub struct Slider {
+pub struct Slider<H: SliderHandler> {
     update_tag: UpdateTag,
     bounds: BoundBox<Point2<i32>>,
 
@@ -19,41 +25,68 @@ pub struct Slider {
 
     min: f32,
     max: f32,
+    step: f32,
 
     slide_range_min: i32,
     slide_range_max: i32,
     head_offset: i32,
 
     slider_rect: BoundBox<Point2<i32>>,
-    slider_click_pos_x: Option<i32>
+    slider_click_pos_x: Option<i32>,
+    handler: H
 }
 
-impl Slider {
-    pub fn new() -> Slider {
+impl<H: SliderHandler> Slider<H> {
+    pub fn new(value: f32, min: f32, max: f32, step: f32, handler: H) -> Slider<H> {
         Slider {
             update_tag: UpdateTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
-            value: 1.0,
-            min: 0.0,
-            max: 1.0,
+            value, min, max, step,
             slide_range_min: 0,
             slide_range_max: 0,
             head_offset: 0,
             slider_rect: BoundBox::new2(0, 0, 0, 0),
-            slider_click_pos_x: None
+            slider_click_pos_x: None,
+            handler
         }
+    }
+
+    #[inline]
+    pub fn value(&self) -> f32 {
+        self.value
+    }
+
+    #[inline]
+    pub fn range(&self) -> (f32, f32) {
+        (self.min, self.max)
+    }
+
+    #[inline]
+    pub fn value_mut(&mut self) -> &mut f32 {
+        self.update_tag.mark_render_self();
+        &mut self.value
+    }
+
+    #[inline]
+    pub fn range_mut(&mut self) -> (&mut f32, &mut f32) {
+        self.update_tag.mark_render_self();
+        (&mut self.min, &mut self.max)
     }
 
     fn set_value_px(&mut self, x_pos: i32) {
         if let Some(slider_click_pos_x) = self.slider_click_pos_x {
-            self.value = (x_pos - slider_click_pos_x - (self.slide_range_min - self.head_offset)) as f32 / (self.slide_range_max - self.slide_range_min) as f32;
+            self.value = (x_pos - slider_click_pos_x - (self.slide_range_min - self.head_offset)) as f32
+                / (self.slide_range_max - self.slide_range_min) as f32
+                * (self.max - self.min);
+            self.value = ((self.value - self.min) / self.step).round() * self.step + self.min;
             self.value = self.value.min(self.max).max(self.min);
         }
     }
 }
 
-impl<A, F> Widget<A, F> for Slider
-    where F: PrimFrame
+impl<F, H> Widget<H::Action, F> for Slider<H>
+    where F: PrimFrame,
+          H: SliderHandler
 {
     #[inline]
     fn update_tag(&self) -> &UpdateTag {
@@ -71,6 +104,10 @@ impl<A, F> Widget<A, F> for Slider
     }
 
     fn render(&mut self, frame: &mut FrameRectStack<F>) {
+        if self.value != self.max && self.value != self.min {
+            self.value = ((self.value - self.min) / self.step).round() * self.step + self.min;
+        }
+        self.value = self.value.min(self.max).max(self.min);
         let mut bar_rect = BoundBox::new2(0, 0, 0, 0);
         let bar_margins = match frame.theme().widget_theme("Slider::Bar").image.map(|b| b.rescale) {
             Some(RescaleRules::Slice(margins)) => margins,
@@ -123,12 +160,14 @@ impl<A, F> Widget<A, F> for Slider
     }
 
     #[inline]
-    fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, bubble_source: &[WidgetIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<H::Action, F>>, bubble_source: &[WidgetIdent]) -> EventOps<H::Action, F> {
+        let mut action = None;
         if bubble_source.len() == 0 {
             let slide_bar_rect = BoundBox::new2(
                 self.slide_range_min - self.head_offset, self.slider_rect.min.y,
                 self.slide_range_max + self.head_offset, self.slider_rect.max.y
             );
+            let start_value = self.value;
             match event {
                 WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left}
                     if self.slider_rect.contains(pos) =>
@@ -141,14 +180,11 @@ impl<A, F> Widget<A, F> for Slider
                 {
                     self.slider_click_pos_x = Some(self.slider_rect.center().x - self.slider_rect.min().x);
                     self.set_value_px(pos.x);
-                    self.update_tag.mark_render_self();
                 },
                 WidgetEvent::MouseMove{new_pos, ..}
                     if self.slider_click_pos_x.is_some() =>
                 {
-                    let slider_click_pos_x = self.slider_click_pos_x.unwrap();
                     self.set_value_px(new_pos.x);
-                    self.update_tag.mark_render_self();
                 },
                 WidgetEvent::MouseUp{button: MouseButton::Left, ..} => {
                     self.slider_click_pos_x = None;
@@ -156,9 +192,13 @@ impl<A, F> Widget<A, F> for Slider
                 },
                 _ => ()
             }
+            if self.value != start_value {
+                action = self.handler.on_move(start_value, self.value);
+                self.update_tag.mark_render_self();
+            }
         }
         EventOps {
-            action: None,
+            action,
             focus: None,
             bubble: false,
             cursor_pos: None,
@@ -168,12 +208,12 @@ impl<A, F> Widget<A, F> for Slider
     }
 
     #[inline]
-    fn subtrait(&self) -> WidgetSubtrait<A, F> {
+    fn subtrait(&self) -> WidgetSubtrait<H::Action, F> {
         WidgetSubtrait::Widget(self)
     }
 
     #[inline]
-    fn subtrait_mut(&mut self) -> WidgetSubtraitMut<A, F> {
+    fn subtrait_mut(&mut self) -> WidgetSubtraitMut<H::Action, F> {
         WidgetSubtraitMut::Widget(self)
     }
 }

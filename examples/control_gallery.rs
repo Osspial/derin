@@ -4,11 +4,12 @@ extern crate derin_macros;
 
 use derin::{LoopFlow, Window, WindowAttributes};
 use derin::layout::{Margins, LayoutHorizontal, LayoutVertical};
-use derin::widgets::{Contents, Button, EditBox, Group, Label, Slider};
+use derin::widgets::{Contents, Button, EditBox, Group, Label, Slider, SliderHandler};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum GalleryEvent {
-    NewButton
+    NewButton,
+    SliderMove(f32)
 }
 
 #[derive(WidgetContainer)]
@@ -23,9 +24,17 @@ struct BasicContainer {
 struct NestedContainer {
     label: Label,
     edit_box: EditBox,
-    slider: Slider,
+    slider: Slider<SliderH>,
     #[derin(collection = "Button<Option<GalleryEvent>>")]
     buttons: Vec<Button<Option<GalleryEvent>>>
+}
+
+struct SliderH;
+impl SliderHandler for SliderH {
+    type Action = GalleryEvent;
+    fn on_move(&mut self, _: f32, new_value: f32) -> Option<GalleryEvent> {
+        Some(GalleryEvent::SliderMove(new_value))
+    }
 }
 
 fn main() {
@@ -35,7 +44,7 @@ fn main() {
             nested: Group::new(
                 NestedContainer {
                     label: Label::new(Contents::Text("Nested Container".to_string())),
-                    slider: Slider::new(),
+                    slider: Slider::new(1.0, 0.0, 255.0, 16.0, SliderH),
                     edit_box: EditBox::new("A Text Box".to_string()),
                     buttons: Vec::new(),
                 },
@@ -55,7 +64,9 @@ fn main() {
     let mut window = unsafe{ Window::new(window_attributes, group, theme).unwrap() };
     let _: Option<()> = window.run_forever(
         |event, root, _| {
-            root.container_mut().nested.container_mut().buttons.push(Button::new(Contents::Text("An added button".to_string()), None));
+            if GalleryEvent::NewButton == event {
+                root.container_mut().nested.container_mut().buttons.push(Button::new(Contents::Text("An added button".to_string()), None));
+            }
             println!("{:?}", event);
             LoopFlow::Continue
         },
