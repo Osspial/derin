@@ -1,4 +1,4 @@
-use event::{FocusChange, WidgetEventOwned};
+use event::{FocusChange, WidgetEvent};
 use tree::WidgetIdent;
 use std::cmp;
 use std::ops::RangeFrom;
@@ -22,13 +22,13 @@ pub(crate) struct MetaEvent<I: Iterator<Item=WidgetIdent>> {
 
 pub(crate) enum MetaEventVariant {
     FocusChange(FocusChange),
-    EventBubble(WidgetEventOwned)
+    EventBubble(WidgetEvent)
 }
 
 #[derive(Debug, Clone, Copy)]
 enum MetaCode {
     FocusChange(FocusChange),
-    EventBubble(WidgetEventOwned),
+    EventBubble(WidgetEvent),
     Ident(WidgetIdent)
 }
 
@@ -40,7 +40,7 @@ impl MetaEventTracker {
         self.code_vec.extend(at_path.into_iter().map(|i| MetaCode::Ident(i)));
     }
 
-    pub fn push_bubble<I>(&mut self, event: WidgetEventOwned, at_path: I)
+    pub fn push_bubble<I>(&mut self, event: WidgetEvent, at_path: I)
         where I: IntoIterator<Item=WidgetIdent>
     {
         self.code_vec.push(MetaCode::EventBubble(event));
@@ -63,7 +63,7 @@ impl<'a> MetaDrain<'a> {
         self.code_vec.extend(at_path.into_iter().map(|i| MetaCode::Ident(i)));
     }
 
-    pub fn push_bubble<I>(&mut self, event: WidgetEventOwned, at_path: I)
+    pub fn push_bubble<I>(&mut self, event: WidgetEvent, at_path: I)
         where I: IntoIterator<Item=WidgetIdent>
     {
         self.code_vec.push(MetaCode::EventBubble(event));

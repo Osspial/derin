@@ -154,12 +154,12 @@ impl<F, H> Widget<H::Action, F> for Button<H>
             }
 
             let new_state = match event {
-                MouseEnter{buttons_down_in_widget, ..} |
-                MouseExit{buttons_down_in_widget, ..} => {
+                MouseEnter{..} |
+                MouseExit{..} => {
                     self.waiting_for_mouseover = false;
                     self.update_tag.mark_update_timer();
 
-                    match (buttons_down_in_widget.is_empty(), event) {
+                    match (input_state.mouse_buttons_down_in_widget.is_empty(), event) {
                         (true, MouseEnter{..}) => ButtonState::Hover,
                         (true, MouseExit{..}) => ButtonState::Normal,
                         (false, _) => self.state,

@@ -2,8 +2,6 @@ use dct::cursor::CursorIcon;
 use dct::buttons::{MouseButton, Key, ModifierKeys};
 use cgmath::{Point2, Vector2};
 use tree::{Widget, WidgetIdent};
-use arrayvec::ArrayVec;
-use mbseq::{MouseButtonSequence, MouseButtonSequenceTrackPos};
 use render::RenderFrame;
 use popup::PopupAttributes;
 
@@ -87,27 +85,15 @@ pub struct InputState<'a> {
 ///
 /// All point coordinates are given relative to the widget's origin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WidgetEvent<'a> {
+pub enum WidgetEvent {
     /// The mouse cursor has entered the widget at the given position.
-    MouseEnter {
-        /// The position where the mouse entered the widget.
-        enter_pos: Point2<i32>,
-        buttons_down: &'a [MouseDown],
-        buttons_down_in_widget: &'a [MouseDown]
-    },
+    MouseEnter(Point2<i32>),
     /// The mouse cursor has exited the widget at the given position.
-    MouseExit {
-        /// The position where the mouse exited the widget.
-        exit_pos: Point2<i32>,
-        buttons_down: &'a [MouseDown],
-        buttons_down_in_widget: &'a [MouseDown]
-    },
+    MouseExit(Point2<i32>),
     /// The mouse cursor has entered a child at a given position.
     MouseEnterChild {
         /// The position where the cursor entered the child.
         enter_pos: Point2<i32>,
-        buttons_down: &'a [MouseDown],
-        buttons_down_in_widget: &'a [MouseDown],
         /// The identifier of the child entered.
         child: WidgetIdent
     },
@@ -115,8 +101,6 @@ pub enum WidgetEvent<'a> {
     MouseExitChild {
         /// The position where the cursor exited the child.
         exit_pos: Point2<i32>,
-        buttons_down: &'a [MouseDown],
-        buttons_down_in_widget: &'a [MouseDown],
         /// The identifier of the child entered.
         child: WidgetIdent
     },
@@ -128,8 +112,6 @@ pub enum WidgetEvent<'a> {
         new_pos: Point2<i32>,
         /// Whether or not the cursor was moved to a position within the widget.
         in_widget: bool,
-        buttons_down: &'a [MouseDown],
-        buttons_down_in_widget: &'a [MouseDown]
     },
     /// A mouse button has been pressed.
     MouseDown {
@@ -188,98 +170,28 @@ pub enum WidgetEvent<'a> {
     }
 }
 
-/// Non-borrowing equivalents of the `WidgetEvent` enum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum WidgetEventOwned {
-    MouseEnter {
-        enter_pos: Point2<i32>,
-        buttons_down: MouseButtonSequence,
-        buttons_down_in_widget: MouseButtonSequence,
-    },
-    MouseExit {
-        exit_pos: Point2<i32>,
-        buttons_down: MouseButtonSequence,
-        buttons_down_in_widget: MouseButtonSequence,
-    },
-    MouseEnterChild {
-        enter_pos: Point2<i32>,
-        buttons_down: MouseButtonSequence,
-        buttons_down_in_widget: MouseButtonSequence,
-        child: WidgetIdent
-    },
-    MouseExitChild {
-        exit_pos: Point2<i32>,
-        buttons_down: MouseButtonSequence,
-        buttons_down_in_widget: MouseButtonSequence,
-        child: WidgetIdent
-    },
-    MouseMove {
-        old_pos: Point2<i32>,
-        new_pos: Point2<i32>,
-        in_widget: bool,
-        buttons_down: MouseButtonSequence,
-        buttons_down_in_widget: MouseButtonSequence
-    },
-    MouseDown {
-        pos: Point2<i32>,
-        in_widget: bool,
-        button: MouseButton
-    },
-    MouseUp {
-        pos: Point2<i32>,
-        in_widget: bool,
-        pressed_in_widget: bool,
-        down_pos: Point2<i32>,
-        button: MouseButton
-    },
-    GainFocus,
-    LoseFocus,
-    Char(char),
-    KeyDown(Key, ModifierKeys),
-    KeyUp(Key, ModifierKeys),
-    Timer {
-        name: &'static str,
-        start_time: Instant,
-        last_trigger: Instant,
-        frequency: Duration,
-        times_triggered: u64
-    }
-}
-
-impl<'a> WidgetEvent<'a> {
+impl WidgetEvent {
     /// Shift coordinates within the widget by the specified vector.
-    pub fn translate(self, dir: Vector2<i32>) -> WidgetEvent<'a> {
+    pub fn translate(self, dir: Vector2<i32>) -> WidgetEvent {
         match self {
-            WidgetEvent::MouseEnter{ enter_pos, buttons_down, buttons_down_in_widget } =>
-                WidgetEvent::MouseEnter {
-                    enter_pos: enter_pos + dir,
-                    buttons_down,
-                    buttons_down_in_widget,
-                },
-            WidgetEvent::MouseExit{ exit_pos, buttons_down, buttons_down_in_widget } =>
-                WidgetEvent::MouseExit {
-                    exit_pos: exit_pos + dir,
-                    buttons_down,
-                    buttons_down_in_widget,
-                },
-            WidgetEvent::MouseEnterChild{ enter_pos, child, buttons_down, buttons_down_in_widget } =>
+            WidgetEvent::MouseEnter(enter_pos) =>
+                WidgetEvent::MouseEnter(enter_pos + dir),
+            WidgetEvent::MouseExit(exit_pos) =>
+                WidgetEvent::MouseExit(exit_pos + dir),
+            WidgetEvent::MouseEnterChild{ enter_pos, child } =>
                 WidgetEvent::MouseEnterChild {
                     enter_pos: enter_pos + dir,
                     child,
-                    buttons_down,
-                    buttons_down_in_widget,
                 },
-            WidgetEvent::MouseExitChild{ exit_pos, child, buttons_down, buttons_down_in_widget } =>
+            WidgetEvent::MouseExitChild{ exit_pos, child } =>
                 WidgetEvent::MouseExitChild {
                     exit_pos: exit_pos + dir,
-                    child, buttons_down,
-                    buttons_down_in_widget,
+                    child,
                 },
-            WidgetEvent::MouseMove{ old_pos, new_pos, in_widget, buttons_down, buttons_down_in_widget } =>
+            WidgetEvent::MouseMove{ old_pos, new_pos, in_widget } =>
                 WidgetEvent::MouseMove {
                     old_pos: old_pos + dir, new_pos: new_pos + dir,
-                    in_widget, buttons_down,
-                    buttons_down_in_widget,
+                    in_widget,
                 },
             WidgetEvent::MouseDown{ pos, in_widget, button } =>
                 WidgetEvent::MouseDown {
@@ -299,145 +211,6 @@ impl<'a> WidgetEvent<'a> {
             WidgetEvent::KeyUp(k, modifiers) => WidgetEvent::KeyUp(k, modifiers),
             WidgetEvent::Timer{ name, start_time, last_trigger, frequency, times_triggered } =>
                 WidgetEvent::Timer{ name, start_time, last_trigger, frequency, times_triggered }
-        }
-    }
-}
-
-impl WidgetEventOwned {
-    pub fn as_borrowed<F, R>(&self, down_positions: &MouseButtonSequenceTrackPos, func: F) -> R
-        where F: FnOnce(WidgetEvent) -> R
-    {
-        let (mbd_array, mbdin_array): (ArrayVec<[_; 5]>, ArrayVec<[_; 5]>);
-        match *self {
-            WidgetEventOwned::MouseEnter{ buttons_down, buttons_down_in_widget, .. } |
-            WidgetEventOwned::MouseExit{ buttons_down, buttons_down_in_widget, .. } |
-            WidgetEventOwned::MouseEnterChild{ buttons_down, buttons_down_in_widget, .. } |
-            WidgetEventOwned::MouseExitChild{ buttons_down, buttons_down_in_widget, .. } |
-            WidgetEventOwned::MouseMove{ buttons_down, buttons_down_in_widget, .. } => {
-                mbd_array = buttons_down.into_iter().filter_map(|button| down_positions.contains(button)).collect(); // RESUME HERE
-                mbdin_array = buttons_down_in_widget.into_iter().filter_map(|button| down_positions.contains(button)).collect();
-            },
-            _ => {
-                mbd_array = ArrayVec::new();
-                mbdin_array = ArrayVec::new();
-            }
-        }
-
-        let event_borrowed = match *self {
-            WidgetEventOwned::MouseEnter{ enter_pos, .. } =>
-                WidgetEvent::MouseEnter {
-                    enter_pos,
-                    buttons_down: &mbd_array,
-                    buttons_down_in_widget: &mbdin_array,
-                },
-            WidgetEventOwned::MouseExit{ exit_pos, .. } =>
-                WidgetEvent::MouseExit {
-                    exit_pos,
-                    buttons_down: &mbd_array,
-                    buttons_down_in_widget: &mbdin_array,
-                },
-            WidgetEventOwned::MouseEnterChild{ enter_pos, child, .. } =>
-                WidgetEvent::MouseEnterChild {
-                    enter_pos, child,
-                    buttons_down: &mbd_array,
-                    buttons_down_in_widget: &mbdin_array,
-                },
-            WidgetEventOwned::MouseExitChild{ exit_pos, child, .. } =>
-                WidgetEvent::MouseExitChild {
-                    exit_pos, child,
-                    buttons_down: &mbd_array,
-                    buttons_down_in_widget: &mbdin_array,
-                },
-            WidgetEventOwned::MouseMove{ old_pos, new_pos, in_widget, .. } =>
-                WidgetEvent::MouseMove {
-                    old_pos, new_pos, in_widget,
-                    buttons_down: &mbd_array,
-                    buttons_down_in_widget: &mbdin_array,
-                },
-            WidgetEventOwned::MouseDown{ pos, in_widget, button } =>
-                WidgetEvent::MouseDown {
-                    pos, in_widget, button
-                },
-            WidgetEventOwned::MouseUp{ pos, down_pos, in_widget, pressed_in_widget, button, .. } =>
-                WidgetEvent::MouseUp {
-                    pos, down_pos, in_widget, pressed_in_widget, button
-                },
-            WidgetEventOwned::GainFocus => WidgetEvent::GainFocus,
-            WidgetEventOwned::LoseFocus => WidgetEvent::LoseFocus,
-            WidgetEventOwned::Char(c) => WidgetEvent::Char(c),
-            WidgetEventOwned::KeyDown(k, modifiers) => WidgetEvent::KeyDown(k, modifiers),
-            WidgetEventOwned::KeyUp(k, modifiers) => WidgetEvent::KeyUp(k, modifiers),
-            WidgetEventOwned::Timer{ name, start_time, last_trigger, frequency, times_triggered } =>
-                WidgetEvent::Timer{ name, start_time, last_trigger, frequency, times_triggered }
-        };
-        func(event_borrowed)
-    }
-}
-
-impl<'a> From<WidgetEvent<'a>> for WidgetEventOwned {
-    fn from(event: WidgetEvent<'a>) -> WidgetEventOwned {
-        let (mbd_sequence, mbdin_sequence): (MouseButtonSequence, MouseButtonSequence);
-        match event {
-            WidgetEvent::MouseEnter{ buttons_down, buttons_down_in_widget, .. } |
-            WidgetEvent::MouseExit{ buttons_down, buttons_down_in_widget, .. } |
-            WidgetEvent::MouseEnterChild{ buttons_down, buttons_down_in_widget, .. } |
-            WidgetEvent::MouseExitChild{ buttons_down, buttons_down_in_widget, .. } |
-            WidgetEvent::MouseMove{ buttons_down, buttons_down_in_widget, .. } => {
-                mbd_sequence = buttons_down.into_iter().map(|d| d.button).collect();
-                mbdin_sequence = buttons_down_in_widget.into_iter().map(|d| d.button).collect();
-            },
-            _ => {
-                mbd_sequence = MouseButtonSequence::new();
-                mbdin_sequence = MouseButtonSequence::new();
-            }
-        }
-
-        match event {
-            WidgetEvent::MouseEnter{ enter_pos, .. } =>
-                WidgetEventOwned::MouseEnter {
-                    enter_pos,
-                    buttons_down: mbd_sequence,
-                    buttons_down_in_widget: mbdin_sequence,
-                },
-            WidgetEvent::MouseExit{ exit_pos, .. } =>
-                WidgetEventOwned::MouseExit {
-                    exit_pos,
-                    buttons_down: mbd_sequence,
-                    buttons_down_in_widget: mbdin_sequence,
-                },
-            WidgetEvent::MouseEnterChild{ enter_pos, child, .. } =>
-                WidgetEventOwned::MouseEnterChild {
-                    enter_pos, child,
-                    buttons_down: mbd_sequence,
-                    buttons_down_in_widget: mbdin_sequence,
-                },
-            WidgetEvent::MouseExitChild{ exit_pos, child, .. } =>
-                WidgetEventOwned::MouseExitChild {
-                    exit_pos, child,
-                    buttons_down: mbd_sequence,
-                    buttons_down_in_widget: mbdin_sequence,
-                },
-            WidgetEvent::MouseMove{ old_pos, new_pos, in_widget, .. } =>
-                WidgetEventOwned::MouseMove {
-                    old_pos, new_pos, in_widget,
-                    buttons_down: mbd_sequence,
-                    buttons_down_in_widget: mbdin_sequence,
-                },
-            WidgetEvent::MouseDown{ pos, in_widget, button } =>
-                WidgetEventOwned::MouseDown {
-                    pos, in_widget, button
-                },
-            WidgetEvent::MouseUp{ pos, in_widget, pressed_in_widget, down_pos, button, .. } =>
-                WidgetEventOwned::MouseUp {
-                    pos, in_widget, pressed_in_widget, down_pos, button
-                },
-            WidgetEvent::GainFocus => WidgetEventOwned::GainFocus,
-            WidgetEvent::LoseFocus => WidgetEventOwned::LoseFocus,
-            WidgetEvent::Char(c) => WidgetEventOwned::Char(c),
-            WidgetEvent::KeyDown(k, modifiers) => WidgetEventOwned::KeyDown(k, modifiers),
-            WidgetEvent::KeyUp(k, modifiers) => WidgetEventOwned::KeyUp(k, modifiers),
-            WidgetEvent::Timer{ name, start_time, last_trigger, frequency, times_triggered } =>
-                WidgetEventOwned::Timer{ name, start_time, last_trigger, frequency, times_triggered }
         }
     }
 }

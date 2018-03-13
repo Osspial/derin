@@ -103,7 +103,7 @@ impl<A, F> Widget<A, F> for EditBox
         self.size_bounds.min.dims.y += render_string_min.height();
     }
 
-    fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
         use self::WidgetEvent::*;
         use dct::buttons::MouseButton;
 
@@ -186,8 +186,8 @@ impl<A, F> Widget<A, F> for EditBox
                     .mark_render_self()
                     .mark_update_timer();
             },
-            MouseMove{new_pos, buttons_down_in_widget, ..} => {
-                if let Some(down) = buttons_down_in_widget.iter().find(|d| d.button == MouseButton::Left) {
+            MouseMove{new_pos, ..} => {
+                if let Some(down) = input_state.mouse_buttons_down_in_widget.iter().find(|d| d.button == MouseButton::Left) {
                     self.string.select_on_line(Segment::new(down.down_pos, new_pos));
                     self.update_tag.mark_render_self();
                 }

@@ -129,7 +129,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
         macro_rules! try_push_action {
             (
                 $widget:expr, $path:expr $(=> ($meta_tracker:expr))*,
-                ($mbd_array:tt, $mbdin_array:tt) => $event:expr, to_rootspace: $widget_offset:expr $(, bubble ($bubble:expr, $bubble_store:expr, $bubble_path:expr))*
+                $event:expr, to_rootspace: $widget_offset:expr $(, bubble ($bubble:expr, $bubble_store:expr, $bubble_path:expr))*
             ) => {{
                 let widget_update_tag = $widget.update_tag();
                 let widget_offset = $widget_offset;
@@ -142,7 +142,6 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                     mouse_buttons_down: &mbd_array,
                     mouse_buttons_down_in_widget: &mbdin_array
                 };
-                let ($mbd_array, $mbdin_array) = (&mbd_array, &mbdin_array);
                 let event = $event;
                 let event_ops = $widget.on_widget_event(
                     event,
@@ -207,11 +206,8 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
 
                 let top_update_tag = try_push_action!(
                     root_widget, root_path.iter().cloned(),
-                    (mbd_array, mbdin_array) => WidgetEvent::MouseEnter {
-                        enter_pos,
-                        buttons_down: mbd_array,
-                        buttons_down_in_widget: mbdin_array
-                    }, to_rootspace: Vector2::new(0, 0)
+                    WidgetEvent::MouseEnter(enter_pos),
+                    to_rootspace: Vector2::new(0, 0)
                 );
 
                 let top_mbseq = top_update_tag.mouse_state.get().mouse_button_sequence();
@@ -224,11 +220,8 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
 
                     let update_tag = try_push_action!(
                         widget, path.iter().cloned(),
-                        (mbd_array, mbdin_array) => WidgetEvent::MouseExit {
-                            exit_pos: exit_pos - widget_offset,
-                            buttons_down: mbd_array,
-                            buttons_down_in_widget: mbdin_array
-                        }, to_rootspace: widget_offset
+                        WidgetEvent::MouseExit(exit_pos - widget_offset),
+                        to_rootspace: widget_offset
                     );
 
 
@@ -273,12 +266,10 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                             let WidgetPath{ widget, path, .. } = widget_stack.top_mut();
                             try_push_action!(
                                 widget, path.iter().cloned(),
-                                (mbd_array, mbdin_array) => WidgetEvent::MouseMove {
+                                WidgetEvent::MouseMove {
                                     old_pos: widget_old_pos,
                                     new_pos: new_pos,
                                     in_widget: true,
-                                    buttons_down: mbd_array,
-                                    buttons_down_in_widget: mbdin_array
                                 }, to_rootspace: top_bounds_offset
                             );
                         }
@@ -367,11 +358,8 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                                             // SEND ENTER ACTION TO CHILD
                                             try_push_action!(
                                                 child, top_path.iter().cloned().chain(Some(child_ident)),
-                                                (mbd_array, mbdin_array) => WidgetEvent::MouseEnter {
-                                                    enter_pos: enter_pos - child_pos_offset,
-                                                    buttons_down: mbd_array,
-                                                    buttons_down_in_widget: mbdin_array
-                                                }, to_rootspace: child_pos_offset
+                                                WidgetEvent::MouseEnter(enter_pos - child_pos_offset),
+                                                to_rootspace: child_pos_offset
                                             );
 
                                             // Store the information relating to the child we entered,
@@ -386,10 +374,8 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                                             // SEND CHILD ENTER ACTION
                                             try_push_action!(
                                                 top_widget_as_parent, top_path.iter().cloned(),
-                                                (mbd_array, mbdin_array) => WidgetEvent::MouseEnterChild {
+                                                WidgetEvent::MouseEnterChild {
                                                     enter_pos,
-                                                    buttons_down: mbd_array,
-                                                    buttons_down_in_widget: mbdin_array,
                                                     child: child_ident
                                                 }, to_rootspace: child_pos_offset
                                             );
@@ -423,11 +409,8 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                                     let WidgetPath{ widget, path, .. } = widget_stack.top_mut();
                                     try_push_action!(
                                         widget, path.iter().cloned(),
-                                        (mbd_array, mbdin_array) => WidgetEvent::MouseExit {
-                                            exit_pos: mouse_exit,
-                                            buttons_down: mbd_array,
-                                            buttons_down_in_widget: mbdin_array
-                                        }, to_rootspace: top_bounds_offset
+                                        WidgetEvent::MouseExit(mouse_exit),
+                                        to_rootspace: top_bounds_offset
                                     );
                                 }
 
@@ -450,10 +433,8 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                                         let WidgetPath{ widget, path, .. } = widget_stack.top_mut();
                                         try_push_action!(
                                             widget, path.iter().cloned(),
-                                            (mbd_array, mbdin_array) => WidgetEvent::MouseExitChild {
+                                            WidgetEvent::MouseExitChild {
                                                 exit_pos: child_exit_pos,
-                                                buttons_down: mbd_array,
-                                                buttons_down_in_widget: mbdin_array,
                                                 child: child_ident
                                             }, to_rootspace: top_parent_offset
                                         );
@@ -506,12 +487,10 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                     if widget_needs_move_event {
                         try_push_action!(
                             widget, path.iter().cloned(),
-                            (mbd_array, mbdin_array) => WidgetEvent::MouseMove {
+                            WidgetEvent::MouseMove {
                                 old_pos: widget_old_pos,
                                 new_pos: new_pos,
                                 in_widget: false,
-                                buttons_down: mbd_array,
-                                buttons_down_in_widget: mbdin_array
                             }, to_rootspace: widget_offset
                         );
                     }
@@ -532,7 +511,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
 
                     try_push_action!(
                         top_widget, path.iter().cloned(),
-                        (_, _) => WidgetEvent::MouseDown {
+                        WidgetEvent::MouseDown {
                             pos: *mouse_pos - top_widget_offset,
                             in_widget,
                             button
@@ -580,7 +559,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
 
                     try_push_action!(
                         widget, path.iter().cloned(),
-                        (_, _) => WidgetEvent::MouseUp {
+                        WidgetEvent::MouseUp {
                             pos: *mouse_pos - widget_offset,
                             down_pos: down_pos_rootspace - widget_offset,
                             in_widget,
@@ -611,7 +590,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                         let widget_offset = bounds_rootspace.min().to_vec();
                         try_push_action!(
                             widget, path.iter().cloned(),
-                            (_, _) => WidgetEvent::MouseUp {
+                            WidgetEvent::MouseUp {
                                 pos: *mouse_pos - widget_offset,
                                 down_pos: down_pos_rootspace - widget_offset,
                                 in_widget: bounds_rootspace.contains(*mouse_pos),
@@ -649,7 +628,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                     let bounds_rootspace = focus_widget.rect() + top_parent_offset;
                     let widget_offset = bounds_rootspace.min().to_vec();
 
-                    try_push_action!(focus_widget, path.iter().cloned(), (_, _) => WidgetEvent::KeyDown(key, *modifiers), to_rootspace: widget_offset);
+                    try_push_action!(focus_widget, path.iter().cloned(), WidgetEvent::KeyDown(key, *modifiers), to_rootspace: widget_offset);
                 }
             },
             WindowEvent::KeyUp(key) => {
@@ -657,7 +636,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                     let bounds_rootspace = focus_widget.rect() + top_parent_offset;
                     let widget_offset = bounds_rootspace.min().to_vec();
 
-                    try_push_action!(focus_widget, path.iter().cloned(), (_, _) => WidgetEvent::KeyUp(key, *modifiers), to_rootspace: widget_offset);
+                    try_push_action!(focus_widget, path.iter().cloned(), WidgetEvent::KeyUp(key, *modifiers), to_rootspace: widget_offset);
                 }
             },
             WindowEvent::Char(c) => {
@@ -665,7 +644,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                     let bounds_rootspace = focus_widget.rect() + top_parent_offset;
                     let widget_offset = bounds_rootspace.min().to_vec();
 
-                    try_push_action!(focus_widget, path.iter().cloned(), (_, _) => WidgetEvent::Char(c), to_rootspace: widget_offset);
+                    try_push_action!(focus_widget, path.iter().cloned(), WidgetEvent::Char(c), to_rootspace: widget_offset);
                 }
             },
             WindowEvent::Timer => {
@@ -681,7 +660,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                         try_push_action!(
                             widget,
                             path.iter().cloned(),
-                            (_, _) => WidgetEvent::Timer {
+                            WidgetEvent::Timer {
                                 name: timer.name,
                                 start_time: timer.start_time,
                                 last_trigger: timer.last_trigger,
@@ -711,7 +690,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                     let bounds_rootspace = widget.rect() + top_parent_offset;
                     let widget_offset = bounds_rootspace.min().to_vec();
 
-                    try_push_action!(widget, path.into_iter().cloned() => (*meta_drain), (_, _) => WidgetEvent::LoseFocus, to_rootspace: widget_offset);
+                    try_push_action!(widget, path.into_iter().cloned() => (*meta_drain), WidgetEvent::LoseFocus, to_rootspace: widget_offset);
 
                     for update_tag in widget_stack.widgets().map(|n| n.update_tag()) {
                         update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
@@ -722,7 +701,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                     let bounds_rootspace = widget.rect() + top_parent_offset;
                     let widget_offset = bounds_rootspace.min().to_vec();
 
-                    try_push_action!(widget, path.into_iter().cloned() => (*meta_drain), (_, _) => WidgetEvent::GainFocus, to_rootspace: widget_offset);
+                    try_push_action!(widget, path.into_iter().cloned() => (*meta_drain), WidgetEvent::GainFocus, to_rootspace: widget_offset);
 
                     widget_stack.pop();
                     for update_tag in widget_stack.widgets().map(|n| n.update_tag()) {
@@ -750,7 +729,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                                 try_push_action!(
                                     widget,
                                     path.into_iter().cloned() => (meta_drain),
-                                    (_, _) => WidgetEvent::LoseFocus, to_rootspace: widget_offset
+                                    WidgetEvent::LoseFocus, to_rootspace: widget_offset
                                 );
                                 for update_tag in widget_stack.widgets().map(|n| n.update_tag()) {
                                     update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
@@ -829,33 +808,32 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                         take_focus_to(&mut widget_stack, &**widget_ident_stack, &mut meta_drain);
                     }
                 },
-                MetaEventVariant::EventBubble(event_owned) => {
+                MetaEventVariant::EventBubble(event) => {
                     if let None = widget_stack.move_to_path(widget_ident_stack[..widget_ident_stack.len() - 1].iter().cloned()) {
                         widget_ident_stack.clear();
                         continue;
                     }
-                    event_owned.as_borrowed(mouse_buttons_down, |event| {
-                        let mut continue_bubble = true;
-                        let mut slice_range = widget_stack.depth() + 1..;
-                        widget_stack.drain_to_root_while(|top_widget, ident, parent_offset| {
-                            let widget_offset = parent_offset + top_widget.rect().min().to_vec();
-                            try_push_action!(
-                                top_widget,
-                                ident.into_iter().cloned() => (meta_drain),
-                                (_, _) => event.translate(-widget_offset),
-                                to_rootspace: widget_offset,
-                                bubble (false, &mut continue_bubble, &widget_ident_stack[slice_range.clone()])
-                            );
-                            slice_range.start -= 1;
-                            continue_bubble
-                        });
 
-                        if continue_bubble {
-                            if let Some(action) = bubble_fallthrough(event, &widget_ident_stack) {
-                                actions.push_back(action);
-                            }
-                        }
+                    let mut continue_bubble = true;
+                    let mut slice_range = widget_stack.depth() + 1..;
+                    widget_stack.drain_to_root_while(|top_widget, ident, parent_offset| {
+                        let widget_offset = parent_offset + top_widget.rect().min().to_vec();
+                        try_push_action!(
+                            top_widget,
+                            ident.into_iter().cloned() => (meta_drain),
+                            event.translate(-widget_offset),
+                            to_rootspace: widget_offset,
+                            bubble (false, &mut continue_bubble, &widget_ident_stack[slice_range.clone()])
+                        );
+                        slice_range.start -= 1;
+                        continue_bubble
                     });
+
+                    if continue_bubble {
+                        if let Some(action) = bubble_fallthrough(event, &widget_ident_stack) {
+                            actions.push_back(action);
+                        }
+                    }
                 }
             }
             widget_ident_stack.clear();
