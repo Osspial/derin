@@ -137,8 +137,8 @@ impl ImageTranslate {
 
                 let atlas_margins = Margins::new(
                     margins.left as f32 - atlas_clip_margins.left,
-                    margins.top as f32 - atlas_clip_margins.right,
-                    margins.right as f32 - atlas_clip_margins.top,
+                    margins.top as f32 - atlas_clip_margins.top,
+                    margins.right as f32 - atlas_clip_margins.right,
                     margins.bottom as f32 - atlas_clip_margins.bottom,
                 );
                 let loc_margins = Margins::new(
