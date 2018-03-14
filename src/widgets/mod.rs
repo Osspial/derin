@@ -1,17 +1,22 @@
 //! The core set of widgets provided by Derin to create GUIs.
 
+pub mod assistants;
 mod button;
+mod clip;
 mod direct_render;
 mod edit_box;
 mod group;
 mod label;
+pub mod scroll_box;
 mod slider;
 
 pub use self::button::*;
+pub use self::clip::*;
 pub use self::direct_render::*;
 pub use self::edit_box::*;
 pub use self::group::*;
 pub use self::label::*;
+pub use self::scroll_box::*;
 pub use self::slider::*;
 
 use gl_render::{Prim, ThemedPrim, RenderString, RelPoint};

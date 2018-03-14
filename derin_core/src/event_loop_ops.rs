@@ -810,6 +810,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
 
                         if let Some(root_as_parent) = redraw_widget.as_parent_mut() {
                             update_widget_layout(root_id, force_full_redraw, root_as_parent);
+                            root_as_parent.update_tag().unmark_update_layout();
                         }
                         if root_update.render_self {
                             redraw_widget.render(&mut frame_rect_stack);
@@ -869,12 +870,12 @@ fn update_widget_layout<A, F: RenderFrame>(root_id: RootID, force_full_redraw: b
         let Update {
             update_child,
             update_layout,
+            update_layout_post,
             ..
         } = widget.update_tag().needs_update(root_id);
 
         if update_layout || force_full_redraw {
             widget.update_child_layout();
-            widget.update_tag().unmark_update_layout();
         }
 
         let mut children_break_bounds = false;
@@ -886,15 +887,23 @@ fn update_widget_layout<A, F: RenderFrame>(root_id: RootID, force_full_redraw: b
                         ..
                     } = summary;
 
+                    let mut update_successful = true;
                     if let Some(child_widget_as_parent) = child_widget.as_parent_mut() {
-                        children_break_bounds |= update_widget_layout(root_id, force_full_redraw, child_widget_as_parent);
+                        update_successful = !update_widget_layout(root_id, force_full_redraw, child_widget_as_parent);
+                        children_break_bounds |= !update_successful;
                     }
 
-                    child_widget.update_tag().unmark_update_layout();
+                    if update_successful {
+                        child_widget.update_tag().unmark_update_layout();
+                    }
                 }
 
                 LoopFlow::Continue
             });
+        }
+
+        if update_layout_post {
+            widget.update_child_layout();
         }
 
         if !children_break_bounds {
@@ -935,7 +944,8 @@ impl<'a, F> WidgetRenderer<'a, F>
                     render_self,
                     update_child,
                     update_layout: _,
-                    update_timer: _
+                    update_timer: _,
+                    update_layout_post: _
                 } = root_update;
 
                 match child_widget.as_parent_mut() {

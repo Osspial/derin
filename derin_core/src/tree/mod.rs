@@ -28,7 +28,8 @@ pub(crate) struct Update {
     pub render_self: bool,
     pub update_child: bool,
     pub update_timer: bool,
-    pub update_layout: bool
+    pub update_layout: bool,
+    pub update_layout_post: bool
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -252,10 +253,11 @@ impl Default for OnFocusOverflow {
 const RENDER_SELF: u32 = 1 << 31;
 const UPDATE_CHILD: u32 = 1 << 30;
 const UPDATE_LAYOUT: u32 = 1 << 29;
-const UPDATE_TIMER: u32 = 1 << 28;
+const UPDATE_LAYOUT_POST: u32 = 1 << 28;
+const UPDATE_TIMER: u32 = 1 << 27;
 const RENDER_ALL: u32 = RENDER_SELF | UPDATE_CHILD;
 
-const UPDATE_MASK: u32 = RENDER_SELF | UPDATE_CHILD | RENDER_ALL | UPDATE_LAYOUT | UPDATE_TIMER;
+const UPDATE_MASK: u32 = RENDER_SELF | UPDATE_CHILD | RENDER_ALL | UPDATE_LAYOUT | UPDATE_LAYOUT_POST | UPDATE_TIMER;
 
 impl UpdateTag {
     #[inline]
@@ -288,6 +290,13 @@ impl UpdateTag {
         self
     }
 
+
+    #[inline]
+    pub fn mark_update_layout_post(&mut self) -> &mut UpdateTag {
+        self.last_root.set(self.last_root.get() | UPDATE_LAYOUT_POST);
+        self
+    }
+
     #[inline]
     pub fn mark_update_timer(&mut self) -> &mut UpdateTag {
         self.last_root.set(self.last_root.get() | UPDATE_TIMER);
@@ -306,7 +315,7 @@ impl UpdateTag {
 
     #[inline]
     pub(crate) fn unmark_update_layout(&self) {
-        self.last_root.set(self.last_root.get() & !UPDATE_LAYOUT);
+        self.last_root.set(self.last_root.get() & !(UPDATE_LAYOUT | UPDATE_LAYOUT_POST));
     }
 
     #[inline]
@@ -326,13 +335,15 @@ impl UpdateTag {
                 render_self: false,
                 update_child: false,
                 update_timer: false,
-                update_layout: false
+                update_layout: false,
+                update_layout_post: false
             },
             r => Update {
                 render_self: r & UPDATE_MASK & RENDER_SELF != 0,
                 update_child: r & UPDATE_MASK & UPDATE_CHILD != 0,
                 update_timer: r & UPDATE_MASK & UPDATE_TIMER != 0,
-                update_layout: r & UPDATE_MASK & UPDATE_LAYOUT != 0
+                update_layout: r & UPDATE_MASK & UPDATE_LAYOUT != 0,
+                update_layout_post: r & UPDATE_MASK & UPDATE_LAYOUT_POST != 0,
             },
         }
     }
@@ -344,9 +355,10 @@ impl Update {
             render_self,
             update_child,
             update_timer: _,
-            update_layout
+            update_layout,
+            update_layout_post
         } = self;
 
-        render_self || update_child || update_layout
+        render_self || update_child || update_layout || update_layout_post
     }
 }

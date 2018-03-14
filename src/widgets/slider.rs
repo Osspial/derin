@@ -1,12 +1,12 @@
+use widgets::assistants::SliderAssist;
 use event::{EventOps, WidgetEvent, InputState, MouseButton};
 use core::tree::{WidgetIdent, UpdateTag, Widget};
 use core::render::{FrameRectStack, Theme};
 use core::popup::ChildPopupsMut;
 use theme::RescaleRules;
-use gullery::glsl::Ni32;
 
 use cgmath::Point2;
-use cgmath_geometry::{BoundBox, GeoBox};
+use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
 
 use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 
@@ -21,66 +21,47 @@ pub struct Slider<H: SliderHandler> {
     update_tag: UpdateTag,
     bounds: BoundBox<Point2<i32>>,
 
-    value: f32,
-
-    min: f32,
-    max: f32,
-    step: f32,
-
-    slide_range_min: i32,
-    slide_range_max: i32,
-    head_offset: i32,
-
-    slider_rect: BoundBox<Point2<i32>>,
-    slider_click_pos_x: Option<i32>,
+    assist: SliderAssist,
     handler: H
 }
 
 impl<H: SliderHandler> Slider<H> {
-    pub fn new(value: f32, min: f32, max: f32, step: f32, handler: H) -> Slider<H> {
+    pub fn new(value: f32, step: f32, min: f32, max: f32, handler: H) -> Slider<H> {
         Slider {
             update_tag: UpdateTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
-            value, min, max, step,
-            slide_range_min: 0,
-            slide_range_max: 0,
-            head_offset: 0,
-            slider_rect: BoundBox::new2(0, 0, 0, 0),
-            slider_click_pos_x: None,
+            assist: SliderAssist {
+                value, step, min, max,
+
+                head_size: 0,
+                bar_rect: BoundBox::new2(0, 0, 0, 0),
+                head_click_pos: None,
+                horizontal: true
+            },
             handler
         }
     }
 
     #[inline]
     pub fn value(&self) -> f32 {
-        self.value
+        self.assist.value
     }
 
     #[inline]
     pub fn range(&self) -> (f32, f32) {
-        (self.min, self.max)
+        (self.assist.min, self.assist.max)
     }
 
     #[inline]
     pub fn value_mut(&mut self) -> &mut f32 {
         self.update_tag.mark_render_self();
-        &mut self.value
+        &mut self.assist.value
     }
 
     #[inline]
     pub fn range_mut(&mut self) -> (&mut f32, &mut f32) {
         self.update_tag.mark_render_self();
-        (&mut self.min, &mut self.max)
-    }
-
-    fn set_value_px(&mut self, x_pos: i32) {
-        if let Some(slider_click_pos_x) = self.slider_click_pos_x {
-            self.value = (x_pos - slider_click_pos_x - (self.slide_range_min - self.head_offset)) as f32
-                / (self.slide_range_max - self.slide_range_min) as f32
-                * (self.max - self.min);
-            self.value = ((self.value - self.min) / self.step).round() * self.step + self.min;
-            self.value = self.value.min(self.max).max(self.min);
-        }
+        (&mut self.assist.min, &mut self.assist.max)
     }
 }
 
@@ -104,17 +85,13 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
     }
 
     fn render(&mut self, frame: &mut FrameRectStack<F>) {
-        if self.value != self.max && self.value != self.min {
-            self.value = ((self.value - self.min) / self.step).round() * self.step + self.min;
-        }
-        self.value = self.value.min(self.max).max(self.min);
-        let mut bar_rect = BoundBox::new2(0, 0, 0, 0);
+        self.assist.round_to_step();
         let bar_margins = match frame.theme().widget_theme("Slider::Bar").image.map(|b| b.rescale) {
             Some(RescaleRules::Slice(margins)) => margins,
             _ => Default::default()
         };
-        let head_offset = frame.theme().widget_theme("Slider::Head").image.map(|h| h.dims.width() / 2).unwrap_or(0);
-        self.head_offset = head_offset as i32;
+        let head_rect = frame.theme().widget_theme("Slider::Head").image.map(|h| h.dims).unwrap_or(DimsBox::new2(0, 0));
+        self.assist.head_size = head_rect.width() as i32;
 
         frame.upload_primitives(Some(
             ThemedPrim {
@@ -128,33 +105,32 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
                     RelPoint::new( 1.0, 0)
                 ),
                 prim: Prim::Image,
-                rect_px_out: Some(&mut bar_rect)
+                rect_px_out: Some(&mut self.assist.bar_rect)
             }
         ).into_iter());
 
-        bar_rect.min.x += bar_margins.left as i32 + head_offset as i32;
-        bar_rect.max.x -= bar_margins.right as i32 + head_offset as i32;
-        bar_rect.min.y += bar_margins.top as i32;
-        bar_rect.max.y -= bar_margins.bottom as i32;
-        self.slide_range_min = bar_rect.min.x;
-        self.slide_range_max = bar_rect.max.x;
+        self.assist.bar_rect.min.x += bar_margins.left as i32;
+        self.assist.bar_rect.max.x -= bar_margins.right as i32;
+        self.assist.bar_rect.min.y += bar_margins.top as i32;
+        self.assist.bar_rect.max.y -= bar_margins.bottom as i32;
+        let bar_rect_center_y = self.assist.bar_rect.center().y;
+        self.assist.bar_rect.min.y = bar_rect_center_y - (head_rect.height() / 2) as i32;
+        self.assist.bar_rect.max.y = bar_rect_center_y + (head_rect.height() / 2) as i32;
 
-        let proprtion_along = Ni32::from_bounded((self.value - self.min) / (self.max - self.min));
-        let x_loc = bar_rect.width() * proprtion_along + bar_rect.min.x;
-
+        let head_rect = self.assist.head_rect();
         frame.upload_primitives(Some(
             ThemedPrim {
                 theme_path: "Slider::Head",
                 min: Point2::new(
-                    RelPoint::new(-2.0, x_loc),
-                    RelPoint::new(-1.0, 0),
+                    RelPoint::new(-1.0, head_rect.min.x),
+                    RelPoint::new(-1.0, head_rect.min.y),
                 ),
                 max: Point2::new(
-                    RelPoint::new( 0.0, x_loc),
-                    RelPoint::new( 1.0, 0)
+                    RelPoint::new(-1.0, head_rect.max.x),
+                    RelPoint::new(-1.0, head_rect.max.y)
                 ),
                 prim: Prim::Image,
-                rect_px_out: Some(&mut self.slider_rect)
+                rect_px_out: None
             },
         ).into_iter());
     }
@@ -163,37 +139,23 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
     fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<H::Action, F>>, bubble_source: &[WidgetIdent]) -> EventOps<H::Action, F> {
         let mut action = None;
         if bubble_source.len() == 0 {
-            let slide_bar_rect = BoundBox::new2(
-                self.slide_range_min - self.head_offset, self.slider_rect.min.y,
-                self.slide_range_max + self.head_offset, self.slider_rect.max.y
-            );
-            let start_value = self.value;
+            let start_value = self.assist.value;
             match event {
-                WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left}
-                    if self.slider_rect.contains(pos) =>
-                {
-                    self.slider_click_pos_x = Some(pos.x - self.slider_rect.min().x);
+                WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left} => {
+                    self.assist.click_head(pos);
                     self.update_tag.mark_render_self();
                 },
-                WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left}
-                    if slide_bar_rect.contains(pos) =>
-                {
-                    self.slider_click_pos_x = Some(self.slider_rect.center().x - self.slider_rect.min().x);
-                    self.set_value_px(pos.x);
-                },
-                WidgetEvent::MouseMove{new_pos, ..}
-                    if self.slider_click_pos_x.is_some() =>
-                {
-                    self.set_value_px(new_pos.x);
+                WidgetEvent::MouseMove{new_pos, ..} => {
+                    self.assist.move_head(new_pos.x);
                 },
                 WidgetEvent::MouseUp{button: MouseButton::Left, ..} => {
-                    self.slider_click_pos_x = None;
+                    self.assist.head_click_pos = None;
                     self.update_tag.mark_render_self();
                 },
                 _ => ()
             }
-            if self.value != start_value {
-                action = self.handler.on_move(start_value, self.value);
+            if self.assist.value != start_value {
+                action = self.handler.on_move(start_value, self.assist.value);
                 self.update_tag.mark_render_self();
             }
         }

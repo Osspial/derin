@@ -186,7 +186,7 @@ impl Default for Theme {
                             tab_size: 8,
                             justify: $text_align,
                             margins: Margins::new($border, $border, $border, $border),
-                            line_wrap: LineWrap::Normal
+                            line_wrap: LineWrap::None
                         }),
                         image: Some(Rc::new(Image {
                             pixels: image_buf!($path),
@@ -207,6 +207,8 @@ impl Default for Theme {
         upload_image!("Button::Hover", "./default_theme_resources/button.hover.png", (32, 32), 4, Align2::new(Align::Center, Align::Center));
         upload_image!("Button::Clicked", "./default_theme_resources/button.clicked.png", (32, 32), 4, Align2::new(Align::Center, Align::Center));
         upload_image!("EditBox", "./default_theme_resources/editbox.png", (8, 8), 3, Align2::new(Align::Start, Align::Center));
+        upload_image!("ScrollBar", "./default_theme_resources/scroll_bar.png", (3, 3), 1, Align2::new(Align::Center, Align::Center));
+        upload_image!("ScrollBackground", "./default_theme_resources/scroll_bg.png", (3, 3), 1, Align2::new(Align::Center, Align::Center));
         theme.insert_widget(
             "Slider::Bar".to_string(),
             ThemeWidget {

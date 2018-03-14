@@ -11,6 +11,7 @@ const CHILD_BATCH_SIZE: usize = 24;
 
 pub type ForEachSummary<'a, W> = &'a mut FnMut(ArrayVec<[WidgetSummary<W>; CHILD_BATCH_SIZE]>) -> LoopFlow<()>;
 pub trait ParentDyn<A, F: RenderFrame>: Widget<A, F> {
+    fn as_widget(&mut self) -> &mut Widget<A, F>;
     fn num_children(&self) -> usize;
 
     fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>>;
@@ -31,6 +32,9 @@ impl<A, F, P> ParentDyn<A, F> for P
     where F: RenderFrame,
           P: Parent<A, F>
 {
+    fn as_widget(&mut self) -> &mut Widget<A, F> {
+        self as &mut Widget<A, F>
+    }
     fn num_children(&self) -> usize {
         <Self as Parent<A, F>>::num_children(self)
     }

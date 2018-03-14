@@ -342,6 +342,23 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
                         });
 
                         if child_ident.is_none() {
+                            let widget_tags = ChildEventRecv::from(top_widget_as_parent.update_tag());
+                            if widget_tags & flag_trail_flags != ChildEventRecv::empty() {
+                                for_each_flag(
+                                    OffsetWidget::new(
+                                        top_widget_as_parent.as_widget(),
+                                        top_parent_offset,
+                                        clip_rect
+                                    ),
+                                    path
+                                );
+
+                                let update_tag = top_widget_as_parent.update_tag();
+                                let flags_removed = flag_trail_flags - ChildEventRecv::from(update_tag);
+                                widgets_visited += 1;
+                                remove_flags |= flags_removed;
+                            }
+
                             flags &= !flag_trail_flags;
                             on_flag_trail = None;
                         }

@@ -4,7 +4,7 @@ extern crate derin_macros;
 
 use derin::{LoopFlow, Window, WindowAttributes};
 use derin::layout::{Margins, LayoutHorizontal, LayoutVertical};
-use derin::widgets::{Contents, Button, EditBox, Group, Label, Slider, SliderHandler};
+use derin::widgets::{Contents, Button, EditBox, Group, Label, Slider, SliderHandler, ScrollBox};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum GalleryEvent {
@@ -16,7 +16,7 @@ enum GalleryEvent {
 #[derin(action = "GalleryEvent")]
 struct BasicContainer {
     button: Button<Option<GalleryEvent>>,
-    nested: Group<NestedContainer, LayoutVertical>
+    nested: ScrollBox<Group<NestedContainer, LayoutVertical>>
 }
 
 #[derive(WidgetContainer)]
@@ -41,15 +41,15 @@ fn main() {
     let group = Group::new(
         BasicContainer {
             button: Button::new(Contents::Text("New Button".to_string()), Some(GalleryEvent::NewButton)),
-            nested: Group::new(
+            nested: ScrollBox::new(Group::new(
                 NestedContainer {
                     label: Label::new(Contents::Text("Nested Container".to_string())),
-                    slider: Slider::new(1.0, 0.0, 255.0, 16.0, SliderH),
-                    edit_box: EditBox::new("A Text Box".to_string()),
+                    slider: Slider::new(1.0, 1.0, 0.0, 255.0, SliderH),
+                    edit_box: EditBox::new("Edit Me!".to_string()),
                     buttons: Vec::new(),
                 },
                 LayoutVertical::new(Margins::new(8, 8, 8, 8), Default::default())
-            )
+            ))
         },
         LayoutHorizontal::new(Margins::new(8, 8, 8, 8), Default::default())
     );
@@ -65,7 +65,7 @@ fn main() {
     let _: Option<()> = window.run_forever(
         |event, root, _| {
             if GalleryEvent::NewButton == event {
-                root.container_mut().nested.container_mut().buttons.push(Button::new(Contents::Text("An added button".to_string()), None));
+                root.container_mut().nested.widget_mut().container_mut().buttons.push(Button::new(Contents::Text("An added button".to_string()), None));
             }
             println!("{:?}", event);
             LoopFlow::Continue
