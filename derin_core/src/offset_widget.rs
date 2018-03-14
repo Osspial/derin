@@ -18,15 +18,17 @@ use arrayvec::ArrayVec;
 #[derive(Debug)]
 pub struct OffsetWidget<'a, W: 'a + ?Sized> {
     widget: &'a mut W,
-    offset: Vector2<i32>
+    offset: Vector2<i32>,
+    clip: Option<BoundBox<Point2<i32>>>
 }
 
 impl<'a, W: ?Sized> OffsetWidget<'a, W> {
     #[inline]
-    pub fn new(widget: &'a mut W, offset: Vector2<i32>) -> OffsetWidget<'a, W> {
+    pub fn new(widget: &'a mut W, offset: Vector2<i32>, clip: Option<BoundBox<Point2<i32>>>) -> OffsetWidget<'a, W> {
         OffsetWidget {
             widget,
-            offset
+            offset,
+            clip
         }
     }
 
@@ -48,6 +50,7 @@ pub trait OffsetWidgetTrait<A, F>
 
     fn update_tag(&self) -> &UpdateTag;
     fn rect(&self) -> BoundBox<Point2<i32>>;
+    fn rect_clipped(&self) -> Option<BoundBox<Point2<i32>>>;
     fn set_rect(&mut self, rect: BoundBox<Point2<i32>>);
     // fn render(&mut self, frame: &mut FrameRectStack<F>) {
     //     self.widget.render(frame);
@@ -97,6 +100,9 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
     }
     fn rect(&self) -> BoundBox<Point2<i32>> {
         self.widget.rect() + self.offset
+    }
+    fn rect_clipped(&self) -> Option<BoundBox<Point2<i32>>> {
+        self.clip.and_then(|clip_rect| clip_rect.intersect_rect(self.rect()))
     }
     fn set_rect(&mut self, rect: BoundBox<Point2<i32>>) {
         *self.widget.rect_mut() = rect - self.offset;
@@ -178,10 +184,11 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
               G: FnMut(WidgetSummary<OffsetWidget<'b, Widget<A, F>>>) -> LoopFlow<()>
     {
         let child_offset = self.rect().min().to_vec();
+        let clip_rect = self.rect_clipped();
 
         self.widget.children_mut(&mut |summary_slice| {
             for summary in summary_slice {
-                let widget: OffsetWidget<'b, _> = OffsetWidget::new(summary.widget, child_offset);
+                let widget: OffsetWidget<'b, _> = OffsetWidget::new(summary.widget, child_offset, clip_rect);
                 let summary_offset = WidgetSummary {
                     ident: summary.ident,
                     rect: summary.rect + child_offset,
@@ -211,7 +218,8 @@ impl<'a, 'b, A, F, W> OffsetWidgetTraitAs<'b, A, F> for &'b mut OffsetWidget<'a,
         match self.widget.as_parent_mut() {
             Some(self_as_parent) => Some(OffsetWidget {
                 widget: self_as_parent,
-                offset: self.offset
+                offset: self.offset,
+                clip: self.clip
             }),
             None => None
         }

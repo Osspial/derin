@@ -72,6 +72,7 @@ struct StringDrawData {
 
 struct GlyphDraw<'a> {
     rect: BoundBox<Point2<i32>>,
+    clip_rect: BoundBox<Point2<i32>>,
     face: &'a mut Face<()>,
     atlas: &'a mut Atlas,
     text_style: ThemeText,
@@ -156,6 +157,7 @@ struct Run {
 impl<'a> TextTranslate<'a> {
     pub fn new_rs<'b, F>(
         rect: BoundBox<Point2<i32>>,
+        clip_rect: BoundBox<Point2<i32>>,
         text_style: ThemeText,
         face: &'a mut Face<()>,
         dpi: DPI,
@@ -165,11 +167,12 @@ impl<'a> TextTranslate<'a> {
     ) -> TextTranslate<'a>
         where F: FnOnce(&str, &mut Face<()>) -> &'b ShapedBuffer
     {
-        Self::new_raw(rect, text_style, face, dpi, atlas, shape_text, render_string, 0..0, None)
+        Self::new_raw(rect, clip_rect, text_style, face, dpi, atlas, shape_text, render_string, 0..0, None)
     }
 
     pub fn new_es<'b, F>(
         rect: BoundBox<Point2<i32>>,
+        clip_rect: BoundBox<Point2<i32>>,
         text_style: ThemeText,
         face: &'a mut Face<()>,
         dpi: DPI,
@@ -180,7 +183,7 @@ impl<'a> TextTranslate<'a> {
         where F: FnOnce(&str, &mut Face<()>) -> &'b ShapedBuffer
     {
         Self::new_raw(
-            rect, text_style, face, dpi, atlas,
+            rect, clip_rect, text_style, face, dpi, atlas,
             shape_text, &mut edit_string.render_string,
             edit_string.highlight_range.clone(),
             match edit_string.draw_cursor && edit_string.highlight_range.len() == 0 {
@@ -192,6 +195,7 @@ impl<'a> TextTranslate<'a> {
 
     fn new_raw<'b, F>(
         mut rect: BoundBox<Point2<i32>>,
+        clip_rect: BoundBox<Point2<i32>>,
         text_style: ThemeText,
         face: &'a mut Face<()>,
         dpi: DPI,
@@ -222,7 +226,10 @@ impl<'a> TextTranslate<'a> {
             font_descender: descender,
 
             glyph_slice: render_string.reshape_glyphs(rect, shape_text, &text_style, face, dpi, cursor_pos),
-            glyph_draw: GlyphDraw{ face, atlas, text_style, dpi, rect },
+            glyph_draw: GlyphDraw{
+                face, atlas, text_style, dpi, rect,
+                clip_rect: clip_rect.intersect_rect(rect).unwrap_or(BoundBox::new2(0, 0, 0, 0))
+            },
 
             highlight_vertex_iter: None,
             glyph_vertex_iter: None,
@@ -638,7 +645,7 @@ impl<'a> Iterator for TextTranslate<'a> {
                             *cursor_pos = None;
                             ImageTranslate::new(
                                 BoundBox::new(pos, pos + Vector2::new(1, font_ascender - font_descender)),
-                                glyph_draw.rect,
+                                glyph_draw.clip_rect,
                                 glyph_draw.atlas.white().cast().unwrap_or(OffsetBox::new2(0, 0, 0, 0)),
                                 glyph_draw.text_style.color,
                                 RescaleRules::StretchOnPixelCenter
@@ -686,7 +693,7 @@ impl<'a> Iterator for TextTranslate<'a> {
 
                             Some(ImageTranslate::new(
                                 highlight_rect,
-                                glyph_draw.rect,
+                                glyph_draw.clip_rect,
                                 glyph_draw.atlas.white().cast().unwrap_or(OffsetBox::new2(0, 0, 0, 0)),
                                 glyph_draw.text_style.highlight_bg_color,
                                 RescaleRules::StretchOnPixelCenter
@@ -804,7 +811,7 @@ impl<'a> GlyphDraw<'a> {
 
         ImageTranslate::new(
             glyph_rect,
-            self.rect,
+            self.clip_rect,
             atlas_rect.cast::<u16>().unwrap_or(OffsetBox::new2(0, 0, 0, 0)),
             match is_highlighted {
                 false => text_style.color,

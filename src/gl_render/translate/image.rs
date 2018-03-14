@@ -2,7 +2,7 @@ use gl_render::GLVertex;
 use gullery::glsl::Nu8;
 use gullery::colors::Rgba;
 
-use cgmath::Point2;
+use cgmath::{Point2, EuclideanSpace};
 use cgmath_geometry::{OffsetBox, BoundBox, GeoBox};
 
 use theme::RescaleRules;
@@ -11,6 +11,7 @@ use dct::layout::{Align, Margins};
 
 pub(in gl_render) struct ImageTranslate {
     verts: TranslateVerts,
+    rect: Option<BoundBox<Point2<i32>>>,
     cur_vertex: usize
 }
 
@@ -36,12 +37,12 @@ impl ImageTranslate {
             Some(clipped_rect) => clipped_rect,
             None => return ImageTranslate {
                 verts: TranslateVerts::None,
+                rect: None,
                 cur_vertex: 0
             }
         };
         let (min, max) = (clipped_rect.min(), clipped_rect.max());
         let gen_corners = || {
-
             let clip_margins = Margins {
                 left: clipped_rect.min().x - rect.min().x,
                 right: rect.max().x - clipped_rect.max().x,
@@ -105,25 +106,31 @@ impl ImageTranslate {
                 ]
             }}
         }
-        let verts = match (min == max, rescale) {
-            (true, _) => TranslateVerts::None,
+        let (verts, rect_out);
+        match (min == max, rescale) {
+            (true, _) => {
+                rect_out = None;
+                verts = TranslateVerts::None;
+            },
             (false, RescaleRules::Stretch) => {
                 let (tl_out, tr_out, br_out, bl_out, _, _) = gen_corners();
-                TranslateVerts::Stretch {
+                rect_out = Some(rect);
+                verts = TranslateVerts::Stretch {
                     tl: tl_out,
                     tr: tr_out,
                     br: br_out,
                     bl: bl_out,
-                }
+                };
             },
             (false, RescaleRules::StretchOnPixelCenter) => {
                 let (tl_out, tr_out, br_out, bl_out, _, _) = gen_corners();
-                TranslateVerts::Stretch {
+                rect_out = Some(rect);
+                verts = TranslateVerts::Stretch {
                     tl: derived_verts!(tl_out, +(0., 0.), +(0., 0.))[2],
                     tr: derived_verts!(tr_out, -(0., 0.), +(0., 0.))[2],
                     br: derived_verts!(br_out, -(0., 0.), -(0., 0.))[2],
                     bl: derived_verts!(bl_out, +(0., 0.), -(0., 0.))[2],
-                }
+                };
             },
             (false, RescaleRules::Slice(margins)) => {
                 let (tl_out, tr_out, br_out, bl_out, clip_margins, atlas_clip_margins) = gen_corners();
@@ -141,12 +148,13 @@ impl ImageTranslate {
                     (margins.bottom as i32 - clip_margins.bottom).max(0) as f32
                 );
 
-                TranslateVerts::Slice {
+                rect_out = Some(rect);
+                verts = TranslateVerts::Slice {
                     tl: derived_verts!(tl_out, +(loc_margins.left, atlas_margins.left), +(loc_margins.top, atlas_margins.top)),
                     tr: derived_verts!(tr_out, -(loc_margins.right, atlas_margins.right), +(loc_margins.top, atlas_margins.top)),
                     br: derived_verts!(br_out, -(loc_margins.right, atlas_margins.right), -(loc_margins.bottom, atlas_margins.bottom)),
                     bl: derived_verts!(bl_out, +(loc_margins.left, atlas_margins.left), -(loc_margins.bottom, atlas_margins.bottom)),
-                }
+                };
             }
             (false, RescaleRules::Align(alignment)) => {
                 let get_dims = |align, atlas_size, fill_size| {
@@ -164,6 +172,7 @@ impl ImageTranslate {
 
                 let bound_x = |i: i32| i.min(clipped_rect.max().x).max(clipped_rect.min().x);
                 let bound_y = |i: i32| i.min(clipped_rect.max().y).max(clipped_rect.min().y);
+                rect_out = Some(BoundBox::new2(min_x, min_y, max_x, max_y) + rect.min.to_vec());
                 let bounds = BoundBox::new2(
                     bound_x(min_x + rect.min.x),
                     bound_y(min_y + rect.min.y),
@@ -189,7 +198,7 @@ impl ImageTranslate {
                 atlas_rect_clipped.min.y += atlas_clip_margins.top;
                 atlas_rect_clipped.max.y -= atlas_clip_margins.bottom;
 
-                TranslateVerts::Stretch {
+                verts = TranslateVerts::Stretch {
                     tl: GLVertex {
                         loc: bounds.min(),
                         color,
@@ -210,22 +219,19 @@ impl ImageTranslate {
                         color,
                         tex_coord: Point2::new(atlas_rect_clipped.min().x, atlas_rect_clipped.max().y)
                     }
-                }
+                };
             }
         };
 
         ImageTranslate {
             verts,
+            rect: rect_out,
             cur_vertex: 0
         }
     }
 
     pub fn rect(&self) -> Option<BoundBox<Point2<i32>>> {
-        match self.verts {
-            TranslateVerts::Stretch{tl, br, ..} => Some(BoundBox::new(tl.loc, br.loc)),
-            TranslateVerts::Slice{tl, br, ..} => Some(BoundBox::new(tl[0].loc, br[0].loc)),
-            TranslateVerts::None => None
-        }
+        self.rect
     }
 }
 

@@ -15,7 +15,7 @@ struct StackElement<'a, A, F: RenderFrame> {
     index: usize
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 struct ElementRects {
     bounds: BoundBox<Point2<i32>>,
     bounds_clipped: Option<BoundBox<Point2<i32>>>
@@ -30,7 +30,7 @@ pub struct NRVec<'a, A: 'a, F: 'a + RenderFrame> {
     cache: &'a mut Vec<StackElement<'static, A, F>>,
     vec: Vec<StackElement<'a, A, F>>,
     ident_vec: &'a mut Vec<WidgetIdent>,
-    clip_rect: BoundBox<Point2<i32>>,
+    clip_rect: Option<BoundBox<Point2<i32>>>,
     top_parent_offset: Vector2<i32>,
     root_id: RootID
 }
@@ -70,7 +70,7 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
         NRVec {
             cache: &mut self.vec,
             vec, ident_vec,
-            clip_rect: BoundBox::new(Point2::new(0, 0), Point2::max_value()),
+            clip_rect: Some(BoundBox::new(Point2::new(0, 0), Point2::max_value())),
             top_parent_offset: Vector2::new(0, 0),
             root_id
         }
@@ -82,7 +82,7 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     pub fn top(&mut self) -> WidgetPath<Widget<A, F>> {
         let widget = self.vec.last_mut().map(|n| unsafe{ &mut *n.widget }).unwrap();
         WidgetPath {
-            widget: OffsetWidget::new(widget, self.top_parent_offset()),
+            widget: OffsetWidget::new(widget, self.top_parent_offset(), self.clip_rect()),
             path: &self.ident_vec
         }
     }
@@ -95,14 +95,6 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     #[inline]
     pub fn top_index(&self) -> usize {
         self.vec.last().unwrap().index
-    }
-
-    #[inline]
-    pub fn clip_rect(&self) -> Option<BoundBox<Point2<i32>>> {
-        self.vec.get(self.vec.len().wrapping_sub(2))
-            .and_then(|widget| widget.rectangles)
-            .and_then(|rectangles| rectangles.bounds_clipped)
-            .map(|r| r + self.top_parent_offset)
     }
 
     #[inline]
@@ -125,18 +117,26 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
         self.vec.truncate(len);
         self.ident_vec.truncate(len);
 
-        self.top_parent_offset = Vector2::new(0, 0);
-        self.clip_rect = BoundBox::new(Point2::new(0, 0), Point2::max_value());
-        for bounds in self.vec[..len-1].iter().filter_map(|n| n.rectangles).map(|r| r.bounds) {
-            self.clip_rect = self.clip_rect.intersect_rect(bounds + self.top_parent_offset)
-                .unwrap_or(BoundBox::new2(0, 0, 0, 0));
-            self.top_parent_offset += bounds.min().to_vec();
+        match self.vec.get(self.vec.len().wrapping_sub(2)).map(|e| e.rectangles.expect("Bad widget bounds stack")) {
+            None => {
+                self.top_parent_offset = Vector2::new(0, 0);
+                self.clip_rect = Some(BoundBox::new(Point2::new(0, 0), Point2::max_value()));
+            },
+            Some(rectangles) => {
+                self.top_parent_offset = rectangles.bounds.min().to_vec();
+                self.clip_rect = rectangles.bounds_clipped;
+            }
         }
     }
 
     #[inline]
     pub fn top_parent_offset(&self) -> Vector2<i32> {
         self.top_parent_offset
+    }
+
+    #[inline]
+    pub fn clip_rect(&self) -> Option<BoundBox<Point2<i32>>> {
+        self.clip_rect
     }
 
     #[inline]
@@ -158,20 +158,17 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
         if let Some(new_top_summary) = new_top_opt {
             assert_ne!(new_top_summary.widget as *mut Widget<A, F>, self.top().widget.inner_mut() as *mut Widget<A, F>);
             {
-                let current_clip_rect = self.clip_rect();
                 let cur_top = self.vec.last_mut().unwrap();
 
-                let top_rect = unsafe{ &*cur_top.widget }.rect();
+                let top_rect = unsafe{ &*cur_top.widget }.rect() + self.top_parent_offset;
+                let top_clip = self.clip_rect.and_then(|r| r.intersect_rect(top_rect));
                 cur_top.rectangles = Some(ElementRects {
                     bounds: top_rect,
-                    bounds_clipped: current_clip_rect.and_then(|r| r.intersect_rect(top_rect))
+                    bounds_clipped: top_clip
                 });
-                // if let Some(parent_rect) = parent_bounds_opt {
-                //     cur_top.bounds = parent_rect.intersect_rect(cur_top.bounds)
-                //         .unwrap_or(BoundBox::new(cur_top.bounds.min, cur_top.bounds.min));
-                // }
+                self.clip_rect = top_clip;
 
-                self.top_parent_offset += top_rect.min().to_vec();
+                self.top_parent_offset = top_rect.min().to_vec();
             }
 
             self.vec.push(StackElement {
@@ -196,8 +193,17 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
         let popped = self.vec.pop().map(|n| unsafe{ &mut *n.widget }).unwrap();
         self.ident_vec.pop();
         let last_mut = self.vec.last_mut().unwrap();
-        self.top_parent_offset -= last_mut.rectangles.expect("Bad widget stack bounds").bounds.min().to_vec();
         last_mut.rectangles = None;
+        match self.vec.get(self.vec.len().wrapping_sub(2)).map(|e| e.rectangles.expect("Bad widget bounds stack")) {
+            None => {
+                self.top_parent_offset = Vector2::new(0, 0);
+                self.clip_rect = Some(BoundBox::new(Point2::new(0, 0), Point2::max_value()));
+            },
+            Some(rectangles) => {
+                self.top_parent_offset = rectangles.bounds.min().to_vec();
+                self.clip_rect = rectangles.bounds_clipped;
+            }
+        }
 
         if popped.update_tag().needs_update(self.root_id) != Update::default() {
             self.top().widget.update_tag().mark_update_child_immutable();

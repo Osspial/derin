@@ -240,8 +240,8 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                             );
                         }
 
-                        let top_bounds = widget_stack.top().widget.rect();
-                        match top_bounds.contains(new_pos) {
+                        let top_bounds = widget_stack.top().widget.rect_clipped();
+                        match top_bounds.map(|r| r.contains(new_pos)).unwrap_or(false) {
                             true => {
                                 // Whether or not to update the child layout.
                                 let update_layout: bool;
@@ -351,7 +351,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                             },
                             // If the cursor is no longer in the widget, send the exit events and move to the parent widget.
                             false => {
-                                let mouse_exit = top_bounds.intersect_line(move_line).1.unwrap_or(new_pos);
+                                let mouse_exit = top_bounds.and_then(|r| r.intersect_line(move_line).1).unwrap_or(new_pos);
 
                                 {
                                     let WidgetPath{ mut widget, path, .. } = widget_stack.top();
@@ -447,7 +447,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 let recv_flags = ChildEventRecv::MOUSE_HOVER | ChildEventRecv::KEYBOARD;
                 let button_mask = ChildEventRecv::mouse_button_mask(button);
                 widget_stack.move_over_flags(recv_flags, |mut top_widget, path| {
-                    let in_widget = top_widget.rect().contains(*mouse_pos);
+                    let in_widget = top_widget.rect_clipped().map(|r| r.contains(*mouse_pos)).unwrap_or(false);
 
                     try_push_action!(
                         top_widget, path.iter().cloned(),
@@ -488,7 +488,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 // Send the mouse up event to the hover widget.
                 let mut move_to_tracked = true;
                 widget_stack.move_over_flags(ChildEventRecv::MOUSE_HOVER, |mut widget, path| {
-                    let in_widget = widget.rect().contains(*mouse_pos);
+                    let in_widget = widget.rect_clipped().map(|r| r.contains(*mouse_pos)).unwrap_or(false);
                     let pressed_in_widget = widget.update_tag().mouse_state.get().mouse_button_sequence().contains(button);
                     // If the hover widget wasn't the one where the mouse was originally pressed, ensure that
                     // we move to the widget where it was pressed.
@@ -521,13 +521,13 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 // send the move event to original presser.
                 if move_to_tracked {
                     widget_stack.move_over_flags(button_mask, |mut widget, path| {
-                        let widget_rect = widget.rect();
+                        let widget_rect = widget.rect_clipped();
                         try_push_action!(
                             widget, path.iter().cloned(),
                             WidgetEvent::MouseUp {
                                 pos: *mouse_pos,
                                 down_pos: down_pos_rootspace,
-                                in_widget: widget_rect.contains(*mouse_pos),
+                                in_widget: widget_rect.map(|r| r.contains(*mouse_pos)).unwrap_or(false),
                                 pressed_in_widget: true,
                                 button
                             }

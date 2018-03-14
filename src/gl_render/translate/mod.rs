@@ -69,6 +69,7 @@ impl Translator {
     pub(in gl_render) fn translate_prims(
         &mut self,
         parent_rect: BoundBox<Point2<i32>>,
+        clip_rect: BoundBox<Point2<i32>>,
         theme: &Theme,
         dpi: DPI,
         prims: impl IntoIterator<Item=ThemedPrim<<GLFrame as PrimFrame>::DirectRender>>,
@@ -94,113 +95,117 @@ impl Translator {
             let theme_path = unsafe{ &*prim.theme_path };
             let widget_theme = theme.widget_theme(theme_path);
 
-            match (prim.prim, widget_theme.image, widget_theme.text) {
-                (Prim::Image, Some(image), _) => {
-                    let atlas_rect = draw.atlas.image_rect(theme_path, || (&image.pixels, image.dims)).cast::<u16>().unwrap();
+            if let Some(parent_clipped) = clip_rect.intersect_rect(parent_rect) {
+                match (prim.prim, widget_theme.image, widget_theme.text) {
+                    (Prim::Image, Some(image), _) => {
+                        let atlas_rect = draw.atlas.image_rect(theme_path, || (&image.pixels, image.dims)).cast::<u16>().unwrap();
 
-                    let abs_rect_dims = abs_rect.dims();
-                    let abs_rect_dims_bounded = image.size_bounds.bound_rect(DimsBox::new(abs_rect_dims));
-                    abs_rect.max.x = abs_rect.min.x + abs_rect_dims_bounded.width();
-                    abs_rect.max.y = abs_rect.min.y + abs_rect_dims_bounded.height();
-                    abs_rect = abs_rect + (abs_rect_dims - abs_rect_dims_bounded.dims) / 2;
+                        let abs_rect_dims = abs_rect.dims();
+                        let abs_rect_dims_bounded = image.size_bounds.bound_rect(DimsBox::new(abs_rect_dims));
+                        abs_rect.max.x = abs_rect.min.x + abs_rect_dims_bounded.width();
+                        abs_rect.max.y = abs_rect.min.y + abs_rect_dims_bounded.height();
+                        abs_rect = abs_rect + (abs_rect_dims - abs_rect_dims_bounded.dims) / 2;
 
-                    let image_translate = ImageTranslate::new(
-                        abs_rect,
-                        parent_rect,
-                        atlas_rect,
-                        Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
-                        image.rescale
-                    );
-                    if let (Some(rect_px_out), Some(image_rect)) = (prim.rect_px_out, image_translate.rect()) {
-                        unsafe{ *rect_px_out = image_rect - parent_rect.min().to_vec() };
-                    }
-
-                    draw.vertices.extend(image_translate);
-                },
-                (Prim::String(render_string), _, Some(theme_text)) => {
-                    match draw.font_cache.face(theme_text.face.clone()) {
-                        Ok(face) => {
-                            if let Some(rect_px_out) = prim.rect_px_out {
-                                unsafe{ *rect_px_out = abs_rect - parent_rect.min().to_vec() };
-                            }
-                            let render_string = unsafe{ &mut *render_string };
-
-                            draw.vertices.extend(TextTranslate::new_rs(
-                                abs_rect,
-                                theme_text.clone(),
-                                face,
-                                dpi,
-                                &mut draw.atlas,
-                                |string, face| {
-                                    self.shaper.shape_text(
-                                        string,
-                                        face,
-                                        FaceSize::new(theme_text.face_size, theme_text.face_size),
-                                        dpi,
-                                        &mut self.shaped_text
-                                    ).ok();
-                                    &self.shaped_text
-                                },
-                                render_string
-                            ));
-                        },
-                        Err(_) => {
-                            //TODO: log
+                        let image_translate = ImageTranslate::new(
+                            abs_rect,
+                            parent_clipped,
+                            atlas_rect,
+                            Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                            image.rescale
+                        );
+                        if let (Some(rect_px_out), Some(image_rect)) = (prim.rect_px_out, image_translate.rect()) {
+                            unsafe{ *rect_px_out = image_rect - parent_rect.min().to_vec() };
                         }
-                    }
-                },
-                (Prim::EditString(edit_string), _, Some(theme_text)) => {
-                    match draw.font_cache.face(theme_text.face.clone()) {
-                        Ok(face) => {
-                            if let Some(rect_px_out) = prim.rect_px_out {
-                                unsafe{ *rect_px_out = abs_rect - parent_rect.min().to_vec() };
+
+                        draw.vertices.extend(image_translate);
+                    },
+                    (Prim::String(render_string), _, Some(theme_text)) => {
+                        match draw.font_cache.face(theme_text.face.clone()) {
+                            Ok(face) => {
+                                if let Some(rect_px_out) = prim.rect_px_out {
+                                    unsafe{ *rect_px_out = abs_rect - parent_rect.min().to_vec() };
+                                }
+                                let render_string = unsafe{ &mut *render_string };
+
+                                draw.vertices.extend(TextTranslate::new_rs(
+                                    abs_rect,
+                                    parent_clipped,
+                                    theme_text.clone(),
+                                    face,
+                                    dpi,
+                                    &mut draw.atlas,
+                                    |string, face| {
+                                        self.shaper.shape_text(
+                                            string,
+                                            face,
+                                            FaceSize::new(theme_text.face_size, theme_text.face_size),
+                                            dpi,
+                                            &mut self.shaped_text
+                                        ).ok();
+                                        &self.shaped_text
+                                    },
+                                    render_string
+                                ));
+                            },
+                            Err(_) => {
+                                //TODO: log
                             }
-                            let edit_string = unsafe{ &mut *edit_string };
-
-                            draw.vertices.extend(TextTranslate::new_es(
-                                abs_rect,
-                                theme_text.clone(),
-                                face,
-                                dpi,
-                                &mut draw.atlas,
-                                |string, face| {
-                                    self.shaper.shape_text(
-                                        string,
-                                        face,
-                                        FaceSize::new(theme_text.face_size, theme_text.face_size),
-                                        dpi,
-                                        &mut self.shaped_text
-                                    ).ok();
-                                    &self.shaped_text
-                                },
-                                edit_string
-                            ));
-                        },
-                        Err(_) => {
-                            //TODO: log
                         }
-                    }
-                },
-                (Prim::DirectRender(render_fn), _, _) => {
-                    draw.draw_contents();
-                    let render_fn = unsafe{ &mut *render_fn };
-                    let mut framebuffer = unsafe{ mem::uninitialized() };
-                    mem::swap(&mut framebuffer, &mut draw.fb);
+                    },
+                    (Prim::EditString(edit_string), _, Some(theme_text)) => {
+                        match draw.font_cache.face(theme_text.face.clone()) {
+                            Ok(face) => {
+                                if let Some(rect_px_out) = prim.rect_px_out {
+                                    unsafe{ *rect_px_out = abs_rect - parent_rect.min().to_vec() };
+                                }
+                                let edit_string = unsafe{ &mut *edit_string };
 
-                    let viewport_origin = Point2::new(abs_rect.min().x.max(0) as u32, abs_rect.min().y.max(0) as u32);
-                    let viewport_rect = OffsetBox::new2(
-                        viewport_origin.x,
-                        viewport_origin.y,
-                        (abs_rect.width() - (viewport_origin.x as i32 - abs_rect.min().x)) as u32,
-                        (abs_rect.height() - (viewport_origin.y as i32 - abs_rect.min().y)) as u32,
-                    );
-                    let mut draw_tuple = (framebuffer, viewport_rect, draw.context_state.clone());
-                    render_fn(&mut draw_tuple);
-                    mem::swap(&mut draw_tuple.0, &mut draw.fb);
-                    mem::forget(draw_tuple.0);
+                                draw.vertices.extend(TextTranslate::new_es(
+                                    abs_rect,
+                                    parent_clipped,
+                                    theme_text.clone(),
+                                    face,
+                                    dpi,
+                                    &mut draw.atlas,
+                                    |string, face| {
+                                        self.shaper.shape_text(
+                                            string,
+                                            face,
+                                            FaceSize::new(theme_text.face_size, theme_text.face_size),
+                                            dpi,
+                                            &mut self.shaped_text
+                                        ).ok();
+                                        &self.shaped_text
+                                    },
+                                    edit_string
+                                ));
+                            },
+                            Err(_) => {
+                                //TODO: log
+                            }
+                        }
+                    },
+                    (Prim::DirectRender(render_fn), _, _) => {
+                        draw.draw_contents();
+                        let render_fn = unsafe{ &mut *render_fn };
+                        let mut framebuffer = unsafe{ mem::uninitialized() };
+                        mem::swap(&mut framebuffer, &mut draw.fb);
+
+                        let viewport_origin = Point2::new(abs_rect.min().x.max(0) as u32, abs_rect.min().y.max(0) as u32);
+                        let viewport_rect = OffsetBox::new2(
+                            viewport_origin.x,
+                            viewport_origin.y,
+                            (abs_rect.width() - (viewport_origin.x as i32 - abs_rect.min().x)) as u32,
+                            (abs_rect.height() - (viewport_origin.y as i32 - abs_rect.min().y)) as u32,
+                        );
+                        let mut draw_tuple = (framebuffer, viewport_rect, draw.context_state.clone());
+                        render_fn(&mut draw_tuple);
+                        mem::swap(&mut draw_tuple.0, &mut draw.fb);
+                        mem::forget(draw_tuple.0);
+                    }
+                    _ => {
+                    } //TODO: log
                 }
-                _ => {
-                } //TODO: log
             }
         }
 

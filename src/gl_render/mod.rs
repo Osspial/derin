@@ -274,27 +274,21 @@ impl PrimFrame for GLFrame {
 }
 
 impl RenderFrame for GLFrame {
-    type Transform = BoundBox<Point2<i32>>;
     type Primitive = ThemedPrim<<Self as PrimFrame>::DirectRender>;
     type Theme = Theme;
 
-    fn upload_primitives<I>(&mut self, _ident: &[WidgetIdent], theme: &Theme, transform: &BoundBox<Point2<i32>>, prim_iter: I)
+    fn upload_primitives<I>(&mut self, _ident: &[WidgetIdent], theme: &Theme, transform: BoundBox<Point2<i32>>, clip_rect: BoundBox<Point2<i32>>, prim_iter: I)
         where I: Iterator<Item=ThemedPrim<<GLFrame as PrimFrame>::DirectRender>>
     {
         let dpi_axis = 72;// (72. * self.draw.scale_factor) as u32;
         self.poly_translator.translate_prims(
-            *transform,
+            transform,
+            clip_rect,
             theme,
             DPI::new(dpi_axis, dpi_axis), // TODO: REPLACE HARDCODED VALUE
             prim_iter,
             &mut self.draw
         );
-    }
-
-    #[inline]
-    fn child_rect_transform(rect: &BoundBox<Point2<i32>>, child_rect: BoundBox<Point2<i32>>) -> Option<BoundBox<Point2<i32>>> {
-        let trans = child_rect + rect.min().to_vec();
-        Some(trans)
     }
 }
 

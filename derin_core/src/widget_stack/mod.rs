@@ -11,7 +11,7 @@ use self::inner::{NRAllocCache, NRVec};
 pub use self::inner::WidgetPath;
 
 use cgmath::{Vector2, EuclideanSpace};
-use cgmath_geometry::GeoBox;
+use cgmath_geometry::{BoundBox, GeoBox};
 use offset_widget::{OffsetWidget, OffsetWidgetTrait, OffsetWidgetTraitAs};
 
 pub(crate) struct WidgetStackBase<A, F: RenderFrame> {
@@ -74,7 +74,11 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         let mut top = self.stack.top();
         assert_eq!(self.root as *mut () as usize, top.widget.inner_mut() as *mut _ as *mut () as usize);
         Some(WidgetPath {
-            widget: OffsetWidget::new(unsafe{ &mut *self.root }, Vector2::new(0, 0)),
+            widget: OffsetWidget::new(
+                unsafe{ &mut *self.root },
+                Vector2::new(0, 0),
+                Some(BoundBox::new2(0, 0, i32::max_value(), i32::max_value()))
+            ),
             path: top.path
         })
     }
@@ -86,7 +90,11 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         let mut top = self.stack.top();
         assert_eq!(self.root as *mut () as usize, top.widget.inner_mut() as *mut _ as *mut () as usize);
         WidgetPath {
-            widget: OffsetWidget::new(unsafe{ &mut *self.root }, Vector2::new(0, 0)),
+            widget: OffsetWidget::new(
+                unsafe{ &mut *self.root },
+                Vector2::new(0, 0),
+                Some(BoundBox::new2(0, 0, i32::max_value(), i32::max_value()))
+            ),
             path: top.path
         }
     }
@@ -111,7 +119,11 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
                     widget.as_parent_mut().unwrap().child_by_index_mut(sibling_index as usize)
                 ).unwrap();
                 Ok(WidgetPath {
-                    widget: OffsetWidget::new(child.widget, self.stack.top_parent_offset()),
+                    widget: OffsetWidget::new(
+                        child.widget,
+                        self.stack.top_parent_offset(),
+                        self.stack.clip_rect()
+                    ),
                     path: self.stack.ident()
                 })
             },
@@ -137,7 +149,11 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         );
         match child {
             Some(child) => Ok(WidgetPath {
-                widget: OffsetWidget::new(child.widget, self.stack.top_parent_offset()),
+                widget: OffsetWidget::new(
+                    child.widget,
+                    self.stack.top_parent_offset(),
+                    self.stack.clip_rect()
+                ),
                 path: self.stack.ident()
             }),
             None => {
@@ -280,6 +296,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
             let flag_trail_flags = on_flag_trail.unwrap();
             let mut remove_flags = ChildEventRecv::empty();
             let top_parent_offset = self.stack.top_parent_offset();
+            let clip_rect = self.stack.clip_rect();
 
             let mut top_widget_offset = Vector2::new(0, 0);
             self.stack.try_push(|top_widget, path| {
@@ -288,7 +305,14 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
                     None => {
                         let widget_tags = ChildEventRecv::from(top_widget.update_tag());
                         if widget_tags & flag_trail_flags != ChildEventRecv::empty() {
-                            for_each_flag(OffsetWidget::new(top_widget, top_parent_offset), path);
+                            for_each_flag(
+                                OffsetWidget::new(
+                                    top_widget,
+                                    top_parent_offset,
+                                    clip_rect
+                                ),
+                                path
+                            );
 
                             let update_tag = top_widget.update_tag();
                             let flags_removed = flag_trail_flags - ChildEventRecv::from(update_tag);
@@ -345,11 +369,12 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         let mut child_index = 0;
         while widgets_left > 0 {
             let top_parent_offset = self.stack.top_parent_offset();
+            let clip_rect = self.stack.clip_rect();
             let valid_child = self.stack.try_push(|top_widget, top_path| {
                 let top_id = top_widget.update_tag().widget_id;
 
                 if let Some((iter_index, _)) = widget_ids.clone().into_iter().enumerate().find(|&(_, id)| id == top_id) {
-                    for_each_widget(OffsetWidget::new(top_widget, top_parent_offset), top_path, iter_index);
+                    for_each_widget(OffsetWidget::new(top_widget, top_parent_offset, clip_rect), top_path, iter_index);
                     widgets_left -= 1;
                 }
 
