@@ -162,7 +162,7 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
         EventOps {
             action,
             focus: None,
-            bubble: false,
+            bubble: event.default_bubble(),
             cursor_pos: None,
             cursor_icon: None,
             popup: None

@@ -115,8 +115,10 @@ impl<A, F> Widget<A, F> for EditBox
         };
         let mut focus = None;
         let mut cursor_icon = None;
+        let mut allow_bubble = true;
         match event {
             KeyDown(key, modifiers) => loop {
+                allow_bubble = false;
                 let jump_to_word_boundaries = modifiers.contains(ModifierKeys::CTRL);
                 match (key, modifiers) {
                     (Key::LArrow, _) => self.string.move_cursor_horizontal(
@@ -161,7 +163,9 @@ impl<A, F> Widget<A, F> for EditBox
                     .mark_update_timer();
                 break;
             },
+            KeyUp(..) => allow_bubble = false,
             Char(c) if allow_char(c) => {
+                allow_bubble = false;
                 self.string.insert_char(c);
                 self.update_tag
                     .mark_render_self()
@@ -208,7 +212,7 @@ impl<A, F> Widget<A, F> for EditBox
         EventOps {
             action: None,
             focus,
-            bubble: true,
+            bubble: allow_bubble && event.default_bubble(),
             cursor_pos: None,
             cursor_icon,
             popup: None

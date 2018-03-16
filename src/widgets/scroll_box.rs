@@ -145,6 +145,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
         let values = |slider_x: &Option<SliderAssist>, slider_y: &Option<SliderAssist>|
             (slider_x.as_ref().map(|s| s.value), slider_y.as_ref().map(|s| s.value));
         let start_values = values(&self.slider_x, &self.slider_y);
+        let mut allow_bubble = true;
         match (bubble_source.len(), event) {
             (0, WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left}) => {
                 if let Some(ref mut slider_x) = self.slider_x {
@@ -173,6 +174,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
                 self.update_tag.mark_render_self();
             },
             (_, WidgetEvent::MouseScrollLines(dir)) => {
+                allow_bubble = false;
                 if let Some(ref mut slider_x) = self.slider_x {
                     slider_x.value -= (24 * dir.x) as f32;
                     slider_x.round_to_step();
@@ -183,6 +185,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
                 }
             },
             (_, WidgetEvent::MouseScrollPx(dir)) => {
+                allow_bubble = false;
                 if let Some(ref mut slider_x) = self.slider_x {
                     slider_x.value -= dir.x as f32;
                     slider_x.round_to_step();
@@ -200,7 +203,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
         EventOps {
             action: None,
             focus: None,
-            bubble: false,
+            bubble: allow_bubble && event.default_bubble(),
             cursor_pos: None,
             cursor_icon: None,
             popup: None

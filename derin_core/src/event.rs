@@ -173,6 +173,27 @@ pub enum WidgetEvent {
 }
 
 impl WidgetEvent {
+    pub fn default_bubble(&self) -> bool {
+        match *self {
+            WidgetEvent::MouseScrollLines(..) |
+            WidgetEvent::MouseScrollPx(..) |
+            WidgetEvent::GainFocus |
+            WidgetEvent::LoseFocus |
+            WidgetEvent::Char(..) |
+            WidgetEvent::KeyDown(..) |
+            WidgetEvent::KeyUp(..) => true,
+
+            WidgetEvent::MouseEnter(..) |
+            WidgetEvent::MouseExit(..) |
+            WidgetEvent::MouseEnterChild{..} |
+            WidgetEvent::MouseExitChild{..} |
+            WidgetEvent::MouseMove{..} |
+            WidgetEvent::MouseDown{..} |
+            WidgetEvent::MouseUp{..} |
+            WidgetEvent::Timer{..} => false
+        }
+    }
+
     /// Shift coordinates within the widget by the specified vector.
     pub fn translate(self, dir: Vector2<i32>) -> WidgetEvent {
         match self {
