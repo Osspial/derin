@@ -124,6 +124,8 @@ pub enum WidgetEvent {
         /// The button that was pressed.
         button: MouseButton
     },
+    MouseScrollLines(Vector2<i32>),
+    MouseScrollPx(Vector2<i32>),
     /// A mouse button has been released.
     ///
     /// A `MouseUp` event will always be delivered for any given `MouseDown` event.
@@ -204,13 +206,15 @@ impl WidgetEvent {
                     down_pos: down_pos + dir,
                     in_widget, pressed_in_widget, button
                 },
-            WidgetEvent::GainFocus => WidgetEvent::GainFocus,
-            WidgetEvent::LoseFocus => WidgetEvent::LoseFocus,
-            WidgetEvent::Char(c) => WidgetEvent::Char(c),
-            WidgetEvent::KeyDown(k, modifiers) => WidgetEvent::KeyDown(k, modifiers),
-            WidgetEvent::KeyUp(k, modifiers) => WidgetEvent::KeyUp(k, modifiers),
-            WidgetEvent::Timer{ name, start_time, last_trigger, frequency, times_triggered } =>
-                WidgetEvent::Timer{ name, start_time, last_trigger, frequency, times_triggered }
+            WidgetEvent::Char(..)              |
+            WidgetEvent::LoseFocus             |
+            WidgetEvent::GainFocus             |
+            WidgetEvent::Timer{..}             |
+            WidgetEvent::KeyUp(..)             |
+            WidgetEvent::KeyDown(..)           |
+            WidgetEvent::MouseScrollPx(..)     |
+            WidgetEvent::MouseScrollLines(..) =>
+                self
         }
     }
 }

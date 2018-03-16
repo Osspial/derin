@@ -21,7 +21,7 @@ mod meta_tracker;
 mod offset_widget;
 mod event_loop_ops;
 
-use cgmath::{Point2, Bounded};
+use cgmath::{Point2, Vector2, Bounded};
 use cgmath_geometry::DimsBox;
 
 use std::marker::PhantomData;
@@ -70,6 +70,8 @@ pub enum WindowEvent {
     MouseExit(Point2<i32>),
     MouseDown(MouseButton),
     MouseUp(MouseButton),
+    MouseScrollLines(Vector2<i32>),
+    MouseScrollPx(Vector2<i32>),
     WindowResize(DimsBox<Point2<u32>>),
     KeyDown(Key),
     KeyUp(Key),

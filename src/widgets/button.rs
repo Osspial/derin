@@ -189,9 +189,6 @@ impl<F, H> Widget<H::Action, F> for Button<H>
                 MouseExitChild{..} => unreachable!(),
                 GainFocus => ButtonState::Hover,
                 LoseFocus => ButtonState::Normal,
-                Char(_)     |
-                KeyDown(..) |
-                KeyUp(..)  => self.state,
                 Timer{name: "mouseover_text", times_triggered: 1, ..} => {
                     self.waiting_for_mouseover = false;
                     self.update_tag.mark_update_timer();
@@ -208,7 +205,7 @@ impl<F, H> Widget<H::Action, F> for Button<H>
                     // ));
                     self.state
                 },
-                Timer{..} => self.state
+                _ => self.state
             };
 
             if new_state != self.state {

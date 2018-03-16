@@ -207,9 +207,13 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
     }
 
     #[inline]
-    pub fn move_to_hover(&mut self) {
-        // Move to the MOUSE_HOVER tagged widget.
-        self.move_over_flags(ChildEventRecv::MOUSE_HOVER, |_, _| {});
+    pub fn move_to_hover(&mut self) -> Option<WidgetPath<Widget<A, F>>> {
+        let mut found_widget = false;
+        self.move_over_flags(ChildEventRecv::MOUSE_HOVER, |_, _| found_widget = true);
+        match found_widget {
+            false => None,
+            true => Some(self.top())
+        }
     }
 
     #[inline]

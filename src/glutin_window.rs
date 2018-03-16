@@ -1,5 +1,5 @@
 use glutin::*;
-use glutin::{MouseButton as GMouseButton, WindowEvent as GWindowEvent};
+use glutin::{MouseButton as GMouseButton, WindowEvent as GWindowEvent, MouseScrollDelta};
 use gl_render::{GLRenderer, GLFrame};
 use dct::buttons::{MouseButton, Key, ModifierKeys};
 use core::{Root, LoopFlow, WindowEvent, EventLoopOps, PopupDelta};
@@ -15,7 +15,7 @@ use std::cell::{Cell, RefCell};
 use std::time::Duration;
 use std::collections::HashMap;
 use std::rc::Rc;
-use cgmath::Point2;
+use cgmath::{Point2, Vector2};
 use cgmath_geometry::{DimsBox, GeoBox};
 
 use parking_lot::Mutex;
@@ -153,6 +153,13 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                                     match state {
                                         ElementState::Pressed => WindowEvent::MouseDown(button),
                                         ElementState::Released => WindowEvent::MouseUp(button)
+                                    }
+                                }
+                                GWindowEvent::MouseWheel{delta, modifiers, ..} => {
+                                    event_loop_ops.set_modifiers(map_modifiers(modifiers));
+                                    match delta {
+                                        MouseScrollDelta::LineDelta(x, y) => WindowEvent::MouseScrollLines(Vector2::new(x as i32, y as i32)),
+                                        MouseScrollDelta::PixelDelta(x, y) => WindowEvent::MouseScrollPx(Vector2::new(x as i32, y as i32)),
                                     }
                                 }
                                 GWindowEvent::Resized(width, height) => WindowEvent::WindowResize(DimsBox::new2(scale!(width), scale!(height))),

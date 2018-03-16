@@ -555,6 +555,17 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                     update_tag.child_event_recv.set(update_tag.child_event_recv.get() & !button_mask);
                 }
             },
+            WindowEvent::MouseScrollLines(scroll_lines) => {
+                if let Some(WidgetPath{ widget: mut hover_widget, path }) = widget_stack.move_to_hover() {
+                    try_push_action!(hover_widget, path.iter().cloned(), WidgetEvent::MouseScrollLines(scroll_lines));
+                }
+            },
+            WindowEvent::MouseScrollPx(scroll_px) => {
+                if let Some(WidgetPath{ widget: mut hover_widget, path }) = widget_stack.move_to_hover() {
+                    try_push_action!(hover_widget, path.iter().cloned(), WidgetEvent::MouseScrollPx(scroll_px));
+                }
+            },
+
             WindowEvent::KeyDown(key) => {
                 if let Some(WidgetPath{ widget: mut focus_widget, path }) = widget_stack.move_to_keyboard_focus() {
                     try_push_action!(focus_widget, path.iter().cloned(), WidgetEvent::KeyDown(key, *modifiers));

@@ -142,42 +142,60 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
 
     #[inline]
     fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, bubble_source: &[WidgetIdent]) -> EventOps<A, F> {
-        if bubble_source.len() == 0 {
-            let values = |slider_x: &Option<SliderAssist>, slider_y: &Option<SliderAssist>|
-                (slider_x.as_ref().map(|s| s.value), slider_y.as_ref().map(|s| s.value));
-            let start_values = values(&self.slider_x, &self.slider_y);
-            match event {
-                WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left} => {
-                    if let Some(ref mut slider_x) = self.slider_x {
-                        slider_x.click_head(pos);
-                    }
-                    if let Some(ref mut slider_y) = self.slider_y {
-                        slider_y.click_head(pos);
-                    }
-                    self.update_tag.mark_render_self();
-                },
-                WidgetEvent::MouseMove{new_pos, ..} => {
-                    if let Some(ref mut slider_x) = self.slider_x {
-                        slider_x.move_head(new_pos.x);
-                    }
-                    if let Some(ref mut slider_y) = self.slider_y {
-                        slider_y.move_head(new_pos.y);
-                    }
-                },
-                WidgetEvent::MouseUp{button: MouseButton::Left, ..} => {
-                    if let Some(ref mut slider_x) = self.slider_x {
-                        slider_x.head_click_pos = None;
-                    }
-                    if let Some(ref mut slider_y) = self.slider_y {
-                        slider_y.head_click_pos = None;
-                    }
-                    self.update_tag.mark_render_self();
-                },
-                _ => ()
-            }
-            if values(&self.slider_x, &self.slider_y) != start_values {
-                self.update_tag.mark_render_self().mark_update_layout_post();
-            }
+        let values = |slider_x: &Option<SliderAssist>, slider_y: &Option<SliderAssist>|
+            (slider_x.as_ref().map(|s| s.value), slider_y.as_ref().map(|s| s.value));
+        let start_values = values(&self.slider_x, &self.slider_y);
+        match (bubble_source.len(), event) {
+            (0, WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left}) => {
+                if let Some(ref mut slider_x) = self.slider_x {
+                    slider_x.click_head(pos);
+                }
+                if let Some(ref mut slider_y) = self.slider_y {
+                    slider_y.click_head(pos);
+                }
+                self.update_tag.mark_render_self();
+            },
+            (0, WidgetEvent::MouseMove{new_pos, ..}) => {
+                if let Some(ref mut slider_x) = self.slider_x {
+                    slider_x.move_head(new_pos.x);
+                }
+                if let Some(ref mut slider_y) = self.slider_y {
+                    slider_y.move_head(new_pos.y);
+                }
+            },
+            (0, WidgetEvent::MouseUp{button: MouseButton::Left, ..}) => {
+                if let Some(ref mut slider_x) = self.slider_x {
+                    slider_x.head_click_pos = None;
+                }
+                if let Some(ref mut slider_y) = self.slider_y {
+                    slider_y.head_click_pos = None;
+                }
+                self.update_tag.mark_render_self();
+            },
+            (_, WidgetEvent::MouseScrollLines(dir)) => {
+                if let Some(ref mut slider_x) = self.slider_x {
+                    slider_x.value -= (24 * dir.x) as f32;
+                    slider_x.round_to_step();
+                }
+                if let Some(ref mut slider_y) = self.slider_y {
+                    slider_y.value -= (24 * dir.y) as f32;
+                    slider_y.round_to_step();
+                }
+            },
+            (_, WidgetEvent::MouseScrollPx(dir)) => {
+                if let Some(ref mut slider_x) = self.slider_x {
+                    slider_x.value -= dir.x as f32;
+                    slider_x.round_to_step();
+                }
+                if let Some(ref mut slider_y) = self.slider_y {
+                    slider_y.value -= dir.y as f32;
+                    slider_y.round_to_step();
+                }
+            },
+            _ => ()
+        }
+        if values(&self.slider_x, &self.slider_y) != start_values {
+            self.update_tag.mark_render_self().mark_update_layout_post();
         }
         EventOps {
             action: None,
