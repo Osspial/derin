@@ -15,17 +15,21 @@ use std::time::Duration;
 
 use arrayvec::ArrayVec;
 
-pub trait ButtonHandler {
-    type Action: 'static;
-
-    fn on_click(&mut self) -> Option<Self::Action>;
+pub trait ButtonHandler<A> {
+    fn on_click(&mut self) -> Option<A>;
 }
 
-impl<A: 'static + Clone> ButtonHandler for Option<A> {
-    type Action = A;
-
-    fn on_click(&mut self) -> Option<Self::Action> {
+impl<A: Clone> ButtonHandler<A> for Option<A> {
+    #[inline]
+    fn on_click(&mut self) -> Option<A> {
         self.clone()
+    }
+}
+
+impl<A> ButtonHandler<A> for () {
+    #[inline]
+    fn on_click(&mut self) -> Option<A> {
+        None
     }
 }
 
@@ -39,7 +43,7 @@ pub enum ButtonState {
 }
 
 #[derive(Debug, Clone)]
-pub struct Button<H: ButtonHandler> {
+pub struct Button<H> {
     update_tag: UpdateTag,
     bounds: BoundBox<Point2<i32>>,
     state: ButtonState,
@@ -49,7 +53,7 @@ pub struct Button<H: ButtonHandler> {
     size_bounds: SizeBounds
 }
 
-impl<H: ButtonHandler> Button<H> {
+impl<H> Button<H> {
     pub fn new(contents: Contents<String>, handler: H) -> Button<H> {
         Button {
             update_tag: UpdateTag::new(),
@@ -72,9 +76,9 @@ impl<H: ButtonHandler> Button<H> {
     }
 }
 
-impl<F, H> Widget<H::Action, F> for Button<H>
+impl<A, F, H> Widget<A, F> for Button<H>
     where F: PrimFrame,
-          H: ButtonHandler
+          H: ButtonHandler<A>
 {
     #[inline]
     fn update_tag(&self) -> &UpdateTag {
@@ -133,7 +137,7 @@ impl<F, H> Widget<H::Action, F> for Button<H>
         }
     }
 
-    fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, popups_opt: Option<ChildPopupsMut<H::Action, F>>, bubble_source: &[WidgetIdent]) -> EventOps<H::Action, F> {
+    fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, popups_opt: Option<ChildPopupsMut<A, F>>, bubble_source: &[WidgetIdent]) -> EventOps<A, F> {
         use self::WidgetEvent::*;
 
         let (mut action, focus) = (None, None);
