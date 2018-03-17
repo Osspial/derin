@@ -144,7 +144,7 @@ impl Translator {
                                     render_string
                                 ));
                                 if let (Some(rect_px_out), Some(text_rect)) = (prim.rect_px_out, render_string.text_rect()) {
-                                    unsafe{ *rect_px_out = text_rect };
+                                    unsafe{ *rect_px_out = text_rect + abs_rect.min().to_vec() - parent_rect.min().to_vec() };
                                 }
                             },
                             Err(_) => {
@@ -177,7 +177,7 @@ impl Translator {
                                     edit_string
                                 ));
                                 if let (Some(rect_px_out), Some(text_rect)) = (prim.rect_px_out, edit_string.render_string.text_rect()) {
-                                    unsafe{ *rect_px_out = text_rect };
+                                    unsafe{ *rect_px_out = text_rect + abs_rect.min().to_vec() - parent_rect.min().to_vec() };
                                 }
                             },
                             Err(_) => {
