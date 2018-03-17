@@ -25,7 +25,7 @@ pub(crate) enum MetaEventVariant {
     EventBubble(WidgetEvent)
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum MetaCode {
     FocusChange(FocusChange),
     EventBubble(WidgetEvent),
@@ -88,7 +88,7 @@ impl<'a> MetaDrain<'a> {
         let MetaDrain{ ref mut index, ref code_vec } = *self;
         let unwrap_ident = move |i| {
             match code_vec[i] {
-                MetaCode::Ident(ident) => ident,
+                MetaCode::Ident(ref ident) => ident.clone(),
                 MetaCode::FocusChange(..) |
                 MetaCode::EventBubble(..) => panic!("not an ident"),
             }

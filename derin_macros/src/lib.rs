@@ -105,12 +105,32 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
         }
     });
 
+    let ident_arc_iter = widget_fields.iter().cloned().filter_map(|widget_field| {
+        match widget_field.ident().clone() {
+            Some(ident) => {
+                let tl_ident = thread_local_ident(ident.clone());
+                Some(quote!(static #tl_ident: Arc<str> = Arc::from(stringify!(#ident));))
+            }
+            None => None
+        }
+    });
+
     quote!{
         #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
-        const #dummy_const: () = {
+        const #dummy_const: () = {mod import {
             extern crate derin as _derive_derin;
+            use self::_derive_derin::LoopFlow;
+            use self::_derive_derin::container::WidgetContainer;
+            use self::_derive_derin::widgets::custom::{Widget, WidgetSummary};
+            use std::sync::Arc;
 
-            impl #impl_generics _derive_derin::container::WidgetContainer<__F> for #ident #ty_generics #where_clause {
+            // Ideally we'd be using lazy_static, but macro re-exporting doesn't work. Maybe we'll
+            // do this when declarative macros 2.0 gets stable.
+            thread_local!{
+                #(#ident_arc_iter)*
+            }
+
+            impl #impl_generics WidgetContainer<__F> for #ident #ty_generics #where_clause {
                 type Action = #action_ty;
 
                 #[inline]
@@ -120,7 +140,7 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
 
                 #[allow(unused_assignments)]
                 fn children<'a, __G, __R>(&'a self, mut for_each_child: __G) -> Option<__R>
-                    where __G: FnMut(_derive_derin::widgets::custom::WidgetSummary<&'a _derive_derin::widgets::custom::Widget<Self::Action, __F>>) -> _derive_derin::LoopFlow<__R>,
+                    where __G: FnMut(WidgetSummary<&'a Widget<Self::Action, __F>>) -> LoopFlow<__R>,
                           Self::Action: 'a,
                           __F: 'a
                 {
@@ -131,7 +151,7 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
 
                 #[allow(unused_assignments)]
                 fn children_mut<'a, __G, __R>(&'a mut self, mut for_each_child: __G) -> Option<__R>
-                    where __G: FnMut(_derive_derin::widgets::custom::WidgetSummary<&'a mut _derive_derin::widgets::custom::Widget<Self::Action, __F>>) -> _derive_derin::LoopFlow<__R>,
+                    where __G: FnMut(WidgetSummary<&'a mut Widget<Self::Action, __F>>) -> LoopFlow<__R>,
                           Self::Action: 'a,
                           __F: 'a
                 {
@@ -140,8 +160,14 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
                     None
                 }
             }
-        };
+        }};
     }
+}
+
+fn thread_local_ident(ident: Ident) -> Ident {
+    let mut tl_ident_str = "TL_IDENT_ARC_".to_string();
+    tl_ident_str.push_str(ident.as_ref());
+    Ident::from(tl_ident_str)
 }
 
 struct CallChildIter<'a, W>
@@ -160,6 +186,7 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
     fn next(&mut self) -> Option<Tokens> {
         if let Some(widget_field) = self.fields.next() {
             let widget_ident = widget_field.ident().clone().unwrap_or(Ident::new(self.field_num as usize));
+            let tl_ident = thread_local_ident(widget_ident.clone());
             let widget_expr = match self.is_mut {
                 true => quote!(&mut self.#widget_ident),
                 false => quote!(&self.#widget_ident)
@@ -174,13 +201,13 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
             match widget_field {
                 WidgetField::Widget(field) => {
                     let child_id = match field.ident {
-                        Some(_) => quote!(_derive_derin::widgets::custom::WidgetIdent::Str(stringify!(#widget_ident))),
+                        Some(_) => quote!(_derive_derin::widgets::custom::WidgetIdent::Str(#tl_ident.with(|i| i.clone()))),
                         None => quote!(_derive_derin::widgets::custom::WidgetIdent::Num(#widget_ident))
                     };
 
                     output = quote!{{
                         let flow = for_each_child(#new_summary (#child_id, index, #widget_expr));
-                        if let _derive_derin::LoopFlow::Break(b) = flow {
+                        if let LoopFlow::Break(b) = flow {
                             return Some(b);
                         }
                         index += 1;
@@ -188,7 +215,7 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
                 },
                 WidgetField::Collection(field, _) => {
                     let child_id = match field.ident {
-                        Some(_) => quote!(_derive_derin::widgets::custom::WidgetIdent::StrCollection(stringify!(#widget_ident), child_index as u32)),
+                        Some(_) => quote!(_derive_derin::widgets::custom::WidgetIdent::StrCollection(#tl_ident.with(|i| i.clone()), child_index as u32)),
                         None => quote!(_derive_derin::widgets::custom::WidgetIdent::NumCollection(#widget_ident, child_index as u32))
                     };
 
@@ -196,7 +223,7 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
                         for (child_index, child) in (#widget_expr).into_iter().enumerate() {
                             let flow = for_each_child(#new_summary (#child_id, index, child));
 
-                            if let _derive_derin::LoopFlow::Break(b) = flow {
+                            if let LoopFlow::Break(b) = flow {
                                 return Some(b);
                             }
                             index += 1;

@@ -123,7 +123,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
 
                 let event = $event;
                 let event_ops = $widget.on_widget_event(
-                    event,
+                    event.clone(),
                     *mouse_pos,
                     &mouse_buttons_down,
                     *modifiers,
@@ -282,7 +282,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                                         let WidgetSummary {
                                             widget: ref mut child,
                                             rect: child_bounds,
-                                            ident: child_ident,
+                                            ident: ref child_ident,
                                             ..
                                         } = child_summary;
 
@@ -307,12 +307,12 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
 
                                         // SEND ENTER ACTION TO CHILD
                                         try_push_action!(
-                                            child, top_path.iter().cloned().chain(Some(child_ident)),
+                                            child, top_path.iter().cloned().chain(Some(child_ident.clone())),
                                             WidgetEvent::MouseEnter(enter_pos)
                                         );
 
                                         // Store the information relating to the child we entered,
-                                        enter_child = Some(EnterChildData{ child_ident, enter_pos });
+                                        enter_child = Some(EnterChildData{ child_ident: child_ident.clone(), enter_pos });
 
                                         // We `continue` the loop after this, but the continue is handled by the
                                         // `enter_child` check below.
@@ -747,7 +747,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                         try_push_action!(
                             top_widget,
                             ident.into_iter().cloned() => (meta_drain),
-                            event,
+                            event.clone(),
                             bubble (false, &mut continue_bubble, &widget_ident_stack[slice_range.clone()])
                         );
                         slice_range.start -= 1;
@@ -850,7 +850,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
         drop(redraw_widget);
         // Report popups that need to be created
         for (owner_id, popup_widget, popup_attributes) in popup_map_insert {
-            let popup_id = popup_widgets.insert(owner_id, popup_attributes.ident, popup_widget);
+            let popup_id = popup_widgets.insert(owner_id, popup_attributes.ident.clone(), popup_widget);
             popup_deltas.push(PopupDelta::Create(PopupSummary {
                 id: popup_id,
                 attributes: popup_attributes
@@ -943,7 +943,7 @@ impl<'a, F> WidgetRenderer<'a, F>
             for mut summary in children_summaries {
                 let WidgetSummary {
                     widget: ref mut child_widget,
-                    ident,
+                    ref ident,
                     rect: child_rect,
                     ..
                 } = summary;
@@ -961,7 +961,7 @@ impl<'a, F> WidgetRenderer<'a, F>
 
                 match child_widget.as_parent_mut() {
                     Some(child_widget_as_parent) => {
-                        if let Some(mut child_frame) = self.frame.enter_child_widget(ident).enter_child_rect(child_rect) {
+                        if let Some(mut child_frame) = self.frame.enter_child_widget(ident.clone()).enter_child_rect(child_rect) {
                             if render_self {
                                 child_widget_as_parent.render(&mut child_frame);
                             }
@@ -977,7 +977,7 @@ impl<'a, F> WidgetRenderer<'a, F>
                     },
                     None => {
                         if render_self {
-                            if let Some(mut child_frame) = self.frame.enter_child_widget(ident).enter_child_rect(child_rect) {
+                            if let Some(mut child_frame) = self.frame.enter_child_widget(ident.clone()).enter_child_rect(child_rect) {
                                 child_widget.render(&mut child_frame);
                             }
                         }

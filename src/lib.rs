@@ -41,6 +41,8 @@ extern crate unicode_segmentation;
 extern crate clipboard;
 extern crate png;
 extern crate parking_lot;
+#[macro_use]
+extern crate lazy_static;
 
 pub mod container;
 pub mod gl_render;

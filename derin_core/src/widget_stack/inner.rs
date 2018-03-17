@@ -89,7 +89,7 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
 
     #[inline]
     pub fn top_ident(&self) -> WidgetIdent {
-        *self.ident_vec.last().unwrap()
+        self.ident_vec.last().cloned().unwrap()
     }
 
     #[inline]
@@ -176,7 +176,7 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
                 rectangles: None,
                 index: new_top_summary.index
             });
-            self.ident_vec.push(new_top_summary.ident);
+            self.ident_vec.push(new_top_summary.ident.clone());
             Some(new_top_summary)
         } else {
             None

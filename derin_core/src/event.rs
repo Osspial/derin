@@ -84,7 +84,7 @@ pub struct InputState<'a> {
 ///  `Timer` event is delivered.
 ///
 /// All point coordinates are given relative to the widget's origin.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WidgetEvent {
     /// The mouse cursor has entered the widget at the given position.
     MouseEnter(Point2<i32>),

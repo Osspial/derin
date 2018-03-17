@@ -73,7 +73,7 @@ impl<A, F: RenderFrame> PopupMap<A, F> {
 
     pub fn insert(&mut self, owner_id: WidgetID, ident: WidgetIdent, widget: Box<Widget<A, F>>) -> PopupID {
         let ident_map = self.owners.entry(owner_id).or_insert(HashMap::new());
-        let popup_id = *ident_map.entry(ident).or_insert(PopupID::new());
+        let popup_id = *ident_map.entry(ident.clone()).or_insert(PopupID::new());
         match self.popups.get_mut(&popup_id) {
             Some(popup) => popup.widget = widget,
             None => {
@@ -129,7 +129,7 @@ impl<A, F: RenderFrame> PopupMap<A, F> {
     }
 
     pub fn replace(&mut self, popup_id: PopupID, popup: PopupWidget<A, F>) {
-        self.owners.get_mut(&popup.owner_id).unwrap().insert(popup.ident, popup_id);
+        self.owners.get_mut(&popup.owner_id).unwrap().insert(popup.ident.clone(), popup_id);
         self.popups.insert(popup_id, popup);
     }
 

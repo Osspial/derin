@@ -11,6 +11,7 @@ use dct::layout::SizeBounds;
 
 use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use arrayvec::ArrayVec;
@@ -143,6 +144,10 @@ impl<A, F, H> Widget<A, F> for Button<H>
         let (mut action, focus) = (None, None);
         let mut popup = None;
 
+        lazy_static!{
+            static ref MOUSEOVER_IDENT: WidgetIdent = WidgetIdent::Str(Arc::from("mouseover_text"));
+        }
+
         if bubble_source.len() == 0 {
             if let Some(mut popups) = popups_opt {
                 // Remove mouseover text, if it exists
@@ -151,7 +156,7 @@ impl<A, F, H> Widget<A, F> for Button<H>
                     MouseExit{..} |
                     MouseMove{..} |
                     MouseDown{..} => {
-                        popups.remove(WidgetIdent::Str("mouseover_text"));
+                        popups.remove(MOUSEOVER_IDENT.clone());
                     },
                     _ => ()
                 }
@@ -163,7 +168,7 @@ impl<A, F, H> Widget<A, F> for Button<H>
                     self.waiting_for_mouseover = false;
                     self.update_tag.mark_update_timer();
 
-                    match (input_state.mouse_buttons_down_in_widget.is_empty(), event) {
+                    match (input_state.mouse_buttons_down_in_widget.is_empty(), event.clone()) {
                         (true, MouseEnter{..}) => ButtonState::Hover,
                         (true, MouseExit{..}) => ButtonState::Normal,
                         (false, _) => self.state,
@@ -204,7 +209,7 @@ impl<A, F, H> Widget<A, F> for Button<H>
                     //         decorations: false,
                     //         tool_window: true,
                     //         focusable: false,
-                    //         ident: WidgetIdent::Str("mouseover_text")
+                    //         ident: MOUSEOVER_IDENT.clone()
                     //     }
                     // ));
                     self.state

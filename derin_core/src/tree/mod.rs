@@ -1,5 +1,6 @@
 pub(crate) mod dyn;
 
+use std::sync::Arc;
 use std::cell::Cell;
 use dyn::ParentDyn;
 
@@ -15,11 +16,11 @@ use render::{RenderFrame, FrameRectStack};
 use timer::TimerRegister;
 use popup::ChildPopupsMut;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum WidgetIdent {
-    Str(&'static str),
+    Str(Arc<str>),
     Num(u32),
-    StrCollection(&'static str, u32),
+    StrCollection(Arc<str>, u32),
     NumCollection(u32, u32)
 }
 

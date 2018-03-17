@@ -337,7 +337,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
                                 let child_flags = get_update_flags(&child_summary.update_tag);
                                 if child_flags & flag_trail_flags != ChildEventRecv::empty() {
                                     on_flag_trail = Some(child_flags & flag_trail_flags);
-                                    child_ident = Some(child_summary.ident);
+                                    child_ident = Some(child_summary.ident.clone());
                                     return LoopFlow::Break(());
                                 }
                             }

@@ -16,6 +16,7 @@ use widgets::assistants::SliderAssist;
 use arrayvec::ArrayVec;
 
 use std::f32;
+use std::sync::Arc;
 
 const SCROLL_BAR_SIZE: i32 = 16;
 #[derive(Debug, Clone)]
@@ -146,7 +147,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
             (slider_x.as_ref().map(|s| s.value), slider_y.as_ref().map(|s| s.value));
         let start_values = values(&self.slider_x, &self.slider_y);
         let mut allow_bubble = true;
-        match (bubble_source.len(), event) {
+        match (bubble_source.len(), event.clone()) {
             (0, WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left}) => {
                 if let Some(ref mut slider_x) = self.slider_x {
                     slider_x.click_head(pos);
@@ -215,6 +216,10 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
     }
 }
 
+lazy_static!{
+    static ref CLIP_IDENT: WidgetIdent = WidgetIdent::Str(Arc::from("clip"));
+}
+
 impl<A, F, W> Parent<A, F> for ScrollBox<W>
     where F: PrimFrame,
           W: Widget<A, F>
@@ -225,9 +230,9 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
 
     fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>> {
         match widget_ident {
-            WidgetIdent::Str("clip") => Some(WidgetSummary {
+            _ if widget_ident == *CLIP_IDENT => Some(WidgetSummary {
                 widget: &self.clip as &Widget<A, F>,
-                ident: WidgetIdent::Str("clip"),
+                ident: CLIP_IDENT.clone(),
                 rect: self.clip.rect(),
                 size_bounds: self.clip.size_bounds(),
                 update_tag: self.clip.update_tag().clone(),
@@ -238,8 +243,8 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
     }
     fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>> {
         match widget_ident {
-            WidgetIdent::Str("clip") => Some(WidgetSummary {
-                ident: WidgetIdent::Str("clip"),
+            _ if widget_ident == *CLIP_IDENT => Some(WidgetSummary {
+                ident: CLIP_IDENT.clone(),
                 rect: self.clip.rect(),
                 size_bounds: self.clip.size_bounds(),
                 update_tag: self.clip.update_tag().clone(),
@@ -256,7 +261,7 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
     {
         let flow = for_each(WidgetSummary {
             widget: &self.clip as &Widget<A, F>,
-            ident: WidgetIdent::Str("clip"),
+            ident: CLIP_IDENT.clone(),
             rect: self.clip.rect(),
             size_bounds: self.clip.size_bounds(),
             update_tag: self.clip.update_tag().clone(),
@@ -274,7 +279,7 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
               G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow<R>
     {
         let flow = for_each(WidgetSummary {
-            ident: WidgetIdent::Str("clip"),
+            ident: CLIP_IDENT.clone(),
             rect: self.clip.rect(),
             size_bounds: self.clip.size_bounds(),
             update_tag: self.clip.update_tag().clone(),
@@ -292,7 +297,7 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
         match index {
             0 => Some(WidgetSummary {
                 widget: &self.clip as &Widget<A, F>,
-                ident: WidgetIdent::Str("clip"),
+                ident: CLIP_IDENT.clone(),
                 rect: self.clip.rect(),
                 size_bounds: self.clip.size_bounds(),
                 update_tag: self.clip.update_tag().clone(),
@@ -304,7 +309,7 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
     fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
         match index {
             0 => Some(WidgetSummary {
-                ident: WidgetIdent::Str("clip"),
+                ident: CLIP_IDENT.clone(),
                 rect: self.clip.rect(),
                 size_bounds: self.clip.size_bounds(),
                 update_tag: self.clip.update_tag().clone(),
