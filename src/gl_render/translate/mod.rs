@@ -122,9 +122,6 @@ impl Translator {
                     (Prim::String(render_string), _, Some(theme_text)) => {
                         match draw.font_cache.face(theme_text.face.clone()) {
                             Ok(face) => {
-                                if let Some(rect_px_out) = prim.rect_px_out {
-                                    unsafe{ *rect_px_out = abs_rect - parent_rect.min().to_vec() };
-                                }
                                 let render_string = unsafe{ &mut *render_string };
 
                                 draw.vertices.extend(TextTranslate::new_rs(
@@ -146,6 +143,9 @@ impl Translator {
                                     },
                                     render_string
                                 ));
+                                if let (Some(rect_px_out), Some(text_rect)) = (prim.rect_px_out, render_string.text_rect()) {
+                                    unsafe{ *rect_px_out = text_rect };
+                                }
                             },
                             Err(_) => {
                                 //TODO: log
@@ -155,9 +155,6 @@ impl Translator {
                     (Prim::EditString(edit_string), _, Some(theme_text)) => {
                         match draw.font_cache.face(theme_text.face.clone()) {
                             Ok(face) => {
-                                if let Some(rect_px_out) = prim.rect_px_out {
-                                    unsafe{ *rect_px_out = abs_rect - parent_rect.min().to_vec() };
-                                }
                                 let edit_string = unsafe{ &mut *edit_string };
 
                                 draw.vertices.extend(TextTranslate::new_es(
@@ -179,6 +176,9 @@ impl Translator {
                                     },
                                     edit_string
                                 ));
+                                if let (Some(rect_px_out), Some(text_rect)) = (prim.rect_px_out, edit_string.render_string.text_rect()) {
+                                    unsafe{ *rect_px_out = text_rect };
+                                }
                             },
                             Err(_) => {
                                 //TODO: log

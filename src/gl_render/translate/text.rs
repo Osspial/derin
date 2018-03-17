@@ -68,6 +68,7 @@ struct StringDrawData {
     text_style: ThemeText,
     dpi: DPI,
     draw_rect: BoundBox<Point2<i32>>,
+    text_rect: Option<BoundBox<Point2<i32>>>
 }
 
 struct GlyphDraw<'a> {
@@ -93,6 +94,8 @@ struct GlyphIter {
     font_ascender: i32,
     font_descender: i32,
     line_height: i32,
+
+    text_rect: Option<BoundBox<Point2<i32>>>,
 
     tab_advance: i32,
     bounds_width: i32,
@@ -226,7 +229,7 @@ impl<'a> TextTranslate<'a> {
             font_descender: descender,
 
             glyph_slice: render_string.reshape_glyphs(rect, shape_text, &text_style, face, dpi, cursor_pos),
-            glyph_draw: GlyphDraw{
+            glyph_draw: GlyphDraw {
                 face, atlas, text_style, dpi, rect,
                 clip_rect: clip_rect.intersect_rect(rect).unwrap_or(BoundBox::new2(0, 0, 0, 0))
             },
@@ -467,6 +470,7 @@ impl GlyphIter {
             font_ascender: ascender,
             font_descender: descender,
             line_height,
+            text_rect: None,
 
             on_hard_break: false,
             tab_advance,
@@ -479,6 +483,18 @@ impl GlyphIter {
             glyph_pos.x, glyph_pos.y - self.font_ascender,
             glyph_pos.x + glyph_advance, glyph_pos.y - self.font_descender
         )
+    }
+
+    fn update_text_rect(&mut self, glyph_rect: BoundBox<Point2<i32>>) {
+        match self.text_rect {
+            None => self.text_rect = Some(glyph_rect),
+            Some(ref mut rect) => {
+                rect.min.x = rect.min.x.min(glyph_rect.min.x);
+                rect.min.y = rect.min.y.min(glyph_rect.min.y);
+                rect.max.x = rect.max.x.max(glyph_rect.max.x);
+                rect.max.y = rect.max.y.max(glyph_rect.max.y);
+            }
+        }
     }
 }
 
@@ -512,6 +528,7 @@ impl Iterator for GlyphIter {
                     };
 
                     self.cursor += glyph.advance.mul_element_wise(Vector2::new(1, -1));
+                    self.update_text_rect(render_glyph.highlight_rect);
                     return Some(render_glyph);
                 },
                 GlyphItem::Word{..} => continue,
@@ -541,6 +558,7 @@ impl Iterator for GlyphIter {
                     };
                     self.cursor.x += cursor_advance;
 
+                    self.update_text_rect(render_glyph.highlight_rect);
                     return Some(render_glyph);
                 },
                 GlyphItem::Whitespace{..} => continue,
@@ -553,6 +571,7 @@ impl Iterator for GlyphIter {
                     };
                     self.line_start_x = self.cursor.x;
                     self.on_hard_break = hard_break;
+                    continue;
                 },
                 GlyphItem::Run(run) => {
                     self.active_run = run;
@@ -569,6 +588,7 @@ impl Iterator for GlyphIter {
                     };
                     self.cursor.x = new_cursor_x;
 
+                    self.update_text_rect(render_glyph.highlight_rect);
                     return Some(render_glyph);
                 }
             }
@@ -669,7 +689,6 @@ impl<'a> Iterator for TextTranslate<'a> {
                             glyph_draw.rect
                         )
                     );
-
 
                     let starts_highlight_rect =
                         (
@@ -851,6 +870,11 @@ impl RenderString {
         self.min_size
     }
 
+    #[inline]
+    pub fn text_rect(&self) -> Option<BoundBox<Point2<i32>>> {
+        self.draw_data.as_ref().and_then(|d| d.text_rect)
+    }
+
     fn reshape_glyphs<'a, F>(&mut self,
         rect: BoundBox<Point2<i32>>,
         shape_text: F,
@@ -881,6 +905,7 @@ impl RenderString {
                     text_style: text_style.clone(),
                     dpi,
                     draw_rect: rect,
+                    text_rect: None
                 });
             }
         }
@@ -892,6 +917,7 @@ impl RenderString {
 
             let mut glyph_iter = GlyphIter::new(rect, shaped_buffer, text_style, face, dpi);
             draw_data.shaped_glyphs.extend(&mut glyph_iter);
+            draw_data.text_rect = glyph_iter.text_rect;
 
             self.min_size = match text_style.line_wrap {
                 LineWrap::None => DimsBox::new2(

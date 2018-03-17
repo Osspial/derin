@@ -10,8 +10,6 @@ use dct::layout::SizeBounds;
 
 use gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame};
 
-use arrayvec::ArrayVec;
-
 #[derive(Debug, Clone)]
 pub struct CheckBox {
     update_tag: UpdateTag,
@@ -81,25 +79,42 @@ impl<A, F> Widget<A, F> for CheckBox
             false => "CheckBox::Empty"
         };
 
-        frame.upload_primitives(ArrayVec::from([
-            ThemedPrim {
-                theme_path: image_str,
-                min: Point2::new(
-                    RelPoint::new(-1.0, 0),
-                    RelPoint::new(-1.0, 0),
-                ),
-                max: Point2::new(
-                    RelPoint::new( 1.0, 0),
-                    RelPoint::new( 1.0, 0)
-                ),
-                prim: Prim::Image,
-                rect_px_out: Some(&mut self.check_rect)
-            },
-            self.contents.to_prim("CheckBox", None)
-        ]).into_iter());
+        let mut content_rect = BoundBox::new2(0, 0, 0, 0);
+        frame.upload_primitives(Some(self.contents.to_prim("CheckBox", Some(&mut content_rect))));
+
+        frame.upload_primitives(Some(
+            match content_rect == BoundBox::new2(0, 0, 0, 0) {
+                true => ThemedPrim {
+                    min: Point2::new(
+                        RelPoint::new(-1.0, 0),
+                        RelPoint::new(-1.0, 0),
+                    ),
+                    max: Point2::new(
+                        RelPoint::new( 1.0, 0),
+                        RelPoint::new( 1.0, 0)
+                    ),
+                    prim: Prim::Image,
+                    theme_path: image_str,
+                    rect_px_out: Some(&mut self.check_rect)
+                },
+                false => ThemedPrim {
+                    min: Point2::new(
+                        RelPoint::new(-1.0, 0),
+                        RelPoint::new(-1.0, content_rect.min().y),
+                    ),
+                    max: Point2::new(
+                        RelPoint::new( 1.0, 0),
+                        RelPoint::new(-1.0, content_rect.max().y),
+                    ),
+                    prim: Prim::Image,
+                    theme_path: image_str,
+                    rect_px_out: Some(&mut self.check_rect)
+                }
+            }
+        ));
     }
 
-    fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, popups_opt: Option<ChildPopupsMut<A, F>>, bubble_source: &[WidgetIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
         let new_checked = match event {
             WidgetEvent::MouseUp{in_widget: true, pressed_in_widget, ..} => {
                 match pressed_in_widget {

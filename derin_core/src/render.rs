@@ -76,10 +76,10 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
 
     #[inline]
     pub fn upload_primitives<I>(&mut self, prim_iter: I)
-        where I: Iterator<Item=F::Primitive>
+        where I: IntoIterator<Item=F::Primitive>
     {
         let widget_ident = &self.widget_ident;
-        self.frame.upload_primitives(widget_ident, self.theme, self.transform, self.clip_rect, prim_iter)
+        self.frame.upload_primitives(widget_ident, self.theme, self.transform, self.clip_rect, prim_iter.into_iter())
     }
 
     #[inline]
