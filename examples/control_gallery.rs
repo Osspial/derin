@@ -4,7 +4,7 @@ extern crate derin_macros;
 
 use derin::{LoopFlow, Window, WindowAttributes};
 use derin::layout::{Margins, LayoutHorizontal, LayoutVertical};
-use derin::widgets::{Contents, Button, EditBox, Group, Label, Slider, SliderHandler, ScrollBox, CheckBox};
+use derin::widgets::{Contents, Button, EditBox, Group, Label, Slider, SliderHandler, ScrollBox, CheckBox, RadioButton, RadioButtonList};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum GalleryEvent {
@@ -26,6 +26,7 @@ struct NestedContainer {
     edit_box: EditBox,
     slider: Slider<SliderH>,
     check_box: CheckBox,
+    radio_buttons: RadioButtonList<LayoutVertical>,
     #[derin(collection = "Button<Option<GalleryEvent>>")]
     buttons: Vec<Button<Option<GalleryEvent>>>
 }
@@ -46,7 +47,14 @@ fn main() {
                 NestedContainer {
                     label: Label::new(Contents::Text("Nested Container".to_string())),
                     slider: Slider::new(1.0, 1.0, 0.0, 255.0, SliderH),
-                    check_box: CheckBox::new(Contents::Text("Checkable".to_string()), true),
+                    check_box: CheckBox::new(true, Contents::Text("Checkable".to_string())),
+                    radio_buttons: RadioButtonList::new(
+                        vec![
+                            RadioButton::new(true, Contents::Text("Radio 1".to_string())),
+                            RadioButton::new(false, Contents::Text("Radio 2".to_string()))
+                        ],
+                        LayoutVertical::new(Margins::new(0, 2, 0, 8), Default::default())
+                    ),
                     edit_box: EditBox::new("Edit Me!".to_string()),
                     buttons: Vec::new(),
                 },

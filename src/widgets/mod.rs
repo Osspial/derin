@@ -8,7 +8,8 @@ mod direct_render;
 mod edit_box;
 mod group;
 mod label;
-pub mod scroll_box;
+mod radio_buttons;
+mod scroll_box;
 mod slider;
 
 pub use self::button::*;
@@ -18,6 +19,7 @@ pub use self::direct_render::*;
 pub use self::edit_box::*;
 pub use self::group::*;
 pub use self::label::*;
+pub use self::radio_buttons::*;
 pub use self::scroll_box::*;
 pub use self::slider::*;
 

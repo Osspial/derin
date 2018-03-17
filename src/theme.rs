@@ -304,6 +304,54 @@ impl Default for Theme {
                 }))
             }
         );
+        theme.insert_widget(
+            "RadioButton".to_string(),
+            ThemeWidget {
+                text: Some(ThemeText {
+                    // TODO: DON'T LOAD FROM SRC
+                    face: ThemeFace::new("./src/default_theme_resources/DejaVuSans.ttf", 0).unwrap(),
+                    color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
+                    highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
+                    highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                    face_size: 16 * 64,
+                    tab_size: 8,
+                    justify: Align2::new(Align::Start, Align::Center),
+                    margins: Margins::new(18, 0, 0, 0),
+                    line_wrap: LineWrap::None
+                }),
+                image: None
+            }
+        );
+        theme.insert_widget(
+            "RadioButton::Empty".to_string(),
+            ThemeWidget {
+                text: None,
+                image: Some(Rc::new(Image {
+                    pixels: image_buf!("./default_theme_resources/radiobutton.empty.png"),
+                    dims: DimsBox::new2(16, 16),
+                    rescale: RescaleRules::Align(Align2::new(Align::Start, Align::Center)),
+                    size_bounds: SizeBounds {
+                        min: DimsBox::new2(16, 16),
+                        ..SizeBounds::default()
+                    }
+                }))
+            }
+        );
+        theme.insert_widget(
+            "RadioButton::Pressed".to_string(),
+            ThemeWidget {
+                text: None,
+                image: Some(Rc::new(Image {
+                    pixels: image_buf!("./default_theme_resources/radiobutton.pressed.png"),
+                    dims: DimsBox::new2(16, 16),
+                    rescale: RescaleRules::Align(Align2::new(Align::Start, Align::Center)),
+                    size_bounds: SizeBounds {
+                        min: DimsBox::new2(16, 16),
+                        ..SizeBounds::default()
+                    }
+                }))
+            }
+        );
 
         theme
     }

@@ -21,7 +21,7 @@ pub struct CheckBox {
 }
 
 impl CheckBox {
-    pub fn new(contents: Contents<String>, checked: bool) -> CheckBox {
+    pub fn new(checked: bool, contents: Contents<String>) -> CheckBox {
         CheckBox {
             update_tag: UpdateTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
