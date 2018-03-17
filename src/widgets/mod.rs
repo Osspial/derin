@@ -2,6 +2,7 @@
 
 pub mod assistants;
 mod button;
+mod check_box;
 mod clip;
 mod direct_render;
 mod edit_box;
@@ -11,6 +12,7 @@ pub mod scroll_box;
 mod slider;
 
 pub use self::button::*;
+pub use self::check_box::*;
 pub use self::clip::*;
 pub use self::direct_render::*;
 pub use self::edit_box::*;

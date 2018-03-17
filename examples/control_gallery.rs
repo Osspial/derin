@@ -4,7 +4,7 @@ extern crate derin_macros;
 
 use derin::{LoopFlow, Window, WindowAttributes};
 use derin::layout::{Margins, LayoutHorizontal, LayoutVertical};
-use derin::widgets::{Contents, Button, EditBox, Group, Label, Slider, SliderHandler, ScrollBox};
+use derin::widgets::{Contents, Button, EditBox, Group, Label, Slider, SliderHandler, ScrollBox, CheckBox};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum GalleryEvent {
@@ -25,6 +25,7 @@ struct NestedContainer {
     label: Label,
     edit_box: EditBox,
     slider: Slider<SliderH>,
+    check_box: CheckBox,
     #[derin(collection = "Button<Option<GalleryEvent>>")]
     buttons: Vec<Button<Option<GalleryEvent>>>
 }
@@ -45,6 +46,7 @@ fn main() {
                 NestedContainer {
                     label: Label::new(Contents::Text("Nested Container".to_string())),
                     slider: Slider::new(1.0, 1.0, 0.0, 255.0, SliderH),
+                    check_box: CheckBox::new(Contents::Text("Checkable".to_string()), true),
                     edit_box: EditBox::new("Edit Me!".to_string()),
                     buttons: Vec::new(),
                 },
