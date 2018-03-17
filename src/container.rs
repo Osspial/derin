@@ -131,15 +131,7 @@ impl<A, F: RenderFrame, N: Widget<A, F>> WidgetContainer<F> for SingleContainer<
               Self::Action: 'a,
               F: 'a
     {
-        let self_summary = WidgetSummary {
-            widget: &self.widget as &Widget<A, F>,
-            ident: WidgetIdent::Num(0),
-            rect: self.widget.rect(),
-            size_bounds: self.widget.size_bounds(),
-            update_tag: self.widget.update_tag().clone(),
-            index: 0
-        };
-        match for_each_child(self_summary) {
+        match for_each_child(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget)) {
             LoopFlow::Continue => None,
             LoopFlow::Break(r) => Some(r)
         }
@@ -150,15 +142,7 @@ impl<A, F: RenderFrame, N: Widget<A, F>> WidgetContainer<F> for SingleContainer<
               Self::Action: 'a,
               F: 'a
     {
-        let self_summary = WidgetSummary {
-            rect: self.widget.rect(),
-            size_bounds: self.widget.size_bounds(),
-            update_tag: self.widget.update_tag().clone(),
-            widget: &mut self.widget as &mut Widget<A, F>,
-            ident: WidgetIdent::Num(0),
-            index: 0
-        };
-        match for_each_child(self_summary) {
+        match for_each_child(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget)) {
             LoopFlow::Continue => None,
             LoopFlow::Break(r) => Some(r)
         }

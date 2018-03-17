@@ -204,13 +204,13 @@ pub trait Widget<A, F: RenderFrame> {
 }
 
 #[derive(Debug, Clone)]
-pub struct WidgetSummary<N: ?Sized> {
+pub struct WidgetSummary<W: ?Sized> {
     pub ident: WidgetIdent,
     pub rect: BoundBox<Point2<i32>>,
     pub size_bounds: SizeBounds,
     pub update_tag: UpdateTag,
     pub index: usize,
-    pub widget: N,
+    pub widget: W,
 }
 
 pub trait Parent<A, F: RenderFrame>: Widget<A, F> {
@@ -233,6 +233,40 @@ pub trait Parent<A, F: RenderFrame>: Widget<A, F> {
 
     fn on_child_focus_overflow(&self) -> OnFocusOverflow {
         OnFocusOverflow::default()
+    }
+}
+
+impl<'a, A, F> WidgetSummary<&'a Widget<A, F>>
+    where F: RenderFrame
+{
+    pub fn new<W>(ident: WidgetIdent, index: usize, widget: &'a W) -> WidgetSummary<&'a Widget<A, F>>
+        where W: Widget<A, F>
+    {
+        WidgetSummary {
+            ident,
+            rect: widget.rect(),
+            size_bounds: widget.size_bounds(),
+            update_tag: widget.update_tag().clone(),
+            index,
+            widget: widget as &Widget<A, F>
+        }
+    }
+}
+
+impl<'a, A, F> WidgetSummary<&'a mut Widget<A, F>>
+    where F: RenderFrame
+{
+    pub fn new_mut<W>(ident: WidgetIdent, index: usize, widget: &'a mut W) -> WidgetSummary<&'a mut Widget<A, F>>
+        where W: Widget<A, F>
+    {
+        WidgetSummary {
+            ident,
+            rect: widget.rect(),
+            size_bounds: widget.size_bounds(),
+            update_tag: widget.update_tag().clone(),
+            index,
+            widget: widget as &mut Widget<A, F>
+        }
     }
 }
 

@@ -164,6 +164,10 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
                 true => quote!(&mut self.#widget_ident),
                 false => quote!(&self.#widget_ident)
             };
+            let new_summary = match self.is_mut {
+                true => quote!(_derive_derin::widgets::custom::WidgetSummary::new_mut),
+                false => quote!(_derive_derin::widgets::custom::WidgetSummary::new),
+            };
 
             let output: Tokens;
 
@@ -175,14 +179,7 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
                     };
 
                     output = quote!{{
-                        let flow = for_each_child(_derive_derin::widgets::custom::WidgetSummary {
-                            ident: #child_id,
-                            rect: <_ as _derive_derin::widgets::custom::Widget<Self::Action, __F>>::rect(&self.#widget_ident),
-                            size_bounds: <_ as _derive_derin::widgets::custom::Widget<Self::Action, __F>>::size_bounds(&self.#widget_ident),
-                            update_tag: <_ as _derive_derin::widgets::custom::Widget<Self::Action, __F>>::update_tag(&self.#widget_ident).clone(),
-                            widget: #widget_expr,
-                            index
-                        });
+                        let flow = for_each_child(#new_summary (#child_id, index, #widget_expr));
                         if let _derive_derin::LoopFlow::Break(b) = flow {
                             return Some(b);
                         }
@@ -197,14 +194,8 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
 
                     output = quote!{{
                         for (child_index, child) in (#widget_expr).into_iter().enumerate() {
-                            let flow = for_each_child(_derive_derin::widgets::custom::WidgetSummary {
-                                ident: #child_id,
-                                rect: <_ as _derive_derin::widgets::custom::Widget<Self::Action, __F>>::rect(child),
-                                size_bounds: <_ as _derive_derin::widgets::custom::Widget<Self::Action, __F>>::size_bounds(child),
-                                update_tag: <_ as _derive_derin::widgets::custom::Widget<Self::Action, __F>>::update_tag(child).clone(),
-                                widget: child,
-                                index
-                            });
+                            let flow = for_each_child(#new_summary (#child_id, index, child));
+
                             if let _derive_derin::LoopFlow::Break(b) = flow {
                                 return Some(b);
                             }

@@ -88,27 +88,13 @@ impl<A, F, W> Parent<A, F> for Clip<W>
 
     fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>> {
         match widget_ident {
-            WidgetIdent::Num(0) => Some(WidgetSummary {
-                widget: &self.widget as &Widget<A, F>,
-                ident: WidgetIdent::Num(0),
-                rect: self.widget.rect(),
-                size_bounds: self.widget.size_bounds(),
-                update_tag: self.widget.update_tag().clone(),
-                index: 0
-            }),
+            WidgetIdent::Num(0) => Some(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget)),
             _ => None
         }
     }
     fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>> {
         match widget_ident {
-            WidgetIdent::Num(0) => Some(WidgetSummary {
-                ident: WidgetIdent::Num(0),
-                rect: self.widget.rect(),
-                size_bounds: self.widget.size_bounds(),
-                update_tag: self.widget.update_tag().clone(),
-                widget: &mut self.widget as &mut Widget<A, F>,
-                index: 0
-            }),
+            WidgetIdent::Num(0) => Some(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget)),
             _ => None
         }
     }
@@ -117,14 +103,7 @@ impl<A, F, W> Parent<A, F> for Clip<W>
         where A: 'a,
               G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow<R>
     {
-        let flow = for_each(WidgetSummary {
-            widget: &self.widget as &Widget<A, F>,
-            ident: WidgetIdent::Num(0),
-            rect: self.widget.rect(),
-            size_bounds: self.widget.size_bounds(),
-            update_tag: self.widget.update_tag().clone(),
-            index: 0
-        });
+        let flow = for_each(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget));
 
         match flow {
             LoopFlow::Continue => None,
@@ -136,14 +115,7 @@ impl<A, F, W> Parent<A, F> for Clip<W>
         where A: 'a,
               G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow<R>
     {
-        let flow = for_each(WidgetSummary {
-            ident: WidgetIdent::Num(0),
-            rect: self.widget.rect(),
-            size_bounds: self.widget.size_bounds(),
-            update_tag: self.widget.update_tag().clone(),
-            widget: &mut self.widget as &mut Widget<A, F>,
-            index: 0
-        });
+        let flow = for_each(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget));
 
         match flow {
             LoopFlow::Continue => None,
@@ -153,27 +125,13 @@ impl<A, F, W> Parent<A, F> for Clip<W>
 
     fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>> {
         match index {
-            0 => Some(WidgetSummary {
-                widget: &self.widget as &Widget<A, F>,
-                ident: WidgetIdent::Num(0),
-                rect: self.widget.rect(),
-                size_bounds: self.widget.size_bounds(),
-                update_tag: self.widget.update_tag().clone(),
-                index: 0
-            }),
+            0 => Some(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget)),
             _ => None
         }
     }
     fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
         match index {
-            0 => Some(WidgetSummary {
-                ident: WidgetIdent::Num(0),
-                rect: self.widget.rect(),
-                size_bounds: self.widget.size_bounds(),
-                update_tag: self.widget.update_tag().clone(),
-                widget: &mut self.widget as &mut Widget<A, F>,
-                index: 0
-            }),
+            0 => Some(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget)),
             _ => None
         }
     }
