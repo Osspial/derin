@@ -52,7 +52,6 @@ impl RelPoint {
     }
 }
 
-
 pub struct Translator {
     shaped_text: ShapedBuffer,
     shaper: Shaper,

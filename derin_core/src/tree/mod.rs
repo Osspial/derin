@@ -1,8 +1,8 @@
 pub(crate) mod dyn;
 
+use dyn::ParentDyn;
 use std::sync::Arc;
 use std::cell::Cell;
-use dyn::ParentDyn;
 
 use LoopFlow;
 use cgmath::Point2;
@@ -237,11 +237,10 @@ pub trait Parent<A, F: RenderFrame>: Widget<A, F> {
     }
 }
 
-impl<'a, A, F> WidgetSummary<&'a Widget<A, F>>
-    where F: RenderFrame
-{
-    pub fn new<W>(ident: WidgetIdent, index: usize, widget: &'a W) -> WidgetSummary<&'a Widget<A, F>>
-        where W: Widget<A, F>
+impl<'a, W: ?Sized> WidgetSummary<&'a W> {
+    pub fn new<A, F>(ident: WidgetIdent, index: usize, widget: &'a W) -> WidgetSummary<&'a W>
+        where W: Widget<A, F>,
+              F: RenderFrame
     {
         WidgetSummary {
             ident,
@@ -249,16 +248,29 @@ impl<'a, A, F> WidgetSummary<&'a Widget<A, F>>
             size_bounds: widget.size_bounds(),
             update_tag: widget.update_tag().clone(),
             index,
-            widget: widget as &Widget<A, F>
+            widget
+        }
+    }
+
+    pub fn to_dyn<A, F>(self) -> WidgetSummary<&'a Widget<A, F>>
+        where W: Widget<A, F>,
+              F: RenderFrame
+    {
+        WidgetSummary {
+            ident: self.ident,
+            rect: self.rect,
+            size_bounds: self.size_bounds,
+            update_tag: self.update_tag,
+            index: self.index,
+            widget: dyn::to_widget_object(self.widget)
         }
     }
 }
 
-impl<'a, A, F> WidgetSummary<&'a mut Widget<A, F>>
-    where F: RenderFrame
-{
-    pub fn new_mut<W>(ident: WidgetIdent, index: usize, widget: &'a mut W) -> WidgetSummary<&'a mut Widget<A, F>>
-        where W: Widget<A, F>
+impl<'a, W: ?Sized> WidgetSummary<&'a mut W> {
+    pub fn new_mut<A, F>(ident: WidgetIdent, index: usize, widget: &'a mut W) -> WidgetSummary<&'a mut W>
+        where W: Widget<A, F>,
+              F: RenderFrame
     {
         WidgetSummary {
             ident,
@@ -266,7 +278,21 @@ impl<'a, A, F> WidgetSummary<&'a mut Widget<A, F>>
             size_bounds: widget.size_bounds(),
             update_tag: widget.update_tag().clone(),
             index,
-            widget: widget as &mut Widget<A, F>
+            widget
+        }
+    }
+
+    pub fn to_dyn_mut<A, F>(self) -> WidgetSummary<&'a mut Widget<A, F>>
+        where W: Widget<A, F>,
+              F: RenderFrame
+    {
+        WidgetSummary {
+            ident: self.ident,
+            rect: self.rect,
+            size_bounds: self.size_bounds,
+            update_tag: self.update_tag,
+            index: self.index,
+            widget: dyn::to_widget_object_mut(self.widget)
         }
     }
 }

@@ -874,7 +874,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
     }
 }
 
-fn update_widget_layout<A, F: RenderFrame>(root_id: RootID, force_full_redraw: bool, widget: &mut ParentDyn<A, F>) -> bool {
+fn update_widget_layout<A: 'static, F: RenderFrame>(root_id: RootID, force_full_redraw: bool, widget: &mut ParentDyn<A, F>) -> bool {
     // Loop to re-solve widget layout, if children break their size bounds. Is 0..4 so that
     // it doesn't enter an infinite loop if children can never be properly solved.
     for _ in 0..4 {
@@ -938,7 +938,7 @@ struct WidgetRenderer<'a, F>
 impl<'a, F> WidgetRenderer<'a, F>
     where F: 'a + RenderFrame
 {
-    fn render_widget_children<A>(&mut self, parent: &mut ParentDyn<A, F>) {
+    fn render_widget_children<A: 'static>(&mut self, parent: &mut ParentDyn<A, F>) {
         parent.children_mut(&mut |children_summaries| {
             for mut summary in children_summaries {
                 let WidgetSummary {

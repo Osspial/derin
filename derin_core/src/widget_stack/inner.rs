@@ -9,8 +9,8 @@ use offset_widget::{OffsetWidget, OffsetWidgetTrait};
 
 // TODO: GET CODE REVIEWED FOR SAFETY
 
-struct StackElement<'a, A, F: RenderFrame> {
-    widget: *mut (Widget<A, F> + 'a),
+struct StackElement<A, F: RenderFrame> {
+    widget: *mut (Widget<A, F>),
     rectangles: Option<ElementRects>,
     index: usize
 }
@@ -22,13 +22,13 @@ struct ElementRects {
 }
 
 pub(crate) struct NRAllocCache<A, F: RenderFrame> {
-    vec: Vec<StackElement<'static, A, F>>,
+    vec: Vec<StackElement<A, F>>,
     ident_vec: Vec<WidgetIdent>
 }
 
-pub struct NRVec<'a, A: 'a, F: 'a + RenderFrame> {
-    cache: &'a mut Vec<StackElement<'static, A, F>>,
-    vec: Vec<StackElement<'a, A, F>>,
+pub struct NRVec<'a, A: 'static, F: 'a + RenderFrame> {
+    cache: &'a mut Vec<StackElement<A, F>>,
+    vec: Vec<StackElement<A, F>>,
     ident_vec: &'a mut Vec<WidgetIdent>,
     clip_rect: Option<BoundBox<Point2<i32>>>,
     top_parent_offset: Vector2<i32>,
@@ -77,7 +77,7 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
     }
 }
 
-impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
+impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
     #[inline]
     pub fn top(&mut self) -> WidgetPath<Widget<A, F>> {
         let widget = self.vec.last_mut().map(|n| unsafe{ &mut *n.widget }).unwrap();
@@ -214,7 +214,7 @@ impl<'a, A, F: RenderFrame> NRVec<'a, A, F> {
     }
 }
 
-impl<'a, A, F: RenderFrame> Drop for NRVec<'a, A, F> {
+impl<'a, A: 'static, F: RenderFrame> Drop for NRVec<'a, A, F> {
     fn drop(&mut self) {
         while let Some(_) = self.pop() {}
         self.vec.clear();
@@ -222,11 +222,11 @@ impl<'a, A, F: RenderFrame> Drop for NRVec<'a, A, F> {
 
         let mut vec = unsafe {
             let (ptr, len, cap) = (self.vec.as_ptr(), self.vec.len(), self.vec.capacity());
-            Vec::from_raw_parts(mem::transmute::<_, *mut StackElement<'static, A, F>>(ptr), len, cap)
+            Vec::from_raw_parts(mem::transmute::<_, *mut StackElement<A, F>>(ptr), len, cap)
         };
         let mut empty_vec = unsafe {
             let (ptr, len, cap) = (self.cache.as_ptr(), self.cache.len(), self.cache.capacity());
-            Vec::from_raw_parts(mem::transmute::<_, *mut StackElement<'a, A, F>>(ptr), len, cap)
+            Vec::from_raw_parts(mem::transmute::<_, *mut StackElement<A, F>>(ptr), len, cap)
         };
 
         mem::swap(self.cache, &mut vec);

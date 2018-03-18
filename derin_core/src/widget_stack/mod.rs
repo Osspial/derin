@@ -18,12 +18,12 @@ pub(crate) struct WidgetStackBase<A, F: RenderFrame> {
     stack: NRAllocCache<A, F>
 }
 
-pub struct WidgetStack<'a, A: 'a, F: 'a + RenderFrame, Root: 'a + ?Sized> {
+pub struct WidgetStack<'a, A: 'static, F: 'a + RenderFrame, Root: 'a + ?Sized> {
     stack: NRVec<'a, A, F>,
     root: *mut Root
 }
 
-impl<A, F: RenderFrame> WidgetStackBase<A, F> {
+impl<A: 'static, F: RenderFrame> WidgetStackBase<A, F> {
     pub fn new() -> WidgetStackBase<A, F> {
         WidgetStackBase {
             stack: NRAllocCache::new()

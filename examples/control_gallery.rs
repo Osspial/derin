@@ -26,7 +26,7 @@ struct NestedContainer {
     edit_box: EditBox,
     slider: Slider<SliderH>,
     check_box: CheckBox,
-    radio_buttons: RadioButtonList<LayoutVertical>,
+    radio_buttons: RadioButtonList<Vec<RadioButton>, LayoutVertical>,
     #[derin(collection = "Button<Option<GalleryEvent>>")]
     buttons: Vec<Button<Option<GalleryEvent>>>
 }

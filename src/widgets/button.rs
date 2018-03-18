@@ -16,18 +16,18 @@ use std::time::Duration;
 
 use arrayvec::ArrayVec;
 
-pub trait ButtonHandler<A> {
+pub trait ButtonHandler<A: 'static>: 'static {
     fn on_click(&mut self) -> Option<A>;
 }
 
-impl<A: Clone> ButtonHandler<A> for Option<A> {
+impl<A: 'static + Clone> ButtonHandler<A> for Option<A> {
     #[inline]
     fn on_click(&mut self) -> Option<A> {
         self.clone()
     }
 }
 
-impl<A> ButtonHandler<A> for () {
+impl<A: 'static> ButtonHandler<A> for () {
     #[inline]
     fn on_click(&mut self) -> Option<A> {
         None
@@ -78,7 +78,8 @@ impl<H> Button<H> {
 }
 
 impl<A, F, H> Widget<A, F> for Button<H>
-    where F: PrimFrame,
+    where A: 'static,
+          F: PrimFrame,
           H: ButtonHandler<A>
 {
     #[inline]

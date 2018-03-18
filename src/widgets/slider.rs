@@ -10,7 +10,7 @@ use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
 
 use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 
-pub trait SliderHandler {
+pub trait SliderHandler: 'static {
     type Action: 'static;
 
     fn on_move(&mut self, old_value: f32, new_value: f32) -> Option<Self::Action>;

@@ -3,7 +3,7 @@ pub use dct::layout::{Align, Align2, GridSize, Margins, SizeBounds, TrRange, Tra
 use core::tree::WidgetIdent;
 
 /// Places widgets in a resizable grid-based layout.
-pub trait GridLayout {
+pub trait GridLayout: 'static {
     fn positions(&self, widget_ident: WidgetIdent, widget_index: usize, num_widgets: usize) -> Option<WidgetPos>;
     fn grid_size(&self, num_widgets: usize) -> GridSize;
 }

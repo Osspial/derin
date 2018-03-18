@@ -1,4 +1,4 @@
-#![feature(conservative_impl_trait)]
+#![feature(conservative_impl_trait, nll)]
 
 // Quote recurses a lot.
 #![recursion_limit="256"]
@@ -11,7 +11,7 @@ extern crate quote;
 use proc_macro::TokenStream;
 
 use syn::*;
-use quote::Tokens;
+use quote::{Tokens, ToTokens};
 
 #[proc_macro_derive(WidgetContainer, attributes(derin))]
 pub fn derive_widget_container(input_tokens: TokenStream) -> TokenStream {
@@ -52,26 +52,20 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
     match *body {
         Body::Struct(ref variant_data) =>
             for field in variant_data.fields().iter() {
-                let mut widget_field = Some(WidgetField::Widget(field));
+                let mut widget_field = WidgetField::Widget(field);
                 derin_attribute_iter(&field.attrs, |attr| {
                     match *attr {
                         MetaItem::NameValue(ref attr_name, Lit::Str(ref collection_inner, _))
                             if attr_name == "collection" =>
-                            if let Some(ref mut widget_field_ref) = widget_field {
-                                match *widget_field_ref {
-                                    WidgetField::Widget(_) => *widget_field_ref = WidgetField::Collection(field, syn::parse_type(collection_inner).expect("Malformed collection type")),
+                                match widget_field {
+                                    WidgetField::Widget(_) => widget_field = WidgetField::Collection(field, syn::parse_type(collection_inner).expect("Malformed collection type")),
                                     WidgetField::Collection(_, _) => panic!("Repeated #[derin(collection)] attribute")
-                                }
-                            } else {
-                                panic!("layout and collection field on same attribute")
-                            },
+                                },
                         _ => panic!("Bad Derin attribute: {}", quote!(#attr).to_string())
                     }
                 });
 
-                if let Some(widget_field) = widget_field {
-                    widget_fields.push(widget_field);
-                }
+                widget_fields.push(widget_field);
             },
         _ => unimplemented!()
     }
@@ -84,6 +78,23 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
     let generics_expanded = expand_generics(generics, &action_ty, &widget_fields);
     let (impl_generics, _, where_clause) = generics_expanded.split_for_impl();
     let (_, ty_generics, _) = generics.split_for_impl();
+
+    let widget_trait_ty = quote!((Widget<#action_ty, __F> + 'static));
+    let mut widget_ty = None;
+    for ty in field_types(widget_fields.iter()) {
+        let mut ty_tokens = Tokens::new();
+        ty.to_tokens(&mut ty_tokens);
+
+        match widget_ty {
+            None => widget_ty = Some(ty_tokens),
+            Some(ref t) if *t != ty_tokens => {
+                widget_ty = Some(widget_trait_ty.clone());
+                break;
+            },
+            _ => ()
+        }
+    }
+    let widget_ty = widget_ty.unwrap_or(widget_trait_ty);
 
     let call_child_iter = CallChildIter {
         fields: widget_fields.iter().cloned(),
@@ -130,8 +141,8 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
                 #(#ident_arc_iter)*
             }
 
-            impl #impl_generics WidgetContainer<__F> for #ident #ty_generics #where_clause {
-                type Action = #action_ty;
+            impl #impl_generics WidgetContainer<#action_ty, __F> for #ident #ty_generics #where_clause {
+                type Widget = #widget_ty;
 
                 #[inline]
                 fn num_children(&self) -> usize {
@@ -140,8 +151,8 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
 
                 #[allow(unused_assignments)]
                 fn children<'a, __G, __R>(&'a self, mut for_each_child: __G) -> Option<__R>
-                    where __G: FnMut(WidgetSummary<&'a Widget<Self::Action, __F>>) -> LoopFlow<__R>,
-                          Self::Action: 'a,
+                    where __G: FnMut(WidgetSummary<&'a Self::Widget>) -> LoopFlow<__R>,
+                          #action_ty: 'a,
                           __F: 'a
                 {
                     let mut index = 0;
@@ -151,8 +162,8 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
 
                 #[allow(unused_assignments)]
                 fn children_mut<'a, __G, __R>(&'a mut self, mut for_each_child: __G) -> Option<__R>
-                    where __G: FnMut(WidgetSummary<&'a mut Widget<Self::Action, __F>>) -> LoopFlow<__R>,
-                          Self::Action: 'a,
+                    where __G: FnMut(WidgetSummary<&'a mut Self::Widget>) -> LoopFlow<__R>,
+                          #action_ty: 'a,
                           __F: 'a
                 {
                     let mut index = 0;

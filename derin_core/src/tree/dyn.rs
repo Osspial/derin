@@ -172,3 +172,82 @@ impl<A, F: RenderFrame> ParentDyn<A, F> {
         widget.as_parent_dyn()
     }
 }
+
+
+pub fn to_widget_object<A, F, W>(widget: &W) -> &Widget<A, F>
+    where W: Widget<A, F> + ?Sized,
+          F: RenderFrame
+{
+    trait AsWidget<'a, A, F>
+        where F: RenderFrame
+    {
+        fn as_widget_dyn(self) -> &'a Widget<A, F>;
+    }
+    impl<'a, A, F, W> AsWidget<'a, A, F> for &'a W
+        where F: RenderFrame,
+              W: Widget<A, F> + ?Sized
+    {
+        #[inline(always)]
+        default fn as_widget_dyn(self) -> &'a Widget<A, F> {
+            panic!("Invalid")
+        }
+    }
+    impl<'a, A, F, W> AsWidget<'a, A, F> for &'a W
+        where F: RenderFrame,
+              W: Widget<A, F>
+    {
+        #[inline(always)]
+        fn as_widget_dyn(self) -> &'a Widget<A, F> {
+            self
+        }
+    }
+    impl<'a, A, F> AsWidget<'a, A, F> for &'a Widget<A, F>
+        where F: RenderFrame
+    {
+        #[inline(always)]
+        fn as_widget_dyn(self) -> &'a Widget<A, F> {
+            self
+        }
+    }
+
+    widget.as_widget_dyn()
+}
+
+pub fn to_widget_object_mut<A, F, W>(widget: &mut W) -> &mut Widget<A, F>
+    where W: Widget<A, F> + ?Sized,
+          F: RenderFrame
+{
+    trait AsWidget<'a, A, F>
+        where F: RenderFrame
+    {
+        fn as_widget_dyn(self) -> &'a mut Widget<A, F>;
+    }
+    impl<'a, A, F, W> AsWidget<'a, A, F> for &'a mut W
+        where F: RenderFrame,
+              W: Widget<A, F> + ?Sized
+    {
+        #[inline(always)]
+        default fn as_widget_dyn(self) -> &'a mut Widget<A, F> {
+            panic!("Invalid")
+        }
+    }
+    impl<'a, A, F, W> AsWidget<'a, A, F> for &'a mut W
+        where F: RenderFrame,
+              W: Widget<A, F>
+    {
+        #[inline(always)]
+        fn as_widget_dyn(self) -> &'a mut Widget<A, F> {
+            self
+        }
+    }
+    impl<'a, A, F> AsWidget<'a, A, F> for &'a mut Widget<A, F>
+        where F: RenderFrame
+    {
+        #[inline(always)]
+        fn as_widget_dyn(self) -> &'a mut Widget<A, F> {
+            self
+        }
+    }
+
+    widget.as_widget_dyn()
+}

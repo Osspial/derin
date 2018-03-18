@@ -51,8 +51,10 @@ impl<C, L> Group<C, L>
 }
 
 impl<A, F, C, L> Widget<A, F> for Group<C, L>
-    where F: PrimFrame,
-          C: WidgetContainer<F, Action=A>,
+    where A: 'static,
+          F: PrimFrame,
+          C: WidgetContainer<A, F>,
+          C::Widget: Widget<A, F>,
           L: GridLayout
 {
     #[inline]
@@ -110,8 +112,10 @@ impl<A, F, C, L> Widget<A, F> for Group<C, L>
 }
 
 impl<A, F, C, L> Parent<A, F> for Group<C, L>
-    where F: PrimFrame,
-          C: WidgetContainer<F, Action=A>,
+    where A: 'static,
+          F: PrimFrame,
+          C: WidgetContainer<A, F>,
+          C::Widget: Widget<A, F>,
           L: GridLayout
 {
     fn num_children(&self) -> usize {
@@ -119,31 +123,31 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
     }
 
     fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>> {
-        self.container.child(widget_ident)
+        self.container.child(widget_ident).map(WidgetSummary::to_dyn)
     }
     fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>> {
-        self.container.child_mut(widget_ident)
+        self.container.child_mut(widget_ident).map(WidgetSummary::to_dyn_mut)
     }
 
     fn children<'a, G, R>(&'a self, mut for_each: G) -> Option<R>
         where A: 'a,
               G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow<R>
     {
-        self.container.children(|summary| for_each(summary))
+        self.container.children(|summary| for_each(WidgetSummary::to_dyn(summary)))
     }
 
     fn children_mut<'a, G, R>(&'a mut self, mut for_each: G) -> Option<R>
         where A: 'a,
               G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow<R>
     {
-        self.container.children_mut(|summary| for_each(summary))
+        self.container.children_mut(|summary| for_each(WidgetSummary::to_dyn_mut(summary)))
     }
 
     fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>> {
-        self.container.child_by_index(index)
+        self.container.child_by_index(index).map(WidgetSummary::to_dyn)
     }
     fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
-        self.container.child_by_index_mut(index)
+        self.container.child_by_index_mut(index).map(WidgetSummary::to_dyn_mut)
     }
 
     fn update_child_layout(&mut self) {
