@@ -604,7 +604,8 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                         );
                     }
                 );
-            }
+            },
+            WindowEvent::Redraw => *force_full_redraw = true
         }
 
         // Dispatch focus-changing events to the widgets.

@@ -190,6 +190,7 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                                     None if window_id == primary_renderer.borrow().window().id() => ControlFlow::Break,
                                     None => ControlFlow::Continue
                                 },
+                                GWindowEvent::Refresh => WindowEvent::Redraw,
                                 _ => return ControlFlow::Continue
                             }
                         },

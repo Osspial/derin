@@ -76,7 +76,8 @@ pub enum WindowEvent {
     KeyDown(Key),
     KeyUp(Key),
     Char(char),
-    Timer
+    Timer,
+    Redraw
 }
 
 #[must_use]
