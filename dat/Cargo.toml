@@ -4,7 +4,6 @@ version = "0.1.0"
 authors = ["Osspial <osspial@gmail.com>"]
 
 [dependencies]
-cgmath = {git = "https://github.com/Osspial/cgmath.git", branch = "prs_merged"}
 cgmath-geometry = { git = "https://github.com/Osspial/cgmath-geometry.git" }
 
 [dev-dependencies]

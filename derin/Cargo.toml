@@ -17,10 +17,6 @@ lazy_static = "1"
 [dev-dependencies]
 derin_macros = {path = "../derin_macros"}
 
-[dependencies.cgmath]
-branch = "prs_merged"
-git = "https://github.com/Osspial/cgmath.git"
-
 [dependencies.cgmath-geometry]
 git = "https://github.com/Osspial/cgmath-geometry.git"
 

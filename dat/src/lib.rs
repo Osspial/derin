@@ -1,6 +1,6 @@
 #![feature(splice, conservative_impl_trait)]
 
-extern crate cgmath;
+use cgmath_geometry::cgmath;
 extern crate cgmath_geometry;
 
 use std::{cmp, mem};

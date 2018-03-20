@@ -2,7 +2,7 @@
 #[cfg_attr(test, macro_use)]
 extern crate quickcheck;
 extern crate num_traits;
-extern crate cgmath;
+use cgmath_geometry::cgmath;
 extern crate cgmath_geometry;
 extern crate dct;
 

@@ -28,7 +28,7 @@ extern crate dct;
 extern crate dat;
 extern crate dle;
 extern crate derin_core as core;
-extern crate cgmath;
+use cgmath_geometry::cgmath;
 extern crate cgmath_geometry;
 extern crate gullery;
 #[macro_use]

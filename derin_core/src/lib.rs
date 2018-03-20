@@ -1,6 +1,6 @@
 #![feature(conservative_impl_trait, universal_impl_trait, range_contains, nll, specialization)]
 
-extern crate cgmath;
+use cgmath_geometry::cgmath;
 extern crate cgmath_geometry;
 #[macro_use]
 extern crate bitflags;

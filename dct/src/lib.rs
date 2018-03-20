@@ -1,4 +1,4 @@
-extern crate cgmath;
+use cgmath_geometry::cgmath;
 extern crate num_traits;
 extern crate cgmath_geometry;
 #[macro_use]
