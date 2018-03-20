@@ -2,6 +2,7 @@
 name = "dat"
 version = "0.1.0"
 authors = ["Osspial <osspial@gmail.com>"]
+license = "Apache-2.0"
 
 [dependencies]
 cgmath-geometry = { git = "https://github.com/Osspial/cgmath-geometry.git" }
