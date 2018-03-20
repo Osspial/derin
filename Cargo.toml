@@ -1,46 +1,5 @@
-[package]
-authors = ["Osspial <osspial@gmail.com>"]
-name = "derin"
-version = "0.1.0"
-[dependencies]
-arrayvec = "0.4"
-glutin = "0.12"
-dat = {path = "./dat"}
-glyphydog = {git = "https://github.com/Osspial/glyphydog.git"}
-itertools = "0.7"
-unicode-segmentation = "1.2"
-clipboard = "0.4"
-png = "0.11"
-parking_lot = "0.5"
-lazy_static = "1"
-
-[dev-dependencies]
-derin_macros = {path = "./derin_macros"}
-
-[dependencies.cgmath]
-branch = "prs_merged"
-git = "https://github.com/Osspial/cgmath.git"
-
-[dependencies.cgmath-geometry]
-git = "https://github.com/Osspial/cgmath-geometry.git"
-
-[dependencies.dct]
-path = "./dct"
-
-[dependencies.derin_core]
-path = "./derin_core"
-
-[dependencies.dle]
-path = "./dle"
-
-[dependencies.gullery]
-git = "https://github.com/Osspial/gullery.git"
-
-[dependencies.gullery_macros]
-git = "https://github.com/Osspial/gullery.git"
-
 [workspace]
-members = ["./dat", "./dct", "./dle", "./derin_macros", "./derin_core"]
+members = ["./dat", "./dct", "./dle", "./derin_macros", "./derin_core", "./derin"]
 
 [patch.crates-io]
 winit = { git = "https://github.com/osspial/winit", branch="prs_merged" }
