@@ -16,6 +16,16 @@ pub trait SliderHandler: 'static {
     fn on_move(&mut self, old_value: f32, new_value: f32) -> Option<Self::Action>;
 }
 
+/// A widget that lets the user select a value within a range of values.
+///
+/// The slider has three values that control the slider's behavior:
+/// * `value`: Where the head is, in between the `min` and the `max`.
+/// * `step`: Snaps the `value` to a given interval.
+/// * `min` and `max`: Controls the minimum and maximum values that can be selected by the slider.
+///
+/// Whenever the slider's head is moved, the provided handler's [`on_move`] function is called.
+///
+/// [`on_move`]: ./trait.SliderHandler.html#tymethod.on_move
 #[derive(Debug, Clone)]
 pub struct Slider<H: SliderHandler> {
     update_tag: UpdateTag,
@@ -26,6 +36,7 @@ pub struct Slider<H: SliderHandler> {
 }
 
 impl<H: SliderHandler> Slider<H> {
+    /// Creates a new slider with the given `value`, `step`, `min`, `max`, and action handler.
     pub fn new(value: f32, step: f32, min: f32, max: f32, handler: H) -> Slider<H> {
         Slider {
             update_tag: UpdateTag::new(),
@@ -42,26 +53,55 @@ impl<H: SliderHandler> Slider<H> {
         }
     }
 
+    /// Retrieves the value stored in the slider.
     #[inline]
     pub fn value(&self) -> f32 {
         self.assist.value
     }
 
+    /// Retrieves the range of possible values the slider can contain.
     #[inline]
     pub fn range(&self) -> (f32, f32) {
         (self.assist.min, self.assist.max)
     }
 
+    /// Retrieves the step, to which the value is snapped to.
+    ///
+    /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
+    /// it unless you're actually changing the contents.
+    #[inline]
+    pub fn step(&self) -> f32 {
+        self.assist.step
+    }
+
+    /// Retrieves the value stored in the slider, for mutation.
+    ///
+    /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
+    /// it unless you're actually changing the contents.
     #[inline]
     pub fn value_mut(&mut self) -> &mut f32 {
         self.update_tag.mark_render_self();
         &mut self.assist.value
     }
 
+    /// Retrieves the range of possible values the slider can contain, for mutation.
+    ///
+    /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
+    /// it unless you're actually changing the contents.
     #[inline]
     pub fn range_mut(&mut self) -> (&mut f32, &mut f32) {
         self.update_tag.mark_render_self();
         (&mut self.assist.min, &mut self.assist.max)
+    }
+
+    /// Retrieves the step, to which the value is snapped to, for mutation.
+    ///
+    /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
+    /// it unless you're actually changing the contents.
+    #[inline]
+    pub fn step_mut(&mut self) -> &mut f32 {
+        self.update_tag.mark_render_self();
+        &mut self.assist.step
     }
 }
 

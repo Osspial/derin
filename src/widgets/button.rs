@@ -16,7 +16,12 @@ use std::time::Duration;
 
 use arrayvec::ArrayVec;
 
+/// Determines which action, if any, should be taken in response to a button press.
 pub trait ButtonHandler<A: 'static>: 'static {
+    /// Called when the button is pressed. If `Some` is returned, the given action is pumped into
+    /// the action queue and passed to [`run_forever`'s `on_action`][on_action].
+    ///
+    /// [on_action]: ../struct.Window.html#method.run_forever
     fn on_click(&mut self) -> Option<A>;
 }
 
@@ -35,7 +40,7 @@ impl<A: 'static> ButtonHandler<A> for () {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ButtonState {
+/*pub*/ enum ButtonState {
     Normal,
     Hover,
     Clicked,
@@ -43,6 +48,12 @@ pub enum ButtonState {
     // Defaulted
 }
 
+/// A simple push-button.
+///
+/// When pressed, calls the [`on_click`] function in the associated handler passed in by the `new`
+/// function.
+///
+/// [`on_click`]: ./trait.ButtonHandler.html#tymethod.on_click
 #[derive(Debug, Clone)]
 pub struct Button<H> {
     update_tag: UpdateTag,
@@ -55,6 +66,7 @@ pub struct Button<H> {
 }
 
 impl<H> Button<H> {
+    /// Creates a new button with the given contents and
     pub fn new(contents: Contents<String>, handler: H) -> Button<H> {
         Button {
             update_tag: UpdateTag::new(),
@@ -67,10 +79,15 @@ impl<H> Button<H> {
         }
     }
 
+    /// Retrieves the contents of the button.
     pub fn contents(&self) -> Contents<&str> {
         self.contents.borrow()
     }
 
+    /// Retrieves the contents of the button, for mutation.
+    ///
+    /// Calling this function forces the button to be re-drawn, so you're discouraged from calling
+    /// it unless you're actually changing the contents.
     pub fn contents_mut(&mut self) -> Contents<&mut String> {
         self.update_tag.mark_render_self();
         self.contents.borrow_mut()
@@ -143,7 +160,7 @@ impl<A, F, H> Widget<A, F> for Button<H>
         use self::WidgetEvent::*;
 
         let (mut action, focus) = (None, None);
-        let mut popup = None;
+        let popup = None;
 
         lazy_static!{
             static ref MOUSEOVER_IDENT: WidgetIdent = WidgetIdent::Str(Arc::from("mouseover_text"));

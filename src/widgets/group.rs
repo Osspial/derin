@@ -17,6 +17,10 @@ use arrayvec::ArrayVec;
 
 use dle::{GridEngine, UpdateHeapCache, SolveError};
 
+/// A group of widgets.
+///
+/// Children of the group are specified by creating structs which implement [`WidgetContainer`].
+/// You're encouraged to use the `derive` macro in `derin_macros` to do so.
 #[derive(Debug, Clone)]
 pub struct Group<C, L>
     where L: GridLayout
@@ -31,6 +35,8 @@ pub struct Group<C, L>
 impl<C, L> Group<C, L>
     where L: GridLayout
 {
+    /// Create a new `Group` containing the widgets specified in `container`, with the layout
+    /// specified in `layout`.
     pub fn new(container: C, layout: L) -> Group<C, L> {
         Group {
             update_tag: UpdateTag::new(),
@@ -40,10 +46,12 @@ impl<C, L> Group<C, L>
         }
     }
 
+    /// Retrieve the widgets contained within the group.
     pub fn container(&self) -> &C {
         &self.container
     }
 
+    /// Retrieve the widgets contained within the group, for mutation.
     pub fn container_mut(&mut self) -> &mut C {
         self.update_tag.mark_update_child().mark_update_layout();
         &mut self.container

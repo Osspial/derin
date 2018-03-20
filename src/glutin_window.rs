@@ -20,6 +20,7 @@ use cgmath_geometry::{DimsBox, GeoBox};
 
 use parking_lot::Mutex;
 
+/// A window displayed on the desktop, which contains a set of drawable widgets.
 pub struct GlutinWindow<A: 'static, N: 'static + Widget<A, GLFrame>> {
     primary_renderer: RefCell<GLRenderer>,
     window_popup_map: HashMap<WindowId, PopupID>,
@@ -39,6 +40,11 @@ enum TimerPark {
 }
 
 impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
+    /// Creates a new window, with the given window attributes, root widget, and theme.
+    ///
+    /// This is unsafe, because it creates at least one OpenGL context. By calling this function,
+    /// you hand all control over the thread's OpenGL context management to this window. In most
+    /// cases this shouldn't be an issue, though.
     pub unsafe fn new(attributes: WindowAttributes, root: N, theme: Theme) -> Result<GlutinWindow<A, N>, CreationError> {
         let events_loop = EventsLoop::new();
         let mut builder = WindowBuilder::new();
@@ -81,18 +87,22 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
         })
     }
 
-    pub fn context_state(&self) -> Rc<ContextState> {
-        self.primary_renderer.borrow().context_state()
-    }
-
+    /// Retrieves a reference to the root widget.
     pub fn root(&self) -> &N {
         &self.root.root_widget
     }
 
+    /// Retrieves a mutable reference to the root widget.
     pub fn root_mut(&mut self) -> &mut N {
         &mut self.root.root_widget
     }
 
+    /// Starts the `derin` event loop, calling `on_action` whenever an action is triggered by a
+    /// child widget. Aborts when `LoopFlow::Break` is returned by `on_action`.
+    ///
+    /// `on_fallthrough` is called whenever a raw event bubbles through the root widget.
+    ///
+    /// TODO: DOCUMENT HOW EVENT BUBBLING WORKS
     pub fn run_forever<F, FF, R>(&mut self, on_action: F, on_fallthrough: FF) -> Option<R>
         where F: FnMut(A, &mut N, &mut Theme) -> LoopFlow<R>,
               FF: FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
@@ -292,6 +302,11 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                 with_renderer(renderer_ref)
             }
         )
+    }
+
+    /// Retrieves the `gullery` context state.
+    pub fn context_state(&self) -> Rc<ContextState> {
+        self.primary_renderer.borrow().context_state()
     }
 }
 

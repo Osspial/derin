@@ -80,10 +80,13 @@ pub enum WindowEvent {
     Redraw
 }
 
+/// Whether to continue or abort a loop.
 #[must_use]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LoopFlow<R> {
+    /// Continue the loop.
     Continue,
+    /// Abort the loop, returning the contained value.
     Break(R)
 }
 

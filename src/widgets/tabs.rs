@@ -15,36 +15,59 @@ use dle::{GridEngine, UpdateHeapCache, SolveError};
 
 use arrayvec::ArrayVec;
 
+/// A page within a greater list of tabs.
+///
+/// Only has a use as a child of a [`TabList`].
+///
+/// [`TabList`]: ./struct.TabList.html
 #[derive(Debug, Clone)]
-pub struct Tab<W> {
-    pub title: RenderString,
+pub struct TabPage<W> {
+    title: RenderString,
+    /// The widget that's displayed within the tab page.
     pub page: W,
     open: bool,
     rect: BoundBox<Point2<i32>>
 }
 
+/// A list of tabs.
+///
+/// This widget lets you display a single widget at a time, from a greater selection of widgets.
+/// Users can switch between these widgets by clicking on a list of tabs at the top of the widget.
 #[derive(Debug, Clone)]
 pub struct TabList<W> {
     update_tag: UpdateTag,
     rect: BoundBox<Point2<i32>>,
     layout_engine: GridEngine,
 
-    tabs: Vec<Tab<W>>
+    tabs: Vec<TabPage<W>>
 }
 
-impl<W> Tab<W> {
-    pub fn new(title: String, page: W) -> Tab<W> {
-        Tab {
+impl<W> TabPage<W> {
+    /// Create a new tab page, with the given title and contained widget.
+    pub fn new(title: String, page: W) -> TabPage<W> {
+        TabPage {
             title: RenderString::new(title),
             page,
             open: true,
             rect: BoundBox::new2(0, 0, 0, 0)
         }
     }
+
+
+    /// Retrieves a reference to the tab's title.
+    pub fn string(&self) -> &str {
+        self.title.string()
+    }
+
+    /// Retrieves the tab's title, for mutation.
+    pub fn string_mut(&mut self) -> &mut String {
+        self.title.string_mut()
+    }
 }
 
 impl<W> TabList<W> {
-    pub fn new(tabs: Vec<Tab<W>>) -> TabList<W> {
+    /// Create a new list of tabs.
+    pub fn new(tabs: Vec<TabPage<W>>) -> TabList<W> {
         TabList {
             update_tag: UpdateTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
@@ -54,11 +77,16 @@ impl<W> TabList<W> {
         }
     }
 
-    pub fn tabs(&self) -> &[Tab<W>] {
+    /// Retrieves a reference to the tab list.
+    pub fn tabs(&self) -> &[TabPage<W>] {
         &self.tabs
     }
 
-    pub fn tabs_mut(&mut self) -> &mut Vec<Tab<W>> {
+    /// Retrieves a reference to the tab list, for mutation.
+    ///
+    /// Calling this function forces the tab list to be re-drawn, so you're discouraged from calling
+    /// it unless you're actually changing the contents.
+    pub fn tabs_mut(&mut self) -> &mut Vec<TabPage<W>> {
         self.update_tag.mark_update_child().mark_update_layout().mark_render_self();
         &mut self.tabs
     }
@@ -283,7 +311,7 @@ impl<A, F, W> Parent<A, F> for TabList<W>
                 );
             }
 
-            let (active_tab, active_tab_index): (&Tab<W>, usize);
+            let (active_tab, active_tab_index): (&TabPage<W>, usize);
 
             match (active_tab_index_opt, self.tabs.len()) {
                 (Some(i), _) => {

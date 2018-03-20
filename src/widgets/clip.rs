@@ -6,10 +6,12 @@ use core::popup::ChildPopupsMut;
 
 use cgmath::{EuclideanSpace, Point2};
 use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
-use dct::layout::SizeBounds;
 
 use gl_render::PrimFrame;
 
+/// Assistant widget that is used to clip another widget
+///
+/// Allows a containing widget to ignore the inner widget's size bounds. Currently used in `ScrollBox`.
 #[derive(Debug, Clone)]
 pub struct Clip<W> {
     update_tag: UpdateTag,
@@ -18,6 +20,7 @@ pub struct Clip<W> {
 }
 
 impl<W> Clip<W> {
+    /// Creates a new clip widget.
     pub fn new(widget: W) -> Clip<W> {
         Clip {
             update_tag: UpdateTag::new(),
@@ -26,10 +29,12 @@ impl<W> Clip<W> {
         }
     }
 
+    /// Retrieves the clipped widget.
     pub fn widget(&self) -> &W {
         &self.widget
     }
 
+    /// Retrieves the clipped widget for mutation.
     pub fn widget_mut(&mut self) -> &mut W {
         self.update_tag.mark_update_child().mark_update_layout();
         &mut self.widget
@@ -54,9 +59,6 @@ impl<A, F, W> Widget<A, F> for Clip<W>
     fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
         self.update_tag.mark_update_layout();
         &mut self.rect
-    }
-    fn size_bounds(&self) -> SizeBounds {
-        SizeBounds::default()
     }
 
     fn render(&mut self, _: &mut FrameRectStack<F>) {}

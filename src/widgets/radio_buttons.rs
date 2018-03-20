@@ -17,6 +17,13 @@ use gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame};
 use dle::{GridEngine, UpdateHeapCache, SolveError};
 use layout::GridLayout;
 
+/// A radio button widget.
+///
+/// Generally is only useful alongside other radio buttons, as an individual radio button can only
+/// be disabled by clicking a sibling radio button. Other radio buttons can be set as siblings
+/// with the [`RadioButtonList`] widget.
+///
+/// [`RadioButtonList`]: ./struct.RadioButtonList.html
 #[derive(Debug, Clone)]
 pub struct RadioButton {
     update_tag: UpdateTag,
@@ -27,6 +34,9 @@ pub struct RadioButton {
     contents: ContentsInner,
 }
 
+/// A set of radio buttons.
+///
+/// Used to define a set of linked radio buttons which disable eachother when pressed.
 #[derive(Debug, Clone)]
 pub struct RadioButtonList<C, L>
     where L: GridLayout
@@ -42,6 +52,9 @@ pub struct RadioButtonList<C, L>
 impl<C, L> RadioButtonList<C, L>
     where L: GridLayout
 {
+    /// Takes a collection of radio buttons, as well as the layout in which to place those buttons.
+    ///
+    /// The passed collection can *only contain radio buttons*, otherwise this will fail to compile.
     pub fn new(buttons: C, layout: L) -> RadioButtonList<C, L> {
         RadioButtonList {
             update_tag: UpdateTag::new(),
@@ -52,10 +65,12 @@ impl<C, L> RadioButtonList<C, L>
         }
     }
 
+    /// Retrieves the collection of radio buttons stored within this list.
     pub fn buttons(&self) -> &C {
         &self.buttons
     }
 
+    /// Retrieves the collection of radio buttons stored within this list, for mutation.
     pub fn buttons_mut(&mut self) -> &mut C {
         self.update_tag.mark_update_child().mark_update_layout();
         &mut self.buttons
@@ -63,6 +78,7 @@ impl<C, L> RadioButtonList<C, L>
 }
 
 impl RadioButton {
+    /// Creates a new radio button, with the given default pressed state and contents.
     pub fn new(pressed: bool, contents: Contents) -> RadioButton {
         RadioButton {
             update_tag: UpdateTag::new(),
@@ -72,6 +88,34 @@ impl RadioButton {
             pressed,
             contents: contents.to_inner(),
         }
+    }
+
+    /// Retrieves the contents of the radio button.
+    pub fn contents(&self) -> Contents<&str> {
+        self.contents.borrow()
+    }
+
+    /// Retrieves the contents of the radio button, for mutation.
+    ///
+    /// Calling this function forces the radio button to be re-drawn, so you're discouraged from calling
+    /// it unless you're actually changing the contents.
+    pub fn contents_mut(&mut self) -> Contents<&mut String> {
+        self.update_tag.mark_render_self();
+        self.contents.borrow_mut()
+    }
+
+    /// Retrieves whether or not the radio button is pressed.
+    pub fn pressed(&self) -> bool {
+        self.pressed
+    }
+
+    /// Retrieves whether or not the radio button is pressed, for mutation.
+    ///
+    /// Calling this function forces the radio button to be re-drawn, so you're discouraged from calling
+    /// it unless you're actually changing the contents.
+    pub fn pressed_mut(&mut self) -> &mut bool {
+        self.update_tag.mark_render_self();
+        &mut self.pressed
     }
 }
 

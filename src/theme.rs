@@ -206,7 +206,6 @@ impl Default for Theme {
         upload_image!("Button::Normal", "./default_theme_resources/button.normal.png", (32, 32), 4, Align2::new(Align::Center, Align::Center));
         upload_image!("Button::Hover", "./default_theme_resources/button.hover.png", (32, 32), 4, Align2::new(Align::Center, Align::Center));
         upload_image!("Button::Clicked", "./default_theme_resources/button.clicked.png", (32, 32), 4, Align2::new(Align::Center, Align::Center));
-        upload_image!("EditBox", "./default_theme_resources/editbox.png", (8, 8), 3, Align2::new(Align::Start, Align::Center));
         upload_image!("ScrollBar", "./default_theme_resources/scroll_bar.png", (3, 3), 1, Align2::new(Align::Center, Align::Center));
         upload_image!("ScrollBackground", "./default_theme_resources/scroll_bg.png", (3, 3), 1, Align2::new(Align::Center, Align::Center));
         theme.insert_widget(
@@ -373,6 +372,32 @@ impl Default for Theme {
                     rescale: RescaleRules::Slice(Margins::new(1, 1, 1, 1)),
                     size_bounds: SizeBounds {
                         min: DimsBox::new2(8, 16),
+                        ..SizeBounds::default()
+                    }
+                }))
+            }
+        );
+        theme.insert_widget(
+            "EditBox".to_string(),
+            ThemeWidget {
+                text: Some(ThemeText {
+                    // TODO: DON'T LOAD FROM SRC
+                    face: ThemeFace::new("./src/default_theme_resources/DejaVuSans.ttf", 0).unwrap(),
+                    color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
+                    highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
+                    highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                    face_size: 16 * 64,
+                    tab_size: 8,
+                    justify: Align2::new(Align::Start, Align::Start),
+                    margins: Margins::new(3, 3, 3, 3),
+                    line_wrap: LineWrap::Normal
+                }),
+                image: Some(Rc::new(Image {
+                    pixels: image_buf!("./default_theme_resources/editbox.png"),
+                    dims: DimsBox::new2(8, 8),
+                    rescale: RescaleRules::Slice(Margins::new(3, 3, 3, 3)),
+                    size_bounds: SizeBounds {
+                        min: DimsBox::new2(3 * 2, 3 * 2),
                         ..SizeBounds::default()
                     }
                 }))

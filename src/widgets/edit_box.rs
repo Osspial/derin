@@ -17,6 +17,7 @@ use std::time::Duration;
 use clipboard::{ClipboardContext, ClipboardProvider};
 use arrayvec::ArrayVec;
 
+/// Multi-line editable text widget.
 #[derive(Debug, Clone)]
 pub struct EditBox {
     update_tag: UpdateTag,
@@ -26,6 +27,7 @@ pub struct EditBox {
 }
 
 impl EditBox {
+    /// Create a new `EditBox`, containing the included `String` by default.
     pub fn new(string: String) -> EditBox {
         EditBox {
             update_tag: UpdateTag::new(),
@@ -35,10 +37,15 @@ impl EditBox {
         }
     }
 
+    /// Retrieves a reference to the string stored within the `EditBox`.
     pub fn string(&self) -> &str {
         self.string.render_string.string()
     }
 
+    /// Retrieves the `String` stored in the `EditBox`, for mutation.
+    ///
+    /// Calling this function forces the box to be re-drawn, so you're discouraged from calling
+    /// it unless you're actually changing the contents.
     pub fn string_mut(&mut self) -> &mut String {
         self.update_tag.mark_render_self();
         self.string.render_string.string_mut()

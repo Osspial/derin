@@ -4,7 +4,7 @@ extern crate derin_macros;
 
 use derin::{LoopFlow, Window, WindowAttributes};
 use derin::layout::{Margins, LayoutHorizontal, LayoutVertical};
-use derin::widgets::{Contents, Button, EditBox, Group, Label, Slider, SliderHandler, ScrollBox, CheckBox, RadioButton, RadioButtonList, Tab, TabList};
+use derin::widgets::{Contents, Button, EditBox, Group, Label, Slider, SliderHandler, ScrollBox, CheckBox, RadioButton, RadioButtonList, TabPage, TabList};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum GalleryEvent {
@@ -62,8 +62,8 @@ fn main() {
                 LayoutVertical::new(Margins::new(8, 8, 8, 8), Default::default())
             )),
             tabs: TabList::new(vec![
-                Tab::new("Tab 1".to_string(), Button::new(Contents::Text("Tab 1".to_string()), None)),
-                Tab::new("Tab No.2".to_string(), Button::new(Contents::Text("Tab 2".to_string()), None)),
+                TabPage::new("Tab 1".to_string(), Button::new(Contents::Text("Tab 1".to_string()), None)),
+                TabPage::new("Tab No.2".to_string(), Button::new(Contents::Text("Tab 2".to_string()), None)),
             ])
         },
         LayoutHorizontal::new(Margins::new(8, 8, 8, 8), Default::default())

@@ -10,6 +10,9 @@ use dct::layout::SizeBounds;
 
 use gl_render::PrimFrame;
 
+/// A simple, non-interactive label.
+///
+/// Can display text or an image, depending on what's in `contents`.
 #[derive(Debug, Clone)]
 pub struct Label {
     update_tag: UpdateTag,
@@ -19,6 +22,7 @@ pub struct Label {
 }
 
 impl Label {
+    /// Create a new label with the given contents.
     pub fn new(contents: Contents<String>) -> Label {
         Label {
             update_tag: UpdateTag::new(),
@@ -28,10 +32,15 @@ impl Label {
         }
     }
 
+    /// Retrieves the contents of the label.
     pub fn contents(&self) -> Contents<&str> {
         self.contents.borrow()
     }
 
+    /// Retrieves the contents of the label, for mutation.
+    ///
+    /// Calling this function forces the label to be re-drawn, so you're discouraged from calling
+    /// it unless you're actually changing the contents.
     pub fn contents_mut(&mut self) -> Contents<&mut String> {
         self.update_tag.mark_render_self();
         self.contents.borrow_mut()

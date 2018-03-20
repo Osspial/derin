@@ -19,6 +19,11 @@ use std::f32;
 use std::sync::Arc;
 
 const SCROLL_BAR_SIZE: i32 = 16;
+
+/// A widget that is used to apply scroll bars to a contained widget.
+///
+/// These bars are hidden by default, only appearing when the inner widget's minimum size is
+/// greater than the scroll box's size.
 #[derive(Debug, Clone)]
 pub struct ScrollBox<W> {
     update_tag: UpdateTag,
@@ -29,6 +34,7 @@ pub struct ScrollBox<W> {
 }
 
 impl<W> ScrollBox<W> {
+    /// Creates a `ScrollBox` that scrolls the provided widget.
     pub fn new(widget: W) -> ScrollBox<W> {
         ScrollBox {
             update_tag: UpdateTag::new(),
@@ -39,10 +45,12 @@ impl<W> ScrollBox<W> {
         }
     }
 
+    /// Retrieves the scrollable widget.
     pub fn widget(&self) -> &W {
         self.clip.widget()
     }
 
+    /// Retrieves the scrollable widget, for mutation.
     pub fn widget_mut(&mut self) -> &mut W {
         self.update_tag.mark_update_child().mark_update_layout_post();
         self.clip.widget_mut()
