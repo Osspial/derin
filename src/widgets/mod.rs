@@ -11,6 +11,7 @@ mod label;
 mod radio_buttons;
 mod scroll_box;
 mod slider;
+mod tabs;
 
 pub use self::button::*;
 pub use self::check_box::*;
@@ -22,6 +23,7 @@ pub use self::label::*;
 pub use self::radio_buttons::*;
 pub use self::scroll_box::*;
 pub use self::slider::*;
+pub use self::tabs::*;
 
 use gl_render::{Prim, ThemedPrim, RenderString, RelPoint};
 use cgmath::Point2;

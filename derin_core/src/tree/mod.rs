@@ -204,6 +204,103 @@ pub trait Widget<A, F: RenderFrame> {
     }
 }
 
+impl<'a, A, F, W> Widget<A, F> for &'a mut W
+    where W: Widget<A, F> + ?Sized,
+          F: RenderFrame
+{
+    #[inline]
+    fn update_tag(&self) -> &UpdateTag {
+        W::update_tag(self)
+    }
+    fn rect(&self) -> BoundBox<Point2<i32>> {
+        W::rect(self)
+    }
+    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+        W::rect_mut(self)
+    }
+    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+        W::render(self, frame)
+    }
+    fn on_widget_event(
+        &mut self,
+        event: WidgetEvent,
+        input_state: InputState,
+        popups: Option<ChildPopupsMut<A, F>>,
+        source_child: &[WidgetIdent]
+    ) -> EventOps<A, F> {
+        W::on_widget_event(self, event, input_state, popups, source_child)
+    }
+
+    fn size_bounds(&self) -> SizeBounds {
+        W::size_bounds(self)
+    }
+    fn register_timers(&self, register: &mut TimerRegister) {
+        W::register_timers(self, register)
+    }
+    fn accepts_focus(&self) -> OnFocus {
+        W::accepts_focus(self)
+    }
+
+    #[doc(hidden)]
+    fn as_parent(&self) -> Option<&ParentDyn<A, F>> {
+        W::as_parent(self)
+    }
+
+    #[doc(hidden)]
+    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<A, F>> {
+        W::as_parent_mut(self)
+    }
+}
+
+
+impl<A, F, W> Widget<A, F> for Box<W>
+    where W: Widget<A, F> + ?Sized,
+          F: RenderFrame
+{
+    #[inline]
+    fn update_tag(&self) -> &UpdateTag {
+        W::update_tag(self)
+    }
+    fn rect(&self) -> BoundBox<Point2<i32>> {
+        W::rect(self)
+    }
+    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+        W::rect_mut(self)
+    }
+    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+        W::render(self, frame)
+    }
+    fn on_widget_event(
+        &mut self,
+        event: WidgetEvent,
+        input_state: InputState,
+        popups: Option<ChildPopupsMut<A, F>>,
+        source_child: &[WidgetIdent]
+    ) -> EventOps<A, F> {
+        W::on_widget_event(self, event, input_state, popups, source_child)
+    }
+
+    fn size_bounds(&self) -> SizeBounds {
+        W::size_bounds(self)
+    }
+    fn register_timers(&self, register: &mut TimerRegister) {
+        W::register_timers(self, register)
+    }
+    fn accepts_focus(&self) -> OnFocus {
+        W::accepts_focus(self)
+    }
+
+    #[doc(hidden)]
+    fn as_parent(&self) -> Option<&ParentDyn<A, F>> {
+        W::as_parent(self)
+    }
+
+    #[doc(hidden)]
+    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<A, F>> {
+        W::as_parent_mut(self)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct WidgetSummary<W: ?Sized> {
     pub ident: WidgetIdent,

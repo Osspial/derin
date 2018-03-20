@@ -922,8 +922,8 @@ impl RenderString {
             self.min_size = match text_style.line_wrap {
                 LineWrap::None => DimsBox::new2(
                     // withholding the +1 leads to clipping bugs so I'm just including it
-                    glyph_iter.cursor.x - glyph_iter.line_start_x + 1,
-                    glyph_iter.line_height + -glyph_iter.font_descender
+                    glyph_iter.cursor.x - glyph_iter.line_start_x + 1 + text_style.margins.width() as i32,
+                    glyph_iter.line_height + -glyph_iter.font_descender + text_style.margins.height() as i32
                 ),
                 _ => DimsBox::new2(0, 0)
             };
