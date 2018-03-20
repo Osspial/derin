@@ -830,28 +830,39 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 root_update.update_child |= force_full_redraw;
 
                 if root_update.render_self || root_update.update_child {
-                    {
-                        let (frame, base_transform) = renderer.make_frame();
-                        let mut frame_rect_stack = FrameRectStack::new(frame, base_transform, theme, widget_ident_stack);
+                    macro_rules! render {
+                        ($prerender_pass:expr) => {{
+                            let (frame, base_transform) = renderer.make_frame(!$prerender_pass);
+                            let mut frame_rect_stack = FrameRectStack::new(frame, base_transform, theme, widget_ident_stack);
 
-                        if let Some(root_as_parent) = redraw_widget.as_parent_mut() {
-                            update_widget_layout(root_id, force_full_redraw, root_as_parent);
-                            root_as_parent.update_tag().unmark_update_layout();
-                        }
-                        if root_update.render_self {
-                            redraw_widget.render(&mut frame_rect_stack);
-                        }
-                        if root_update.update_child {
-                            if let Some(root_as_parent) = redraw_widget.as_parent_mut() {
-                                WidgetRenderer {
-                                    root_id: root_id,
-                                    frame: frame_rect_stack,
-                                    force_full_redraw: force_full_redraw,
-                                    theme
-                                }.render_widget_children(root_as_parent)
+                            if root_update.render_self {
+                                redraw_widget.render(&mut frame_rect_stack);
                             }
-                        }
+                            if root_update.update_child {
+                                if let Some(root_as_parent) = redraw_widget.as_parent_mut() {
+                                    WidgetRenderer {
+                                        root_id: root_id,
+                                        frame: frame_rect_stack,
+                                        force_full_redraw: force_full_redraw && !$prerender_pass,
+                                        prerender_pass: $prerender_pass,
+                                        theme
+                                    }.render_widget_children(root_as_parent)
+                                }
+                            }
+                        }}
                     }
+
+                    // Before we do rendering proper, a "prerendering pass" is performed. This
+                    // is done because some elements, like text, compute their minimum size
+                    // when rendering, which factors into layout calculations.
+                    render!(true);
+                    if let Some(root_as_parent) = redraw_widget.as_parent_mut() {
+                        update_widget_layout(root_id, force_full_redraw, root_as_parent);
+                        root_as_parent.update_tag().unmark_update_layout();
+                    }
+
+                    // Do the proper rendering pass.
+                    render!(false);
 
                     renderer.finish_frame(theme);
                     redraw_widget.update_tag().mark_updated(root_id);
@@ -947,6 +958,7 @@ struct WidgetRenderer<'a, F>
     root_id: RootID,
     frame: FrameRectStack<'a, F>,
     force_full_redraw: bool,
+    prerender_pass: bool,
     theme: &'a F::Theme
 }
 
@@ -985,6 +997,7 @@ impl<'a, F> WidgetRenderer<'a, F>
                                     root_id: self.root_id,
                                     frame: child_frame,
                                     force_full_redraw: self.force_full_redraw,
+                                    prerender_pass: self.prerender_pass,
                                     theme: self.theme
                                 }.render_widget_children(child_widget_as_parent);
                             }
@@ -999,7 +1012,9 @@ impl<'a, F> WidgetRenderer<'a, F>
                     }
                 }
 
-                child_widget.update_tag().mark_updated(self.root_id);
+                if !self.prerender_pass {
+                    child_widget.update_tag().mark_updated(self.root_id);
+                }
             }
 
             LoopFlow::Continue

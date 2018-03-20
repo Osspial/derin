@@ -59,6 +59,7 @@ pub struct GLRenderer {
 }
 
 pub struct GLFrame {
+    output_vertices: bool,
     poly_translator: Translator,
     draw: FrameDraw
 }
@@ -144,6 +145,7 @@ impl GLRenderer {
 
         Ok(GLRenderer {
             frame: GLFrame {
+                output_vertices: true,
                 poly_translator: Translator::new(),
                 draw: FrameDraw {
                     vertices: Vec::new(),
@@ -241,7 +243,7 @@ impl Renderer for GLRenderer {
         }
     }
 
-    fn make_frame(&mut self) -> (&mut GLFrame, BoundBox<Point2<i32>>) {
+    fn make_frame(&mut self, draw_output: bool) -> (&mut GLFrame, BoundBox<Point2<i32>>) {
         let (width, height) = self.window.get_inner_size().unwrap();
         let scale_factor = self.window.hidpi_factor();
         self.frame.draw.window_dims = DimsBox::new2(width, height);
@@ -250,6 +252,7 @@ impl Renderer for GLRenderer {
         let height_scaled = (height as f32 * scale_factor) as u32;
         self.frame.draw.render_state.viewport = DimsBox::new2(width_scaled, height_scaled).into();
         self.frame.draw.fb.clear_color(Rgba::new(1., 1., 1., 1.));
+        self.frame.output_vertices = draw_output;
 
         (&mut self.frame, BoundBox::new2(0, 0, width as i32, height as i32))
     }
@@ -301,6 +304,7 @@ impl RenderFrame for GLFrame {
             theme,
             DPI::new(dpi_axis, dpi_axis), // TODO: REPLACE HARDCODED VALUE
             prim_iter,
+            self.output_vertices,
             &mut self.draw
         );
     }

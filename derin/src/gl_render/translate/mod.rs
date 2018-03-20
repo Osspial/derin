@@ -87,6 +87,7 @@ impl Translator {
         dpi: DPI,
         prims: impl IntoIterator<Item=ThemedPrim<<GLFrame as PrimFrame>::DirectRender>>,
 
+        output_vertices: bool,
         draw: &mut FrameDraw
     ) {
         let prim_rect_iter = prims.into_iter().map(move |p| {
@@ -130,14 +131,16 @@ impl Translator {
                             unsafe{ *rect_px_out = image_rect - parent_rect.min().to_vec() };
                         }
 
-                        draw.vertices.extend(image_translate);
+                        if output_vertices {
+                            draw.vertices.extend(image_translate);
+                        }
                     },
                     (Prim::String(render_string), _, Some(theme_text)) => {
                         match draw.font_cache.face(theme_text.face.clone()) {
                             Ok(face) => {
                                 let render_string = unsafe{ &mut *render_string };
 
-                                draw.vertices.extend(TextTranslate::new_rs(
+                                let vertex_iter = TextTranslate::new_rs(
                                     abs_rect,
                                     parent_clipped,
                                     theme_text.clone(),
@@ -155,7 +158,10 @@ impl Translator {
                                         &self.shaped_text
                                     },
                                     render_string
-                                ));
+                                );
+                                if output_vertices {
+                                    draw.vertices.extend(vertex_iter);
+                                }
                                 if let (Some(rect_px_out), Some(text_rect)) = (prim.rect_px_out, render_string.text_rect()) {
                                     unsafe{ *rect_px_out = text_rect + abs_rect.min().to_vec() - parent_rect.min().to_vec() };
                                 }
@@ -170,7 +176,7 @@ impl Translator {
                             Ok(face) => {
                                 let edit_string = unsafe{ &mut *edit_string };
 
-                                draw.vertices.extend(TextTranslate::new_es(
+                                let vertex_iter = TextTranslate::new_es(
                                     abs_rect,
                                     parent_clipped,
                                     theme_text.clone(),
@@ -188,7 +194,10 @@ impl Translator {
                                         &self.shaped_text
                                     },
                                     edit_string
-                                ));
+                                );
+                                if output_vertices {
+                                    draw.vertices.extend(vertex_iter);
+                                }
                                 if let (Some(rect_px_out), Some(text_rect)) = (prim.rect_px_out, edit_string.render_string.text_rect()) {
                                     unsafe{ *rect_px_out = text_rect + abs_rect.min().to_vec() - parent_rect.min().to_vec() };
                                 }
@@ -198,7 +207,7 @@ impl Translator {
                             }
                         }
                     },
-                    (Prim::DirectRender(render_fn), _, _) => {
+                    (Prim::DirectRender(render_fn), _, _) if output_vertices => {
                         draw.draw_contents();
                         let render_fn = unsafe{ &mut *render_fn };
                         let mut framebuffer = unsafe{ mem::uninitialized() };

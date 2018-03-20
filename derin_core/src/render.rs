@@ -26,7 +26,7 @@ pub trait Renderer {
     fn set_cursor_icon(&mut self, icon: CursorIcon);
     fn set_size_bounds(&mut self, size_bounds: SizeBounds);
     fn resized(&mut self, new_size: DimsBox<Point2<u32>>);
-    fn make_frame(&mut self) -> (&mut Self::Frame, BoundBox<Point2<i32>>);
+    fn make_frame(&mut self, draw_output: bool) -> (&mut Self::Frame, BoundBox<Point2<i32>>);
     fn finish_frame(&mut self, theme: &<Self::Frame as RenderFrame>::Theme);
 }
 
