@@ -2,7 +2,7 @@ extern crate derin;
 extern crate png;
 
 use derin::{LoopFlow, Window, WindowAttributes};
-use derin::layout::{Align, Align2, Margins, LayoutHorizontal};
+use derin::layout::{Align, Align2, Margins, SizeBounds, LayoutHorizontal};
 use derin::container::SingleContainer;
 use derin::widgets::{Contents, Group, Label};
 use derin::theme::{ThemeWidget, Image, RescaleRules};
@@ -31,7 +31,8 @@ fn main() {
                     Rgba::slice_from_raw(Nu8::slice_from_raw(&image)).to_vec()
                 },
                 dims: DimsBox::new2(32, 32),
-                rescale: RescaleRules::Align(Align2::new(Align::Center, Align::Center))
+                rescale: RescaleRules::Align(Align2::new(Align::Center, Align::Center)),
+                size_bounds: SizeBounds::default()
             }))
         }
     );

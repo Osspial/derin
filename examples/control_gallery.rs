@@ -9,6 +9,7 @@ use derin::widgets::{Contents, Button, EditBox, Group, Label, Slider, SliderHand
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum GalleryEvent {
     NewButton,
+    Checked,
     SliderMove(f32)
 }
 
@@ -26,7 +27,7 @@ struct NestedContainer {
     label: Label,
     edit_box: EditBox,
     slider: Slider<SliderH>,
-    check_box: CheckBox,
+    check_box: CheckBox<Option<GalleryEvent>>,
     radio_buttons: RadioButtonList<Vec<RadioButton>, LayoutVertical>,
     #[derin(collection = "Button<Option<GalleryEvent>>")]
     buttons: Vec<Button<Option<GalleryEvent>>>
@@ -48,7 +49,7 @@ fn main() {
                 NestedContainer {
                     label: Label::new(Contents::Text("Nested Container".to_string())),
                     slider: Slider::new(1.0, 1.0, 0.0, 255.0, SliderH),
-                    check_box: CheckBox::new(true, Contents::Text("Checkable".to_string())),
+                    check_box: CheckBox::new(true, Contents::Text("Checkable".to_string()), Some(GalleryEvent::Checked)),
                     radio_buttons: RadioButtonList::new(
                         vec![
                             RadioButton::new(true, Contents::Text("Radio 1".to_string())),
