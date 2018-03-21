@@ -146,8 +146,18 @@ impl ImageTranslate {
                     bl: derived_verts!(bl_out, +(0., 0.), -(0., 0.))[2],
                 };
             },
-            (false, RescaleRules::Slice(margins)) => {
+            (false, RescaleRules::Slice(mut margins)) => {
                 let (tl_out, tr_out, br_out, bl_out, clip_margins, atlas_clip_margins) = gen_corners();
+                let margins_width = margins.width();
+                if margins_width as i32 > rect.width() {
+                    margins.left -= margins_width / 2;
+                    margins.right -= (margins_width + 1) / 2;
+                }
+                let margins_height = margins.height();
+                if margins_height as i32 > rect.height() {
+                    margins.top -= margins_height / 2;
+                    margins.bottom -= (margins_height + 1) / 2;
+                }
 
                 let atlas_margins = Margins::new(
                     margins.left as f32 - atlas_clip_margins.left,

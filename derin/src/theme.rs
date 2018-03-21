@@ -444,7 +444,7 @@ impl Default for Theme {
         radiobutton!("Selected::Pressed", "./default_theme_resources/radiobutton/selected.pressed.png");
 
         macro_rules! progress_bar {
-            ($name:expr, $path:expr) => {
+            ($name:expr, $path:expr, $min:expr) => {
                 theme.insert_widget(
                     concat!("ProgressBar::", $name).to_string(),
                     ThemeWidget {
@@ -454,7 +454,7 @@ impl Default for Theme {
                             dims: DimsBox::new2(16, 16),
                             rescale: RescaleRules::Slice(Margins::new(3, 2, 3, 2)),
                             size_bounds: SizeBounds {
-                                min: DimsBox::new2(6, 4),
+                                min: $min,
                                 ..SizeBounds::default()
                             }
                         }))
@@ -462,8 +462,8 @@ impl Default for Theme {
                 );
             }
         }
-        progress_bar!("Background", "./default_theme_resources/progressbar.bg.png");
-        progress_bar!("Fill", "./default_theme_resources/progressbar.fill.png");
+        progress_bar!("Background", "./default_theme_resources/progressbar.bg.png", DimsBox::new2(6, 4));
+        progress_bar!("Fill", "./default_theme_resources/progressbar.fill.png", DimsBox::new2(0, 4));
 
         macro_rules! tab {
             ($name:expr, $path:expr) => {
