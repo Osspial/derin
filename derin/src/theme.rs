@@ -515,6 +515,31 @@ impl Default for Theme {
                 }))
             }
         );
+        theme.insert_widget(
+            "LineBox".to_string(),
+            ThemeWidget {
+                text: Some(ThemeText {
+                    face: font.clone(),
+                    color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
+                    highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
+                    highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                    face_size: 16 * 64,
+                    tab_size: 8,
+                    justify: Align2::new(Align::Start, Align::Start),
+                    margins: Margins::new(3, 3, 3, 3),
+                    line_wrap: LineWrap::None
+                }),
+                image: Some(Rc::new(Image {
+                    pixels: image_buf!("./default_theme_resources/editbox.png"),
+                    dims: DimsBox::new2(8, 8),
+                    rescale: RescaleRules::Slice(Margins::new(3, 3, 3, 3)),
+                    size_bounds: SizeBounds {
+                        min: DimsBox::new2(3 * 2, 3 * 2),
+                        ..SizeBounds::default()
+                    }
+                }))
+            }
+        );
 
         theme
     }

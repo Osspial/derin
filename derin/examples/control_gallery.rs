@@ -39,7 +39,7 @@ struct BasicContainer {
 #[derin(action = "GalleryEvent")]
 struct NestedContainer {
     label: Label,
-    edit_box: EditBox,
+    edit_box: LineBox,
     progress_bar: ProgressBar,
     slider: Slider<SliderH>,
     check_box: CheckBox<Option<GalleryEvent>>,
@@ -73,7 +73,7 @@ fn main() {
                         ],
                         LayoutVertical::new(Margins::new(0, 2, 0, 8), Default::default())
                     ),
-                    edit_box: EditBox::new("Edit Me!".to_string()),
+                    edit_box: LineBox::new("Edit Me!".to_string()),
                     buttons: Vec::new(),
                 },
                 LayoutVertical::new(Margins::new(8, 8, 8, 8), Default::default())

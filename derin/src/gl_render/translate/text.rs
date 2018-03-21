@@ -857,6 +857,19 @@ impl<'a> GlyphDraw<'a> {
     }
 }
 
+impl Default for RenderString {
+    #[inline]
+    fn default() -> RenderString {
+        RenderString::new(String::new())
+    }
+}
+
+impl Default for EditString {
+    #[inline]
+    fn default() -> EditString {
+        EditString::new(RenderString::default())
+    }
+}
 
 impl RenderString {
     pub fn new(string: String) -> RenderString {
