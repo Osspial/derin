@@ -417,36 +417,32 @@ impl Default for Theme {
                 image: None
             }
         );
-        theme.insert_widget(
-            "RadioButton::Empty".to_string(),
-            ThemeWidget {
-                text: None,
-                image: Some(Rc::new(Image {
-                    pixels: image_buf!("./default_theme_resources/radiobutton.empty.png"),
-                    dims: DimsBox::new2(16, 16),
-                    rescale: RescaleRules::Align(Align2::new(Align::Start, Align::Center)),
-                    size_bounds: SizeBounds {
-                        min: DimsBox::new2(16, 16),
-                        ..SizeBounds::default()
+        macro_rules! radiobutton {
+            ($name:expr, $path:expr) => {
+                theme.insert_widget(
+                    concat!("RadioButton::", $name).to_string(),
+                    ThemeWidget {
+                        text: None,
+                        image: Some(Rc::new(Image {
+                            pixels: image_buf!($path),
+                            dims: DimsBox::new2(16, 16),
+                            rescale: RescaleRules::Align(Align2::new(Align::Start, Align::Center)),
+                            size_bounds: SizeBounds {
+                                min: DimsBox::new2(16, 16),
+                                ..SizeBounds::default()
+                            }
+                        }))
                     }
-                }))
+                );
             }
-        );
-        theme.insert_widget(
-            "RadioButton::Pressed".to_string(),
-            ThemeWidget {
-                text: None,
-                image: Some(Rc::new(Image {
-                    pixels: image_buf!("./default_theme_resources/radiobutton.pressed.png"),
-                    dims: DimsBox::new2(16, 16),
-                    rescale: RescaleRules::Align(Align2::new(Align::Start, Align::Center)),
-                    size_bounds: SizeBounds {
-                        min: DimsBox::new2(16, 16),
-                        ..SizeBounds::default()
-                    }
-                }))
-            }
-        );
+        }
+        radiobutton!("Empty", "./default_theme_resources/radiobutton/empty.png");
+        radiobutton!("Empty::Hover", "./default_theme_resources/radiobutton/empty.hover.png");
+        radiobutton!("Empty::Pressed", "./default_theme_resources/radiobutton/empty.pressed.png");
+        radiobutton!("Selected", "./default_theme_resources/radiobutton/selected.png");
+        radiobutton!("Selected::Hover", "./default_theme_resources/radiobutton/selected.hover.png");
+        radiobutton!("Selected::Pressed", "./default_theme_resources/radiobutton/selected.pressed.png");
+
         theme.insert_widget(
             "Tab".to_string(),
             ThemeWidget {

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use container::WidgetContainer;
+use widgets::assistants::ButtonState;
 use widgets::{Contents, ContentsInner};
 use cgmath::Point2;
 use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
@@ -44,13 +45,14 @@ pub struct RadioButton {
     rect: BoundBox<Point2<i32>>,
     min_size: DimsBox<Point2<i32>>,
 
-    pressed: bool,
+    selected: bool,
+    button_state: ButtonState,
     contents: ContentsInner,
 }
 
 /// A set of radio buttons.
 ///
-/// Used to define a set of linked radio buttons which disable eachother when pressed.
+/// Used to define a set of linked radio buttons which disable eachother when selected.
 #[derive(Debug, Clone)]
 pub struct RadioButtonList<C, L>
     where L: GridLayout
@@ -92,14 +94,15 @@ impl<C, L> RadioButtonList<C, L>
 }
 
 impl RadioButton {
-    /// Creates a new radio button, with the given default pressed state and contents.
-    pub fn new(pressed: bool, contents: Contents) -> RadioButton {
+    /// Creates a new radio button, with the given default selected state and contents.
+    pub fn new(selected: bool, contents: Contents) -> RadioButton {
         RadioButton {
             update_tag: UpdateTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
             min_size: DimsBox::new2(0, 0),
 
-            pressed,
+            selected,
+            button_state: ButtonState::Normal,
             contents: contents.to_inner(),
         }
     }
@@ -118,18 +121,18 @@ impl RadioButton {
         self.contents.borrow_mut()
     }
 
-    /// Retrieves whether or not the radio button is pressed.
-    pub fn pressed(&self) -> bool {
-        self.pressed
+    /// Retrieves whether or not the radio button is selected.
+    pub fn selected(&self) -> bool {
+        self.selected
     }
 
-    /// Retrieves whether or not the radio button is pressed, for mutation.
+    /// Retrieves whether or not the radio button is selected, for mutation.
     ///
     /// Calling this function forces the radio button to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
-    pub fn pressed_mut(&mut self) -> &mut bool {
+    pub fn selected_mut(&mut self) -> &mut bool {
         self.update_tag.mark_render_self();
-        &mut self.pressed
+        &mut self.selected
     }
 }
 
@@ -156,11 +159,15 @@ impl<A, F> Widget<A, F> for RadioButton
     }
 
     fn render(&mut self, frame: &mut FrameRectStack<F>) {
-        let icon_str = match self.pressed {
-            true => "RadioButton::Pressed",
-            false => "RadioButton::Empty"
+        let image_str = match (self.selected, self.button_state) {
+            (true, ButtonState::Normal) => "RadioButton::Selected",
+            (true, ButtonState::Hover) => "RadioButton::Selected::Hover",
+            (true, ButtonState::Pressed) => "RadioButton::Selected::Pressed",
+            (false, ButtonState::Normal) => "RadioButton::Empty",
+            (false, ButtonState::Hover) => "RadioButton::Empty::Hover",
+            (false, ButtonState::Pressed) => "RadioButton::Empty::Pressed",
         };
-        let icon_min_size = frame.theme().widget_theme(icon_str).image.map(|b| b.size_bounds.min).unwrap_or(DimsBox::new2(0, 0));
+        let icon_min_size = frame.theme().widget_theme(image_str).image.map(|b| b.size_bounds.min).unwrap_or(DimsBox::new2(0, 0));
 
         let mut content_rect = BoundBox::new2(0, 0, 0, 0);
         frame.upload_primitives(Some(
@@ -190,7 +197,7 @@ impl<A, F> Widget<A, F> for RadioButton
                         RelPoint::new( 1.0, 0)
                     ),
                     prim: Prim::Image,
-                    theme_path: icon_str,
+                    theme_path: image_str,
                     rect_px_out: Some(&mut icon_rect)
                 },
                 false => {
@@ -204,7 +211,7 @@ impl<A, F> Widget<A, F> for RadioButton
                             RelPoint::new(-1.0, content_rect.min.y + icon_min_size.height()),
                         ),
                         prim: Prim::Image,
-                        theme_path: icon_str,
+                        theme_path: image_str,
                         rect_px_out: Some(&mut icon_rect)
                     }
                 }
@@ -217,20 +224,49 @@ impl<A, F> Widget<A, F> for RadioButton
         );
     }
 
-    fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
+        use self::WidgetEvent::*;
+
         let mut force_bubble = false;
+        let action = None;
+        let (mut new_selected, mut new_state) = (self.selected, self.button_state);
         match event {
-            WidgetEvent::MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
-                force_bubble = true;
-                self.pressed = true;
-                self.update_tag.mark_render_self();
+            MouseEnter{..} |
+            MouseExit{..} => {
+                self.update_tag.mark_update_timer();
+
+                new_state = match (input_state.mouse_buttons_down_in_widget.is_empty(), event.clone()) {
+                    (true, MouseEnter{..}) => ButtonState::Hover,
+                    (true, MouseExit{..}) => ButtonState::Normal,
+                    (false, _) => self.button_state,
+                    _ => unreachable!()
+                };
             },
+            MouseDown{..} => new_state = ButtonState::Pressed,
+            MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
+                // if !self.selected {
+                //     action = self.handler.change_state(!self.selected);
+                // }
+                force_bubble = true;
+                new_selected = true;
+                new_state = ButtonState::Hover;
+            },
+            MouseUp{in_widget: false, ..} => new_state = ButtonState::Normal,
+            GainFocus => new_state = ButtonState::Hover,
+            LoseFocus => new_state = ButtonState::Normal,
             _ => ()
         };
 
+        if new_selected != self.selected || new_state != self.button_state {
+            self.update_tag.mark_render_self();
+            self.selected = new_selected;
+            self.button_state = new_state;
+        }
+
+
 
         EventOps {
-            action: None,
+            action,
             focus: None,
             bubble: force_bubble || event.default_bubble(),
             cursor_pos: None,
@@ -272,17 +308,17 @@ impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
     #[inline]
     fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, bubble_source: &[WidgetIdent]) -> EventOps<A, F> {
         let mut bubble = true;
-        // Un-select any child radio buttons after a new button was pressed.
+        // Un-select any child radio buttons after a new button was selected.
         if let (Some(child_ident), WidgetEvent::MouseUp{in_widget: true, pressed_in_widget: true, ..}) = (bubble_source.get(0), event) {
             bubble = false;
             let mut state_changed = false;
             self.buttons.children_mut::<_, ()>(|summary| {
                 if summary.ident != *child_ident {
-                    if summary.widget.pressed {
+                    if summary.widget.selected {
                         summary.widget.update_tag.mark_render_self();
                     }
-                    state_changed |= summary.widget.pressed;
-                    summary.widget.pressed = false;
+                    state_changed |= summary.widget.selected;
+                    summary.widget.selected = false;
                 }
                 LoopFlow::Continue
             });
