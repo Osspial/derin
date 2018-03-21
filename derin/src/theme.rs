@@ -308,7 +308,7 @@ impl Default for Theme {
         upload_image!("Group", "./default_theme_resources/group.png", (3, 3), 1, Align2::new(Align::Start, Align::Start));
         upload_image!("Button::Normal", "./default_theme_resources/button.normal.png", (32, 32), 4, Align2::new(Align::Center, Align::Center));
         upload_image!("Button::Hover", "./default_theme_resources/button.hover.png", (32, 32), 4, Align2::new(Align::Center, Align::Center));
-        upload_image!("Button::Clicked", "./default_theme_resources/button.clicked.png", (32, 32), 4, Align2::new(Align::Center, Align::Center));
+        upload_image!("Button::Pressed", "./default_theme_resources/button.pressed.png", (32, 32), 4, Align2::new(Align::Center, Align::Center));
         upload_image!("ScrollBar", "./default_theme_resources/scroll_bar.png", (3, 3), 1, Align2::new(Align::Center, Align::Center));
         upload_image!("ScrollBackground", "./default_theme_resources/scroll_bg.png", (3, 3), 1, Align2::new(Align::Center, Align::Center));
         theme.insert_widget(
@@ -362,7 +362,6 @@ impl Default for Theme {
             "CheckBox".to_string(),
             ThemeWidget {
                 text: Some(ThemeText {
-                    // TODO: DON'T LOAD FROM SRC
                     face: font.clone(),
                     color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
                     highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
@@ -376,41 +375,35 @@ impl Default for Theme {
                 image: None
             }
         );
-        theme.insert_widget(
-            "CheckBox::Empty".to_string(),
-            ThemeWidget {
-                text: None,
-                image: Some(Rc::new(Image {
-                    pixels: image_buf!("./default_theme_resources/checkbox.empty.png"),
-                    dims: DimsBox::new2(16, 16),
-                    rescale: RescaleRules::Align(Align2::new(Align::Start, Align::Center)),
-                    size_bounds: SizeBounds {
-                        min: DimsBox::new2(16, 16),
-                        ..SizeBounds::default()
+        macro_rules! checkbox {
+            ($name:expr, $path:expr) => {
+                theme.insert_widget(
+                    concat!("CheckBox::", $name).to_string(),
+                    ThemeWidget {
+                        text: None,
+                        image: Some(Rc::new(Image {
+                            pixels: image_buf!($path),
+                            dims: DimsBox::new2(16, 16),
+                            rescale: RescaleRules::Align(Align2::new(Align::Start, Align::Center)),
+                            size_bounds: SizeBounds {
+                                min: DimsBox::new2(16, 16),
+                                ..SizeBounds::default()
+                            }
+                        }))
                     }
-                }))
+                );
             }
-        );
-        theme.insert_widget(
-            "CheckBox::Checked".to_string(),
-            ThemeWidget {
-                text: None,
-                image: Some(Rc::new(Image {
-                    pixels: image_buf!("./default_theme_resources/checkbox.checked.png"),
-                    dims: DimsBox::new2(16, 16),
-                    rescale: RescaleRules::Align(Align2::new(Align::Start, Align::Center)),
-                    size_bounds: SizeBounds {
-                        min: DimsBox::new2(16, 16),
-                        ..SizeBounds::default()
-                    }
-                }))
-            }
-        );
+        }
+        checkbox!("Empty", "./default_theme_resources/checkbox/empty.png");
+        checkbox!("Empty::Hover", "./default_theme_resources/checkbox/empty.hover.png");
+        checkbox!("Empty::Pressed", "./default_theme_resources/checkbox/empty.pressed.png");
+        checkbox!("Checked", "./default_theme_resources/checkbox/checked.png");
+        checkbox!("Checked::Hover", "./default_theme_resources/checkbox/checked.hover.png");
+        checkbox!("Checked::Pressed", "./default_theme_resources/checkbox/checked.pressed.png");
         theme.insert_widget(
             "RadioButton".to_string(),
             ThemeWidget {
                 text: Some(ThemeText {
-                    // TODO: DON'T LOAD FROM SRC
                     face: font.clone(),
                     color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
                     highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
@@ -458,7 +451,6 @@ impl Default for Theme {
             "Tab".to_string(),
             ThemeWidget {
                 text: Some(ThemeText {
-                    // TODO: DON'T LOAD FROM SRC
                     face: font.clone(),
                     color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
                     highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
@@ -470,11 +462,11 @@ impl Default for Theme {
                     line_wrap: LineWrap::None
                 }),
                 image: Some(Rc::new(Image {
-                    pixels: image_buf!("./default_theme_resources/group.png"),
-                    dims: DimsBox::new2(3, 3),
-                    rescale: RescaleRules::Slice(Margins::new(1, 1, 1, 1)),
+                    pixels: image_buf!("./default_theme_resources/tab.png"),
+                    dims: DimsBox::new2(11, 7),
+                    rescale: RescaleRules::Slice(Margins::new(4, 4, 4, 0)),
                     size_bounds: SizeBounds {
-                        min: DimsBox::new2(8, 16),
+                        min: DimsBox::new2(8, 4),
                         ..SizeBounds::default()
                     }
                 }))
@@ -484,7 +476,6 @@ impl Default for Theme {
             "EditBox".to_string(),
             ThemeWidget {
                 text: Some(ThemeText {
-                    // TODO: DON'T LOAD FROM SRC
                     face: font.clone(),
                     color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
                     highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),

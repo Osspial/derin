@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use widgets::assistants::ButtonState;
 use widgets::{Contents, ContentsInner, ToggleHandler};
 use cgmath::Point2;
 use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
@@ -38,6 +39,7 @@ pub struct CheckBox<H> {
     check_rect: BoundBox<Point2<i32>>,
     contents: ContentsInner,
     checked: bool,
+    button_state: ButtonState,
     handler: H
 }
 
@@ -52,6 +54,7 @@ impl<H> CheckBox<H> {
 
             check_rect: BoundBox::new2(0, 0, 0, 0),
             contents: contents.to_inner(),
+            button_state: ButtonState::Normal,
             checked, handler
         }
     }
@@ -110,9 +113,13 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
     }
 
     fn render(&mut self, frame: &mut FrameRectStack<F>) {
-        let image_str = match self.checked {
-            true => "CheckBox::Checked",
-            false => "CheckBox::Empty"
+        let image_str = match (self.checked, self.button_state) {
+            (true, ButtonState::Normal) => "CheckBox::Checked",
+            (true, ButtonState::Hover) => "CheckBox::Checked::Hover",
+            (true, ButtonState::Pressed) => "CheckBox::Checked::Pressed",
+            (false, ButtonState::Normal) => "CheckBox::Empty",
+            (false, ButtonState::Hover) => "CheckBox::Empty::Hover",
+            (false, ButtonState::Pressed) => "CheckBox::Empty::Pressed",
         };
 
         let mut content_rect = BoundBox::new2(0, 0, 0, 0);
@@ -150,21 +157,41 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
         ));
     }
 
-    fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
+        use self::WidgetEvent::*;
+
         let mut action = None;
-        let new_checked = match event {
-            WidgetEvent::MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
+        let (mut new_checked, mut new_state) = (self.checked, self.button_state);
+        match event {
+            MouseEnter{..} |
+            MouseExit{..} => {
+                self.update_tag.mark_update_timer();
+
+                new_state = match (input_state.mouse_buttons_down_in_widget.is_empty(), event.clone()) {
+                    (true, MouseEnter{..}) => ButtonState::Hover,
+                    (true, MouseExit{..}) => ButtonState::Normal,
+                    (false, _) => self.button_state,
+                    _ => unreachable!()
+                };
+            },
+            MouseDown{..} => new_state = ButtonState::Pressed,
+            MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
                 if !self.checked {
                     action = self.handler.change_state(!self.checked);
                 }
-                !self.checked
+                new_checked = !self.checked;
+                new_state = ButtonState::Hover;
             },
-            _ => self.checked
+            MouseUp{in_widget: false, ..} => new_state = ButtonState::Normal,
+            GainFocus => new_state = ButtonState::Hover,
+            LoseFocus => new_state = ButtonState::Normal,
+            _ => ()
         };
 
-        if new_checked != self.checked {
+        if new_checked != self.checked || new_state != self.button_state {
             self.update_tag.mark_render_self();
             self.checked = new_checked;
+            self.button_state = new_state;
         }
 
 

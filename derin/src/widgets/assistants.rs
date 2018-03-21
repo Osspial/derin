@@ -15,6 +15,15 @@
 use cgmath::Point2;
 use cgmath_geometry::{BoundBox, GeoBox};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ButtonState {
+    Normal,
+    Hover,
+    Pressed,
+    // Disabled,
+    // Defaulted
+}
+
 #[derive(Debug, Clone)]
 pub struct SliderAssist {
     pub value: f32,
