@@ -18,7 +18,7 @@ extern crate derin_macros;
 
 use derin::{LoopFlow, Window, WindowAttributes};
 use derin::layout::{Margins, LayoutHorizontal, LayoutVertical};
-use derin::widgets::{Contents, Button, EditBox, Group, Label, Slider, SliderHandler, ScrollBox, CheckBox, RadioButton, RadioButtonList, TabPage, TabList};
+use derin::widgets::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum GalleryEvent {
@@ -40,6 +40,7 @@ struct BasicContainer {
 struct NestedContainer {
     label: Label,
     edit_box: EditBox,
+    progress_bar: ProgressBar,
     slider: Slider<SliderH>,
     check_box: CheckBox<Option<GalleryEvent>>,
     radio_buttons: RadioButtonList<Vec<RadioButton>, LayoutVertical>,
@@ -62,7 +63,8 @@ fn main() {
             nested: ScrollBox::new(Group::new(
                 NestedContainer {
                     label: Label::new(Contents::Text("Nested Container".to_string())),
-                    slider: Slider::new(1.0, 1.0, 0.0, 255.0, SliderH),
+                    slider: Slider::new(0.0, 1.0, 0.0, 100.0, SliderH),
+                    progress_bar: ProgressBar::new(0.0, 0.0, 100.0),
                     check_box: CheckBox::new(true, Contents::Text("Checkable".to_string()), Some(GalleryEvent::Checked)),
                     radio_buttons: RadioButtonList::new(
                         vec![
@@ -94,8 +96,12 @@ fn main() {
     let mut window = unsafe{ Window::new(window_attributes, group, theme).unwrap() };
     let _: Option<()> = window.run_forever(
         |event, root, _| {
-            if GalleryEvent::NewButton == event {
-                root.container_mut().nested.widget_mut().container_mut().buttons.push(Button::new(Contents::Text("An added button".to_string()), None));
+            match event {
+                GalleryEvent::NewButton =>
+                    root.container_mut().nested.widget_mut().container_mut().buttons.push(Button::new(Contents::Text("An added button".to_string()), None)),
+                GalleryEvent::SliderMove(move_to) =>
+                    *root.container_mut().nested.widget_mut().container_mut().progress_bar.value_mut() = move_to,
+                _ => ()
             }
             println!("{:?}", event);
             LoopFlow::Continue

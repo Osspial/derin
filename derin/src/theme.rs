@@ -443,6 +443,28 @@ impl Default for Theme {
         radiobutton!("Selected::Hover", "./default_theme_resources/radiobutton/selected.hover.png");
         radiobutton!("Selected::Pressed", "./default_theme_resources/radiobutton/selected.pressed.png");
 
+        macro_rules! progress_bar {
+            ($name:expr, $path:expr) => {
+                theme.insert_widget(
+                    concat!("ProgressBar::", $name).to_string(),
+                    ThemeWidget {
+                        text: None,
+                        image: Some(Rc::new(Image {
+                            pixels: image_buf!($path),
+                            dims: DimsBox::new2(16, 16),
+                            rescale: RescaleRules::Slice(Margins::new(3, 2, 3, 2)),
+                            size_bounds: SizeBounds {
+                                min: DimsBox::new2(6, 4),
+                                ..SizeBounds::default()
+                            }
+                        }))
+                    }
+                );
+            }
+        }
+        progress_bar!("Background", "./default_theme_resources/progressbar.bg.png");
+        progress_bar!("Fill", "./default_theme_resources/progressbar.fill.png");
+
         theme.insert_widget(
             "Tab".to_string(),
             ThemeWidget {
