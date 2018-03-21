@@ -20,7 +20,7 @@ use gullery::glsl::Nu8;
 
 use cgmath::Point2;
 use cgmath_geometry::DimsBox;
-use dct::layout::{Align, Align2, Margins, SizeBounds};
+use derin_common_types::layout::{Align, Align2, Margins, SizeBounds};
 
 use std::io;
 use std::rc::Rc;
@@ -31,7 +31,7 @@ use std::collections::hash_map::RandomState;
 
 
 use core::render::Theme as CoreTheme;
-pub use dct::cursor::CursorIcon;
+pub use derin_common_types::cursor::CursorIcon;
 
 pub mod color {
     pub use gullery::colors::Rgba;

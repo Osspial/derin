@@ -23,8 +23,8 @@ use cgmath::Point2;
 use cgmath_geometry::BoundBox;
 
 use mbseq::MouseButtonSequence;
-use dct::buttons::MouseButton;
-use dct::layout::SizeBounds;
+use derin_common_types::buttons::MouseButton;
+use derin_common_types::layout::SizeBounds;
 use event::{WidgetEvent, EventOps, InputState};
 use render::{RenderFrame, FrameRectStack};
 use timer::TimerRegister;

@@ -21,8 +21,8 @@ use render::RenderFrame;
 use timer::TimerRegister;
 use mbseq::MouseButtonSequenceTrackPos;
 
-use dct::buttons::ModifierKeys;
-use dct::layout::SizeBounds;
+use derin_common_types::buttons::ModifierKeys;
+use derin_common_types::layout::SizeBounds;
 
 use cgmath::{Point2, Vector2, EuclideanSpace};
 use cgmath_geometry::{BoundBox, GeoBox};

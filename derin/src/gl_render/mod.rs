@@ -21,8 +21,8 @@ mod font_cache;
 mod translate;
 
 use std::rc::Rc;
-use dct::cursor::CursorIcon;
-use dct::layout::SizeBounds;
+use derin_common_types::cursor::CursorIcon;
+use derin_common_types::layout::SizeBounds;
 
 use cgmath::{Array, Bounded, Point2, Vector2, EuclideanSpace};
 

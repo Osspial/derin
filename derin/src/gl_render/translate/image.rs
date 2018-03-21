@@ -21,7 +21,7 @@ use cgmath_geometry::{OffsetBox, BoundBox, GeoBox};
 
 use theme::RescaleRules;
 
-use dct::layout::{Align, Margins};
+use derin_common_types::layout::{Align, Margins};
 
 pub(in gl_render) struct ImageTranslate {
     verts: TranslateVerts,

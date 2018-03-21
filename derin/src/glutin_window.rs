@@ -15,7 +15,7 @@
 use glutin::*;
 use glutin::{MouseButton as GMouseButton, WindowEvent as GWindowEvent, MouseScrollDelta};
 use gl_render::{GLRenderer, GLFrame};
-use dct::buttons::{MouseButton, Key, ModifierKeys};
+use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
 use core::{Root, LoopFlow, WindowEvent, EventLoopOps, PopupDelta};
 use core::tree::{Widget, WidgetIdent};
 use core::event::WidgetEvent;

@@ -24,7 +24,7 @@ use gullery::colors::Rgba;
 use gullery::glsl::Nu8;
 
 use glyphydog::{ShapedBuffer, ShapedGlyph, Face, FaceSize, DPI, LoadFlags, RenderMode};
-use dct::layout::Align;
+use derin_common_types::layout::Align;
 
 use unicode_segmentation::UnicodeSegmentation;
 

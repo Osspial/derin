@@ -1,5 +1,5 @@
 [workspace]
-members = ["./dat", "./dct", "./dle", "./derin_macros", "./derin_core", "./derin"]
+members = ["./derin_atlas", "./derin_common_types", "./derin_layout_engine", "./derin_macros", "./derin_core", "./derin"]
 
 [patch.crates-io]
 winit = { git = "https://github.com/osspial/winit", branch="prs_merged" }

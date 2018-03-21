@@ -20,8 +20,8 @@ use core::popup::ChildPopupsMut;
 
 use cgmath::{Point2, Vector2};
 use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
-use dct::layout::SizeBounds;
-use dct::buttons::MouseButton;
+use derin_common_types::layout::SizeBounds;
+use derin_common_types::buttons::MouseButton;
 
 use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 use widgets::Clip;

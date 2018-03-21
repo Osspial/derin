@@ -1,10 +1,13 @@
 [package]
-name = "dct"
+name = "derin_layout_engine"
 version = "0.1.0"
 authors = ["Osspial <osspial@gmail.com>"]
 license = "Apache-2.0"
 
 [dependencies]
-num-traits = "0.1"
+derin_common_types = {path = "../derin_common_types"}
 cgmath-geometry = { git = "https://github.com/Osspial/cgmath-geometry.git" }
-bitflags = "1.0"
+num-traits = "0.1"
+
+[dev-dependencies]
+quickcheck = "0.4"

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 //! Utilities for specifying the layout of widgets.
-pub use dct::layout::{Align, Align2, GridSize, Margins, SizeBounds, TrRange, TrackHints, WidgetPos, WidgetSpan};
+pub use derin_common_types::layout::{Align, Align2, GridSize, Margins, SizeBounds, TrRange, TrackHints, WidgetPos, WidgetSpan};
 use core::tree::WidgetIdent;
 
 /// Places widgets in a resizable grid-based layout.

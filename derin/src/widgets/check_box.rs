@@ -21,7 +21,7 @@ use core::event::{EventOps, InputState, WidgetEvent};
 use core::popup::ChildPopupsMut;
 use core::tree::{WidgetIdent, UpdateTag, Widget};
 use core::render::FrameRectStack;
-use dct::layout::SizeBounds;
+use derin_common_types::layout::SizeBounds;
 
 use gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame};
 

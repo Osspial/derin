@@ -38,9 +38,9 @@
 //! [freetype-build]: https://github.com/PistonDevelopers/freetype-sys/blob/master/README.md
 //! [container]: container/trait.WidgetContainer.html
 
-extern crate dct;
-extern crate dat;
-extern crate dle;
+extern crate derin_common_types;
+extern crate derin_atlas;
+extern crate derin_layout_engine;
 extern crate derin_core as core;
 use cgmath_geometry::cgmath;
 extern crate cgmath_geometry;
@@ -72,7 +72,7 @@ pub use core::LoopFlow;
 /// `WidgetEvent` type and associated helpers.
 pub mod event {
     pub use core::event::{EventOps, InputState, MouseDown, FocusChange, WidgetEvent};
-    pub use dct::buttons::{ModifierKeys, Key, MouseButton};
+    pub use derin_common_types::buttons::{ModifierKeys, Key, MouseButton};
 }
 
 /// Types used to assemble widget geometry.

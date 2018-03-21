@@ -14,7 +14,7 @@
 
 use std::iter::{ExactSizeIterator, FromIterator};
 
-use dct::buttons::{MouseButton, MOUSE_INT_MASK, MOUSE_INT_MASK_LEN, NUM_MOUSE_BUTTONS};
+use derin_common_types::buttons::{MouseButton, MOUSE_INT_MASK, MOUSE_INT_MASK_LEN, NUM_MOUSE_BUTTONS};
 use cgmath::Point2;
 use arrayvec::{ArrayVec, IntoIter};
 use event::MouseDown;

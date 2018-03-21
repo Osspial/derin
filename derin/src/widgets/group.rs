@@ -20,7 +20,7 @@ use core::popup::ChildPopupsMut;
 
 use cgmath::Point2;
 use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
-use dct::layout::{SizeBounds, WidgetPos};
+use derin_common_types::layout::{SizeBounds, WidgetPos};
 
 use container::WidgetContainer;
 use layout::GridLayout;
@@ -29,7 +29,7 @@ use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 use std::cell::RefCell;
 use arrayvec::ArrayVec;
 
-use dle::{GridEngine, UpdateHeapCache, SolveError};
+use derin_layout_engine::{GridEngine, UpdateHeapCache, SolveError};
 
 /// A group of widgets.
 ///

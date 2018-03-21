@@ -1,13 +1,11 @@
 [package]
-name = "dle"
+name = "derin_atlas"
 version = "0.1.0"
 authors = ["Osspial <osspial@gmail.com>"]
 license = "Apache-2.0"
 
 [dependencies]
-dct = {path = "../dct"}
 cgmath-geometry = { git = "https://github.com/Osspial/cgmath-geometry.git" }
-num-traits = "0.1"
 
 [dev-dependencies]
-quickcheck = "0.4"
+image = "0.16"

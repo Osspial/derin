@@ -18,14 +18,14 @@ extern crate quickcheck;
 extern crate num_traits;
 use cgmath_geometry::cgmath;
 extern crate cgmath_geometry;
-extern crate dct;
+extern crate derin_common_types;
 
 mod grid;
 
-use dct::Px;
+use derin_common_types::Px;
 use cgmath::{Point2, Vector2, EuclideanSpace};
 use cgmath_geometry::{DimsBox, BoundBox, GeoBox};
-use dct::layout::{Fr, Tr, Align2, Align, GridSize, WidgetPos, TrackHints, SizeBounds, Margins};
+use derin_common_types::layout::{Fr, Tr, Align2, Align, GridSize, WidgetPos, TrackHints, SizeBounds, Margins};
 use grid::{TrackVec, SizeResult};
 
 use std::cmp;

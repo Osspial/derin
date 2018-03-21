@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use Tr;
-use dct::Px;
+use derin_common_types::Px;
 use cgmath::Point2;
-use dct::layout::{GridSize, TrRange, TrackHints};
+use derin_common_types::layout::{GridSize, TrRange, TrackHints};
 
 use std::cmp;
 use std::fmt::{Debug, Formatter, Error};

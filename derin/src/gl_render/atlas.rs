@@ -21,7 +21,7 @@ use cgmath_geometry::{OffsetBox, DimsBox, GeoBox};
 use gullery::glsl::Nu8;
 use gullery::colors::Rgba;
 
-use dat::SkylineAtlas;
+use derin_atlas::SkylineAtlas;
 
 use theme::ThemeFace;
 

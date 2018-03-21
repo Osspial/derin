@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate dat;
+extern crate derin_atlas;
 extern crate image;
 extern crate cgmath_geometry;
 
 use std::slice;
-use dat::SkylineAtlas;
+use derin_atlas::SkylineAtlas;
 use image::{DynamicImage, ColorType};
 use cgmath_geometry::DimsRect;
 

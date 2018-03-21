@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use dct::cursor::CursorIcon;
-use dct::buttons::{MouseButton, Key, ModifierKeys};
+use derin_common_types::cursor::CursorIcon;
+use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
 use cgmath::{Point2, Vector2};
 use tree::{Widget, WidgetIdent};
 use render::RenderFrame;

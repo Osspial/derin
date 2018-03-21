@@ -20,12 +20,12 @@ use core::event::{EventOps, WidgetEvent, InputState};
 use core::tree::{WidgetIdent, UpdateTag, WidgetSummary, Widget, Parent, OnFocus};
 use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
-use dct::layout::{SizeBounds, WidgetPos, GridSize, WidgetSpan, TrackHints};
+use derin_common_types::layout::{SizeBounds, WidgetPos, GridSize, WidgetSpan, TrackHints};
 
 use std::cell::RefCell;
 
 use gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame, RenderString};
-use dle::{GridEngine, UpdateHeapCache, SolveError};
+use derin_layout_engine::{GridEngine, UpdateHeapCache, SolveError};
 
 use arrayvec::ArrayVec;
 

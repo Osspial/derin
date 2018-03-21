@@ -15,8 +15,8 @@
 use tree::WidgetIdent;
 use cgmath::{EuclideanSpace, Point2};
 use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
-use dct::cursor::CursorIcon;
-use dct::layout::SizeBounds;
+use derin_common_types::cursor::CursorIcon;
+use derin_common_types::layout::SizeBounds;
 
 pub trait Renderer {
     type Frame: RenderFrame;

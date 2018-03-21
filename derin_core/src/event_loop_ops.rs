@@ -26,7 +26,7 @@ use event::{WidgetEvent, FocusChange};
 use render::{Renderer, RenderFrame, FrameRectStack};
 use widget_stack::{WidgetPath, WidgetStack};
 use meta_tracker::{MetaDrain, MetaEvent, MetaEventVariant};
-use dct::buttons::ModifierKeys;
+use derin_common_types::buttons::ModifierKeys;
 use offset_widget::*;
 
 use std::time::Duration;

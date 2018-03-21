@@ -19,7 +19,7 @@ extern crate cgmath_geometry;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
-extern crate dct;
+extern crate derin_common_types;
 extern crate arrayvec;
 extern crate itertools;
 
@@ -50,8 +50,8 @@ use render::{Renderer, RenderFrame};
 use mbseq::MouseButtonSequenceTrackPos;
 use widget_stack::WidgetStackBase;
 use meta_tracker::MetaEventTracker;
-use dct::buttons::{MouseButton, Key, ModifierKeys};
-use dct::cursor::CursorIcon;
+use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
+use derin_common_types::cursor::CursorIcon;
 
 pub struct Root<A, N, F>
     where N: Widget<A, F> + 'static,

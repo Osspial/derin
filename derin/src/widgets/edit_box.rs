@@ -20,9 +20,9 @@ use core::timer::TimerRegister;
 
 use cgmath::Point2;
 use cgmath_geometry::{BoundBox, DimsBox, GeoBox, Segment};
-use dct::layout::SizeBounds;
-use dct::cursor::CursorIcon;
-use dct::buttons::{Key, ModifierKeys};
+use derin_common_types::layout::SizeBounds;
+use derin_common_types::cursor::CursorIcon;
+use derin_common_types::buttons::{Key, ModifierKeys};
 
 use gl_render::{ThemedPrim, PrimFrame, RenderString, EditString, RelPoint, Prim};
 
@@ -126,7 +126,7 @@ impl<A, F> Widget<A, F> for EditBox
 
     fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
         use self::WidgetEvent::*;
-        use dct::buttons::MouseButton;
+        use derin_common_types::buttons::MouseButton;
 
         let allow_char = |c| match c {
             '\t' |

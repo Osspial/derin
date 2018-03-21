@@ -21,7 +21,7 @@ use core::popup::ChildPopupsMut;
 
 use cgmath::Point2;
 use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
-use dct::layout::SizeBounds;
+use derin_common_types::layout::SizeBounds;
 
 use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 

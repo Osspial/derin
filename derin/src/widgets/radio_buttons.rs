@@ -24,12 +24,12 @@ use core::tree::{WidgetIdent, UpdateTag, WidgetSummary, Widget, Parent, OnFocus}
 use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 use core::render::Theme as CoreTheme;
-use dct::layout::{SizeBounds, WidgetPos};
+use derin_common_types::layout::{SizeBounds, WidgetPos};
 
 use std::cell::RefCell;
 
 use gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame};
-use dle::{GridEngine, UpdateHeapCache, SolveError};
+use derin_layout_engine::{GridEngine, UpdateHeapCache, SolveError};
 use layout::GridLayout;
 
 /// A radio button widget.
