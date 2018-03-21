@@ -32,6 +32,7 @@ use itertools::Itertools;
 use std::{cmp, vec};
 use std::cmp::Ordering;
 use std::ops::Range;
+use std::any::Any;
 
 
 pub(in gl_render) struct TextTranslate<'a> {
@@ -88,7 +89,7 @@ struct StringDrawData {
 struct GlyphDraw<'a> {
     rect: BoundBox<Point2<i32>>,
     clip_rect: BoundBox<Point2<i32>>,
-    face: &'a mut Face<()>,
+    face: &'a mut Face<Any>,
     atlas: &'a mut Atlas,
     text_style: ThemeText,
     dpi: DPI
@@ -176,13 +177,13 @@ impl<'a> TextTranslate<'a> {
         rect: BoundBox<Point2<i32>>,
         clip_rect: BoundBox<Point2<i32>>,
         text_style: ThemeText,
-        face: &'a mut Face<()>,
+        face: &'a mut Face<Any>,
         dpi: DPI,
         atlas: &'a mut Atlas,
         shape_text: F,
         render_string: &'a mut RenderString
     ) -> TextTranslate<'a>
-        where F: FnOnce(&str, &mut Face<()>) -> &'b ShapedBuffer
+        where F: FnOnce(&str, &mut Face<Any>) -> &'b ShapedBuffer
     {
         Self::new_raw(rect, clip_rect, text_style, face, dpi, atlas, shape_text, render_string, 0..0, None)
     }
@@ -191,13 +192,13 @@ impl<'a> TextTranslate<'a> {
         rect: BoundBox<Point2<i32>>,
         clip_rect: BoundBox<Point2<i32>>,
         text_style: ThemeText,
-        face: &'a mut Face<()>,
+        face: &'a mut Face<Any>,
         dpi: DPI,
         atlas: &'a mut Atlas,
         shape_text: F,
         edit_string: &'a mut EditString
     ) -> TextTranslate<'a>
-        where F: FnOnce(&str, &mut Face<()>) -> &'b ShapedBuffer
+        where F: FnOnce(&str, &mut Face<Any>) -> &'b ShapedBuffer
     {
         Self::new_raw(
             rect, clip_rect, text_style, face, dpi, atlas,
@@ -214,7 +215,7 @@ impl<'a> TextTranslate<'a> {
         mut rect: BoundBox<Point2<i32>>,
         clip_rect: BoundBox<Point2<i32>>,
         text_style: ThemeText,
-        face: &'a mut Face<()>,
+        face: &'a mut Face<Any>,
         dpi: DPI,
         atlas: &'a mut Atlas,
         shape_text: F,
@@ -222,7 +223,7 @@ impl<'a> TextTranslate<'a> {
         highlight_range: Range<usize>,
         cursor_pos: Option<usize>,
     ) -> TextTranslate<'a>
-        where F: FnOnce(&str, &mut Face<()>) -> &'b ShapedBuffer
+        where F: FnOnce(&str, &mut Face<Any>) -> &'b ShapedBuffer
     {
         let face_size = FaceSize::new(text_style.face_size, text_style.face_size);
         let font_metrics = face.metrics_sized(face_size, dpi).unwrap();
@@ -260,7 +261,7 @@ impl GlyphIter {
         rect: BoundBox<Point2<i32>>,
         shaped_text: &ShapedBuffer,
         text_style: &ThemeText,
-        face: &mut Face<()>,
+        face: &mut Face<Any>,
         dpi: DPI
     ) -> GlyphIter
     {
@@ -827,6 +828,7 @@ impl<'a> GlyphDraw<'a> {
                         // (&[], DimsBox::new2(0, 0), Vector2::new(0, 0))
                     }
                 }
+
             }
         );
 
@@ -893,11 +895,11 @@ impl RenderString {
         rect: BoundBox<Point2<i32>>,
         shape_text: F,
         text_style: &ThemeText,
-        face: &mut Face<()>,
+        face: &mut Face<Any>,
         dpi: DPI,
         cursor_pos_opt: Option<usize>
     ) -> &[RenderGlyph]
-        where F: FnOnce(&str, &mut Face<()>) -> &'a ShapedBuffer
+        where F: FnOnce(&str, &mut Face<Any>) -> &'a ShapedBuffer
     {
         let use_cached_glyphs: bool;
         match self.draw_data {

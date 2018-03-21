@@ -27,7 +27,7 @@ use theme::ThemeFace;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct GlyphKey {
-    face: ThemeFace,
+    face_fingerprint: u64,
     size: u32,
     glyph_index: u32
 }
@@ -108,7 +108,7 @@ impl Atlas {
               J: 'a + IntoIterator<Item=Rgba<Nu8>>
     {
         let key = GlyphKey {
-            face,
+            face_fingerprint: face.fingerprint(),
             size: face_size,
             glyph_index
         };

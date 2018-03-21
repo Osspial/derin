@@ -26,6 +26,9 @@ use std::io;
 use std::rc::Rc;
 use std::path::Path;
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher, BuildHasher};
+use std::collections::hash_map::RandomState;
+
 
 use core::render::Theme as CoreTheme;
 pub use dct::cursor::CursorIcon;
@@ -68,7 +71,7 @@ pub enum LineWrap {
 }
 
 /// Collection of information used to determine how to render text in a widget.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThemeText {
     /// A handle to the font face used to draw the text.
     pub face: ThemeFace,
@@ -93,17 +96,31 @@ pub struct ThemeText {
 }
 
 /// The text style and image used to draw a widget with a given style.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ThemeWidget {
     pub text: Option<ThemeText>,
     pub image: Option<Rc<Image>>,
 }
 
 /// Reference-counted face handle. This is cheap to clone.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ThemeFace {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ThemeFace {
+    Path(ThemeFacePath),
+    Buffer(ThemeFaceBuffer)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThemeFacePath {
     font_path: Rc<Path>,
-    face_index: i32
+    face_index: i32,
+    fingerprint: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThemeFaceBuffer {
+    font_buffer: Rc<[u8]>,
+    face_index: i32,
+    fingerprint: u64,
 }
 
 pub struct Theme {
@@ -112,12 +129,41 @@ pub struct Theme {
 
 
 impl ThemeFace {
+    #[inline]
+    pub fn face_index(&self) -> i32 {
+        match *self {
+            ThemeFace::Path(ThemeFacePath{face_index, ..}) |
+            ThemeFace::Buffer(ThemeFaceBuffer{face_index, ..}) => face_index
+        }
+    }
+
+    #[inline]
+    pub fn fingerprint(&self) -> u64 {
+        match *self {
+            ThemeFace::Path(ThemeFacePath{fingerprint, ..}) |
+            ThemeFace::Buffer(ThemeFaceBuffer{fingerprint, ..}) => fingerprint
+        }
+    }
+}
+
+lazy_static!{
+    static ref FINGERPRINT_STATE: RandomState = RandomState::new();
+}
+
+impl ThemeFacePath {
     /// Create a new face, referencing the font file at the provided path.
     #[inline]
-    pub fn new<P: AsRef<Path>>(path: P, face_index: i32) -> Result<ThemeFace, io::Error> {
-        Ok(ThemeFace {
-            font_path: path.as_ref().canonicalize()?.into(),
-            face_index
+    pub fn new<P: AsRef<Path>>(path: P, face_index: i32) -> Result<ThemeFacePath, io::Error> {
+        let font_path: Rc<Path> = path.as_ref().canonicalize()?.into();
+        let mut hasher = FINGERPRINT_STATE.build_hasher();
+        font_path.hash(&mut hasher);
+        face_index.hash(&mut hasher);
+        let fingerprint = hasher.finish();
+
+        Ok(ThemeFacePath {
+            font_path,
+            face_index,
+            fingerprint
         })
     }
 
@@ -131,6 +177,45 @@ impl ThemeFace {
     #[inline]
     pub fn face_index(&self) -> i32 {
         self.face_index
+    }
+
+    #[inline]
+    pub fn fingerprint(&self) -> u64 {
+        self.fingerprint
+    }
+}
+
+impl ThemeFaceBuffer {
+    /// Create a new face from the given buffer.
+    #[inline]
+    pub fn new(font_buffer: Rc<[u8]>, face_index: i32) -> ThemeFaceBuffer {
+        let mut hasher = FINGERPRINT_STATE.build_hasher();
+        font_buffer.hash(&mut hasher);
+        face_index.hash(&mut hasher);
+        let fingerprint = hasher.finish();
+
+        ThemeFaceBuffer {
+            font_buffer,
+            face_index,
+            fingerprint
+        }
+    }
+
+    /// Retrieve the path of the font file.
+    #[inline]
+    pub fn font_buffer(&self) -> &Rc<[u8]> {
+        &self.font_buffer
+    }
+
+    /// Gets the index of the face within the font file.
+    #[inline]
+    pub fn face_index(&self) -> i32 {
+        self.face_index
+    }
+
+    #[inline]
+    pub fn fingerprint(&self) -> u64 {
+        self.fingerprint
     }
 }
 
@@ -182,6 +267,11 @@ impl Default for Theme {
             ::std::mem::forget(image);
             image_resized
         };
+        thread_local!{
+            static DEJA_VU_SANS: Rc<[u8]> = Rc::from(&include_bytes!("./default_theme_resources/DejaVuSans.ttf")[..]);
+        }
+        let font = ThemeFace::Buffer(ThemeFaceBuffer::new(DEJA_VU_SANS.with(|b| b.clone()), 0));
+
         macro_rules! image_buf {
             ($path:expr) => {{image_buf(&include_bytes!($path)[..])}}
         }
@@ -191,8 +281,7 @@ impl Default for Theme {
                     $name.to_string(),
                     ThemeWidget {
                         text: Some(ThemeText {
-                            // TODO: DON'T LOAD FROM SRC
-                            face: ThemeFace::new("./src/default_theme_resources/DejaVuSans.ttf", 0).unwrap(),
+                            face: font.clone(),
                             color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
                             highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
                             highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
@@ -256,7 +345,7 @@ impl Default for Theme {
             "Label".to_string(),
             ThemeWidget {
                 text: Some(ThemeText {
-                    face: ThemeFace::new("./src/default_theme_resources/DejaVuSans.ttf", 0).unwrap(),
+                    face: font.clone(),
                     color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
                     highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
                     highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
@@ -274,7 +363,7 @@ impl Default for Theme {
             ThemeWidget {
                 text: Some(ThemeText {
                     // TODO: DON'T LOAD FROM SRC
-                    face: ThemeFace::new("./src/default_theme_resources/DejaVuSans.ttf", 0).unwrap(),
+                    face: font.clone(),
                     color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
                     highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
                     highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
@@ -322,7 +411,7 @@ impl Default for Theme {
             ThemeWidget {
                 text: Some(ThemeText {
                     // TODO: DON'T LOAD FROM SRC
-                    face: ThemeFace::new("./src/default_theme_resources/DejaVuSans.ttf", 0).unwrap(),
+                    face: font.clone(),
                     color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
                     highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
                     highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
@@ -370,7 +459,7 @@ impl Default for Theme {
             ThemeWidget {
                 text: Some(ThemeText {
                     // TODO: DON'T LOAD FROM SRC
-                    face: ThemeFace::new("./src/default_theme_resources/DejaVuSans.ttf", 0).unwrap(),
+                    face: font.clone(),
                     color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
                     highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
                     highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
@@ -396,7 +485,7 @@ impl Default for Theme {
             ThemeWidget {
                 text: Some(ThemeText {
                     // TODO: DON'T LOAD FROM SRC
-                    face: ThemeFace::new("./src/default_theme_resources/DejaVuSans.ttf", 0).unwrap(),
+                    face: font.clone(),
                     color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
                     highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
                     highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
