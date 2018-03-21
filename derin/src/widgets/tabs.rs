@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use widgets::assistants::ButtonState;
 use cgmath::Point2;
 use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
 
@@ -40,6 +41,7 @@ pub struct TabPage<W> {
     /// The widget that's displayed within the tab page.
     pub page: W,
     open: bool,
+    button_state: ButtonState,
     rect: BoundBox<Point2<i32>>
 }
 
@@ -63,6 +65,7 @@ impl<W> TabPage<W> {
             title: RenderString::new(title),
             page,
             open: true,
+            button_state: ButtonState::Normal,
             rect: BoundBox::new2(0, 0, 0, 0)
         }
     }
@@ -134,9 +137,14 @@ impl<A, F, W> Widget<A, F> for TabList<W>
 
     fn render(&mut self, frame: &mut FrameRectStack<F>) {
         for tab in &mut self.tabs {
+            let theme_path = match tab.button_state {
+                ButtonState::Normal => "Tab::Normal",
+                ButtonState::Hover => "Tab::Hover",
+                ButtonState::Pressed => "Tab::Pressed"
+            };
             frame.upload_primitives(ArrayVec::from([
                 ThemedPrim {
-                    theme_path: "Tab",
+                    theme_path,
                     min: Point2::new(
                         RelPoint::new(-1.0, tab.rect.min.x),
                         RelPoint::new(-1.0, tab.rect.min.y),
@@ -149,7 +157,7 @@ impl<A, F, W> Widget<A, F> for TabList<W>
                     rect_px_out: None
                 },
                 ThemedPrim {
-                    theme_path: "Tab",
+                    theme_path,
                     min: Point2::new(
                         RelPoint::new(-1.0, tab.rect.min.x),
                         RelPoint::new(-1.0, tab.rect.min.y),
@@ -167,25 +175,93 @@ impl<A, F, W> Widget<A, F> for TabList<W>
 
     #[inline]
     fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, bubble_source: &[WidgetIdent]) -> EventOps<A, F> {
-        // Change tab selection.
-        if let (0, &WidgetEvent::MouseUp{in_widget: true, pressed_in_widget: true, pos, down_pos, ..}) = (bubble_source.len(), &event) {
-            let mut state_changed = false;
-            let (mut old_open, mut new_open) = (None, None);
-            for (index, tab) in self.tabs.iter_mut().enumerate() {
-                let is_open = tab.rect.contains(pos) && tab.rect.contains(down_pos);
-                state_changed |= is_open != tab.open;
-
-                if tab.open && old_open == None {
-                    old_open = Some(index);
+        if bubble_source.len() == 0 {
+            match event {
+                WidgetEvent::MouseMove{new_pos, in_widget: true, ..} => {
+                    let mut state_changed = false;
+                    for tab in self.tabs.iter_mut() {
+                        let new_state = match (tab.button_state, tab.rect.contains(new_pos)) {
+                            (ButtonState::Pressed, _) => ButtonState::Pressed,
+                            (_, true) => ButtonState::Hover,
+                            (_, false) => ButtonState::Normal,
+                        };
+                        state_changed |= new_state != tab.button_state;
+                        tab.button_state = new_state;
+                    }
+                    if state_changed {
+                        self.update_tag.mark_render_self();
+                    }
+                },
+                WidgetEvent::MouseEnterChild{..} => {
+                    let mut state_changed = false;
+                    for tab in self.tabs.iter_mut() {
+                        let new_state = match tab.button_state {
+                            ButtonState::Pressed => ButtonState::Pressed,
+                            _ => ButtonState::Normal,
+                        };
+                        state_changed |= new_state != tab.button_state;
+                        tab.button_state = new_state;
+                    }
+                    if state_changed {
+                        self.update_tag.mark_render_self();
+                    }
                 }
-                if is_open && new_open == None {
-                    new_open = Some(index);
-                }
+                WidgetEvent::MouseDown{pos, in_widget: true, ..} => {
+                    let mut state_changed = false;
+                    for tab in self.tabs.iter_mut() {
+                        let new_state = match tab.rect.contains(pos) {
+                            true => ButtonState::Pressed,
+                            false => tab.button_state
+                        };
+                        state_changed |= new_state != tab.button_state;
+                        tab.button_state = new_state;
+                    }
+                    if state_changed {
+                        self.update_tag.mark_render_self();
+                    }
+                },
+                WidgetEvent::MouseUp{in_widget: true, pressed_in_widget: true, pos, down_pos, ..} => {
+                    // Change tab selection.
+                    let mut state_changed = false;
+                    let (mut old_open, mut new_open) = (None, None);
+                    for (index, tab) in self.tabs.iter_mut().enumerate() {
+                        let tab_contains = tab.rect.contains(pos);
+                        let is_open = tab_contains && tab.rect.contains(down_pos);
+                        let new_state = match tab_contains {
+                            true => ButtonState::Hover,
+                            false => ButtonState::Normal
+                        };
+                        state_changed |= is_open != tab.open || new_state != tab.button_state;
 
-                tab.open = is_open;
-            }
-            if state_changed && !(old_open == new_open || new_open == None) {
-                self.update_tag.mark_update_layout().mark_render_self();
+                        if tab.open && old_open == None {
+                            old_open = Some(index);
+                        }
+                        if is_open && new_open == None {
+                            new_open = Some(index);
+                        }
+
+                        tab.open = is_open;
+                        tab.button_state = new_state;
+                    }
+                    if state_changed {
+                        self.update_tag.mark_render_self();
+                    }
+                    if !(old_open == new_open || new_open == None) {
+                        self.update_tag.mark_update_layout();
+                    }
+                },
+                WidgetEvent::MouseUp{in_widget: false, pressed_in_widget: true, ..} => {
+                    let mut state_changed = false;
+                    for tab in self.tabs.iter_mut() {
+                        let new_state = ButtonState::Normal;
+                        state_changed |= new_state != tab.button_state;
+                        tab.button_state = new_state;
+                    }
+                    if state_changed {
+                        self.update_tag.mark_render_self();
+                    }
+                },
+                _ => ()
             }
         }
 

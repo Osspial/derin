@@ -306,9 +306,9 @@ impl Default for Theme {
         }
 
         upload_image!("Group", "./default_theme_resources/group.png", (3, 3), 1, Align2::new(Align::Start, Align::Start));
-        upload_image!("Button::Normal", "./default_theme_resources/button.normal.png", (32, 32), 4, Align2::new(Align::Center, Align::Center));
-        upload_image!("Button::Hover", "./default_theme_resources/button.hover.png", (32, 32), 4, Align2::new(Align::Center, Align::Center));
-        upload_image!("Button::Pressed", "./default_theme_resources/button.pressed.png", (32, 32), 4, Align2::new(Align::Center, Align::Center));
+        upload_image!("Button::Normal", "./default_theme_resources/button/base.png", (16, 16), 4, Align2::new(Align::Center, Align::Center));
+        upload_image!("Button::Hover", "./default_theme_resources/button/hover.png", (16, 16), 4, Align2::new(Align::Center, Align::Center));
+        upload_image!("Button::Pressed", "./default_theme_resources/button/pressed.png", (16, 16), 4, Align2::new(Align::Center, Align::Center));
         upload_image!("ScrollBar", "./default_theme_resources/scroll_bar.png", (3, 3), 1, Align2::new(Align::Center, Align::Center));
         upload_image!("ScrollBackground", "./default_theme_resources/scroll_bg.png", (3, 3), 1, Align2::new(Align::Center, Align::Center));
         theme.insert_widget(
@@ -465,31 +465,38 @@ impl Default for Theme {
         progress_bar!("Background", "./default_theme_resources/progressbar.bg.png");
         progress_bar!("Fill", "./default_theme_resources/progressbar.fill.png");
 
-        theme.insert_widget(
-            "Tab".to_string(),
-            ThemeWidget {
-                text: Some(ThemeText {
-                    face: font.clone(),
-                    color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
-                    highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
-                    highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
-                    face_size: 16 * 64,
-                    tab_size: 8,
-                    justify: Align2::new(Align::Center, Align::Center),
-                    margins: Margins::new(4, 4, 4, 4),
-                    line_wrap: LineWrap::None
-                }),
-                image: Some(Rc::new(Image {
-                    pixels: image_buf!("./default_theme_resources/tab.png"),
-                    dims: DimsBox::new2(11, 7),
-                    rescale: RescaleRules::Slice(Margins::new(4, 4, 4, 0)),
-                    size_bounds: SizeBounds {
-                        min: DimsBox::new2(8, 4),
-                        ..SizeBounds::default()
+        macro_rules! tab {
+            ($name:expr, $path:expr) => {
+                theme.insert_widget(
+                    concat!("Tab::", $name).to_string(),
+                    ThemeWidget {
+                        text: Some(ThemeText {
+                            face: font.clone(),
+                            color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
+                            highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
+                            highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                            face_size: 16 * 64,
+                            tab_size: 8,
+                            justify: Align2::new(Align::Center, Align::Center),
+                            margins: Margins::new(4, 4, 4, 4),
+                            line_wrap: LineWrap::None
+                        }),
+                        image: Some(Rc::new(Image {
+                            pixels: image_buf!($path),
+                            dims: DimsBox::new2(16, 8),
+                            rescale: RescaleRules::Slice(Margins::new(4, 4, 4, 0)),
+                            size_bounds: SizeBounds {
+                                min: DimsBox::new2(8, 4),
+                                ..SizeBounds::default()
+                            }
+                        }))
                     }
-                }))
+                );
             }
-        );
+        }
+        tab!("Normal", "./default_theme_resources/tab/base.png");
+        tab!("Hover", "./default_theme_resources/tab/hover.png");
+        tab!("Pressed", "./default_theme_resources/tab/pressed.png");
         theme.insert_widget(
             "EditBox".to_string(),
             ThemeWidget {
