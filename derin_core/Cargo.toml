@@ -3,6 +3,11 @@ name = "derin_core"
 version = "0.1.0"
 authors = ["Osspial <osspial@gmail.com>"]
 license = "Apache-2.0"
+description = "Derin's core Event Loop"
+documentation = "https://docs.rs/derin_core"
+repository = "https://github.com/Osspial/derin"
+keywords = ["gui", "widgets", "ui"]
+categories = ["gui"]
 
 [dependencies]
 bitflags = "1.0"

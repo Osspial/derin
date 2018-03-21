@@ -4,6 +4,12 @@ version = "0.1.0"
 authors = ["Osspial <osspial@gmail.com>"]
 license = "Apache-2.0"
 
+description = "A Skyline Atlas implementation for Derin"
+documentation = "https://docs.rs/derin_atlas"
+repository = "https://github.com/Osspial/derin"
+keywords = ["atlas", "skyline"]
+categories = ["multimedia::images", "rendering"]
+
 [dependencies]
 cgmath-geometry = { git = "https://github.com/Osspial/cgmath-geometry.git" }
 

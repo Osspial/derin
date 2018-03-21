@@ -3,6 +3,12 @@ authors = ["Osspial <osspial@gmail.com>"]
 name = "derin"
 version = "0.1.0"
 license = "Apache-2.0"
+description = "A Derive-Based GUI Library for Rust"
+documentation = "https://docs.rs/derin"
+repository = "https://github.com/Osspial/derin"
+readme = "../README.md"
+keywords = ["gui", "desktop", "widgets", "ui"]
+categories = ["gui"]
 
 [dependencies]
 arrayvec = "0.4"
