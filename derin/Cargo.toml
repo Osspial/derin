@@ -6,7 +6,7 @@ license = "Apache-2.0"
 
 [dependencies]
 arrayvec = "0.4"
-glutin = "0.12"
+glutin = "0.13"
 derin_atlas = {path = "../derin_atlas"}
 glyphydog = {git = "https://github.com/Osspial/glyphydog.git"}
 itertools = "0.7"

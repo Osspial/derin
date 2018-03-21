@@ -139,7 +139,7 @@ impl GLRenderer {
         let vert_shader = Shader::new(VERT_SHADER, context_state.clone()).unwrap();
         let frag_shader = Shader::new(FRAG_SHADER, context_state.clone()).unwrap();
 
-        let program = Program::new(&vert_shader, None, &frag_shader).unwrap_werr();
+        let program = Program::new(&vert_shader, None, &frag_shader).unwrap().0;
 
         let gl_tex_atlas = Texture::new(DimsBox::new2(1024, 1024), 1, context_state.clone()).unwrap();
 
