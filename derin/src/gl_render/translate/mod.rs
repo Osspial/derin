@@ -112,7 +112,10 @@ impl Translator {
             if let Some(parent_clipped) = clip_rect.intersect_rect(parent_rect) {
                 match (prim.prim, widget_theme.image, widget_theme.text) {
                     (Prim::Image, Some(image), _) => {
-                        let atlas_rect = draw.atlas.image_rect(theme_path, || (&image.pixels, image.dims)).cast::<u16>().unwrap();
+                        let atlas_rect = match output_vertices {
+                            true => draw.atlas.image_rect(theme_path, || (&image.pixels, image.dims)).cast::<u16>().unwrap(),
+                            false => OffsetBox::new2(0, 0, 0, 0)
+                        };
 
                         let abs_rect_dims = abs_rect.dims();
                         let abs_rect_dims_bounded = image.size_bounds.bound_rect(DimsBox::new(abs_rect_dims));
