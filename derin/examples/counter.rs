@@ -30,7 +30,7 @@ struct Counter {
 
 fn main() {
     let mut value = 0;
-    let mut counter_ui = Group::new(
+    let counter_ui = Group::new(
         Counter {
             increment: Button::new(Contents::Text("Increment".to_string()), Some(1)),
             decrement: Button::new(Contents::Text("Decrement".to_string()), Some(-1)),

@@ -33,7 +33,7 @@ use core::tree::{WidgetIdent, WidgetSummary, Widget};
 ///   themselves widgets, but are instead collections of widgets, such as `Vec`.
 ///
 /// # Example
-/// ```
+/// ```ignore
 /// pub struct SimpleAction;
 ///
 /// #[derive(WidgetContainer)]

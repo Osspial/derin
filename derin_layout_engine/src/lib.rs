@@ -633,7 +633,8 @@ enum HintError {
 mod tests {
     use super::*;
     use quickcheck::{Arbitrary, Gen};
-    use geometry::*;
+    use cgmath_geometry::*;
+    use cgmath::Point2;
     use std::mem;
 
     quickcheck!{
@@ -664,10 +665,13 @@ mod tests {
         }
     }
 
-    impl Arbitrary for BoundRect {
-        fn arbitrary<G: Gen>(g: &mut G) -> BoundRect {
-            let mut topleft = Point2::arbitrary(g);
-            let mut lowright = Point2::arbitrary(g);
+    #[derive(Clone)]
+    struct A<T>(T);
+
+    impl Arbitrary for A<BoundBox<Point2<i32>>> {
+        fn arbitrary<G: Gen>(g: &mut G) -> A<BoundBox<Point2<i32>>> {
+            let mut topleft = <A<Point2<i32>>>::arbitrary(g).0;
+            let mut lowright = <A<Point2<i32>>>::arbitrary(g).0;
 
             // Make sure that topleft is above and to the left of lowright.
             if lowright.x < topleft.x {
@@ -677,16 +681,16 @@ mod tests {
                 mem::swap(&mut lowright.y, &mut topleft.y);
             }
 
-            BoundRect {
-                topleft: topleft,
-                lowright: lowright
-            }
+            A(BoundBox {
+                min: topleft,
+                max: lowright
+            })
         }
     }
 
-    impl Arbitrary for Point2 {
-        fn arbitrary<G: Gen>(g: &mut G) -> Point2 {
-            Point2::new(g.next_u32(), g.next_u32())
+    impl Arbitrary for A<Point2<i32>> {
+        fn arbitrary<G: Gen>(g: &mut G) -> A<Point2<i32>> {
+            A(Point2::new(g.next_u32() as i32 & !i32::min_value(), g.next_u32() as i32 & !i32::min_value()))
         }
     }
 }

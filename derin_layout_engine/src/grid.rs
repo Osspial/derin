@@ -427,10 +427,11 @@ mod tests {
     impl Arbitrary for GridTrack {
         fn arbitrary<G: Gen>(g: &mut G) -> GridTrack {
             let mut track = GridTrack::default();
-            track.set_min_size(g.next_u32());
-            track.set_max_size(g.next_u32());
-            track.change_size(g.next_u32());
-            track.fr_size = g.next_f32();
+            track.set_hints(TrackHints {
+                min_size: g.next_u32() as i32 & !i32::min_value(),
+                max_size: g.next_u32() as i32 & !i32::min_value(),
+                fr_size: g.next_f32()
+            }).ok();
             track
         }
     }

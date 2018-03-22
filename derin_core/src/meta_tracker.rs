@@ -34,6 +34,7 @@ pub(crate) struct MetaEvent<I: Iterator<Item=WidgetIdent>> {
     pub variant: MetaEventVariant
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub(crate) enum MetaEventVariant {
     FocusChange(FocusChange),
     EventBubble(WidgetEvent)
@@ -140,30 +141,41 @@ impl MetaCode {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
     #[test]
     fn focus_push_drain() {
         let mut focus_tracker = MetaEventTracker::default();
-        focus_tracker.push_focus(FocusChange::Next, [WidgetIdent::Num(0), WidgetIdent::Str("hello")].into_iter().cloned());
-        focus_tracker.push_focus(FocusChange::Prev, [WidgetIdent::Str("goodbye"), WidgetIdent::Str("again"), WidgetIdent::Num(3)].into_iter().cloned());
+        let hello: Arc<str> = Arc::from("hello");
+        let goodbye: Arc<str> = Arc::from("goodbye");
+        let again: Arc<str> = Arc::from("again");
+
+        focus_tracker.push_focus(FocusChange::Next, [WidgetIdent::Num(0), WidgetIdent::Str(hello.clone())].into_iter().cloned());
+        focus_tracker.push_focus(FocusChange::Prev, [WidgetIdent::Str(goodbye.clone()), WidgetIdent::Str(again.clone()), WidgetIdent::Num(3)].into_iter().cloned());
 
         {
         let mut drain = focus_tracker.drain_meta();
-            let (focus, mut iter) = drain.next().unwrap();
-            assert_eq!(FocusChange::Next, focus);
-            assert_eq!(Some(WidgetIdent::Num(0)), iter.next());
-            assert_eq!(Some(WidgetIdent::Str("hello")), iter.next());
-            assert_eq!(None, iter.next());
+            let MetaEvent {
+                mut source,
+                variant
+            } = drain.next().unwrap();
+            assert_eq!(MetaEventVariant::FocusChange(FocusChange::Next), variant);
+            assert_eq!(Some(WidgetIdent::Num(0)), source.next());
+            assert_eq!(Some(WidgetIdent::Str(hello.clone())), source.next());
+            assert_eq!(None, source.next());
         }
 
         {
         let mut drain = focus_tracker.drain_meta();
-            let (focus, mut iter) = drain.next().unwrap();
-            assert_eq!(FocusChange::Prev, focus);
-            assert_eq!(Some(WidgetIdent::Str("goodbye")), iter.next());
-            assert_eq!(Some(WidgetIdent::Str("again")), iter.next());
-            assert_eq!(Some(WidgetIdent::Num(3)), iter.next());
-            assert_eq!(None, iter.next());
+            let MetaEvent {
+                mut source,
+                variant
+            } = drain.next().unwrap();
+            assert_eq!(MetaEventVariant::FocusChange(FocusChange::Prev), variant);
+            assert_eq!(Some(WidgetIdent::Str(goodbye.clone())), source.next());
+            assert_eq!(Some(WidgetIdent::Str(again.clone())), source.next());
+            assert_eq!(Some(WidgetIdent::Num(3)), source.next());
+            assert_eq!(None, source.next());
         }
 
         let mut drain = focus_tracker.drain_meta();

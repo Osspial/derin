@@ -75,7 +75,7 @@ fn main() {
             program: {
                 let vertex_shader = Shader::new(VERTEX_SHADER, context_state.clone()).unwrap();
                 let fragment_shader = Shader::new(FRAGMENT_SHADER, context_state.clone()).unwrap();
-                Program::new(&vertex_shader, None, &fragment_shader).unwrap_discard()
+                Program::new(&vertex_shader, None, &fragment_shader).unwrap().0
             }
         });
     }
