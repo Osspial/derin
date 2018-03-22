@@ -262,9 +262,9 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                             let builder = WindowBuilder::new()
                                 .with_dimensions(popup_attrs.rect.width() as u32, popup_attrs.rect.height() as u32)
                                 .with_visibility(false)
-                                .with_focusability(popup_attrs.focusable)
+                                // .with_focusability(popup_attrs.focusable)
                                 .with_title(popup_attrs.title)
-                                .is_popup(popup_attrs.tool_window)
+                                // .is_popup(popup_attrs.tool_window)
                                 .with_decorations(popup_attrs.decorations);
                             let popup_renderer = unsafe{ GLRenderer::new(events_loop, builder).unwrap() };
                             let window_pos = primary_renderer.borrow().window().get_inner_position().unwrap();

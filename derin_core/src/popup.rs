@@ -27,8 +27,8 @@ pub struct PopupAttributes {
     pub rect: BoundBox<Point2<i32>>,
     pub title: String,
     pub decorations: bool,
-    pub tool_window: bool,
-    pub focusable: bool,
+    // pub tool_window: bool,
+    // pub focusable: bool,
     pub ident: WidgetIdent
 }
 
@@ -45,8 +45,8 @@ impl Default for PopupAttributes {
             rect: BoundBox::new2(0, 0, 0, 0),
             title: String::new(),
             decorations: true,
-            tool_window: false,
-            focusable: true,
+            // tool_window: false,
+            // focusable: true,
             ident: WidgetIdent::Num(0)
         }
     }
