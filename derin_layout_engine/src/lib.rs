@@ -398,7 +398,11 @@ impl GridEngine {
                                 }
 
                                 frac_min_size.dims.$axis = cmp::max(
-                                    (widget_size_bounds.min.$size() as Fr * $fr_axis / fr_widget).ceil() as Px,
+                                    match fr_widget > 0.0 {
+                                        true => 
+                                            (widget_size_bounds.min.$size() as Fr * $fr_axis / fr_widget).ceil() as Px,
+                                        false => 0
+                                    },
                                     frac_min_size.$size()
                                 );
 
