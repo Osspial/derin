@@ -20,6 +20,7 @@ use core::{Root, LoopFlow, WindowEvent, EventLoopOps, PopupDelta};
 use core::tree::{Widget, WidgetIdent};
 use core::event::WidgetEvent;
 use core::popup::PopupID;
+use core::render::Renderer;
 use theme::Theme;
 use gullery::ContextState;
 
@@ -145,7 +146,8 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
 
             loop {
                 let mut popup_deltas = Vec::new();
-                events_loop.run_forever(|glutin_event| {
+                let mut break_loop = false;
+                let mut process_glutin_event = |glutin_event| {
                     let mut popup_id = None;
                     let derin_event: WindowEvent = match glutin_event {
                         Event::WindowEvent{window_id, event} => {
@@ -172,7 +174,7 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                                         GMouseButton::Middle => MouseButton::Middle,
                                         GMouseButton::Other(1) => MouseButton::X1,
                                         GMouseButton::Other(2) => MouseButton::X2,
-                                        GMouseButton::Other(_) => return ControlFlow::Continue
+                                        GMouseButton::Other(_) => return
                                     };
                                     match state {
                                         ElementState::Pressed => WindowEvent::MouseDown(button),
@@ -196,10 +198,10 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                                             ElementState::Released => WindowEvent::KeyUp(key)
                                         }
                                     } else {
-                                        return ControlFlow::Continue
+                                        return;
                                     }
                                 }
-                                GWindowEvent::Closed => return match popup_id {
+                                GWindowEvent::Closed => match popup_id {
                                     Some(popup_id) => {
                                         event_loop_ops.remove_popup(popup_id);
 
@@ -209,18 +211,20 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                                         unsafe{ removed_renderer.window().make_current().ok() };
                                         drop(removed_renderer);
 
-                                        ControlFlow::Continue
+                                        return
                                     },
-                                    None if window_id == primary_renderer.borrow().window().id() => ControlFlow::Break,
-                                    None => ControlFlow::Continue
+                                    None => {
+                                        break_loop = true;
+                                        return
+                                    }
                                 },
                                 GWindowEvent::Refresh => WindowEvent::Redraw,
-                                _ => return ControlFlow::Continue
+                                _ => return
                             }
                         },
                         Event::Awakened => WindowEvent::Timer,
                         Event::Suspended(..) |
-                        Event::DeviceEvent{..} => return ControlFlow::Continue
+                        Event::DeviceEvent{..} => return
                     };
 
                     let event_result = match popup_id {
@@ -237,18 +241,18 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                     match event_result.flow {
                         LoopFlow::Break(b) => {
                             ret = Some(b);
-                            return ControlFlow::Break;
+                            return;
                         },
                         LoopFlow::Continue => ()
                     }
                     if event_result.popup_deltas.len() > 0 {
                         popup_deltas = event_result.popup_deltas;
-                        return ControlFlow::Break;
+                        return;
                     }
-
-                    ControlFlow::Continue
-                });
-                if popup_deltas.len() == 0 {
+                };
+                events_loop.run_forever(|e| {process_glutin_event(e); ControlFlow::Break});
+                events_loop.poll_events(process_glutin_event);
+                if break_loop {
                     break;
                 }
 
@@ -288,6 +292,8 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                         }
                     }
                 }
+
+                event_loop_ops.redraw();
             }
             ret
         };

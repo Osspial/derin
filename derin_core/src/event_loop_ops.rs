@@ -27,6 +27,7 @@ use render::{Renderer, RenderFrame, FrameRectStack};
 use widget_stack::{WidgetPath, WidgetStack};
 use meta_tracker::{MetaDrain, MetaEvent, MetaEventVariant};
 use derin_common_types::buttons::ModifierKeys;
+use derin_common_types::cursor::CursorIcon;
 use offset_widget::*;
 
 use std::time::Duration;
@@ -39,7 +40,10 @@ pub struct EventLoopOps<'a, A: 'static, N: 'static, F: 'a, R: 'a, G: 'a>
     pub(crate) root: &'a mut Root<A, N, F>,
     pub(crate) on_action: &'a mut FnMut(A, &mut N, &mut F::Theme) -> LoopFlow<G>,
     pub(crate) bubble_fallthrough: &'a mut FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>,
-    pub(crate) with_renderer: &'a mut FnMut(Option<PopupID>, &mut FnMut(&mut R))
+    pub(crate) with_renderer: &'a mut FnMut(Option<PopupID>, &mut FnMut(&mut R)),
+
+    pub(crate) set_cursor_pos: Option<Point2<i32>>,
+    pub(crate) set_cursor_icon: Option<CursorIcon>
 }
 
 #[must_use]
@@ -82,7 +86,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 ref mut mouse_buttons_down,
                 ref mut actions,
                 ref mut widget_stack_base,
-                ref mut force_full_redraw,
+                needs_redraw: ref mut root_needs_redraw,
                 ref mut event_stamp,
                 ref mut widget_ident_stack,
                 ref mut meta_tracker,
@@ -91,41 +95,41 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 ref mut theme,
                 ref mut popup_widgets,
                 ref mut modifiers,
-                ref mut cursor_icon,
                 ..
             },
             ref mut on_action,
             ref mut bubble_fallthrough,
-            ref mut with_renderer
+            ref mut set_cursor_pos,
+            ref mut set_cursor_icon,
+            ..
         } = *self;
 
         // let mut cur_popup_id = None;
         let mut popup_map_insert = Vec::new();
         let mut popup_deltas = Vec::new();
 
-        let mut set_cursor_pos = None;
-        let mut set_cursor_icon = None;
-        let mouse_pos: &mut Point2<i32>;
-
         // If we're performing events on a popup, we remove that popup from the popup map so that
         // operations can be performed on other popups during event processing. We re-insert it
         // after all operations have been performed.
         let mut taken_popup_widget = None;
+        let (mouse_pos, needs_redraw, mut widget_stack):
+            (&mut Point2<i32>, &mut bool, _);
 
-        let widget_stack_root = match event_popup_id {
+        match event_popup_id {
             Some(id) => {
                 taken_popup_widget = Some(popup_widgets.take(id).expect("Bad Popup ID"));
                 let popup_widget = taken_popup_widget.as_mut().unwrap();
 
                 mouse_pos = &mut popup_widget.mouse_pos;
-                &mut *popup_widget.widget
+                widget_stack = widget_stack_base.use_stack_dyn(&mut *popup_widget.widget, root_id);
+                needs_redraw = &mut popup_widget.needs_redraw;
             },
             None => {
                 mouse_pos = root_mouse_pos;
-                &mut *root_widget
+                widget_stack = widget_stack_base.use_stack_dyn(&mut *root_widget, root_id);
+                needs_redraw = &mut *root_needs_redraw;
             }
-        };
-        let mut widget_stack = widget_stack_base.use_stack_dyn(widget_stack_root, root_id);
+        }
 
         macro_rules! try_push_action {
             (
@@ -170,8 +174,8 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                         $path
                     );
                 }
-                set_cursor_pos = set_cursor_pos.or(event_ops.cursor_pos);
-                set_cursor_icon = set_cursor_icon.or(event_ops.cursor_icon);
+                *set_cursor_pos = set_cursor_pos.or(event_ops.cursor_pos);
+                *set_cursor_icon = set_cursor_icon.or(event_ops.cursor_icon);
                 $(*$bubble_store = event_ops.bubble;)*
 
                 widget_update_tag.last_event_stamp.set(*event_stamp);
@@ -193,7 +197,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
 
                 widget_stack.move_to_root();
                 widget_stack.top().widget.set_rect(new_size.cast::<i32>().unwrap_or(DimsBox::max_value()).into());
-                *force_full_redraw = true;
+                *needs_redraw = true;
             },
             WindowEvent::MouseEnter(enter_pos) => {
                 let WidgetPath{ widget: mut root_widget, path: root_path, .. } = widget_stack.move_to_root();
@@ -619,7 +623,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                     }
                 );
             },
-            WindowEvent::Redraw => *force_full_redraw = true
+            WindowEvent::Redraw => *needs_redraw = true
         }
 
         // Dispatch focus-changing events to the widgets.
@@ -787,8 +791,6 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
         }
 
         let mut return_flow = LoopFlow::Continue;
-        let mut root_update = widget_stack.move_to_root().widget.update_tag().needs_update(root_id);
-        let mark_active_widgets_redraw = root_update.needs_redraw();
 
         drop(widget_stack);
         if 0 < actions.len() {
@@ -802,29 +804,84 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
                 }
             }
         }
-        let redraw_widget = match taken_popup_widget.as_mut() {
-            Some(popup_widget) => &mut *popup_widget.widget,
-            None => root_widget
-        };
 
-        with_renderer(event_popup_id, &mut |renderer| {
-            if let Some(cursor_pos) = set_cursor_pos {
+        // Report popups that need to be created
+        for (owner_id, popup_widget, popup_attributes) in popup_map_insert {
+            let popup_id = popup_widgets.insert(owner_id, popup_attributes.ident.clone(), popup_widget);
+            popup_deltas.push(PopupDelta::Create(PopupSummary {
+                id: popup_id,
+                attributes: popup_attributes
+            }));
+        }
+
+        // Report popups that need to be destroyed.
+        popup_deltas.extend(popup_widgets.popups_removed_by_children()
+            .map(|removed_popup_id| PopupDelta::Remove(removed_popup_id)));
+
+        // If we took a popup widget out of the popup map, replace it.
+        if let Some(taken_popup_widget) = taken_popup_widget {
+            popup_widgets.replace(event_popup_id.unwrap(), taken_popup_widget);
+        }
+
+        EventLoopResult {
+            flow: return_flow,
+            wait_until_call_timer: timer_list.time_until_trigger(),
+            popup_deltas
+        }
+    }
+
+    pub fn redraw(&mut self) {
+        let EventLoopOps {
+            root: &mut Root {
+                id: root_id,
+                needs_redraw: ref mut root_needs_redraw,
+                ref mut widget_ident_stack,
+                ref mut root_widget,
+                ref mut theme,
+                ref mut cursor_icon,
+                ref mut popup_widgets,
+                ..
+            },
+            ref mut with_renderer,
+            ref mut set_cursor_icon,
+            ref mut set_cursor_pos,
+            ..
+        } = *self;
+
+        // match taken_popup_widget.as_mut() {
+        //     Some(popup_widget) => {
+        //         redraw_widget = &mut *popup_widget.widget;
+        //         needs_redraw = &mut popup_widget.needs_redraw;
+        //     },
+        //     None => {
+        //         redraw_widget = root_widget;
+        //         needs_redraw = root_needs_redraw;
+        //     }
+        // };
+        let mut redraw = |redraw_widget: &mut Widget<A, F>, renderer: &mut R, needs_redraw: &mut bool| {
+            let mut root_update = redraw_widget.update_tag().needs_update(root_id);
+            let mark_active_widgets_redraw = root_update.needs_redraw();
+
+            if let Some(cursor_pos) = *set_cursor_pos {
                 renderer.set_cursor_pos(cursor_pos);
             }
-            if let Some(set_icon) = set_cursor_icon {
+            if let Some(set_icon) = *set_cursor_icon {
                 if set_icon != *cursor_icon {
                     renderer.set_cursor_icon(set_icon);
                     *cursor_icon = set_icon;
                 }
             }
-            if let WindowEvent::WindowResize(new_dims) = event {
+            *set_cursor_pos = None;
+            *set_cursor_icon = None;
+
+            let new_dims = DimsBox::new(redraw_widget.rect().dims().map(|d| d as u32));
+            if new_dims != renderer.dims() {
                 renderer.resized(new_dims);
             }
 
-
             // Draw the widget tree.
-            if mark_active_widgets_redraw || *force_full_redraw {
-                let force_full_redraw = *force_full_redraw || renderer.force_full_redraw();
+            if mark_active_widgets_redraw || *needs_redraw {
+                let force_full_redraw = *needs_redraw || renderer.force_full_redraw();
 
                 root_update.render_self |= force_full_redraw;
                 root_update.update_child |= force_full_redraw;
@@ -870,33 +927,16 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
             }
 
             renderer.set_size_bounds(redraw_widget.size_bounds());
-            *force_full_redraw = false;
-        });
+            *needs_redraw = false;
+        };
 
-        drop(redraw_widget);
-        // Report popups that need to be created
-        for (owner_id, popup_widget, popup_attributes) in popup_map_insert {
-            let popup_id = popup_widgets.insert(owner_id, popup_attributes.ident.clone(), popup_widget);
-            popup_deltas.push(PopupDelta::Create(PopupSummary {
-                id: popup_id,
-                attributes: popup_attributes
-            }));
+        with_renderer(None, &mut |renderer| redraw(root_widget as &mut Widget<A, F>, renderer, root_needs_redraw));
+        for (id, popup) in popup_widgets.popups_mut() {
+            with_renderer(Some(id), &mut |renderer| redraw(&mut *popup.widget, renderer, &mut popup.needs_redraw));
         }
-
-        // Report popups that need to be destroyed.
-        popup_deltas.extend(popup_widgets.popups_removed_by_children()
-            .map(|removed_popup_id| PopupDelta::Remove(removed_popup_id)));
-
-        // If we took a popup widget out of the popup map, replace it.
-        if let Some(taken_popup_widget) = taken_popup_widget {
-            popup_widgets.replace(event_popup_id.unwrap(), taken_popup_widget);
-        }
-
-        EventLoopResult {
-            flow: return_flow,
-            wait_until_call_timer: timer_list.time_until_trigger(),
-            popup_deltas
-        }
+        // with_renderer(event_popup_id, &mut |renderer| {
+        //     *needs_redraw = false;
+        // });
     }
 }
 

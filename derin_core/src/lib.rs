@@ -66,7 +66,7 @@ pub struct Root<A, N, F>
 
     actions: VecDeque<A>,
     widget_stack_base: WidgetStackBase<A, F>,
-    force_full_redraw: bool,
+    needs_redraw: bool,
     event_stamp: u32,
     widget_ident_stack: Vec<WidgetIdent>,
     meta_tracker: MetaEventTracker,
@@ -120,7 +120,7 @@ impl<A, N, F> Root<A, N, F>
             cursor_icon: CursorIcon::default(),
             actions: VecDeque::new(),
             widget_stack_base: WidgetStackBase::new(),
-            force_full_redraw: false,
+            needs_redraw: true,
             event_stamp: 1,
             widget_ident_stack: Vec::new(),
             meta_tracker: MetaEventTracker::default(),
@@ -144,7 +144,10 @@ impl<A, N, F> Root<A, N, F>
             root: self,
             on_action: &mut on_action,
             bubble_fallthrough: &mut bubble_fallthrough,
-            with_renderer: &mut with_renderer
+            with_renderer: &mut with_renderer,
+
+           set_cursor_icon: None,
+           set_cursor_pos: None
         })
     }
 }

@@ -66,6 +66,7 @@ pub(crate) struct PopupMap<A, F: RenderFrame> {
 pub(crate) struct PopupWidget<A, F: RenderFrame> {
     pub widget: Box<Widget<A, F>>,
     pub mouse_pos: Point2<i32>,
+    pub needs_redraw: bool,
     pub owner_id: WidgetID,
     pub ident: WidgetIdent
 }
@@ -94,6 +95,7 @@ impl<A, F: RenderFrame> PopupMap<A, F> {
                 self.popups.insert(popup_id, PopupWidget {
                     widget,
                     mouse_pos: Point2::new(0, 0),
+                    needs_redraw: true,
                     owner_id,
                     ident
                 });
@@ -161,6 +163,10 @@ impl<A, F: RenderFrame> PopupMap<A, F> {
                 None
             }
         })
+    }
+
+    pub(crate) fn popups_mut<'a>(&'a mut self) -> impl 'a + Iterator<Item=(PopupID, &'a mut PopupWidget<A, F>)> {
+        self.popups.iter_mut().map(|(i, p)| (*i, p))
     }
 }
 
