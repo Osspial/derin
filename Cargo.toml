@@ -2,4 +2,4 @@
 members = ["./derin_atlas", "./derin_common_types", "./derin_layout_engine", "./derin_macros", "./derin_core", "./derin"]
 
 [replace]
-"winit:0.11.2" = { git = "https://github.com/osspial/winit", branch="prs_merged" }
+"winit:0.11.3" = { git = "https://github.com/osspial/winit", branch="prs_merged" }
