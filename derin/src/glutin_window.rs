@@ -16,7 +16,7 @@ use glutin::*;
 use glutin::{MouseButton as GMouseButton, WindowEvent as GWindowEvent, MouseScrollDelta};
 use gl_render::{GLRenderer, GLFrame};
 use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
-use core::{Root, LoopFlow, WindowEvent, EventLoopOps, PopupDelta};
+use core::{Root, LoopFlow, WindowEvent, PopupDelta};
 use core::tree::{Widget, WidgetIdent};
 use core::event::WidgetEvent;
 use core::popup::PopupID;
@@ -26,7 +26,6 @@ use gullery::ContextState;
 
 use std::thread::{self, JoinHandle};
 use std::sync::Arc;
-use std::cell::{Cell, RefCell};
 use std::time::Duration;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -37,10 +36,10 @@ use parking_lot::Mutex;
 
 /// A window displayed on the desktop, which contains a set of drawable widgets.
 pub struct GlutinWindow<A: 'static, N: 'static + Widget<A, GLFrame>> {
-    primary_renderer: RefCell<GLRenderer>,
+    primary_renderer: GLRenderer,
     window_popup_map: HashMap<WindowId, PopupID>,
-    popup_renderers: RefCell<HashMap<PopupID, GLRenderer>>,
-    active_renderer: Cell<Option<PopupID>>,
+    popup_renderers: HashMap<PopupID, GLRenderer>,
+    active_renderer: Option<PopupID>,
     events_loop: EventsLoop,
     timer_sync: Arc<Mutex<TimerPark>>,
     timer_thread_handle: JoinHandle<()>,
@@ -92,10 +91,10 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
 
         Ok(GlutinWindow {
             root: Root::new(root, theme, renderer.dims()),
-            primary_renderer: RefCell::new(renderer),
-            active_renderer: Cell::new(None),
+            primary_renderer: renderer,
+            active_renderer: None,
             window_popup_map: HashMap::new(),
-            popup_renderers: RefCell::new(HashMap::new()),
+            popup_renderers: HashMap::new(),
             events_loop,
             timer_sync,
             timer_thread_handle,
@@ -118,14 +117,14 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
     /// `on_fallthrough` is called whenever a raw event bubbles through the root widget.
     ///
     /// TODO: DOCUMENT HOW EVENT BUBBLING WORKS
-    pub fn run_forever<F, FF, R>(&mut self, on_action: F, on_fallthrough: FF) -> Option<R>
+    pub fn run_forever<F, FF, R>(&mut self, mut on_action: F, mut on_fallthrough: FF) -> Option<R>
         where F: FnMut(A, &mut N, &mut Theme) -> LoopFlow<R>,
               FF: FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
     {
         let GlutinWindow {
             ref mut primary_renderer,
-            ref popup_renderers,
-            ref active_renderer,
+            ref mut popup_renderers,
+            ref mut active_renderer,
             ref mut window_popup_map,
             ref mut events_loop,
             ref mut timer_sync,
@@ -133,200 +132,184 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
             ref mut root,
         } = *self;
 
-        let adapt_window_events = |event_loop_ops: &mut EventLoopOps<A, N, GLFrame, GLRenderer, R>| {
-            let mut ret: Option<R> = None;
-            let map_modifiers = |g_modifiers: ModifiersState| {
-                let mut modifiers = ModifierKeys::empty();
-                modifiers.set(ModifierKeys::SHIFT, g_modifiers.shift);
-                modifiers.set(ModifierKeys::CTRL, g_modifiers.ctrl);
-                modifiers.set(ModifierKeys::ALT, g_modifiers.alt);
-                modifiers.set(ModifierKeys::LOGO, g_modifiers.logo);
-                modifiers
-            };
+        let mut ret: Option<R> = None;
+        let map_modifiers = |g_modifiers: ModifiersState| {
+            let mut modifiers = ModifierKeys::empty();
+            modifiers.set(ModifierKeys::SHIFT, g_modifiers.shift);
+            modifiers.set(ModifierKeys::CTRL, g_modifiers.ctrl);
+            modifiers.set(ModifierKeys::ALT, g_modifiers.alt);
+            modifiers.set(ModifierKeys::LOGO, g_modifiers.logo);
+            modifiers
+        };
 
-            loop {
-                let mut popup_deltas = Vec::new();
-                let mut break_loop = false;
-                let mut process_glutin_event = |glutin_event| {
-                    let mut popup_id = None;
-                    let derin_event: WindowEvent = match glutin_event {
-                        Event::WindowEvent{window_id, event} => {
-                            popup_id = window_popup_map.get(&window_id).cloned();
-                            let scale_factor = match popup_id {
-                                None => primary_renderer.borrow().window().hidpi_factor(),
-                                Some(id) => popup_renderers.borrow().get(&id).unwrap().window().hidpi_factor()
-                            };
-                            macro_rules! scale {
-                                ($val:expr) => {{($val as f32 / scale_factor) as _}}
+        loop {
+            let mut popup_deltas = Vec::new();
+            let mut break_loop = false;
+            let mut process_glutin_event = |glutin_event| {
+                let mut popup_id = None;
+                let derin_event: WindowEvent = match glutin_event {
+                    Event::WindowEvent{window_id, event} => {
+                        popup_id = window_popup_map.get(&window_id).cloned();
+                        let scale_factor = match popup_id {
+                            None => primary_renderer.window().hidpi_factor(),
+                            Some(id) => popup_renderers.get(&id).unwrap().window().hidpi_factor()
+                        };
+                        macro_rules! scale {
+                            ($val:expr) => {{($val as f32 / scale_factor) as _}}
+                        }
+                        match event {
+                            GWindowEvent::CursorMoved{position, modifiers, ..} => {
+                                root.modifiers = map_modifiers(modifiers);
+                                WindowEvent::MouseMove(Point2::new(scale!(position.0), scale!(position.1)))
+                            },
+                            GWindowEvent::CursorEntered{..} => WindowEvent::MouseEnter(Point2::new(0, 0)),
+                            GWindowEvent::CursorLeft{..} => WindowEvent::MouseExit(Point2::new(0, 0)),
+                            GWindowEvent::MouseInput{state, button: g_button, modifiers, ..} => {
+                                root.modifiers = map_modifiers(modifiers);
+                                let button = match g_button {
+                                    GMouseButton::Left => MouseButton::Left,
+                                    GMouseButton::Right => MouseButton::Right,
+                                    GMouseButton::Middle => MouseButton::Middle,
+                                    GMouseButton::Other(1) => MouseButton::X1,
+                                    GMouseButton::Other(2) => MouseButton::X2,
+                                    GMouseButton::Other(_) => return
+                                };
+                                match state {
+                                    ElementState::Pressed => WindowEvent::MouseDown(button),
+                                    ElementState::Released => WindowEvent::MouseUp(button)
+                                }
                             }
-                            match event {
-                                GWindowEvent::CursorMoved{position, modifiers, ..} => {
-                                    event_loop_ops.set_modifiers(map_modifiers(modifiers));
-                                    WindowEvent::MouseMove(Point2::new(scale!(position.0), scale!(position.1)))
-                                },
-                                GWindowEvent::CursorEntered{..} => WindowEvent::MouseEnter(Point2::new(0, 0)),
-                                GWindowEvent::CursorLeft{..} => WindowEvent::MouseExit(Point2::new(0, 0)),
-                                GWindowEvent::MouseInput{state, button: g_button, modifiers, ..} => {
-                                    event_loop_ops.set_modifiers(map_modifiers(modifiers));
-                                    let button = match g_button {
-                                        GMouseButton::Left => MouseButton::Left,
-                                        GMouseButton::Right => MouseButton::Right,
-                                        GMouseButton::Middle => MouseButton::Middle,
-                                        GMouseButton::Other(1) => MouseButton::X1,
-                                        GMouseButton::Other(2) => MouseButton::X2,
-                                        GMouseButton::Other(_) => return
-                                    };
-                                    match state {
-                                        ElementState::Pressed => WindowEvent::MouseDown(button),
-                                        ElementState::Released => WindowEvent::MouseUp(button)
-                                    }
+                            GWindowEvent::MouseWheel{delta, modifiers, ..} => {
+                                root.modifiers = map_modifiers(modifiers);
+                                match delta {
+                                    MouseScrollDelta::LineDelta(x, y) => WindowEvent::MouseScrollLines(Vector2::new(x as i32, y as i32)),
+                                    MouseScrollDelta::PixelDelta(x, y) => WindowEvent::MouseScrollPx(Vector2::new(x as i32, y as i32)),
                                 }
-                                GWindowEvent::MouseWheel{delta, modifiers, ..} => {
-                                    event_loop_ops.set_modifiers(map_modifiers(modifiers));
-                                    match delta {
-                                        MouseScrollDelta::LineDelta(x, y) => WindowEvent::MouseScrollLines(Vector2::new(x as i32, y as i32)),
-                                        MouseScrollDelta::PixelDelta(x, y) => WindowEvent::MouseScrollPx(Vector2::new(x as i32, y as i32)),
-                                    }
-                                }
-                                GWindowEvent::Resized(width, height) => WindowEvent::WindowResize(DimsBox::new2(scale!(width), scale!(height))),
-                                GWindowEvent::ReceivedCharacter(c) => WindowEvent::Char(c),
-                                GWindowEvent::KeyboardInput{ input, .. } => {
-                                    if let Some(key) = input.virtual_keycode.and_then(map_key) {
-                                        event_loop_ops.set_modifiers(map_modifiers(input.modifiers));
-                                        match input.state {
-                                            ElementState::Pressed => WindowEvent::KeyDown(key),
-                                            ElementState::Released => WindowEvent::KeyUp(key)
-                                        }
-                                    } else {
-                                        return;
-                                    }
-                                }
-                                GWindowEvent::Closed => match popup_id {
-                                    Some(popup_id) => {
-                                        event_loop_ops.remove_popup(popup_id);
-
-                                        let removed_renderer = popup_renderers.borrow_mut().remove(&popup_id).unwrap();
-                                        window_popup_map.remove(&removed_renderer.window().id());
-                                        // The popup's context has to be bound when destroying the context.
-                                        unsafe{ removed_renderer.window().make_current().ok() };
-                                        drop(removed_renderer);
-
-                                        return
-                                    },
-                                    None => {
-                                        break_loop = true;
-                                        return
-                                    }
-                                },
-                                GWindowEvent::Refresh => WindowEvent::Redraw,
-                                _ => return
                             }
-                        },
-                        Event::Awakened => WindowEvent::Timer,
-                        Event::Suspended(..) |
-                        Event::DeviceEvent{..} => return
-                    };
+                            GWindowEvent::Resized(width, height) => WindowEvent::WindowResize(DimsBox::new2(scale!(width), scale!(height))),
+                            GWindowEvent::ReceivedCharacter(c) => WindowEvent::Char(c),
+                            GWindowEvent::KeyboardInput{ input, .. } => {
+                                if let Some(key) = input.virtual_keycode.and_then(map_key) {
+                                    root.modifiers = map_modifiers(input.modifiers);
+                                    match input.state {
+                                        ElementState::Pressed => WindowEvent::KeyDown(key),
+                                        ElementState::Released => WindowEvent::KeyUp(key)
+                                    }
+                                } else {
+                                    return;
+                                }
+                            }
+                            GWindowEvent::Closed => match popup_id {
+                                Some(popup_id) => {
+                                    root.remove_popup(popup_id);
 
-                    let event_result = match popup_id {
-                        Some(popup_id) => event_loop_ops.process_popup_event(popup_id, derin_event),
-                        None => event_loop_ops.process_event(derin_event)
-                    };
+                                    let removed_renderer = popup_renderers.remove(&popup_id).unwrap();
+                                    window_popup_map.remove(&removed_renderer.window().id());
+                                    // The popup's context has to be bound when destroying the context.
+                                    unsafe{ removed_renderer.window().make_current().ok() };
+                                    drop(removed_renderer);
 
-                    match event_result.wait_until_call_timer {
-                        None => *timer_sync.lock() = TimerPark::Indefinite,
-                        Some(park_duration) => *timer_sync.lock() = TimerPark::Timeout(park_duration)
-                    }
-                    timer_thread_handle.thread().unpark();
+                                    return
+                                },
+                                None => {
+                                    break_loop = true;
+                                    return
+                                }
+                            },
+                            GWindowEvent::Refresh => WindowEvent::Redraw,
+                            _ => return
+                        }
+                    },
+                    Event::Awakened => WindowEvent::Timer,
+                    Event::Suspended(..) |
+                    Event::DeviceEvent{..} => return
+                };
 
-                    match event_result.flow {
+                let event_result = match popup_id {
+                    Some(popup_id) => root.process_popup_event(popup_id, derin_event, &mut on_fallthrough),
+                    None => root.process_event(derin_event, &mut on_fallthrough)
+                };
+
+                match event_result.wait_until_call_timer {
+                    None => *timer_sync.lock() = TimerPark::Indefinite,
+                    Some(park_duration) => *timer_sync.lock() = TimerPark::Timeout(park_duration)
+                }
+                timer_thread_handle.thread().unpark();
+
+                for action in root.actions.drain(..) {
+                    match on_action(action, &mut root.root_widget, &mut root.theme) {
                         LoopFlow::Break(b) => {
                             ret = Some(b);
                             return;
                         },
                         LoopFlow::Continue => ()
                     }
-                    if event_result.popup_deltas.len() > 0 {
-                        popup_deltas = event_result.popup_deltas;
-                        return;
-                    }
-                };
-                events_loop.run_forever(|e| {process_glutin_event(e); ControlFlow::Break});
-                events_loop.poll_events(process_glutin_event);
-                if break_loop {
-                    break;
                 }
-
-                let mut popup_renderers = popup_renderers.borrow_mut();
-                for popup_delta in popup_deltas.drain(..) {
-                    match popup_delta {
-                        PopupDelta::Create(popup_summary) => {
-                            let popup_attrs = popup_summary.attributes;
-                            let popup_id = popup_summary.id;
-
-                            let builder = WindowBuilder::new()
-                                .with_dimensions(popup_attrs.rect.width() as u32, popup_attrs.rect.height() as u32)
-                                .with_visibility(false)
-                                // .with_focusability(popup_attrs.focusable)
-                                .with_title(popup_attrs.title)
-                                // .is_popup(popup_attrs.tool_window)
-                                .with_decorations(popup_attrs.decorations);
-                            let popup_renderer = unsafe{ GLRenderer::new(events_loop, builder).unwrap() };
-                            let window_pos = primary_renderer.borrow().window().get_inner_position().unwrap();
-                            popup_renderer.window().set_position(popup_attrs.rect.min().x + window_pos.0, popup_attrs.rect.min().y + window_pos.1);
-                            popup_renderer.window().show();
-
-                            window_popup_map.insert(popup_renderer.window().id(), popup_id);
-                            popup_renderers.insert(popup_id, popup_renderer);
-                            active_renderer.set(Some(popup_id));
-                        },
-                        PopupDelta::Remove(popup_id) => {
-                            let removed_renderer = popup_renderers.remove(&popup_id).unwrap();
-                            window_popup_map.remove(&removed_renderer.window().id());
-                            // The popup's context has to be bound when destroying the context.
-                            unsafe{ removed_renderer.window().make_current().ok() };
-                            drop(removed_renderer);
-
-                            // Reset the context to the primary window.
-                            unsafe{ primary_renderer.borrow().window().make_current().ok() };
-                            active_renderer.set(None);
-                        }
-                    }
+                if event_result.popup_deltas.len() > 0 {
+                    popup_deltas = event_result.popup_deltas;
                 }
-
-                event_loop_ops.redraw();
+            };
+            events_loop.run_forever(|e| {process_glutin_event(e); ControlFlow::Break});
+            events_loop.poll_events(process_glutin_event);
+            if break_loop {
+                break;
             }
-            ret
-        };
 
-        root.run_forever(
-            adapt_window_events,
-            on_action,
-            on_fallthrough,
-            |popup_id_opt, with_renderer| {
-                let (mut hashmap_cell, mut primary_cell);
+            for popup_delta in popup_deltas.drain(..) {
+                match popup_delta {
+                    PopupDelta::Create(popup_summary) => {
+                        let popup_attrs = popup_summary.attributes;
+                        let popup_id = popup_summary.id;
 
-                let renderer_ref = match popup_id_opt {
-                    Some(popup_id) => {
-                        hashmap_cell = popup_renderers.borrow_mut();
-                        hashmap_cell.get_mut(&popup_id).unwrap()
+                        let builder = WindowBuilder::new()
+                            .with_dimensions(popup_attrs.rect.width() as u32, popup_attrs.rect.height() as u32)
+                            .with_visibility(false)
+                            // .with_focusability(popup_attrs.focusable)
+                            .with_title(popup_attrs.title)
+                            // .is_popup(popup_attrs.tool_window)
+                            .with_decorations(popup_attrs.decorations);
+                        let popup_renderer = unsafe{ GLRenderer::new(events_loop, builder).unwrap() };
+                        let window_pos = primary_renderer.window().get_inner_position().unwrap();
+                        popup_renderer.window().set_position(popup_attrs.rect.min().x + window_pos.0, popup_attrs.rect.min().y + window_pos.1);
+                        popup_renderer.window().show();
+
+                        window_popup_map.insert(popup_renderer.window().id(), popup_id);
+                        popup_renderers.insert(popup_id, popup_renderer);
+                        *active_renderer = Some(popup_id);
                     },
-                    None => {
-                        primary_cell = primary_renderer.borrow_mut();
-                        &mut *primary_cell
+                    PopupDelta::Remove(popup_id) => {
+                        let removed_renderer = popup_renderers.remove(&popup_id).unwrap();
+                        window_popup_map.remove(&removed_renderer.window().id());
+                        // The popup's context has to be bound when destroying the context.
+                        unsafe{ removed_renderer.window().make_current().ok() };
+                        drop(removed_renderer);
+
+                        // Reset the context to the primary window.
+                        unsafe{ primary_renderer.window().make_current().ok() };
+                        *active_renderer = None;
                     }
+                }
+            }
+
+            root.redraw(|popup_id_opt, with_renderer| {
+                let renderer_ref = match popup_id_opt {
+                    Some(popup_id) => popup_renderers.get_mut(&popup_id).unwrap(),
+                    None => primary_renderer
                 };
-                if popup_id_opt != active_renderer.get() {
+                if popup_id_opt != *active_renderer {
                     unsafe{ renderer_ref.window().make_current().unwrap() };
-                    active_renderer.set(popup_id_opt);
+                    *active_renderer = popup_id_opt;
                 }
                 with_renderer(renderer_ref)
-            }
-        )
+            });
+        }
+
+        ret
     }
 
     /// Retrieves the `gullery` context state.
     pub fn context_state(&self) -> Rc<ContextState> {
-        self.primary_renderer.borrow().context_state()
+        self.primary_renderer.context_state()
     }
 }
 

@@ -26,30 +26,13 @@ use event::{WidgetEvent, FocusChange};
 use render::{Renderer, RenderFrame, FrameRectStack};
 use widget_stack::{WidgetPath, WidgetStack};
 use meta_tracker::{MetaDrain, MetaEvent, MetaEventVariant};
-use derin_common_types::buttons::ModifierKeys;
-use derin_common_types::cursor::CursorIcon;
 use offset_widget::*;
 
 use std::time::Duration;
 
-pub struct EventLoopOps<'a, A: 'static, N: 'static, F: 'a, R: 'a, G: 'a>
-    where N: Widget<A, F>,
-          F: RenderFrame,
-          R: Renderer<Frame=F>
-{
-    pub(crate) root: &'a mut Root<A, N, F>,
-    pub(crate) on_action: &'a mut FnMut(A, &mut N, &mut F::Theme) -> LoopFlow<G>,
-    pub(crate) bubble_fallthrough: &'a mut FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>,
-    pub(crate) with_renderer: &'a mut FnMut(Option<PopupID>, &mut FnMut(&mut R)),
-
-    pub(crate) set_cursor_pos: Option<Point2<i32>>,
-    pub(crate) set_cursor_icon: Option<CursorIcon>
-}
-
 #[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EventLoopResult<R> {
-    pub flow: LoopFlow<R>,
+pub struct EventLoopResult {
     pub wait_until_call_timer: Option<Duration>,
     pub popup_deltas: Vec<PopupDelta>
 }
@@ -60,45 +43,49 @@ pub enum PopupDelta {
     Remove(PopupID)
 }
 
-impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
+impl<A, N, F> Root<A, N, F>
     where N: Widget<A, F>,
           F: RenderFrame,
-          R: Renderer<Frame=F>
 {
-    pub fn set_modifiers(&mut self, modifiers: ModifierKeys) {
-        self.root.modifiers = modifiers;
+    pub fn process_event(
+        &mut self,
+        event: WindowEvent,
+        mut bubble_fallthrough: impl FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
+    ) -> EventLoopResult {
+        self.process_event_inner(None, event, &mut bubble_fallthrough)
     }
-    pub fn process_event(&mut self, event: WindowEvent) -> EventLoopResult<G> {
-        self.process_event_inner(None, event)
-    }
-    pub fn process_popup_event(&mut self, popup_id: PopupID, event: WindowEvent) -> EventLoopResult<G> {
-        self.process_event_inner(Some(popup_id), event)
+    pub fn process_popup_event(
+        &mut self,
+        popup_id: PopupID,
+        event: WindowEvent,
+        mut bubble_fallthrough: impl FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
+    ) -> EventLoopResult {
+        self.process_event_inner(Some(popup_id), event, &mut bubble_fallthrough)
     }
     pub fn remove_popup(&mut self, popup_id: PopupID) {
-        self.root.popup_widgets.remove(popup_id);
+        self.popup_widgets.remove(popup_id);
     }
 
-    fn process_event_inner(&mut self, event_popup_id: Option<PopupID>, event: WindowEvent) -> EventLoopResult<G> {
-        let EventLoopOps {
-            root: &mut Root {
-                id: root_id,
-                mouse_pos: ref mut root_mouse_pos,
-                ref mut mouse_buttons_down,
-                ref mut actions,
-                ref mut widget_stack_base,
-                needs_redraw: ref mut root_needs_redraw,
-                ref mut event_stamp,
-                ref mut widget_ident_stack,
-                ref mut meta_tracker,
-                ref mut timer_list,
-                ref mut root_widget,
-                ref mut theme,
-                ref mut popup_widgets,
-                ref mut modifiers,
-                ..
-            },
-            ref mut on_action,
-            ref mut bubble_fallthrough,
+    fn process_event_inner(
+        &mut self,
+        event_popup_id: Option<PopupID>,
+        event: WindowEvent,
+        bubble_fallthrough: &mut FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
+    ) -> EventLoopResult {
+        let Root {
+            id: root_id,
+            mouse_pos: ref mut root_mouse_pos,
+            ref mut mouse_buttons_down,
+            ref mut actions,
+            ref mut widget_stack_base,
+            needs_redraw: ref mut root_needs_redraw,
+            ref mut event_stamp,
+            ref mut widget_ident_stack,
+            ref mut meta_tracker,
+            ref mut timer_list,
+            ref mut root_widget,
+            ref mut popup_widgets,
+            ref mut modifiers,
             ref mut set_cursor_pos,
             ref mut set_cursor_icon,
             ..
@@ -790,20 +777,7 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
             *event_stamp += 1;
         }
 
-        let mut return_flow = LoopFlow::Continue;
-
         drop(widget_stack);
-        if 0 < actions.len() {
-            while let Some(action) = actions.pop_front() {
-                match on_action(action, root_widget, theme) {
-                    LoopFlow::Continue => (),
-                    LoopFlow::Break(ret) => {
-                        return_flow = LoopFlow::Break(ret);
-                        break;
-                    }
-                }
-            }
-        }
 
         // Report popups that need to be created
         for (owner_id, popup_widget, popup_attributes) in popup_map_insert {
@@ -824,25 +798,22 @@ impl<'a, A, N, F, R, G> EventLoopOps<'a, A, N, F, R, G>
         }
 
         EventLoopResult {
-            flow: return_flow,
             wait_until_call_timer: timer_list.time_until_trigger(),
             popup_deltas
         }
     }
 
-    pub fn redraw(&mut self) {
-        let EventLoopOps {
-            root: &mut Root {
-                id: root_id,
-                needs_redraw: ref mut root_needs_redraw,
-                ref mut widget_ident_stack,
-                ref mut root_widget,
-                ref mut theme,
-                ref mut cursor_icon,
-                ref mut popup_widgets,
-                ..
-            },
-            ref mut with_renderer,
+    pub fn redraw<R>(&mut self, mut with_renderer: impl FnMut(Option<PopupID>, &mut FnMut(&mut R)))
+        where R: Renderer<Frame=F>
+    {
+        let Root {
+            id: root_id,
+            needs_redraw: ref mut root_needs_redraw,
+            ref mut widget_ident_stack,
+            ref mut root_widget,
+            ref mut theme,
+            ref mut cursor_icon,
+            ref mut popup_widgets,
             ref mut set_cursor_icon,
             ref mut set_cursor_pos,
             ..

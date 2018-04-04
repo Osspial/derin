@@ -42,11 +42,10 @@ use std::marker::PhantomData;
 use std::collections::VecDeque;
 
 use tree::*;
-pub use event_loop_ops::{EventLoopOps, EventLoopResult, PopupDelta};
+pub use event_loop_ops::{EventLoopResult, PopupDelta};
 use timer::TimerList;
-use event::WidgetEvent;
-use popup::{PopupID, PopupMap};
-use render::{Renderer, RenderFrame};
+use popup::PopupMap;
+use render::RenderFrame;
 use mbseq::MouseButtonSequenceTrackPos;
 use widget_stack::WidgetStackBase;
 use meta_tracker::MetaEventTracker;
@@ -60,11 +59,11 @@ pub struct Root<A, N, F>
 {
     id: RootID,
     mouse_pos: Point2<i32>,
-    modifiers: ModifierKeys,
+    pub modifiers: ModifierKeys,
     cursor_icon: CursorIcon,
     mouse_buttons_down: MouseButtonSequenceTrackPos,
 
-    actions: VecDeque<A>,
+    pub actions: VecDeque<A>,
     widget_stack_base: WidgetStackBase<A, F>,
     needs_redraw: bool,
     event_stamp: u32,
@@ -74,6 +73,10 @@ pub struct Root<A, N, F>
     pub root_widget: N,
     pub theme: F::Theme,
     popup_widgets: PopupMap<A, F>,
+
+    set_cursor_pos: Option<Point2<i32>>,
+    set_cursor_icon: Option<CursorIcon>,
+
     _marker: PhantomData<*const F>
 }
 
@@ -127,29 +130,14 @@ impl<A, N, F> Root<A, N, F>
             timer_list: TimerList::new(None),
             root_widget, theme,
             popup_widgets: PopupMap::new(),
+
+            set_cursor_pos: None,
+            set_cursor_icon: None,
+
             _marker: PhantomData
         }
     }
 
-    pub fn run_forever<R, G>(
-        &mut self,
-        mut gen_events: impl FnMut(&mut EventLoopOps<A, N, F, R, G>) -> Option<G>,
-        mut on_action: impl FnMut(A, &mut N, &mut F::Theme) -> LoopFlow<G>,
-        mut bubble_fallthrough: impl FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>,
-        mut with_renderer: impl FnMut(Option<PopupID>, &mut FnMut(&mut R))
-    ) -> Option<G>
-        where R: Renderer<Frame=F>
-    {
-        gen_events(&mut EventLoopOps {
-            root: self,
-            on_action: &mut on_action,
-            bubble_fallthrough: &mut bubble_fallthrough,
-            with_renderer: &mut with_renderer,
-
-           set_cursor_icon: None,
-           set_cursor_pos: None
-        })
-    }
 }
 
 impl<T> Into<Option<T>> for LoopFlow<T> {
