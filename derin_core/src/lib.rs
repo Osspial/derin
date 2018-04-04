@@ -138,6 +138,10 @@ impl<A, N, F> Root<A, N, F>
         }
     }
 
+    #[inline]
+    pub fn mouse_pos(&self) -> Point2<i32> {
+        self.mouse_pos
+    }
 }
 
 impl<T> Into<Option<T>> for LoopFlow<T> {

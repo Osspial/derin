@@ -29,21 +29,26 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::collections::HashMap;
 use std::rc::Rc;
-use cgmath::{Point2, Vector2};
-use cgmath_geometry::{DimsBox, GeoBox};
+use cgmath::{Point2, Vector2, EuclideanSpace};
+use cgmath_geometry::{DimsBox, GeoBox, BoundBox, Segment};
 
 use parking_lot::Mutex;
 
 /// A window displayed on the desktop, which contains a set of drawable widgets.
 pub struct GlutinWindow<A: 'static, N: 'static + Widget<A, GLFrame>> {
     primary_renderer: GLRenderer,
-    window_popup_map: HashMap<WindowId, PopupID>,
-    popup_renderers: HashMap<PopupID, GLRenderer>,
-    active_renderer: Option<PopupID>,
+    popup_rects: Vec<PopupInfo>,
     events_loop: EventsLoop,
     timer_sync: Arc<Mutex<TimerPark>>,
     timer_thread_handle: JoinHandle<()>,
     root: Root<A, N, GLFrame>
+}
+
+#[derive(Debug, Clone)]
+struct PopupInfo {
+    id: PopupID,
+    rect: BoundBox<Point2<i32>>,
+    contains_mouse: bool
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -92,9 +97,7 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
         Ok(GlutinWindow {
             root: Root::new(root, theme, renderer.dims()),
             primary_renderer: renderer,
-            active_renderer: None,
-            window_popup_map: HashMap::new(),
-            popup_renderers: HashMap::new(),
+            popup_rects: Vec::new(),
             events_loop,
             timer_sync,
             timer_thread_handle,
@@ -123,9 +126,7 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
     {
         let GlutinWindow {
             ref mut primary_renderer,
-            ref mut popup_renderers,
-            ref mut active_renderer,
-            ref mut window_popup_map,
+            ref mut popup_rects,
             ref mut events_loop,
             ref mut timer_sync,
             ref mut timer_thread_handle,
@@ -146,14 +147,9 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
             let mut popup_deltas = Vec::new();
             let mut break_loop = false;
             let mut process_glutin_event = |glutin_event| {
-                let mut popup_id = None;
                 let derin_event: WindowEvent = match glutin_event {
-                    Event::WindowEvent{window_id, event} => {
-                        popup_id = window_popup_map.get(&window_id).cloned();
-                        let scale_factor = match popup_id {
-                            None => primary_renderer.window().hidpi_factor(),
-                            Some(id) => popup_renderers.get(&id).unwrap().window().hidpi_factor()
-                        };
+                    Event::WindowEvent{event, ..} => {
+                        let scale_factor = primary_renderer.window().hidpi_factor();
                         macro_rules! scale {
                             ($val:expr) => {{($val as f32 / scale_factor) as _}}
                         }
@@ -199,22 +195,9 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                                     return;
                                 }
                             }
-                            GWindowEvent::Closed => match popup_id {
-                                Some(popup_id) => {
-                                    root.remove_popup(popup_id);
-
-                                    let removed_renderer = popup_renderers.remove(&popup_id).unwrap();
-                                    window_popup_map.remove(&removed_renderer.window().id());
-                                    // The popup's context has to be bound when destroying the context.
-                                    unsafe{ removed_renderer.window().make_current().ok() };
-                                    drop(removed_renderer);
-
-                                    return
-                                },
-                                None => {
-                                    break_loop = true;
-                                    return
-                                }
+                            GWindowEvent::Closed => {
+                                break_loop = true;
+                                return
                             },
                             GWindowEvent::Refresh => WindowEvent::Redraw,
                             _ => return
@@ -225,10 +208,76 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                     Event::DeviceEvent{..} => return
                 };
 
-                let event_result = match popup_id {
-                    Some(popup_id) => root.process_popup_event(popup_id, derin_event, &mut on_fallthrough),
-                    None => root.process_event(derin_event, &mut on_fallthrough)
-                };
+                if let WindowEvent::MouseMove(new_pos) = derin_event {
+                    let old_pos = root.mouse_pos();
+                    let (mut old_popup, mut new_popup) = (None, None);
+                    for popup_info in popup_rects.iter_mut().rev() {
+                        if popup_info.rect.contains(new_pos) && new_popup.is_none() {
+                            new_popup = Some(popup_info);
+                        } else if popup_info.contains_mouse && old_popup.is_none() {
+                            old_popup = Some(popup_info);
+                        }
+
+                        if let (&Some(_), &Some(_)) = (&old_popup, &new_popup) {
+                            break;
+                        }
+                    }
+
+                    match (old_popup, new_popup) {
+                        (None, None) => root.process_popup_event(popup_id, derin_event, &mut popup_deltas, &mut on_fallthrough),
+                        (Some(old_popup), None) => {
+                            old_popup.contains_mouse = false;
+                            let popup_offset = old_popup.rect.min.to_vec();
+                            let exit_pos = old_popup.rect
+                                .intersect_line(Segment::new(old_pos, new_pos))
+                                .1.unwrap_or(old_popup.rect.min);
+
+                            root.process_popup_event(old_popup.id, WindowEvent::MouseMove(new_pos - popup_offset), &mut popup_deltas, &mut on_fallthrough);
+                            root.process_popup_event(old_popup.id, WindowEvent::MouseExit(exit_pos - popup_offset), &mut popup_deltas, &mut on_fallthrough);
+                            root.process_event(WindowEvent::MouseEnter(exit_pos), &mut popup_deltas, &mut on_fallthrough);
+                            root.process_event(WindowEvent::MouseMove(new_pos), &mut popup_deltas, &mut on_fallthrough);
+                        },
+                        (None, Some(new_popup)) => {
+                            let popup_offset = new_popup.rect.min.to_vec();
+                            match new_popup.contains_mouse {
+                                false => {
+                                    new_popup.contains_mouse = true;
+                                    let enter_pos = new_popup.rect
+                                        .intersect_line(Segment::new(old_pos, new_pos))
+                                        .0.unwrap_or(new_popup.rect.min);
+
+                                    root.process_event(WindowEvent::MouseMove(new_pos), &mut popup_deltas, &mut on_fallthrough);
+                                    root.process_event(WindowEvent::MouseExit(enter_pos), &mut popup_deltas, &mut on_fallthrough);
+                                    root.process_popup_event(new_popup.id, WindowEvent::MouseEnter(enter_pos - popup_offset), &mut popup_deltas, &mut on_fallthrough);
+                                    root.process_popup_event(new_popup.id, WindowEvent::MouseMove(new_pos - popup_offset), &mut popup_deltas, &mut on_fallthrough);
+                                },
+                                true => {
+                                    root.process_popup_event(new_popup.id, WindowEvent::MouseMove(new_pos - popup_offset), &mut popup_deltas, &mut on_fallthrough);
+                                }
+                            }
+                        },
+                        (Some(old_popup), Some(new_popup)) => {
+                            old_popup.contains_mouse = false;
+                            new_popup.contains_mouse = true;
+                            let old_popup_exit_pos = old_popup.rect
+                                .intersect_line(Segment::new(old_pos, new_pos))
+                                .1.unwrap_or(old_popup.rect.min);
+                            let new_popup_enter_pos = new_popup.rect
+                                .intersect_line(Segment::new(old_pos, new_pos))
+                                .0.unwrap_or(new_popup.rect.min);
+
+                            let new_popup_offset = new_popup.rect.min.to_vec();
+                            let old_popup_offset = old_popup.rect.min.to_vec();
+
+                            root.process_popup_event(old_popup.id, WindowEvent::MouseMove(new_pos - old_popup_offset), &mut popup_deltas, &mut on_fallthrough);
+                            root.process_popup_event(old_popup.id, WindowEvent::MouseExit(old_popup_exit_pos - old_popup_offset), &mut popup_deltas, &mut on_fallthrough);
+                            root.process_popup_event(new_popup.id, WindowEvent::MouseEnter(new_popup_enter_pos - new_popup_offset), &mut popup_deltas, &mut on_fallthrough);
+                            root.process_popup_event(new_popup.id, WindowEvent::MouseMove(new_pos - new_popup_offset), &mut popup_deltas, &mut on_fallthrough);
+                        }
+                    }
+                } else {
+                    let popup_id =
+                }
 
                 match event_result.wait_until_call_timer {
                     None => *timer_sync.lock() = TimerPark::Indefinite,
@@ -245,9 +294,6 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                         LoopFlow::Continue => ()
                     }
                 }
-                if event_result.popup_deltas.len() > 0 {
-                    popup_deltas = event_result.popup_deltas;
-                }
             };
             events_loop.run_forever(|e| {process_glutin_event(e); ControlFlow::Break});
             events_loop.poll_events(process_glutin_event);
@@ -261,46 +307,25 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                         let popup_attrs = popup_summary.attributes;
                         let popup_id = popup_summary.id;
 
-                        let builder = WindowBuilder::new()
-                            .with_dimensions(popup_attrs.rect.width() as u32, popup_attrs.rect.height() as u32)
-                            .with_visibility(false)
-                            // .with_focusability(popup_attrs.focusable)
-                            .with_title(popup_attrs.title)
-                            // .is_popup(popup_attrs.tool_window)
-                            .with_decorations(popup_attrs.decorations);
-                        let popup_renderer = unsafe{ GLRenderer::new(events_loop, builder).unwrap() };
-                        let window_pos = primary_renderer.window().get_inner_position().unwrap();
-                        popup_renderer.window().set_position(popup_attrs.rect.min().x + window_pos.0, popup_attrs.rect.min().y + window_pos.1);
-                        popup_renderer.window().show();
-
-                        window_popup_map.insert(popup_renderer.window().id(), popup_id);
-                        popup_renderers.insert(popup_id, popup_renderer);
-                        *active_renderer = Some(popup_id);
+                        popup_rects.push(PopupInfo {
+                            id: popup_id,
+                            rect: popup_attrs.rect,
+                            contains_mouse: false
+                        });
                     },
                     PopupDelta::Remove(popup_id) => {
-                        let removed_renderer = popup_renderers.remove(&popup_id).unwrap();
-                        window_popup_map.remove(&removed_renderer.window().id());
-                        // The popup's context has to be bound when destroying the context.
-                        unsafe{ removed_renderer.window().make_current().ok() };
-                        drop(removed_renderer);
-
-                        // Reset the context to the primary window.
-                        unsafe{ primary_renderer.window().make_current().ok() };
-                        *active_renderer = None;
+                        for (index, popup_info) in popup_rects.iter().enumerate() {
+                            if popup_info.id == popup_id {
+                                popup_rects.remove(index);
+                                break;
+                            }
+                        }
                     }
                 }
             }
 
             root.redraw(|popup_id_opt, with_renderer| {
-                let renderer_ref = match popup_id_opt {
-                    Some(popup_id) => popup_renderers.get_mut(&popup_id).unwrap(),
-                    None => primary_renderer
-                };
-                if popup_id_opt != *active_renderer {
-                    unsafe{ renderer_ref.window().make_current().unwrap() };
-                    *active_renderer = popup_id_opt;
-                }
-                with_renderer(renderer_ref)
+                with_renderer(primary_renderer)
             });
         }
 

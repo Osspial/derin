@@ -30,11 +30,9 @@ use offset_widget::*;
 
 use std::time::Duration;
 
-#[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EventLoopResult {
-    pub wait_until_call_timer: Option<Duration>,
-    pub popup_deltas: Vec<PopupDelta>
+    pub wait_until_call_timer: Option<Duration>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,17 +48,19 @@ impl<A, N, F> Root<A, N, F>
     pub fn process_event(
         &mut self,
         event: WindowEvent,
+        popup_deltas: &mut Vec<PopupDelta>,
         mut bubble_fallthrough: impl FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
     ) -> EventLoopResult {
-        self.process_event_inner(None, event, &mut bubble_fallthrough)
+        self.process_event_inner(None, event, popup_deltas, &mut bubble_fallthrough)
     }
     pub fn process_popup_event(
         &mut self,
         popup_id: PopupID,
         event: WindowEvent,
+        popup_deltas: &mut Vec<PopupDelta>,
         mut bubble_fallthrough: impl FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
     ) -> EventLoopResult {
-        self.process_event_inner(Some(popup_id), event, &mut bubble_fallthrough)
+        self.process_event_inner(Some(popup_id), event, popup_deltas, &mut bubble_fallthrough)
     }
     pub fn remove_popup(&mut self, popup_id: PopupID) {
         self.popup_widgets.remove(popup_id);
@@ -70,6 +70,7 @@ impl<A, N, F> Root<A, N, F>
         &mut self,
         event_popup_id: Option<PopupID>,
         event: WindowEvent,
+        popup_deltas: &mut Vec<PopupDelta>,
         bubble_fallthrough: &mut FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
     ) -> EventLoopResult {
         let Root {
@@ -93,7 +94,6 @@ impl<A, N, F> Root<A, N, F>
 
         // let mut cur_popup_id = None;
         let mut popup_map_insert = Vec::new();
-        let mut popup_deltas = Vec::new();
 
         // If we're performing events on a popup, we remove that popup from the popup map so that
         // operations can be performed on other popups during event processing. We re-insert it
@@ -798,8 +798,7 @@ impl<A, N, F> Root<A, N, F>
         }
 
         EventLoopResult {
-            wait_until_call_timer: timer_list.time_until_trigger(),
-            popup_deltas
+            wait_until_call_timer: timer_list.time_until_trigger()
         }
     }
 
@@ -819,16 +818,6 @@ impl<A, N, F> Root<A, N, F>
             ..
         } = *self;
 
-        // match taken_popup_widget.as_mut() {
-        //     Some(popup_widget) => {
-        //         redraw_widget = &mut *popup_widget.widget;
-        //         needs_redraw = &mut popup_widget.needs_redraw;
-        //     },
-        //     None => {
-        //         redraw_widget = root_widget;
-        //         needs_redraw = root_needs_redraw;
-        //     }
-        // };
         let mut redraw = |redraw_widget: &mut Widget<A, F>, renderer: &mut R, needs_redraw: &mut bool| {
             let mut root_update = redraw_widget.update_tag().needs_update(root_id);
             let mark_active_widgets_redraw = root_update.needs_redraw();
