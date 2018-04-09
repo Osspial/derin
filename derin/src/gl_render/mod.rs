@@ -174,11 +174,6 @@ impl GLRenderer {
         })
     }
 
-    pub fn dims(&self) -> DimsBox<Point2<u32>> {
-        let (width, height) = self.window.get_inner_size().unwrap();
-        DimsBox::new2(width, height)
-    }
-
     #[inline]
     pub fn window(&self) -> &GlWindow {
         &self.window
@@ -220,6 +215,11 @@ impl Renderer for GLRenderer {
     }
     fn resized(&mut self, new_size: DimsBox<Point2<u32>>) {
         self.window.context().resize(new_size.width(), new_size.height());
+    }
+
+    fn dims(&self) -> DimsBox<Point2<u32>> {
+        let (width, height) = self.window.get_inner_size().unwrap();
+        DimsBox::new2(width, height)
     }
 
     fn set_size_bounds(&mut self, client_size_bounds: SizeBounds) {
