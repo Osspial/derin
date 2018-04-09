@@ -1056,7 +1056,8 @@ impl EditString {
 
         macro_rules! search_for_glyph {
             ($iter:expr) => {{
-                let mut glyph_iter = $iter.skip_while(move |g| g.str_index != *cursor_pos);
+                let cursor_pos_move = *cursor_pos;
+                let mut glyph_iter = $iter.skip_while(move |g| g.str_index != cursor_pos_move);
                 if let Some(cursor_glyph) = glyph_iter.next() {
                     let cursor_pos_px = cursor_glyph.highlight_rect.min;
                     if cursor_target_x_px.is_none() {
