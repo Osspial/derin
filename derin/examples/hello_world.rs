@@ -14,8 +14,9 @@
 
 extern crate derin;
 
-use derin::{Window, WindowAttributes, LoopFlow};
+use derin::{Window, WindowConfig, LoopFlow};
 use derin::widgets::{Button, Contents};
+use derin::geometry::DimsBox;
 
 fn main() {
     let print_string = "Prints to the console.";
@@ -23,10 +24,10 @@ fn main() {
     // Create a new window that displays a GUI on the desktop.
     let mut window = unsafe{ Window::new(
         // Set the attributes with which we'll create the window.
-        WindowAttributes {
-            dimensions: Some((400, 50)),
+        WindowConfig {
+            dimensions: Some(DimsBox::new2(400, 50)),
             title: "Derin's Hello World".to_string(),
-            ..WindowAttributes::default()
+            ..WindowConfig::default()
         },
         // Create a button that displays "Hello World" to the user, and passes `print_string`
         // to the UI's action loop.

@@ -16,9 +16,10 @@ extern crate derin;
 #[macro_use]
 extern crate derin_macros;
 
-use derin::{Window, WindowAttributes, LoopFlow};
+use derin::{Window, WindowConfig, LoopFlow};
 use derin::layout::{Margins, LayoutHorizontal};
 use derin::widgets::{Button, Group, Label, Contents};
+use derin::geometry::DimsBox;
 
 #[derive(WidgetContainer)]
 #[derin(action = "i32")]
@@ -40,13 +41,13 @@ fn main() {
     );
     let theme = derin::theme::Theme::default();
 
-    let window_attributes = WindowAttributes {
-        dimensions: Some((400, 50)),
+    let window_config = WindowConfig {
+        dimensions: Some(DimsBox::new2(400, 50)),
         title: "Counter Example".to_string(),
-        ..WindowAttributes::default()
+        ..WindowConfig::default()
     };
 
-    let mut window = unsafe{ Window::new(window_attributes, counter_ui, theme).unwrap() };
+    let mut window = unsafe{ Window::new(window_config, counter_ui, theme).unwrap() };
     let _: Option<()> = window.run_forever(
         |value_delta, counter_ui, _| {
             value += value_delta;

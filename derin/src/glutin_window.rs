@@ -34,6 +34,28 @@ use cgmath_geometry::{DimsBox, GeoBox};
 
 use parking_lot::Mutex;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WindowConfig {
+    pub dimensions: Option<DimsBox<Point2<u32>>>,
+    pub title: String,
+
+    pub multisampling: u16,
+    pub depth_bits: Option<u8>,
+    pub stencil_bits: Option<u8>,
+}
+
+impl Default for WindowConfig {
+    fn default() -> WindowConfig {
+        WindowConfig {
+            dimensions: None,
+            title: "Derin Window".to_string(),
+            multisampling: 0,
+            depth_bits: None,
+            stencil_bits: None
+        }
+    }
+}
+
 /// A window displayed on the desktop, which contains a set of drawable widgets.
 pub struct GlutinWindow<A: 'static, N: 'static + Widget<A, GLFrame>> {
     primary_renderer: GLRenderer,
@@ -54,16 +76,31 @@ enum TimerPark {
 }
 
 impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
-    /// Creates a new window, with the given window attributes, root widget, and theme.
+    /// Creates a new window, with the given window configuration, root widget, and theme.
     ///
     /// This is unsafe, because it creates at least one OpenGL context. By calling this function,
     /// you hand all control over the thread's OpenGL context management to this window. In most
     /// cases this shouldn't be an issue, though.
-    pub unsafe fn new(attributes: WindowAttributes, root: N, theme: Theme) -> Result<GlutinWindow<A, N>, CreationError> {
+    pub unsafe fn new(config: WindowConfig, root: N, theme: Theme) -> Result<GlutinWindow<A, N>, CreationError> {
+        let mut window_builder = WindowBuilder::new();
+        window_builder.window.dimensions = config.dimensions.map(|d| (d.width(), d.height()));
+        window_builder.window.title = config.title.clone();
+        let gen_context_builder = || {
+            let mut context_builder = ContextBuilder::new();
+
+            context_builder = context_builder.with_multisampling(config.multisampling);
+            if let Some(depth_bits) = config.depth_bits {
+                context_builder = context_builder.with_depth_buffer(depth_bits);
+            }
+            if let Some(stencil_bits) = config.stencil_bits {
+                context_builder = context_builder.with_stencil_buffer(stencil_bits);
+            }
+
+            context_builder
+        };
+
         let events_loop = EventsLoop::new();
-        let mut builder = WindowBuilder::new();
-        builder.window = attributes;
-        let renderer = GLRenderer::new(&events_loop, builder)?;
+        let renderer = GLRenderer::new(&events_loop, window_builder, gen_context_builder)?;
 
         let timer_sync = Arc::new(Mutex::new(TimerPark::Indefinite));
         let timer_sync_timer_thread = timer_sync.clone();
@@ -268,7 +305,7 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                             .with_title(popup_attrs.title)
                             // .is_popup(popup_attrs.tool_window)
                             .with_decorations(popup_attrs.decorations);
-                        let popup_renderer = unsafe{ GLRenderer::new(events_loop, builder).unwrap() };
+                        let popup_renderer = unsafe{ GLRenderer::new(events_loop, builder, || ContextBuilder::new()).unwrap() };
                         let window_pos = primary_renderer.window().get_inner_position().unwrap();
                         popup_renderer.window().set_position(popup_attrs.rect.min().x + window_pos.0, popup_attrs.rect.min().y + window_pos.1);
                         popup_renderer.window().show();

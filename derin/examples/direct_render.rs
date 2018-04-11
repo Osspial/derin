@@ -17,11 +17,11 @@ extern crate gullery;
 #[macro_use]
 extern crate gullery_macros;
 
-use derin::{LoopFlow, Window, WindowAttributes};
+use derin::{LoopFlow, Window, WindowConfig};
 use derin::layout::{Margins, LayoutHorizontal};
 use derin::container::SingleContainer;
 use derin::widgets::{Group, DirectRender, DirectRenderState};
-use derin::geometry::{OffsetBox, Point2};
+use derin::geometry::{DimsBox, OffsetBox, Point2};
 
 use gullery::ContextState;
 use gullery::buffers::*;
@@ -50,13 +50,13 @@ fn main() {
     );
     let theme = derin::theme::Theme::default();
 
-    let window_attributes = WindowAttributes {
-        dimensions: Some((256, 256)),
+    let window_config = WindowConfig {
+        dimensions: Some(DimsBox::new2(256, 256)),
         title: "Direct Render Example".to_string(),
-        ..WindowAttributes::default()
+        ..WindowConfig::default()
     };
 
-    let mut window = unsafe{ Window::new(window_attributes, direct_draw_ui, theme).unwrap() };
+    let mut window = unsafe{ Window::new(window_config, direct_draw_ui, theme).unwrap() };
     let context_state = window.context_state();
     {
         let direct = &mut window.root_mut().container_mut().widget.render_state_mut();

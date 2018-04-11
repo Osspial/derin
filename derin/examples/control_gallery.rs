@@ -16,9 +16,10 @@ extern crate derin;
 #[macro_use]
 extern crate derin_macros;
 
-use derin::{LoopFlow, Window, WindowAttributes};
+use derin::{LoopFlow, Window, WindowConfig};
 use derin::layout::{Margins, LayoutHorizontal, LayoutVertical};
 use derin::widgets::*;
+use derin::geometry::DimsBox;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum GalleryEvent {
@@ -87,13 +88,13 @@ fn main() {
     );
     let theme = derin::theme::Theme::default();
 
-    let window_attributes = WindowAttributes {
-        dimensions: Some((512, 512)),
+    let window_config = WindowConfig {
+        dimensions: Some(DimsBox::new2(512, 512)),
         title: "Derin Control Gallery".to_string(),
-        ..WindowAttributes::default()
+        ..WindowConfig::default()
     };
 
-    let mut window = unsafe{ Window::new(window_attributes, group, theme).unwrap() };
+    let mut window = unsafe{ Window::new(window_config, group, theme).unwrap() };
     let _: Option<()> = window.run_forever(
         |event, root, _| {
             match event {

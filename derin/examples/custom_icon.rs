@@ -15,7 +15,7 @@
 extern crate derin;
 extern crate png;
 
-use derin::{LoopFlow, Window, WindowAttributes};
+use derin::{LoopFlow, Window, WindowConfig};
 use derin::layout::{Align, Align2, Margins, SizeBounds, LayoutHorizontal};
 use derin::container::SingleContainer;
 use derin::widgets::{Contents, Group, Label};
@@ -51,13 +51,13 @@ fn main() {
         }
     );
 
-    let window_attributes = WindowAttributes {
-        dimensions: Some((64, 64)),
+    let window_config = WindowConfig {
+        dimensions: Some(DimsBox::new2(64, 64)),
         title: "Custom Icon".to_string(),
-        ..WindowAttributes::default()
+        ..WindowConfig::default()
     };
 
-    let mut window = unsafe{ Window::new(window_attributes, group, theme).unwrap() };
+    let mut window = unsafe{ Window::new(window_config, group, theme).unwrap() };
     let _: Option<()> = window.run_forever(
         |_: (), _, _| {
             LoopFlow::Continue

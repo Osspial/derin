@@ -100,13 +100,13 @@ pub trait PrimFrame: RenderFrame<Primitive=ThemedPrim<<Self as PrimFrame>::Direc
 
 
 impl GLRenderer {
-    pub unsafe fn new(events_loop: &EventsLoop, window_builder: WindowBuilder) -> Result<GLRenderer, CreationError> {
+    pub unsafe fn new(events_loop: &EventsLoop, window_builder: WindowBuilder, gen_context_builder: impl Fn() -> ContextBuilder<'static>) -> Result<GLRenderer, CreationError> {
         let show_window = window_builder.window.visible;
         let window = {
             let window_builder_no_show = window_builder.with_visibility(false);
             let make_window = |version, profile_opt| {
                 let mut context_builder =
-                    ContextBuilder::new()
+                    gen_context_builder()
                         .with_gl(GlRequest::GlThenGles {
                             opengl_version: version,
                             opengles_version: (3, 0)

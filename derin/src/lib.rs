@@ -65,7 +65,7 @@ pub mod layout;
 pub mod theme;
 pub mod widgets;
 
-pub use glutin_window::GlutinWindow as Window;
+pub use glutin_window::{GlutinWindow as Window, WindowConfig};
 pub use glutin::WindowAttributes;
 pub use core::LoopFlow;
 
