@@ -109,7 +109,7 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
     }
 
     fn size_bounds(&self) -> SizeBounds {
-        SizeBounds::new_min(DimsBox::new(self.check_rect.dims()))
+        SizeBounds::new_min(self.check_rect.dims())
     }
 
     fn render(&mut self, frame: &mut FrameRectStack<F>) {

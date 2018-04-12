@@ -361,7 +361,7 @@ impl<A, F, W> Parent<A, F> for TabList<W>
 
             let grid_dims = GridSize::new(self.tabs.len() as u32 + 1, 2);
 
-            self.layout_engine.desired_size = DimsBox::new(self.rect.dims());
+            self.layout_engine.desired_size = self.rect.dims();
             self.layout_engine.set_grid_size(grid_dims);
             self.layout_engine.set_row_hints(
                 0,

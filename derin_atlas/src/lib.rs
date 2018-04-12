@@ -191,7 +191,7 @@ impl<P: Copy> SkylineAtlas<P> {
     }
 
     pub fn add_image(&mut self, image_dims: DimsBox<Point2<u32>>, image_view: OffsetBox<Point2<u32>>, image_data: &[P]) -> Option<OffsetBox<Point2<u32>>> {
-        self.add_image_rows(DimsBox::new(image_view.dims()), rows_from_image(image_dims, image_view, image_data)).ok()
+        self.add_image_rows(image_view.dims(), rows_from_image(image_dims, image_view, image_data)).ok()
     }
 
     pub fn add_image_rows<'a, I>(&mut self, image_dims: DimsBox<Point2<u32>>, image_data: I) -> Result<OffsetBox<Point2<u32>>, I>
@@ -271,7 +271,7 @@ impl<P: Copy> SkylineAtlas<P> {
             };
 
             for (index, &mut (_, ref mut rect)) in rects_sorted.iter_mut().enumerate() {
-                match self.calc_insert_over(DimsBox::new(rect.dims())) {
+                match self.calc_insert_over(rect.dims()) {
                     Some(insert_over) => {
                         if insert_over.space_lost < best_insert_over.space_lost || best_insert_index == usize::max_value() {
                             best_insert_index = index;
@@ -292,7 +292,7 @@ impl<P: Copy> SkylineAtlas<P> {
             let remove_rect = rects_sorted.remove(best_insert_index);
             *remove_rect.1 = self.insert_over(
                 best_insert_over,
-                DimsBox::new(remove_rect.0.dims())
+                remove_rect.0.dims()
             );
             self.blit(dims, remove_rect.0, remove_rect.1.min().to_vec(), &old_pixels);
             removed_rects.push(remove_rect);
@@ -309,7 +309,7 @@ impl<P: Copy> SkylineAtlas<P> {
 
     pub fn blit(&mut self, image_dims: DimsBox<Point2<u32>>, image_view: OffsetBox<Point2<u32>>, write_offset: Vector2<u32>, image_data: &[P]) {
         blit(
-            rows_from_image(image_dims, image_view, image_data), DimsBox::new(image_view.dims()),
+            rows_from_image(image_dims, image_view, image_data), image_view.dims(),
             &mut self.pixels, self.dims, write_offset
         );
     }

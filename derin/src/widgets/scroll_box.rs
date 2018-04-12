@@ -344,7 +344,7 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
 
     fn update_child_layout(&mut self) {
         let child_size_bounds = self.clip.widget().size_bounds();
-        let mut child_dims: DimsBox<Point2<_>> = DimsBox::new(self.rect.dims());
+        let mut child_dims: DimsBox<Point2<_>> = self.rect.dims();
         let mut offset = Vector2 {
             x: self.slider_x.as_ref().map(|s| s.value as i32).unwrap_or(0),
             y: self.slider_y.as_ref().map(|s| s.value as i32).unwrap_or(0)
@@ -369,7 +369,7 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
         offset.x = offset.x.min((child_dims.width() as u32).saturating_sub(clip_dims.width() as u32) as i32);
         offset.y = offset.y.min((child_dims.height() as u32).saturating_sub(clip_dims.height() as u32) as i32);
 
-        let self_dims: DimsBox<Point2<_>> = DimsBox::new(self.rect.dims());
+        let self_dims: DimsBox<Point2<_>> = self.rect.dims();
         self.slider_x = match has_x_scroll {
             false => None,
             true => Some(SliderAssist {

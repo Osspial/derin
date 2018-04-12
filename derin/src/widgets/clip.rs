@@ -19,7 +19,7 @@ use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 
 use cgmath::{EuclideanSpace, Point2};
-use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
+use cgmath_geometry::{BoundBox, GeoBox};
 
 use gl_render::PrimFrame;
 
@@ -156,7 +156,7 @@ impl<A, F, W> Parent<A, F> for Clip<W>
         let widget_rect = self.widget.rect();
         let size_bounds = self.widget.size_bounds();
 
-        let dims_clipped = size_bounds.bound_rect(DimsBox::new(widget_rect.dims()));
+        let dims_clipped = size_bounds.bound_rect(widget_rect.dims());
         if dims_clipped.dims() != widget_rect.dims() {
             *self.widget.rect_mut() = BoundBox::from(dims_clipped) + widget_rect.min().to_vec();
         }

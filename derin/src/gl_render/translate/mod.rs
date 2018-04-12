@@ -95,12 +95,12 @@ impl Translator {
             let parent_dims = parent_rect.dims();
 
             let bl = Point2 {
-                x: parent_center.x + (parent_dims.x as f32 * p.min.x.frac_origin) as i32 / 2 + p.min.x.pixel_pos,
-                y: parent_center.y + (parent_dims.y as f32 * p.min.y.frac_origin) as i32 / 2 + p.min.y.pixel_pos
+                x: parent_center.x + (parent_dims.width() as f32 * p.min.x.frac_origin) as i32 / 2 + p.min.x.pixel_pos,
+                y: parent_center.y + (parent_dims.height() as f32 * p.min.y.frac_origin) as i32 / 2 + p.min.y.pixel_pos
             };
             let tr = Point2 {
-                x: parent_center.x + (parent_dims.x as f32 * p.max.x.frac_origin) as i32 / 2 + p.max.x.pixel_pos,
-                y: parent_center.y + (parent_dims.y as f32 * p.max.y.frac_origin) as i32 / 2 + p.max.y.pixel_pos
+                x: parent_center.x + (parent_dims.width() as f32 * p.max.x.frac_origin) as i32 / 2 + p.max.x.pixel_pos,
+                y: parent_center.y + (parent_dims.height() as f32 * p.max.y.frac_origin) as i32 / 2 + p.max.y.pixel_pos
             };
             (BoundBox::new2(bl.x, bl.y, tr.x, tr.y), p)
         });
@@ -118,10 +118,10 @@ impl Translator {
                         };
 
                         let abs_rect_dims = abs_rect.dims();
-                        let abs_rect_dims_bounded = image.size_bounds.bound_rect(DimsBox::new(abs_rect_dims));
+                        let abs_rect_dims_bounded = image.size_bounds.bound_rect(abs_rect_dims);
                         abs_rect.max.x = abs_rect.min.x + abs_rect_dims_bounded.width();
                         abs_rect.max.y = abs_rect.min.y + abs_rect_dims_bounded.height();
-                        abs_rect = abs_rect + (abs_rect_dims - abs_rect_dims_bounded.dims) / 2;
+                        abs_rect = abs_rect + (abs_rect_dims.dims - abs_rect_dims_bounded.dims) / 2;
 
                         let image_translate = ImageTranslate::new(
                             abs_rect,

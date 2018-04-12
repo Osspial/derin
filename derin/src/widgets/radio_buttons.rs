@@ -411,7 +411,7 @@ impl<A, F, C, L> Parent<A, F> for RadioButtonList<C, L>
                 LoopFlow::Continue
             });
 
-            self.layout_engine.desired_size = DimsBox::new(self.rect.dims());
+            self.layout_engine.desired_size = self.rect.dims();
             self.layout_engine.set_grid_size(self.layout.grid_size(num_children));
             self.layout_engine.update_engine(hints_vec, rects_vec, update_heap_cache);
 

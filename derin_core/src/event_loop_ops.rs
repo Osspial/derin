@@ -845,7 +845,7 @@ impl<A, N, F> Root<A, N, F>
             *set_cursor_pos = None;
             *set_cursor_icon = None;
 
-            let new_dims = DimsBox::new(redraw_widget.rect().dims().map(|d| d as u32));
+            let new_dims = redraw_widget.rect().dims().cast::<u32>().unwrap_or(DimsBox::new2(0, 0));
             if new_dims != renderer.dims() {
                 renderer.resized(new_dims);
             }
@@ -959,7 +959,7 @@ fn update_widget_layout<A: 'static, F: RenderFrame>(root_id: RootID, force_full_
         }
     }
 
-    let widget_rect = DimsBox::new(widget.rect().dims());
+    let widget_rect = widget.rect().dims();
     widget.size_bounds().bound_rect(widget_rect) != widget_rect
 }
 
