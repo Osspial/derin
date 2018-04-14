@@ -18,15 +18,16 @@ derin_macros = "0.1"
 
 ## Examples
 Beyond looking at the API docs, you're encouraged to look at one of the provided examples, to see
-more complex examples of how to use Derin. Those can be found in the [`derin/examples`](https://github.com/Osspial/derin/derin/examples)
+more complex examples of how to use Derin. Those can be found in the [`derin/examples`](https://github.com/Osspial/derin/tree/master/derin/examples)
 directory.
 
 ```rust
 // A simple application that shows a click-able button to the user.
 extern crate derin;
 
-use derin::{Window, WindowAttributes, LoopFlow};
+use derin::{Window, WindowConfig, LoopFlow};
 use derin::widgets::{Button, Contents};
+use derin::geometry::DimsBox;
 
 fn main() {
     let print_string = "Prints to the console.";
@@ -34,10 +35,10 @@ fn main() {
     // Create a new window that displays a GUI on the desktop.
     let mut window = unsafe{ Window::new(
         // Set the attributes with which we'll create the window.
-        WindowAttributes {
-            dimensions: Some((400, 50)),
+        WindowConfig {
+            dimensions: Some(DimsBox::new2(400, 50)),
             title: "Derin's Hello World".to_string(),
-            ..WindowAttributes::default()
+            ..WindowConfig::default()
         },
         // Create a button that displays "Hello World" to the user, and passes `print_string`
         // to the UI's action loop.
@@ -59,8 +60,8 @@ fn main() {
 ```
 
 ## License
-Derin is made available under the Apache License, 2.0, viewable [in this repository][https://github.com/Osspial/derin/LICENSE]
-or on the [Apache Website][https://www.apache.org/licenses/LICENSE-2.0].
+Derin is made available under the Apache License, 2.0, viewable [in this repository](https://github.com/Osspial/derin/blob/master/LICENSE)
+or on the [Apache Website](https://www.apache.org/licenses/LICENSE-2.0).
 
 ## Contribution
 Unless explicitly stated otherwise, any contributions intentionally submitted for inclusion within
