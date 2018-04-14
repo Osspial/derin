@@ -141,7 +141,7 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
     });
 
     quote!{
-        #[allow(non_upper_case_globals, unused_attributes, unused_qualifications)]
+        #[allow(non_upper_case_globals, unused_attributes, unused_qualifications, unused_imports)]
         const #dummy_const: () = {mod import {
             extern crate derin as _derive_derin;
             use self::_derive_derin::LoopFlow;
@@ -155,6 +155,7 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
                 #(#ident_arc_iter)*
             }
 
+            #[automatically_derived]
             impl #impl_generics WidgetContainer<#action_ty, __F> for #ident #ty_generics #where_clause {
                 type Widget = #widget_ty;
 
@@ -163,7 +164,7 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
                     0 #(#num_children_iter)*
                 }
 
-                #[allow(unused_assignments)]
+                #[allow(unused_assignments, unused_variables, unused_mut)]
                 fn children<'a, __G, __R>(&'a self, mut for_each_child: __G) -> Option<__R>
                     where __G: FnMut(WidgetSummary<&'a Self::Widget>) -> LoopFlow<__R>,
                           #action_ty: 'a,
@@ -174,7 +175,7 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
                     None
                 }
 
-                #[allow(unused_assignments)]
+                #[allow(unused_assignments, unused_variables, unused_mut)]
                 fn children_mut<'a, __G, __R>(&'a mut self, mut for_each_child: __G) -> Option<__R>
                     where __G: FnMut(WidgetSummary<&'a mut Self::Widget>) -> LoopFlow<__R>,
                           #action_ty: 'a,
