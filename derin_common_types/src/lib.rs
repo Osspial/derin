@@ -17,6 +17,9 @@ extern crate num_traits;
 extern crate cgmath_geometry;
 #[macro_use]
 extern crate bitflags;
+#[cfg(feature = "serde")]
+#[cfg_attr(feature = "serde", macro_use)]
+extern crate serde;
 
 pub type Px = i32;
 

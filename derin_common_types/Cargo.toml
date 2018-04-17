@@ -9,5 +9,7 @@ repository = "https://github.com/Osspial/derin"
 
 [dependencies]
 num-traits = "0.1"
-cgmath-geometry = { git = "https://github.com/Osspial/cgmath-geometry.git" }
+cgmath-geometry = { git = "https://github.com/Osspial/cgmath-geometry.git", features = ["serde"] }
 bitflags = "1.0"
+
+serde = { version = "1.0", features = ["serde_derive"], optional = true }

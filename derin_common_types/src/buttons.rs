@@ -14,6 +14,7 @@
 
 /// A button on the mouse.
 #[repr(u8)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MouseButton {
     Left = MOUSE_L,
@@ -53,6 +54,7 @@ bitflags!{
 
 /// A key on the keyboard.
 #[repr(u8)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Key {
     /// Backspace

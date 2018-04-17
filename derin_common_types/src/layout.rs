@@ -21,6 +21,7 @@ use std::ops::{Add, Range, RangeFrom, RangeFull, RangeTo};
 pub type Tr = u32;
 pub type Fr = f32;
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TrRange {
     pub start: Option<Tr>,
@@ -78,12 +79,15 @@ impl From<RangeTo<Tr>> for TrRange {
 }
 
 two_axis_type!{
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct GridSize(Tr);
 
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct WidgetSpan(Into<TrRange>);
 
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub struct Align2(Align);
 }
@@ -94,6 +98,7 @@ impl Default for WidgetSpan {
     }
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Align {
     Stretch,
@@ -110,6 +115,7 @@ impl Default for Align {
 
 
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Default, Debug, Clone, Copy)]
 pub struct WidgetPos {
     pub size_bounds: SizeBounds,
@@ -129,6 +135,7 @@ impl WidgetPos {
     }
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TrackHints {
     /// Track-level minimum size. If the child minimum size is less than this, this is used instead.
@@ -152,9 +159,8 @@ impl Default for TrackHints {
     }
 }
 
-// This is #[repr(C)] because of stupid evil pointer hacks in dww.
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(C)]
 pub struct SizeBounds {
     pub min: DimsBox<Point2<Px>>,
     pub max: DimsBox<Point2<Px>>
@@ -203,6 +209,7 @@ impl Default for SizeBounds {
     }
 }
 
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Margins<T> {
     pub left: T,
