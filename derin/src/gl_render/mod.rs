@@ -104,7 +104,20 @@ impl GLRenderer {
         let show_window = window_builder.window.visible;
         let window = {
             let window_builder_no_show = window_builder.with_visibility(false);
-            let make_window = |version, profile_opt| {
+            let versions = [
+                ((3, 3), Some(GlProfile::Core)),
+                ((3, 3), Some(GlProfile::Compatibility)),
+                ((3, 3), None),
+                ((3, 2), Some(GlProfile::Core)),
+                ((3, 2), Some(GlProfile::Compatibility)),
+                ((3, 2), None),
+                ((3, 1), Some(GlProfile::Core)),
+                ((3, 1), Some(GlProfile::Compatibility)),
+                ((3, 1), None)
+            ];
+
+            let mut window = None;
+            for (version, profile_opt) in versions.iter().cloned() {
                 let mut context_builder =
                     gen_context_builder()
                         .with_gl(GlRequest::GlThenGles {
@@ -112,22 +125,17 @@ impl GLRenderer {
                             opengles_version: (3, 0)
                         });
                 context_builder.gl_attr.profile = profile_opt;
-                GlWindow::new(
+                window = Some(GlWindow::new(
                     window_builder_no_show.clone(),
                     context_builder,
                     events_loop
-                )
-            };
+                ));
+                if let Some(Ok(_)) = window {
+                    break;
+                }
+            }
 
-                         make_window((3, 3), Some(GlProfile::Core))
-            .or_else(|_| make_window((3, 3), Some(GlProfile::Compatibility)))
-            .or_else(|_| make_window((3, 3), None))
-            .or_else(|_| make_window((3, 2), Some(GlProfile::Core)))
-            .or_else(|_| make_window((3, 2), Some(GlProfile::Compatibility)))
-            .or_else(|_| make_window((3, 2), None))
-            .or_else(|_| make_window((3, 1), Some(GlProfile::Core)))
-            .or_else(|_| make_window((3, 1), Some(GlProfile::Compatibility)))
-            .or_else(|_| make_window((3, 1), None))?
+            window.unwrap()?
         };
         if show_window {
             window.show();

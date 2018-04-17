@@ -188,7 +188,8 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                     Event::WindowEvent{window_id, event} => {
                         popup_id = window_popup_map.get(&window_id).cloned();
                         let scale_factor = match popup_id {
-                            None => primary_renderer.window().hidpi_factor(),
+                            None if window_id == primary_renderer.window().id() => primary_renderer.window().hidpi_factor(),
+                            None => return,
                             Some(id) => popup_renderers.get(&id).unwrap().window().hidpi_factor()
                         };
                         macro_rules! scale {
