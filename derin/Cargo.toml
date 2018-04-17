@@ -28,5 +28,7 @@ derin_layout_engine = {path = "../derin_layout_engine"}
 gullery = {git = "https://github.com/Osspial/gullery.git"}
 gullery_macros = {git = "https://github.com/Osspial/gullery.git"}
 
+serde = { version = "1.0", features = ["serde_derive"], optional = true }
+
 [dev-dependencies]
 derin_macros = {path = "../derin_macros"}
