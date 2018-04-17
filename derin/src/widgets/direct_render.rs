@@ -24,21 +24,37 @@ use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 
 use std::mem;
 
-pub struct DirectRender<R>
-    where R: DirectRenderState
-{
+pub struct DirectRender<R> {
     update_tag: UpdateTag,
     bounds: BoundBox<Point2<i32>>,
     render_state: R
 }
 
-pub trait DirectRenderState {
+pub trait DirectRenderState<A> {
     type RenderType;
 
     fn render(&mut self, _: &mut Self::RenderType);
+    fn on_widget_event<F>(
+        &mut self,
+        _event: WidgetEvent,
+        _input_state: InputState,
+        _popups: Option<ChildPopupsMut<A, F>>,
+        _source_child: &[WidgetIdent]
+    ) -> EventOps<A, F>
+        where F: PrimFrame<DirectRender = Self::RenderType>
+    {
+        EventOps {
+            action: None,
+            focus: None,
+            bubble: true,
+            cursor_pos: None,
+            cursor_icon: None,
+            popup: None
+        }
+    }
 }
 
-impl<R: DirectRenderState> DirectRender<R> {
+impl<R> DirectRender<R> {
     pub fn new(render_state: R) -> DirectRender<R> {
         DirectRender {
             update_tag: UpdateTag::new(),
@@ -58,7 +74,7 @@ impl<R: DirectRenderState> DirectRender<R> {
 }
 
 impl<A, F, R> Widget<A, F> for DirectRender<R>
-    where R: DirectRenderState + 'static,
+    where R: DirectRenderState<A> + 'static,
           F: PrimFrame<DirectRender = R::RenderType>
 {
     #[inline]
@@ -94,14 +110,7 @@ impl<A, F, R> Widget<A, F> for DirectRender<R>
     }
 
     #[inline]
-    fn on_widget_event(&mut self, _: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
-        EventOps {
-            action: None,
-            focus: None,
-            bubble: true,
-            cursor_pos: None,
-            cursor_icon: None,
-            popup: None
-        }
+    fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, popups: Option<ChildPopupsMut<A, F>>, source_child: &[WidgetIdent]) -> EventOps<A, F> {
+        self.render_state.on_widget_event(event, input_state, popups, source_child)
     }
 }
