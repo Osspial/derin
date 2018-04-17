@@ -71,6 +71,10 @@ impl<R> DirectRender<R> {
         self.update_tag.mark_render_self();
         &mut self.render_state
     }
+
+    pub fn mark_redraw(&mut self) {
+        self.update_tag.mark_render_self();
+    }
 }
 
 impl<A, F, R> Widget<A, F> for DirectRender<R>
