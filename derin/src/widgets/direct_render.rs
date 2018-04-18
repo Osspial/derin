@@ -25,7 +25,7 @@ use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 use std::mem;
 
 pub struct DirectRender<R> {
-    update_tag: WidgetTag,
+    widget_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
     render_state: R
 }
@@ -57,7 +57,7 @@ pub trait DirectRenderState<A> {
 impl<R> DirectRender<R> {
     pub fn new(render_state: R) -> DirectRender<R> {
         DirectRender {
-            update_tag: WidgetTag::new(),
+            widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             render_state
         }
@@ -68,12 +68,12 @@ impl<R> DirectRender<R> {
     }
 
     pub fn render_state_mut(&mut self) -> &mut R {
-        self.update_tag.mark_render_self();
+        self.widget_tag.mark_render_self();
         &mut self.render_state
     }
 
     pub fn mark_redraw(&mut self) {
-        self.update_tag.mark_render_self();
+        self.widget_tag.mark_render_self();
     }
 }
 
@@ -82,8 +82,8 @@ impl<A, F, R> Widget<A, F> for DirectRender<R>
           F: PrimFrame<DirectRender = R::RenderType>
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        &self.update_tag
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
     }
 
     #[inline]

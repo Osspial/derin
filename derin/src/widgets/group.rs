@@ -39,7 +39,7 @@ use derin_layout_engine::{GridEngine, UpdateHeapCache, SolveError};
 pub struct Group<C, L>
     where L: GridLayout
 {
-    update_tag: WidgetTag,
+    widget_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
     layout_engine: GridEngine,
     container: C,
@@ -53,7 +53,7 @@ impl<C, L> Group<C, L>
     /// specified in `layout`.
     pub fn new(container: C, layout: L) -> Group<C, L> {
         Group {
-            update_tag: WidgetTag::new(),
+            widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             layout_engine: GridEngine::new(),
             container, layout
@@ -67,7 +67,7 @@ impl<C, L> Group<C, L>
 
     /// Retrieve the widgets contained within the group, for mutation.
     pub fn container_mut(&mut self) -> &mut C {
-        self.update_tag.mark_update_child().mark_update_layout();
+        self.widget_tag.mark_update_child().mark_update_layout();
         &mut self.container
     }
 }
@@ -80,8 +80,8 @@ impl<A, F, C, L> Widget<A, F> for Group<C, L>
           L: GridLayout
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        &self.update_tag
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
     }
 
     #[inline]
@@ -91,7 +91,7 @@ impl<A, F, C, L> Widget<A, F> for Group<C, L>
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
-        self.update_tag.mark_update_layout();
+        self.widget_tag.mark_update_layout();
         &mut self.bounds
     }
     fn size_bounds(&self) -> SizeBounds {

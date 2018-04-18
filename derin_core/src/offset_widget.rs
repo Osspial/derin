@@ -62,7 +62,7 @@ pub trait OffsetWidgetTrait<A, F>
 {
     type Widget: Widget<A, F> + ?Sized;
 
-    fn update_tag(&self) -> &WidgetTag;
+    fn widget_tag(&self) -> &WidgetTag;
     fn rect(&self) -> BoundBox<Point2<i32>>;
     fn rect_clipped(&self) -> Option<BoundBox<Point2<i32>>>;
     fn set_rect(&mut self, rect: BoundBox<Point2<i32>>);
@@ -109,8 +109,8 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
 {
     type Widget = W;
 
-    fn update_tag(&self) -> &WidgetTag {
-        self.widget.update_tag()
+    fn widget_tag(&self) -> &WidgetTag {
+        self.widget.widget_tag()
     }
     fn rect(&self) -> BoundBox<Point2<i32>> {
         self.widget.rect() + self.offset
@@ -134,14 +134,14 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
         source_child: &[WidgetIdent]
     ) -> EventOps<A, F>
     {
-        let update_tag = self.update_tag();
+        let widget_tag = self.widget_tag();
         let offset = self.rect().min().to_vec();
         let mbd_array: ArrayVec<[_; 5]> = mouse_buttons_down.clone().into_iter()
             .map(|mut down| {
                 down.down_pos -= offset;
                 down
             }).collect();
-        let mbdin_array: ArrayVec<[_; 5]> = update_tag.mouse_state.get().mouse_button_sequence()
+        let mbdin_array: ArrayVec<[_; 5]> = widget_tag.mouse_state.get().mouse_button_sequence()
             .into_iter().filter_map(|b| mouse_buttons_down.contains(b))
             .map(|mut down| {
                 down.down_pos -= offset;

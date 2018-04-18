@@ -58,7 +58,7 @@ impl<A: 'static> ButtonHandler<A> for () {
 /// [`on_click`]: ./trait.ButtonHandler.html#tymethod.on_click
 #[derive(Debug, Clone)]
 pub struct Button<H> {
-    update_tag: WidgetTag,
+    widget_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
     state: ButtonState,
     handler: H,
@@ -70,7 +70,7 @@ impl<H> Button<H> {
     /// Creates a new button with the given contents and
     pub fn new(contents: Contents<String>, handler: H) -> Button<H> {
         Button {
-            update_tag: WidgetTag::new(),
+            widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             state: ButtonState::Normal,
             handler,
@@ -89,7 +89,7 @@ impl<H> Button<H> {
     /// Calling this function forces the button to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn contents_mut(&mut self) -> Contents<&mut String> {
-        self.update_tag.mark_render_self();
+        self.widget_tag.mark_render_self();
         self.contents.borrow_mut()
     }
 }
@@ -100,8 +100,8 @@ impl<A, F, H> Widget<A, F> for Button<H>
           H: ButtonHandler<A>
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        &self.update_tag
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
     }
 
     #[inline]
@@ -158,7 +158,7 @@ impl<A, F, H> Widget<A, F> for Button<H>
         let new_state = match event {
             MouseEnter{..} |
             MouseExit{..} => {
-                self.update_tag.mark_update_timer();
+                self.widget_tag.mark_update_timer();
 
                 match (input_state.mouse_buttons_down_in_widget.is_empty(), event.clone()) {
                     (true, MouseEnter{..}) => ButtonState::Hover,
@@ -179,7 +179,7 @@ impl<A, F, H> Widget<A, F> for Button<H>
         };
 
         if new_state != self.state {
-            self.update_tag.mark_render_self();
+            self.widget_tag.mark_render_self();
             self.state = new_state;
         }
 

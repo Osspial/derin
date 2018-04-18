@@ -40,7 +40,7 @@ const SCROLL_BAR_SIZE: i32 = 16;
 /// greater than the scroll box's size.
 #[derive(Debug, Clone)]
 pub struct ScrollBox<W> {
-    update_tag: WidgetTag,
+    widget_tag: WidgetTag,
     rect: BoundBox<Point2<i32>>,
     slider_x: Option<SliderAssist>,
     slider_y: Option<SliderAssist>,
@@ -51,7 +51,7 @@ impl<W> ScrollBox<W> {
     /// Creates a `ScrollBox` that scrolls the provided widget.
     pub fn new(widget: W) -> ScrollBox<W> {
         ScrollBox {
-            update_tag: WidgetTag::new(),
+            widget_tag: WidgetTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
             clip: Clip::new(widget),
             slider_x: None,
@@ -66,7 +66,7 @@ impl<W> ScrollBox<W> {
 
     /// Retrieves the scrollable widget, for mutation.
     pub fn widget_mut(&mut self) -> &mut W {
-        self.update_tag.mark_update_child().mark_update_layout_post();
+        self.widget_tag.mark_update_child().mark_update_layout_post();
         self.clip.widget_mut()
     }
 
@@ -90,8 +90,8 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
           W: Widget<A, F>
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        &self.update_tag
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
     }
 
     #[inline]
@@ -101,7 +101,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
-        self.update_tag.mark_update_layout_post();
+        self.widget_tag.mark_update_layout_post();
         &mut self.rect
     }
     fn size_bounds(&self) -> SizeBounds {
@@ -191,7 +191,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
                 if let Some(ref mut slider_y) = self.slider_y {
                     slider_y.click_head(pos);
                 }
-                self.update_tag.mark_render_self();
+                self.widget_tag.mark_render_self();
             },
             (0, WidgetEvent::MouseMove{new_pos, ..}) => {
                 if let Some(ref mut slider_x) = self.slider_x {
@@ -208,7 +208,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
                 if let Some(ref mut slider_y) = self.slider_y {
                     slider_y.head_click_pos = None;
                 }
-                self.update_tag.mark_render_self();
+                self.widget_tag.mark_render_self();
             },
             (_, WidgetEvent::MouseScrollLines(dir)) => {
                 allow_bubble = false;
@@ -235,7 +235,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
             _ => ()
         }
         if values(&self.slider_x, &self.slider_y) != start_values {
-            self.update_tag.mark_render_self().mark_update_layout_post();
+            self.widget_tag.mark_render_self().mark_update_layout_post();
         }
         EventOps {
             action: None,

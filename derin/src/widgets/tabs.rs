@@ -51,7 +51,7 @@ pub struct TabPage<W> {
 /// Users can switch between these widgets by clicking on a list of tabs at the top of the widget.
 #[derive(Debug, Clone)]
 pub struct TabList<W> {
-    update_tag: WidgetTag,
+    widget_tag: WidgetTag,
     rect: BoundBox<Point2<i32>>,
     layout_engine: GridEngine,
 
@@ -86,7 +86,7 @@ impl<W> TabList<W> {
     /// Create a new list of tabs.
     pub fn new(tabs: Vec<TabPage<W>>) -> TabList<W> {
         TabList {
-            update_tag: WidgetTag::new(),
+            widget_tag: WidgetTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
             layout_engine: GridEngine::new(),
 
@@ -104,7 +104,7 @@ impl<W> TabList<W> {
     /// Calling this function forces the tab list to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn tabs_mut(&mut self) -> &mut Vec<TabPage<W>> {
-        self.update_tag.mark_update_child().mark_update_layout().mark_render_self();
+        self.widget_tag.mark_update_child().mark_update_layout().mark_render_self();
         &mut self.tabs
     }
 }
@@ -115,8 +115,8 @@ impl<A, F, W> Widget<A, F> for TabList<W>
           W: Widget<A, F>
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        &self.update_tag
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
     }
 
     #[inline]
@@ -126,7 +126,7 @@ impl<A, F, W> Widget<A, F> for TabList<W>
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
-        self.update_tag.mark_update_layout().mark_render_self();
+        self.widget_tag.mark_update_layout().mark_render_self();
         &mut self.rect
     }
 
@@ -189,7 +189,7 @@ impl<A, F, W> Widget<A, F> for TabList<W>
                         tab.button_state = new_state;
                     }
                     if state_changed {
-                        self.update_tag.mark_render_self();
+                        self.widget_tag.mark_render_self();
                     }
                 },
                 WidgetEvent::MouseEnterChild{..} => {
@@ -203,7 +203,7 @@ impl<A, F, W> Widget<A, F> for TabList<W>
                         tab.button_state = new_state;
                     }
                     if state_changed {
-                        self.update_tag.mark_render_self();
+                        self.widget_tag.mark_render_self();
                     }
                 }
                 WidgetEvent::MouseDown{pos, in_widget: true, ..} => {
@@ -217,7 +217,7 @@ impl<A, F, W> Widget<A, F> for TabList<W>
                         tab.button_state = new_state;
                     }
                     if state_changed {
-                        self.update_tag.mark_render_self();
+                        self.widget_tag.mark_render_self();
                     }
                 },
                 WidgetEvent::MouseUp{in_widget: true, pressed_in_widget: true, pos, down_pos, ..} => {
@@ -244,10 +244,10 @@ impl<A, F, W> Widget<A, F> for TabList<W>
                         tab.button_state = new_state;
                     }
                     if state_changed {
-                        self.update_tag.mark_render_self();
+                        self.widget_tag.mark_render_self();
                     }
                     if !(old_open == new_open || new_open == None) {
-                        self.update_tag.mark_update_layout();
+                        self.widget_tag.mark_update_layout();
                     }
                 },
                 WidgetEvent::MouseUp{in_widget: false, pressed_in_widget: true, ..} => {
@@ -258,7 +258,7 @@ impl<A, F, W> Widget<A, F> for TabList<W>
                         tab.button_state = new_state;
                     }
                     if state_changed {
-                        self.update_tag.mark_render_self();
+                        self.widget_tag.mark_render_self();
                     }
                 },
                 _ => ()

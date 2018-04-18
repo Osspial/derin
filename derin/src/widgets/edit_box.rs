@@ -32,7 +32,7 @@ use arrayvec::ArrayVec;
 /// Multi-line editable text widget.
 #[derive(Debug, Clone)]
 pub struct EditBox {
-    update_tag: WidgetTag,
+    widget_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
     edit: TextEditAssist,
     min_size: DimsBox<Point2<i32>>
@@ -41,7 +41,7 @@ pub struct EditBox {
 /// Single-line editable text widget.
 #[derive(Debug, Clone)]
 pub struct LineBox {
-    update_tag: WidgetTag,
+    widget_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
     edit: TextEditAssist<LineCharFilter>,
     min_size: DimsBox<Point2<i32>>
@@ -51,7 +51,7 @@ impl EditBox {
     /// Create a new `EditBox`, containing the included `String` by default.
     pub fn new(string: String) -> EditBox {
         EditBox {
-            update_tag: WidgetTag::new(),
+            widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             edit: TextEditAssist {
                 string: EditString::new(RenderString::new(string)),
@@ -71,7 +71,7 @@ impl EditBox {
     /// Calling this function forces the box to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn string_mut(&mut self) -> &mut String {
-        self.update_tag.mark_render_self();
+        self.widget_tag.mark_render_self();
         self.edit.string.render_string.string_mut()
     }
 }
@@ -80,7 +80,7 @@ impl LineBox {
     /// Create a new `LineBox`, containing the included `String` by default.
     pub fn new(string: String) -> LineBox {
         LineBox {
-            update_tag: WidgetTag::new(),
+            widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             edit: TextEditAssist {
                 string: EditString::new(RenderString::new(string)),
@@ -100,7 +100,7 @@ impl LineBox {
     /// Calling this function forces the box to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn string_mut(&mut self) -> &mut String {
-        self.update_tag.mark_render_self();
+        self.widget_tag.mark_render_self();
         self.edit.string.render_string.string_mut()
     }
 }
@@ -153,16 +153,16 @@ macro_rules! render_and_event {
                     focus,
                 } = self.edit.adapt_event(&event, input_state);
                 if cursor_flash.is_some() {
-                    self.update_tag.mark_update_timer();
+                    self.widget_tag.mark_update_timer();
                 }
                 if redraw {
-                    self.update_tag.mark_render_self();
+                    self.widget_tag.mark_render_self();
                 }
 
                 match event {
                     Timer{name: "cursor_flash", times_triggered, ..} => {
                         self.edit.string.draw_cursor = times_triggered % 2 == 0;
-                        self.update_tag.mark_render_self();
+                        self.widget_tag.mark_render_self();
                     },
                     _ => ()
                 };
@@ -177,7 +177,7 @@ macro_rules! render_and_event {
             }
 
             fn register_timers(&self, register: &mut TimerRegister) {
-                if self.update_tag.has_keyboard_focus() {
+                if self.widget_tag.has_keyboard_focus() {
                     register.add_timer("cursor_flash", Duration::new(1, 0)/2, true);
                 }
             }
@@ -188,8 +188,8 @@ impl<A, F> Widget<A, F> for EditBox
     where F: PrimFrame
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        &self.update_tag
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
     }
 
     #[inline]
@@ -214,8 +214,8 @@ impl<A, F> Widget<A, F> for LineBox
     where F: PrimFrame
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        &self.update_tag
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
     }
 
     #[inline]

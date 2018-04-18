@@ -26,7 +26,7 @@ use arrayvec::ArrayVec;
 
 #[derive(Debug, Clone)]
 pub struct ProgressBar {
-    update_tag: WidgetTag,
+    widget_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
 
     value: f32,
@@ -38,7 +38,7 @@ impl ProgressBar {
     /// Creates a new progress bar with the given `value`, `step`, `min`, `max`, and action handler.
     pub fn new(value: f32, min: f32, max: f32) -> ProgressBar {
         ProgressBar {
-            update_tag: WidgetTag::new(),
+            widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             value,
             min,
@@ -64,7 +64,7 @@ impl ProgressBar {
     /// it unless you're actually changing the contents.
     #[inline]
     pub fn value_mut(&mut self) -> &mut f32 {
-        self.update_tag.mark_render_self();
+        self.widget_tag.mark_render_self();
         &mut self.value
     }
 
@@ -74,7 +74,7 @@ impl ProgressBar {
     /// it unless you're actually changing the contents.
     #[inline]
     pub fn range_mut(&mut self) -> (&mut f32, &mut f32) {
-        self.update_tag.mark_render_self();
+        self.widget_tag.mark_render_self();
         (&mut self.min, &mut self.max)
     }
 }
@@ -83,8 +83,8 @@ impl<A, F> Widget<A, F> for ProgressBar
     where F: PrimFrame
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        &self.update_tag
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
     }
 
     #[inline]

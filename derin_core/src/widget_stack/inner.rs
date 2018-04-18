@@ -123,8 +123,8 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
             let parent = unsafe{ &*widget_slice[0].widget };
             let child = unsafe{ &*widget_slice[1].widget };
 
-            if child.update_tag().needs_update(self.root_id) != Update::default() {
-                parent.update_tag().mark_update_child_immutable();
+            if child.widget_tag().needs_update(self.root_id) != Update::default() {
+                parent.widget_tag().mark_update_child_immutable();
             }
         }
 
@@ -219,8 +219,8 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
             }
         }
 
-        if popped.update_tag().needs_update(self.root_id) != Update::default() {
-            self.top().widget.update_tag().mark_update_child_immutable();
+        if popped.widget_tag().needs_update(self.root_id) != Update::default() {
+            self.top().widget.widget_tag().mark_update_child_immutable();
         }
 
 

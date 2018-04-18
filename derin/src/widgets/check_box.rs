@@ -33,7 +33,7 @@ use gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame};
 /// [`change_state`]: ./trait.ToggleHandler.html
 #[derive(Debug, Clone)]
 pub struct CheckBox<H> {
-    update_tag: WidgetTag,
+    widget_tag: WidgetTag,
     rect: BoundBox<Point2<i32>>,
 
     check_rect: BoundBox<Point2<i32>>,
@@ -49,7 +49,7 @@ impl<H> CheckBox<H> {
     /// [toggle handler]: ./trait.ToggleHandler.html
     pub fn new(checked: bool, contents: Contents<String>, handler: H) -> CheckBox<H> {
         CheckBox {
-            update_tag: WidgetTag::new(),
+            widget_tag: WidgetTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
 
             check_rect: BoundBox::new2(0, 0, 0, 0),
@@ -69,7 +69,7 @@ impl<H> CheckBox<H> {
     /// Calling this function forces the checkbox to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn contents_mut(&mut self) -> Contents<&mut String> {
-        self.update_tag.mark_render_self();
+        self.widget_tag.mark_render_self();
         self.contents.borrow_mut()
     }
 
@@ -83,7 +83,7 @@ impl<H> CheckBox<H> {
     /// Calling this function forces the checkbox to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn checked_mut(&mut self) -> &mut bool {
-        self.update_tag.mark_render_self();
+        self.widget_tag.mark_render_self();
         &mut self.checked
     }
 }
@@ -94,8 +94,8 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
           H: ToggleHandler<A>
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        &self.update_tag
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
     }
 
     #[inline]
@@ -165,7 +165,7 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
         match event {
             MouseEnter{..} |
             MouseExit{..} => {
-                self.update_tag.mark_update_timer();
+                self.widget_tag.mark_update_timer();
 
                 new_state = match (input_state.mouse_buttons_down_in_widget.is_empty(), event.clone()) {
                     (true, MouseEnter{..}) => ButtonState::Hover,
@@ -189,7 +189,7 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
         };
 
         if new_checked != self.checked || new_state != self.button_state {
-            self.update_tag.mark_render_self();
+            self.widget_tag.mark_render_self();
             self.checked = new_checked;
             self.button_state = new_state;
         }

@@ -60,7 +60,7 @@ pub(crate) enum MouseState {
 #[derive(Debug, Clone)]
 pub struct WidgetTag {
     last_root: Cell<RootID>,
-    update_tag: Cell<UpdateTag>,
+    widget_tag: Cell<UpdateTag>,
     pub(crate) widget_id: WidgetID,
     pub(crate) last_event_stamp: Cell<u32>,
     pub(crate) mouse_state: Cell<MouseState>,
@@ -114,16 +114,16 @@ impl From<MouseButtonSequence> for ChildEventRecv {
 
 impl<'a> From<&'a WidgetTag> for ChildEventRecv {
     #[inline]
-    fn from(update_tag: &'a WidgetTag) -> ChildEventRecv {
-        let widget_mb_flags = ChildEventRecv::from(update_tag.mouse_state.get().mouse_button_sequence());
+    fn from(widget_tag: &'a WidgetTag) -> ChildEventRecv {
+        let widget_mb_flags = ChildEventRecv::from(widget_tag.mouse_state.get().mouse_button_sequence());
 
         widget_mb_flags |
-        match update_tag.mouse_state.get() {
+        match widget_tag.mouse_state.get() {
             MouseState::Hovering(_, _) => ChildEventRecv::MOUSE_HOVER,
             MouseState::Tracking(_, _)  |
             MouseState::Untracked   => ChildEventRecv::empty()
         } |
-        match update_tag.has_keyboard_focus.get() {
+        match widget_tag.has_keyboard_focus.get() {
             true => ChildEventRecv::KEYBOARD,
             false => ChildEventRecv::empty()
         }
@@ -183,7 +183,7 @@ pub enum OnFocusOverflow {
 }
 
 pub trait Widget<A, F: RenderFrame> {
-    fn update_tag(&self) -> &WidgetTag;
+    fn widget_tag(&self) -> &WidgetTag;
     fn rect(&self) -> BoundBox<Point2<i32>>;
     fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>>;
     fn render(&mut self, frame: &mut FrameRectStack<F>);
@@ -219,8 +219,8 @@ impl<'a, A, F, W> Widget<A, F> for &'a mut W
           F: RenderFrame
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        W::update_tag(self)
+    fn widget_tag(&self) -> &WidgetTag {
+        W::widget_tag(self)
     }
     fn rect(&self) -> BoundBox<Point2<i32>> {
         W::rect(self)
@@ -268,8 +268,8 @@ impl<A, F, W> Widget<A, F> for Box<W>
           F: RenderFrame
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        W::update_tag(self)
+    fn widget_tag(&self) -> &WidgetTag {
+        W::widget_tag(self)
     }
     fn rect(&self) -> BoundBox<Point2<i32>> {
         W::rect(self)
@@ -420,7 +420,7 @@ impl WidgetTag {
     pub fn new() -> WidgetTag {
         WidgetTag {
             last_root: Cell::new(RootID::dummy()),
-            update_tag: Cell::new(UpdateTag::all()),
+            widget_tag: Cell::new(UpdateTag::all()),
             widget_id: WidgetID::new(),
             last_event_stamp: Cell::new(0),
             mouse_state: Cell::new(MouseState::Untracked),
@@ -431,32 +431,32 @@ impl WidgetTag {
 
     #[inline]
     pub fn mark_render_self(&mut self) -> &mut WidgetTag {
-        self.update_tag.set(self.update_tag.get() | UpdateTag::RENDER_SELF);
+        self.widget_tag.set(self.widget_tag.get() | UpdateTag::RENDER_SELF);
         self
     }
 
     #[inline]
     pub fn mark_update_child(&mut self) -> &mut WidgetTag {
-        self.update_tag.set(self.update_tag.get() | UpdateTag::UPDATE_CHILD);
+        self.widget_tag.set(self.widget_tag.get() | UpdateTag::UPDATE_CHILD);
         self
     }
 
     #[inline]
     pub fn mark_update_layout(&mut self) -> &mut WidgetTag {
-        self.update_tag.set(self.update_tag.get() | UpdateTag::UPDATE_LAYOUT);
+        self.widget_tag.set(self.widget_tag.get() | UpdateTag::UPDATE_LAYOUT);
         self
     }
 
 
     #[inline]
     pub fn mark_update_layout_post(&mut self) -> &mut WidgetTag {
-        self.update_tag.set(self.update_tag.get() | UpdateTag::UPDATE_LAYOUT_POST);
+        self.widget_tag.set(self.widget_tag.get() | UpdateTag::UPDATE_LAYOUT_POST);
         self
     }
 
     #[inline]
     pub fn mark_update_timer(&mut self) -> &mut WidgetTag {
-        self.update_tag.set(self.update_tag.get() | UpdateTag::UPDATE_TIMER);
+        self.widget_tag.set(self.widget_tag.get() | UpdateTag::UPDATE_TIMER);
         self
     }
 
@@ -468,22 +468,22 @@ impl WidgetTag {
     #[inline]
     pub(crate) fn mark_updated(&self, root_id: RootID) {
         self.last_root.set(root_id);
-        self.update_tag.set(UpdateTag::empty());
+        self.widget_tag.set(UpdateTag::empty());
     }
 
     #[inline]
     pub(crate) fn unmark_update_layout(&self) {
-        self.update_tag.set(self.update_tag.get() & !(UpdateTag::UPDATE_LAYOUT | UpdateTag::UPDATE_LAYOUT_POST));
+        self.widget_tag.set(self.widget_tag.get() & !(UpdateTag::UPDATE_LAYOUT | UpdateTag::UPDATE_LAYOUT_POST));
     }
 
     #[inline]
     pub(crate) fn unmark_update_timer(&self) {
-        self.update_tag.set(self.update_tag.get() & !UpdateTag::UPDATE_TIMER);
+        self.widget_tag.set(self.widget_tag.get() & !UpdateTag::UPDATE_TIMER);
     }
 
     #[inline]
     pub(crate) fn mark_update_child_immutable(&self) {
-        self.update_tag.set(self.update_tag.get() | UpdateTag::UPDATE_CHILD);
+        self.widget_tag.set(self.widget_tag.get() | UpdateTag::UPDATE_CHILD);
     }
 
     #[inline]
@@ -497,13 +497,13 @@ impl WidgetTag {
                 update_layout_post: true
             }
         } else {
-            let update_tag = self.update_tag.get();
+            let widget_tag = self.widget_tag.get();
             Update {
-                render_self: update_tag.contains(UpdateTag::RENDER_SELF),
-                update_child: update_tag.contains(UpdateTag::UPDATE_CHILD),
-                update_timer: update_tag.contains(UpdateTag::UPDATE_TIMER),
-                update_layout: update_tag.contains(UpdateTag::UPDATE_LAYOUT),
-                update_layout_post: update_tag.contains(UpdateTag::UPDATE_LAYOUT_POST),
+                render_self: widget_tag.contains(UpdateTag::RENDER_SELF),
+                update_child: widget_tag.contains(UpdateTag::UPDATE_CHILD),
+                update_timer: widget_tag.contains(UpdateTag::UPDATE_TIMER),
+                update_layout: widget_tag.contains(UpdateTag::UPDATE_LAYOUT),
+                update_layout_post: widget_tag.contains(UpdateTag::UPDATE_LAYOUT_POST),
             }
         }
     }

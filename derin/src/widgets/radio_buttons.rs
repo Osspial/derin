@@ -41,7 +41,7 @@ use layout::GridLayout;
 /// [`RadioButtonList`]: ./struct.RadioButtonList.html
 #[derive(Debug, Clone)]
 pub struct RadioButton {
-    update_tag: WidgetTag,
+    widget_tag: WidgetTag,
     rect: BoundBox<Point2<i32>>,
     min_size: DimsBox<Point2<i32>>,
 
@@ -57,7 +57,7 @@ pub struct RadioButton {
 pub struct RadioButtonList<C, L>
     where L: GridLayout
 {
-    update_tag: WidgetTag,
+    widget_tag: WidgetTag,
     rect: BoundBox<Point2<i32>>,
 
     layout_engine: GridEngine,
@@ -73,7 +73,7 @@ impl<C, L> RadioButtonList<C, L>
     /// The passed collection can *only contain radio buttons*, otherwise this will fail to compile.
     pub fn new(buttons: C, layout: L) -> RadioButtonList<C, L> {
         RadioButtonList {
-            update_tag: WidgetTag::new(),
+            widget_tag: WidgetTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
 
             layout_engine: GridEngine::new(),
@@ -88,7 +88,7 @@ impl<C, L> RadioButtonList<C, L>
 
     /// Retrieves the collection of radio buttons stored within this list, for mutation.
     pub fn buttons_mut(&mut self) -> &mut C {
-        self.update_tag.mark_update_child().mark_update_layout();
+        self.widget_tag.mark_update_child().mark_update_layout();
         &mut self.buttons
     }
 }
@@ -97,7 +97,7 @@ impl RadioButton {
     /// Creates a new radio button, with the given default selected state and contents.
     pub fn new(selected: bool, contents: Contents) -> RadioButton {
         RadioButton {
-            update_tag: WidgetTag::new(),
+            widget_tag: WidgetTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
             min_size: DimsBox::new2(0, 0),
 
@@ -117,7 +117,7 @@ impl RadioButton {
     /// Calling this function forces the radio button to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn contents_mut(&mut self) -> Contents<&mut String> {
-        self.update_tag.mark_render_self();
+        self.widget_tag.mark_render_self();
         self.contents.borrow_mut()
     }
 
@@ -131,7 +131,7 @@ impl RadioButton {
     /// Calling this function forces the radio button to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn selected_mut(&mut self) -> &mut bool {
-        self.update_tag.mark_render_self();
+        self.widget_tag.mark_render_self();
         &mut self.selected
     }
 }
@@ -140,8 +140,8 @@ impl<A, F> Widget<A, F> for RadioButton
     where F: PrimFrame
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        &self.update_tag
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
     }
 
     #[inline]
@@ -233,7 +233,7 @@ impl<A, F> Widget<A, F> for RadioButton
         match event {
             MouseEnter{..} |
             MouseExit{..} => {
-                self.update_tag.mark_update_timer();
+                self.widget_tag.mark_update_timer();
 
                 new_state = match (input_state.mouse_buttons_down_in_widget.is_empty(), event.clone()) {
                     (true, MouseEnter{..}) => ButtonState::Hover,
@@ -258,7 +258,7 @@ impl<A, F> Widget<A, F> for RadioButton
         };
 
         if new_selected != self.selected || new_state != self.button_state {
-            self.update_tag.mark_render_self();
+            self.widget_tag.mark_render_self();
             self.selected = new_selected;
             self.button_state = new_state;
         }
@@ -284,8 +284,8 @@ impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
           L: GridLayout
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        &self.update_tag
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
     }
 
     #[inline]
@@ -295,7 +295,7 @@ impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
-        self.update_tag.mark_update_layout();
+        self.widget_tag.mark_update_layout();
         &mut self.rect
     }
 
@@ -315,14 +315,14 @@ impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
             self.buttons.children_mut::<_, ()>(|summary| {
                 if summary.ident != *child_ident {
                     if summary.widget.selected {
-                        summary.widget.update_tag.mark_render_self();
+                        summary.widget.widget_tag.mark_render_self();
                     }
                     state_changed |= summary.widget.selected;
                     summary.widget.selected = false;
                 }
                 LoopFlow::Continue
             });
-            self.update_tag.mark_update_child();
+            self.widget_tag.mark_update_child();
         }
 
         EventOps {

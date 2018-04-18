@@ -42,7 +42,7 @@ pub trait SliderHandler: 'static {
 /// [`on_move`]: ./trait.SliderHandler.html#tymethod.on_move
 #[derive(Debug, Clone)]
 pub struct Slider<H: SliderHandler> {
-    update_tag: WidgetTag,
+    widget_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
 
     assist: SliderAssist,
@@ -53,7 +53,7 @@ impl<H: SliderHandler> Slider<H> {
     /// Creates a new slider with the given `value`, `step`, `min`, `max`, and action handler.
     pub fn new(value: f32, step: f32, min: f32, max: f32, handler: H) -> Slider<H> {
         Slider {
-            update_tag: WidgetTag::new(),
+            widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             assist: SliderAssist {
                 value, step, min, max,
@@ -94,7 +94,7 @@ impl<H: SliderHandler> Slider<H> {
     /// it unless you're actually changing the contents.
     #[inline]
     pub fn value_mut(&mut self) -> &mut f32 {
-        self.update_tag.mark_render_self();
+        self.widget_tag.mark_render_self();
         &mut self.assist.value
     }
 
@@ -104,7 +104,7 @@ impl<H: SliderHandler> Slider<H> {
     /// it unless you're actually changing the contents.
     #[inline]
     pub fn range_mut(&mut self) -> (&mut f32, &mut f32) {
-        self.update_tag.mark_render_self();
+        self.widget_tag.mark_render_self();
         (&mut self.assist.min, &mut self.assist.max)
     }
 
@@ -114,7 +114,7 @@ impl<H: SliderHandler> Slider<H> {
     /// it unless you're actually changing the contents.
     #[inline]
     pub fn step_mut(&mut self) -> &mut f32 {
-        self.update_tag.mark_render_self();
+        self.widget_tag.mark_render_self();
         &mut self.assist.step
     }
 }
@@ -124,8 +124,8 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
           H: SliderHandler
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        &self.update_tag
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
     }
 
     #[inline]
@@ -197,20 +197,20 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
             match event {
                 WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left} => {
                     self.assist.click_head(pos);
-                    self.update_tag.mark_render_self();
+                    self.widget_tag.mark_render_self();
                 },
                 WidgetEvent::MouseMove{new_pos, ..} => {
                     self.assist.move_head(new_pos.x);
                 },
                 WidgetEvent::MouseUp{button: MouseButton::Left, ..} => {
                     self.assist.head_click_pos = None;
-                    self.update_tag.mark_render_self();
+                    self.widget_tag.mark_render_self();
                 },
                 _ => ()
             }
             if self.assist.value != start_value {
                 action = self.handler.on_move(start_value, self.assist.value);
-                self.update_tag.mark_render_self();
+                self.widget_tag.mark_render_self();
             }
         }
         EventOps {

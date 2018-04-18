@@ -29,7 +29,7 @@ use gl_render::PrimFrame;
 /// Can display text or an image, depending on what's in `contents`.
 #[derive(Debug, Clone)]
 pub struct Label {
-    update_tag: WidgetTag,
+    widget_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
     contents: ContentsInner,
     min_size: DimsBox<Point2<i32>>
@@ -39,7 +39,7 @@ impl Label {
     /// Create a new label with the given contents.
     pub fn new(contents: Contents<String>) -> Label {
         Label {
-            update_tag: WidgetTag::new(),
+            widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             contents: contents.to_inner(),
             min_size: DimsBox::new2(0, 0)
@@ -56,7 +56,7 @@ impl Label {
     /// Calling this function forces the label to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn contents_mut(&mut self) -> Contents<&mut String> {
-        self.update_tag.mark_render_self();
+        self.widget_tag.mark_render_self();
         self.contents.borrow_mut()
     }
 }
@@ -65,8 +65,8 @@ impl<A, F> Widget<A, F> for Label
     where F: PrimFrame
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        &self.update_tag
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
     }
 
     #[inline]

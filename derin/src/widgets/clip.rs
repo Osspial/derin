@@ -28,7 +28,7 @@ use gl_render::PrimFrame;
 /// Allows a containing widget to ignore the inner widget's size bounds. Currently used in `ScrollBox`.
 #[derive(Debug, Clone)]
 pub struct Clip<W> {
-    update_tag: WidgetTag,
+    widget_tag: WidgetTag,
     rect: BoundBox<Point2<i32>>,
     widget: W
 }
@@ -37,7 +37,7 @@ impl<W> Clip<W> {
     /// Creates a new clip widget.
     pub fn new(widget: W) -> Clip<W> {
         Clip {
-            update_tag: WidgetTag::new(),
+            widget_tag: WidgetTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
             widget
         }
@@ -50,7 +50,7 @@ impl<W> Clip<W> {
 
     /// Retrieves the clipped widget for mutation.
     pub fn widget_mut(&mut self) -> &mut W {
-        self.update_tag.mark_update_child().mark_update_layout();
+        self.widget_tag.mark_update_child().mark_update_layout();
         &mut self.widget
     }
 }
@@ -60,8 +60,8 @@ impl<A, F, W> Widget<A, F> for Clip<W>
           W: Widget<A, F>
 {
     #[inline]
-    fn update_tag(&self) -> &WidgetTag {
-        &self.update_tag
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
     }
 
     #[inline]
@@ -71,7 +71,7 @@ impl<A, F, W> Widget<A, F> for Clip<W>
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
-        self.update_tag.mark_update_layout();
+        self.widget_tag.mark_update_layout();
         &mut self.rect
     }
 
