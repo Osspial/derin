@@ -59,7 +59,8 @@ pub(crate) enum MouseState {
 
 #[derive(Debug, Clone)]
 pub struct WidgetTag {
-    last_root: Cell<u32>,
+    last_root: Cell<RootID>,
+    update_tag: Cell<UpdateTag>,
     pub(crate) widget_id: WidgetID,
     pub(crate) last_event_stamp: Cell<u32>,
     pub(crate) mouse_state: Cell<MouseState>,
@@ -79,8 +80,7 @@ impl MouseState {
 }
 
 bitflags! {
-    #[doc(hidden)]
-    pub struct ChildEventRecv: u8 {
+    pub(crate) struct ChildEventRecv: u8 {
         const MOUSE_L        = 1 << 0;
         const MOUSE_R        = 1 << 1;
         const MOUSE_M        = 1 << 2;
@@ -131,7 +131,7 @@ impl<'a> From<&'a WidgetTag> for ChildEventRecv {
 }
 
 macro_rules! id {
-    (pub$(($vis:tt))* $Name:ident $(let $id:ident; $with_id:block)*) => {
+    (pub$(($vis:tt))* $Name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub$(($vis))* struct $Name(u32);
 
@@ -142,10 +142,6 @@ macro_rules! id {
 
                 static ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
                 let id = ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32;
-                $({
-                    let $id = id;
-                    $with_id
-                })*
 
                 $Name(id as u32)
             }
@@ -158,7 +154,7 @@ macro_rules! id {
     }
 }
 
-id!(pub(crate) RootID let id; {assert!(id < UPDATE_MASK)});
+id!(pub(crate) RootID);
 id!(pub(crate) WidgetID);
 
 
@@ -407,20 +403,24 @@ impl Default for OnFocusOverflow {
     }
 }
 
-const RENDER_SELF: u32 = 1 << 31;
-const UPDATE_CHILD: u32 = 1 << 30;
-const UPDATE_LAYOUT: u32 = 1 << 29;
-const UPDATE_LAYOUT_POST: u32 = 1 << 28;
-const UPDATE_TIMER: u32 = 1 << 27;
-const RENDER_ALL: u32 = RENDER_SELF | UPDATE_CHILD;
 
-const UPDATE_MASK: u32 = RENDER_SELF | UPDATE_CHILD | RENDER_ALL | UPDATE_LAYOUT | UPDATE_LAYOUT_POST | UPDATE_TIMER;
+bitflags!{
+    pub(crate) struct UpdateTag: u8 {
+        const RENDER_SELF = 1 << 0;
+        const UPDATE_CHILD = 1 << 1;
+        const UPDATE_LAYOUT = 1 << 2;
+        const UPDATE_LAYOUT_POST = 1 << 3;
+        const UPDATE_TIMER = 1 << 4;
+        const RENDER_ALL = UpdateTag::RENDER_SELF.bits | UpdateTag::UPDATE_CHILD.bits;
+    }
+}
 
 impl WidgetTag {
     #[inline]
     pub fn new() -> WidgetTag {
         WidgetTag {
-            last_root: Cell::new(UPDATE_MASK),
+            last_root: Cell::new(RootID::dummy()),
+            update_tag: Cell::new(UpdateTag::all()),
             widget_id: WidgetID::new(),
             last_event_stamp: Cell::new(0),
             mouse_state: Cell::new(MouseState::Untracked),
@@ -431,32 +431,32 @@ impl WidgetTag {
 
     #[inline]
     pub fn mark_render_self(&mut self) -> &mut WidgetTag {
-        self.last_root.set(self.last_root.get() | RENDER_SELF);
+        self.update_tag.set(self.update_tag.get() | UpdateTag::RENDER_SELF);
         self
     }
 
     #[inline]
     pub fn mark_update_child(&mut self) -> &mut WidgetTag {
-        self.last_root.set(self.last_root.get() | UPDATE_CHILD);
+        self.update_tag.set(self.update_tag.get() | UpdateTag::UPDATE_CHILD);
         self
     }
 
     #[inline]
     pub fn mark_update_layout(&mut self) -> &mut WidgetTag {
-        self.last_root.set(self.last_root.get() | UPDATE_LAYOUT);
+        self.update_tag.set(self.update_tag.get() | UpdateTag::UPDATE_LAYOUT);
         self
     }
 
 
     #[inline]
     pub fn mark_update_layout_post(&mut self) -> &mut WidgetTag {
-        self.last_root.set(self.last_root.get() | UPDATE_LAYOUT_POST);
+        self.update_tag.set(self.update_tag.get() | UpdateTag::UPDATE_LAYOUT_POST);
         self
     }
 
     #[inline]
     pub fn mark_update_timer(&mut self) -> &mut WidgetTag {
-        self.last_root.set(self.last_root.get() | UPDATE_TIMER);
+        self.update_tag.set(self.update_tag.get() | UpdateTag::UPDATE_TIMER);
         self
     }
 
@@ -467,41 +467,44 @@ impl WidgetTag {
 
     #[inline]
     pub(crate) fn mark_updated(&self, root_id: RootID) {
-        self.last_root.set(root_id.0);
+        self.last_root.set(root_id);
+        self.update_tag.set(UpdateTag::empty());
     }
 
     #[inline]
     pub(crate) fn unmark_update_layout(&self) {
-        self.last_root.set(self.last_root.get() & !(UPDATE_LAYOUT | UPDATE_LAYOUT_POST));
+        self.update_tag.set(self.update_tag.get() & !(UpdateTag::UPDATE_LAYOUT | UpdateTag::UPDATE_LAYOUT_POST));
     }
 
     #[inline]
     pub(crate) fn unmark_update_timer(&self) {
-        self.last_root.set(self.last_root.get() & !UPDATE_TIMER);
+        self.update_tag.set(self.update_tag.get() & !UpdateTag::UPDATE_TIMER);
     }
 
     #[inline]
     pub(crate) fn mark_update_child_immutable(&self) {
-        self.last_root.set(self.last_root.get() | UPDATE_CHILD);
+        self.update_tag.set(self.update_tag.get() | UpdateTag::UPDATE_CHILD);
     }
 
     #[inline]
     pub(crate) fn needs_update(&self, root_id: RootID) -> Update {
-        match self.last_root.get() {
-            r if r == root_id.0 => Update {
-                render_self: false,
-                update_child: false,
-                update_timer: false,
-                update_layout: false,
-                update_layout_post: false
-            },
-            r => Update {
-                render_self: r & UPDATE_MASK & RENDER_SELF != 0,
-                update_child: r & UPDATE_MASK & UPDATE_CHILD != 0,
-                update_timer: r & UPDATE_MASK & UPDATE_TIMER != 0,
-                update_layout: r & UPDATE_MASK & UPDATE_LAYOUT != 0,
-                update_layout_post: r & UPDATE_MASK & UPDATE_LAYOUT_POST != 0,
-            },
+        if root_id != self.last_root.get() {
+            Update {
+                render_self: true,
+                update_child: true,
+                update_timer: true,
+                update_layout: true,
+                update_layout_post: true
+            }
+        } else {
+            let update_tag = self.update_tag.get();
+            Update {
+                render_self: update_tag.contains(UpdateTag::RENDER_SELF),
+                update_child: update_tag.contains(UpdateTag::UPDATE_CHILD),
+                update_timer: update_tag.contains(UpdateTag::UPDATE_TIMER),
+                update_layout: update_tag.contains(UpdateTag::UPDATE_LAYOUT),
+                update_layout_post: update_tag.contains(UpdateTag::UPDATE_LAYOUT_POST),
+            }
         }
     }
 }

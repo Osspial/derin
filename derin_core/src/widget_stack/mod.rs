@@ -285,7 +285,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
 
     /// Returns number of widgets visited. `for_each_flag` takes widget at flag, ident path of widget,
     /// and Vector2 giving offset from root of the widget's parent.
-    pub fn move_over_flags<G>(&mut self, mut flags: ChildEventRecv, mut for_each_flag: G) -> usize
+    pub(crate) fn move_over_flags<G>(&mut self, mut flags: ChildEventRecv, mut for_each_flag: G) -> usize
         where G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent])
     {
         assert_ne!(self.stack.widgets().len(), 0);
