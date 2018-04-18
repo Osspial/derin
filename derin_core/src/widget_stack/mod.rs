@@ -18,7 +18,7 @@ use LoopFlow;
 use std::cmp::{Ordering, Ord};
 use std::iter::{DoubleEndedIterator, ExactSizeIterator};
 use render::RenderFrame;
-use tree::{Widget, WidgetSummary, WidgetIdent, ChildEventRecv, UpdateTag, RootID, WidgetID};
+use tree::{Widget, WidgetSummary, WidgetIdent, ChildEventRecv, WidgetTag, RootID, WidgetID};
 use tree::dyn::ParentDyn;
 
 use self::inner::{NRAllocCache, NRVec};
@@ -290,7 +290,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
     {
         assert_ne!(self.stack.widgets().len(), 0);
 
-        let get_update_flags = |update: &UpdateTag| update.child_event_recv.get() | ChildEventRecv::from(update);
+        let get_update_flags = |update: &WidgetTag| update.child_event_recv.get() | ChildEventRecv::from(update);
         // Remove flags from the search set that aren't found at the root of the tree.
         flags &= {
             let root_update = self.stack.widgets().next().unwrap().update_tag();

@@ -58,7 +58,7 @@ pub(crate) enum MouseState {
 }
 
 #[derive(Debug, Clone)]
-pub struct UpdateTag {
+pub struct WidgetTag {
     last_root: Cell<u32>,
     pub(crate) widget_id: WidgetID,
     pub(crate) last_event_stamp: Cell<u32>,
@@ -112,9 +112,9 @@ impl From<MouseButtonSequence> for ChildEventRecv {
     }
 }
 
-impl<'a> From<&'a UpdateTag> for ChildEventRecv {
+impl<'a> From<&'a WidgetTag> for ChildEventRecv {
     #[inline]
-    fn from(update_tag: &'a UpdateTag) -> ChildEventRecv {
+    fn from(update_tag: &'a WidgetTag) -> ChildEventRecv {
         let widget_mb_flags = ChildEventRecv::from(update_tag.mouse_state.get().mouse_button_sequence());
 
         widget_mb_flags |
@@ -187,7 +187,7 @@ pub enum OnFocusOverflow {
 }
 
 pub trait Widget<A, F: RenderFrame> {
-    fn update_tag(&self) -> &UpdateTag;
+    fn update_tag(&self) -> &WidgetTag;
     fn rect(&self) -> BoundBox<Point2<i32>>;
     fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>>;
     fn render(&mut self, frame: &mut FrameRectStack<F>);
@@ -223,7 +223,7 @@ impl<'a, A, F, W> Widget<A, F> for &'a mut W
           F: RenderFrame
 {
     #[inline]
-    fn update_tag(&self) -> &UpdateTag {
+    fn update_tag(&self) -> &WidgetTag {
         W::update_tag(self)
     }
     fn rect(&self) -> BoundBox<Point2<i32>> {
@@ -272,7 +272,7 @@ impl<A, F, W> Widget<A, F> for Box<W>
           F: RenderFrame
 {
     #[inline]
-    fn update_tag(&self) -> &UpdateTag {
+    fn update_tag(&self) -> &WidgetTag {
         W::update_tag(self)
     }
     fn rect(&self) -> BoundBox<Point2<i32>> {
@@ -416,10 +416,10 @@ const RENDER_ALL: u32 = RENDER_SELF | UPDATE_CHILD;
 
 const UPDATE_MASK: u32 = RENDER_SELF | UPDATE_CHILD | RENDER_ALL | UPDATE_LAYOUT | UPDATE_LAYOUT_POST | UPDATE_TIMER;
 
-impl UpdateTag {
+impl WidgetTag {
     #[inline]
-    pub fn new() -> UpdateTag {
-        UpdateTag {
+    pub fn new() -> WidgetTag {
+        WidgetTag {
             last_root: Cell::new(UPDATE_MASK),
             widget_id: WidgetID::new(),
             last_event_stamp: Cell::new(0),
@@ -430,32 +430,32 @@ impl UpdateTag {
     }
 
     #[inline]
-    pub fn mark_render_self(&mut self) -> &mut UpdateTag {
+    pub fn mark_render_self(&mut self) -> &mut WidgetTag {
         self.last_root.set(self.last_root.get() | RENDER_SELF);
         self
     }
 
     #[inline]
-    pub fn mark_update_child(&mut self) -> &mut UpdateTag {
+    pub fn mark_update_child(&mut self) -> &mut WidgetTag {
         self.last_root.set(self.last_root.get() | UPDATE_CHILD);
         self
     }
 
     #[inline]
-    pub fn mark_update_layout(&mut self) -> &mut UpdateTag {
+    pub fn mark_update_layout(&mut self) -> &mut WidgetTag {
         self.last_root.set(self.last_root.get() | UPDATE_LAYOUT);
         self
     }
 
 
     #[inline]
-    pub fn mark_update_layout_post(&mut self) -> &mut UpdateTag {
+    pub fn mark_update_layout_post(&mut self) -> &mut WidgetTag {
         self.last_root.set(self.last_root.get() | UPDATE_LAYOUT_POST);
         self
     }
 
     #[inline]
-    pub fn mark_update_timer(&mut self) -> &mut UpdateTag {
+    pub fn mark_update_timer(&mut self) -> &mut WidgetTag {
         self.last_root.set(self.last_root.get() | UPDATE_TIMER);
         self
     }

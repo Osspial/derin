@@ -18,7 +18,7 @@ use cgmath_geometry::{BoundBox, GeoBox};
 
 use core::LoopFlow;
 use core::event::{EventOps, WidgetEvent, InputState};
-use core::tree::{WidgetIdent, UpdateTag, WidgetSummary, Widget, Parent, OnFocus};
+use core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
 use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 use derin_common_types::layout::{SizeBounds, WidgetPos, GridSize, WidgetSpan, TrackHints};
@@ -51,7 +51,7 @@ pub struct TabPage<W> {
 /// Users can switch between these widgets by clicking on a list of tabs at the top of the widget.
 #[derive(Debug, Clone)]
 pub struct TabList<W> {
-    update_tag: UpdateTag,
+    update_tag: WidgetTag,
     rect: BoundBox<Point2<i32>>,
     layout_engine: GridEngine,
 
@@ -86,7 +86,7 @@ impl<W> TabList<W> {
     /// Create a new list of tabs.
     pub fn new(tabs: Vec<TabPage<W>>) -> TabList<W> {
         TabList {
-            update_tag: UpdateTag::new(),
+            update_tag: WidgetTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
             layout_engine: GridEngine::new(),
 
@@ -115,7 +115,7 @@ impl<A, F, W> Widget<A, F> for TabList<W>
           W: Widget<A, F>
 {
     #[inline]
-    fn update_tag(&self) -> &UpdateTag {
+    fn update_tag(&self) -> &WidgetTag {
         &self.update_tag
     }
 

@@ -14,7 +14,7 @@
 
 use widgets::assistants::SliderAssist;
 use event::{EventOps, WidgetEvent, InputState, MouseButton};
-use core::tree::{WidgetIdent, UpdateTag, Widget};
+use core::tree::{WidgetIdent, WidgetTag, Widget};
 use core::render::{FrameRectStack, Theme};
 use core::popup::ChildPopupsMut;
 use theme::RescaleRules;
@@ -42,7 +42,7 @@ pub trait SliderHandler: 'static {
 /// [`on_move`]: ./trait.SliderHandler.html#tymethod.on_move
 #[derive(Debug, Clone)]
 pub struct Slider<H: SliderHandler> {
-    update_tag: UpdateTag,
+    update_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
 
     assist: SliderAssist,
@@ -53,7 +53,7 @@ impl<H: SliderHandler> Slider<H> {
     /// Creates a new slider with the given `value`, `step`, `min`, `max`, and action handler.
     pub fn new(value: f32, step: f32, min: f32, max: f32, handler: H) -> Slider<H> {
         Slider {
-            update_tag: UpdateTag::new(),
+            update_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             assist: SliderAssist {
                 value, step, min, max,
@@ -124,7 +124,7 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
           H: SliderHandler
 {
     #[inline]
-    fn update_tag(&self) -> &UpdateTag {
+    fn update_tag(&self) -> &WidgetTag {
         &self.update_tag
     }
 

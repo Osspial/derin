@@ -19,7 +19,7 @@ use cgmath_geometry::{BoundBox, GeoBox};
 
 use core::event::{EventOps, InputState, WidgetEvent};
 use core::popup::ChildPopupsMut;
-use core::tree::{WidgetIdent, UpdateTag, Widget};
+use core::tree::{WidgetIdent, WidgetTag, Widget};
 use core::render::FrameRectStack;
 use derin_common_types::layout::SizeBounds;
 
@@ -33,7 +33,7 @@ use gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame};
 /// [`change_state`]: ./trait.ToggleHandler.html
 #[derive(Debug, Clone)]
 pub struct CheckBox<H> {
-    update_tag: UpdateTag,
+    update_tag: WidgetTag,
     rect: BoundBox<Point2<i32>>,
 
     check_rect: BoundBox<Point2<i32>>,
@@ -49,7 +49,7 @@ impl<H> CheckBox<H> {
     /// [toggle handler]: ./trait.ToggleHandler.html
     pub fn new(checked: bool, contents: Contents<String>, handler: H) -> CheckBox<H> {
         CheckBox {
-            update_tag: UpdateTag::new(),
+            update_tag: WidgetTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
 
             check_rect: BoundBox::new2(0, 0, 0, 0),
@@ -94,7 +94,7 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
           H: ToggleHandler<A>
 {
     #[inline]
-    fn update_tag(&self) -> &UpdateTag {
+    fn update_tag(&self) -> &WidgetTag {
         &self.update_tag
     }
 

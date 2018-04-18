@@ -769,7 +769,7 @@ impl<A, N, F> Root<A, N, F>
             widget_ident_stack.clear();
         }
 
-        // Increment the event stamp. Because new `UpdateTag`s have a default event stampo of 0,
+        // Increment the event stamp. Because new `WidgetTag`s have a default event stampo of 0,
         // make sure our event stamp is never 0.
         *event_stamp = event_stamp.wrapping_add(1);
         if *event_stamp == 0 {

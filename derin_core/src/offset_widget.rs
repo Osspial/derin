@@ -14,7 +14,7 @@
 
 use LoopFlow;
 use popup::ChildPopupsMut;
-use tree::{OnFocus, Widget, WidgetIdent, UpdateTag, WidgetSummary};
+use tree::{OnFocus, Widget, WidgetIdent, WidgetTag, WidgetSummary};
 use tree::dyn::ParentDyn;
 use event::{InputState, WidgetEvent, EventOps};
 use render::RenderFrame;
@@ -62,7 +62,7 @@ pub trait OffsetWidgetTrait<A, F>
 {
     type Widget: Widget<A, F> + ?Sized;
 
-    fn update_tag(&self) -> &UpdateTag;
+    fn update_tag(&self) -> &WidgetTag;
     fn rect(&self) -> BoundBox<Point2<i32>>;
     fn rect_clipped(&self) -> Option<BoundBox<Point2<i32>>>;
     fn set_rect(&mut self, rect: BoundBox<Point2<i32>>);
@@ -109,7 +109,7 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
 {
     type Widget = W;
 
-    fn update_tag(&self) -> &UpdateTag {
+    fn update_tag(&self) -> &WidgetTag {
         self.widget.update_tag()
     }
     fn rect(&self) -> BoundBox<Point2<i32>> {

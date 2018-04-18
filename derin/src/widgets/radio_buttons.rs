@@ -20,7 +20,7 @@ use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
 
 use core::LoopFlow;
 use core::event::{EventOps, WidgetEvent, InputState};
-use core::tree::{WidgetIdent, UpdateTag, WidgetSummary, Widget, Parent, OnFocus};
+use core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
 use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 use core::render::Theme as CoreTheme;
@@ -41,7 +41,7 @@ use layout::GridLayout;
 /// [`RadioButtonList`]: ./struct.RadioButtonList.html
 #[derive(Debug, Clone)]
 pub struct RadioButton {
-    update_tag: UpdateTag,
+    update_tag: WidgetTag,
     rect: BoundBox<Point2<i32>>,
     min_size: DimsBox<Point2<i32>>,
 
@@ -57,7 +57,7 @@ pub struct RadioButton {
 pub struct RadioButtonList<C, L>
     where L: GridLayout
 {
-    update_tag: UpdateTag,
+    update_tag: WidgetTag,
     rect: BoundBox<Point2<i32>>,
 
     layout_engine: GridEngine,
@@ -73,7 +73,7 @@ impl<C, L> RadioButtonList<C, L>
     /// The passed collection can *only contain radio buttons*, otherwise this will fail to compile.
     pub fn new(buttons: C, layout: L) -> RadioButtonList<C, L> {
         RadioButtonList {
-            update_tag: UpdateTag::new(),
+            update_tag: WidgetTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
 
             layout_engine: GridEngine::new(),
@@ -97,7 +97,7 @@ impl RadioButton {
     /// Creates a new radio button, with the given default selected state and contents.
     pub fn new(selected: bool, contents: Contents) -> RadioButton {
         RadioButton {
-            update_tag: UpdateTag::new(),
+            update_tag: WidgetTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
             min_size: DimsBox::new2(0, 0),
 
@@ -140,7 +140,7 @@ impl<A, F> Widget<A, F> for RadioButton
     where F: PrimFrame
 {
     #[inline]
-    fn update_tag(&self) -> &UpdateTag {
+    fn update_tag(&self) -> &WidgetTag {
         &self.update_tag
     }
 
@@ -284,7 +284,7 @@ impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
           L: GridLayout
 {
     #[inline]
-    fn update_tag(&self) -> &UpdateTag {
+    fn update_tag(&self) -> &WidgetTag {
         &self.update_tag
     }
 

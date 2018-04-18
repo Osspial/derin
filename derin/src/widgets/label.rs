@@ -14,7 +14,7 @@
 
 use widgets::{Contents, ContentsInner};
 use core::event::{EventOps, WidgetEvent, InputState};
-use core::tree::{WidgetIdent, UpdateTag, Widget};
+use core::tree::{WidgetIdent, WidgetTag, Widget};
 use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 
@@ -29,7 +29,7 @@ use gl_render::PrimFrame;
 /// Can display text or an image, depending on what's in `contents`.
 #[derive(Debug, Clone)]
 pub struct Label {
-    update_tag: UpdateTag,
+    update_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
     contents: ContentsInner,
     min_size: DimsBox<Point2<i32>>
@@ -39,7 +39,7 @@ impl Label {
     /// Create a new label with the given contents.
     pub fn new(contents: Contents<String>) -> Label {
         Label {
-            update_tag: UpdateTag::new(),
+            update_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             contents: contents.to_inner(),
             min_size: DimsBox::new2(0, 0)
@@ -65,7 +65,7 @@ impl<A, F> Widget<A, F> for Label
     where F: PrimFrame
 {
     #[inline]
-    fn update_tag(&self) -> &UpdateTag {
+    fn update_tag(&self) -> &WidgetTag {
         &self.update_tag
     }
 

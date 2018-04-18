@@ -51,7 +51,7 @@ use core::render::Theme as CoreTheme;
 pub mod custom {
     pub use core::popup;
     pub use core::timer::TimerRegister;
-    pub use core::tree::{UpdateTag, Widget, WidgetSummary, WidgetIdent};
+    pub use core::tree::{WidgetTag, Widget, WidgetSummary, WidgetIdent};
 }
 
 /// Determines which action, if any, should be taken in response to a button toggle.

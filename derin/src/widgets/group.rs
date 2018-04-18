@@ -14,7 +14,7 @@
 
 use core::LoopFlow;
 use core::event::{EventOps, WidgetEvent, InputState};
-use core::tree::{WidgetIdent, UpdateTag, WidgetSummary, Widget, Parent, OnFocus};
+use core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
 use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 
@@ -39,7 +39,7 @@ use derin_layout_engine::{GridEngine, UpdateHeapCache, SolveError};
 pub struct Group<C, L>
     where L: GridLayout
 {
-    update_tag: UpdateTag,
+    update_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
     layout_engine: GridEngine,
     container: C,
@@ -53,7 +53,7 @@ impl<C, L> Group<C, L>
     /// specified in `layout`.
     pub fn new(container: C, layout: L) -> Group<C, L> {
         Group {
-            update_tag: UpdateTag::new(),
+            update_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             layout_engine: GridEngine::new(),
             container, layout
@@ -80,7 +80,7 @@ impl<A, F, C, L> Widget<A, F> for Group<C, L>
           L: GridLayout
 {
     #[inline]
-    fn update_tag(&self) -> &UpdateTag {
+    fn update_tag(&self) -> &WidgetTag {
         &self.update_tag
     }
 

@@ -14,7 +14,7 @@
 
 use widgets::assistants::text_edit::{TextEditAssist, TextEditOps, LineCharFilter};
 use core::event::{EventOps, WidgetEvent, InputState};
-use core::tree::{WidgetIdent, UpdateTag, Widget};
+use core::tree::{WidgetIdent, WidgetTag, Widget};
 use core::render::{FrameRectStack, Theme};
 use core::popup::ChildPopupsMut;
 use core::timer::TimerRegister;
@@ -32,7 +32,7 @@ use arrayvec::ArrayVec;
 /// Multi-line editable text widget.
 #[derive(Debug, Clone)]
 pub struct EditBox {
-    update_tag: UpdateTag,
+    update_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
     edit: TextEditAssist,
     min_size: DimsBox<Point2<i32>>
@@ -41,7 +41,7 @@ pub struct EditBox {
 /// Single-line editable text widget.
 #[derive(Debug, Clone)]
 pub struct LineBox {
-    update_tag: UpdateTag,
+    update_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
     edit: TextEditAssist<LineCharFilter>,
     min_size: DimsBox<Point2<i32>>
@@ -51,7 +51,7 @@ impl EditBox {
     /// Create a new `EditBox`, containing the included `String` by default.
     pub fn new(string: String) -> EditBox {
         EditBox {
-            update_tag: UpdateTag::new(),
+            update_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             edit: TextEditAssist {
                 string: EditString::new(RenderString::new(string)),
@@ -80,7 +80,7 @@ impl LineBox {
     /// Create a new `LineBox`, containing the included `String` by default.
     pub fn new(string: String) -> LineBox {
         LineBox {
-            update_tag: UpdateTag::new(),
+            update_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             edit: TextEditAssist {
                 string: EditString::new(RenderString::new(string)),
@@ -188,7 +188,7 @@ impl<A, F> Widget<A, F> for EditBox
     where F: PrimFrame
 {
     #[inline]
-    fn update_tag(&self) -> &UpdateTag {
+    fn update_tag(&self) -> &WidgetTag {
         &self.update_tag
     }
 
@@ -214,7 +214,7 @@ impl<A, F> Widget<A, F> for LineBox
     where F: PrimFrame
 {
     #[inline]
-    fn update_tag(&self) -> &UpdateTag {
+    fn update_tag(&self) -> &WidgetTag {
         &self.update_tag
     }
 

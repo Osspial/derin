@@ -15,7 +15,7 @@
 use widgets::assistants::ButtonState;
 use widgets::{Contents, ContentsInner};
 use core::event::{EventOps, WidgetEvent, InputState};
-use core::tree::{WidgetIdent, UpdateTag, Widget};
+use core::tree::{WidgetIdent, WidgetTag, Widget};
 use core::render::{FrameRectStack, Theme};
 use core::popup::ChildPopupsMut;
 
@@ -58,7 +58,7 @@ impl<A: 'static> ButtonHandler<A> for () {
 /// [`on_click`]: ./trait.ButtonHandler.html#tymethod.on_click
 #[derive(Debug, Clone)]
 pub struct Button<H> {
-    update_tag: UpdateTag,
+    update_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
     state: ButtonState,
     handler: H,
@@ -70,7 +70,7 @@ impl<H> Button<H> {
     /// Creates a new button with the given contents and
     pub fn new(contents: Contents<String>, handler: H) -> Button<H> {
         Button {
-            update_tag: UpdateTag::new(),
+            update_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             state: ButtonState::Normal,
             handler,
@@ -100,7 +100,7 @@ impl<A, F, H> Widget<A, F> for Button<H>
           H: ButtonHandler<A>
 {
     #[inline]
-    fn update_tag(&self) -> &UpdateTag {
+    fn update_tag(&self) -> &WidgetTag {
         &self.update_tag
     }
 

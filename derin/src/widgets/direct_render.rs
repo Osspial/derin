@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use core::event::{EventOps, WidgetEvent, InputState};
-use core::tree::{WidgetIdent, UpdateTag, Widget, };
+use core::tree::{WidgetIdent, WidgetTag, Widget, };
 use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 
@@ -25,7 +25,7 @@ use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 use std::mem;
 
 pub struct DirectRender<R> {
-    update_tag: UpdateTag,
+    update_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
     render_state: R
 }
@@ -57,7 +57,7 @@ pub trait DirectRenderState<A> {
 impl<R> DirectRender<R> {
     pub fn new(render_state: R) -> DirectRender<R> {
         DirectRender {
-            update_tag: UpdateTag::new(),
+            update_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             render_state
         }
@@ -82,7 +82,7 @@ impl<A, F, R> Widget<A, F> for DirectRender<R>
           F: PrimFrame<DirectRender = R::RenderType>
 {
     #[inline]
-    fn update_tag(&self) -> &UpdateTag {
+    fn update_tag(&self) -> &WidgetTag {
         &self.update_tag
     }
 

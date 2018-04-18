@@ -14,7 +14,7 @@
 
 use core::LoopFlow;
 use core::event::{EventOps, WidgetEvent, InputState};
-use core::tree::{WidgetIdent, UpdateTag, WidgetSummary, Widget, Parent, OnFocus};
+use core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
 use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 
@@ -28,7 +28,7 @@ use gl_render::PrimFrame;
 /// Allows a containing widget to ignore the inner widget's size bounds. Currently used in `ScrollBox`.
 #[derive(Debug, Clone)]
 pub struct Clip<W> {
-    update_tag: UpdateTag,
+    update_tag: WidgetTag,
     rect: BoundBox<Point2<i32>>,
     widget: W
 }
@@ -37,7 +37,7 @@ impl<W> Clip<W> {
     /// Creates a new clip widget.
     pub fn new(widget: W) -> Clip<W> {
         Clip {
-            update_tag: UpdateTag::new(),
+            update_tag: WidgetTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
             widget
         }
@@ -60,7 +60,7 @@ impl<A, F, W> Widget<A, F> for Clip<W>
           W: Widget<A, F>
 {
     #[inline]
-    fn update_tag(&self) -> &UpdateTag {
+    fn update_tag(&self) -> &WidgetTag {
         &self.update_tag
     }
 
