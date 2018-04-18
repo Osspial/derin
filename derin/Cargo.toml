@@ -32,3 +32,6 @@ serde = { version = "1.0", features = ["serde_derive"], optional = true }
 
 [dev-dependencies]
 derin_macros = {path = "../derin_macros"}
+
+[features]
+derin-serde = ["cgmath-geometry/cgmath-serde", "derin_common_types/derin-serde"]
