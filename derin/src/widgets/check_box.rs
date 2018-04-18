@@ -15,7 +15,7 @@
 use widgets::assistants::ButtonState;
 use widgets::{Contents, ContentsInner, ToggleHandler};
 use cgmath::Point2;
-use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
+use cgmath_geometry::{BoundBox, GeoBox};
 
 use core::event::{EventOps, InputState, WidgetEvent};
 use core::popup::ChildPopupsMut;

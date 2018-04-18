@@ -14,7 +14,7 @@
 
 use widgets::assistants::ButtonState;
 use cgmath::Point2;
-use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
+use cgmath_geometry::{BoundBox, GeoBox};
 
 use core::LoopFlow;
 use core::event::{EventOps, WidgetEvent, InputState};

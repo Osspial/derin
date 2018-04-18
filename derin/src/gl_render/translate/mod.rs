@@ -16,7 +16,7 @@ mod image;
 mod text;
 
 use cgmath::{Point2, EuclideanSpace};
-use cgmath_geometry::{GeoBox, OffsetBox, BoundBox, DimsBox};
+use cgmath_geometry::{GeoBox, OffsetBox, BoundBox};
 use glyphydog::{ShapedBuffer, Shaper, FaceSize, DPI};
 
 use gullery::glsl::Nu8;
