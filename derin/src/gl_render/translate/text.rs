@@ -695,7 +695,7 @@ impl<'a> Iterator for TextTranslate<'a> {
                     };
                     *glyph_slice_index += 1;
 
-                    let is_highlighted = highlight_range.contains(next_glyph.str_index);
+                    let is_highlighted = highlight_range.contains(&next_glyph.str_index);
                     *glyph_vertex_iter = next_glyph.glyph_index.map(|glyph_index|
                         glyph_draw.glyph_atlas_image(
                             next_glyph.pos,
