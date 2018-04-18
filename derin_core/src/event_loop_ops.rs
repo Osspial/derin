@@ -280,13 +280,12 @@ impl<A, N, F> Root<A, N, F>
                                     // Figure out if the cursor has moved into a child widget, and send the relevant events if
                                     // we have.
                                     top_widget_as_parent.children_mut(|mut child_summary| {
-                                        if !child_summary.rect.contains(new_pos) {
+                                        if !child_summary.widget.rect().contains(new_pos) {
                                             return LoopFlow::Continue;
                                         }
 
                                         let WidgetSummary {
                                             widget: ref mut child,
-                                            rect: child_bounds,
                                             ident: ref child_ident,
                                             ..
                                         } = child_summary;
@@ -295,7 +294,7 @@ impl<A, N, F> Root<A, N, F>
                                         // done in the child's parent's coordinate space (i.e. the currently hovered
                                         // widget), and is translated to the child's coordinate space when we enter the
                                         // child.
-                                        let enter_pos = child_bounds.intersect_line(move_line).0
+                                        let enter_pos = child.rect().intersect_line(move_line).0
                                             .unwrap_or(new_pos);
 
                                         // Get the mouse buttons already down in the child, and set the mouse
@@ -982,9 +981,9 @@ impl<'a, F> WidgetRenderer<'a, F>
                 let WidgetSummary {
                     widget: ref mut child_widget,
                     ref ident,
-                    rect: child_rect,
                     ..
                 } = summary;
+                let child_rect = child_widget.rect();
 
                 let mut root_update = child_widget.update_tag().needs_update(self.root_id);
                 root_update.render_self |= self.force_full_redraw;

@@ -318,9 +318,6 @@ impl<A, F, W> Widget<A, F> for Box<W>
 #[derive(Debug, Clone)]
 pub struct WidgetSummary<W: ?Sized> {
     pub ident: WidgetIdent,
-    pub rect: BoundBox<Point2<i32>>,
-    pub size_bounds: SizeBounds,
-    pub update_tag: UpdateTag,
     pub index: usize,
     pub widget: W,
 }
@@ -355,9 +352,6 @@ impl<'a, W: ?Sized> WidgetSummary<&'a W> {
     {
         WidgetSummary {
             ident,
-            rect: widget.rect(),
-            size_bounds: widget.size_bounds(),
-            update_tag: widget.update_tag().clone(),
             index,
             widget
         }
@@ -369,9 +363,6 @@ impl<'a, W: ?Sized> WidgetSummary<&'a W> {
     {
         WidgetSummary {
             ident: self.ident,
-            rect: self.rect,
-            size_bounds: self.size_bounds,
-            update_tag: self.update_tag,
             index: self.index,
             widget: dyn::to_widget_object(self.widget)
         }
@@ -385,9 +376,6 @@ impl<'a, W: ?Sized> WidgetSummary<&'a mut W> {
     {
         WidgetSummary {
             ident,
-            rect: widget.rect(),
-            size_bounds: widget.size_bounds(),
-            update_tag: widget.update_tag().clone(),
             index,
             widget
         }
@@ -399,9 +387,6 @@ impl<'a, W: ?Sized> WidgetSummary<&'a mut W> {
     {
         WidgetSummary {
             ident: self.ident,
-            rect: self.rect,
-            size_bounds: self.size_bounds,
-            update_tag: self.update_tag,
             index: self.index,
             widget: dyn::to_widget_object_mut(self.widget)
         }

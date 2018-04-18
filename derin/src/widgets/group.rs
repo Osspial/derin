@@ -195,9 +195,11 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
             let num_children = self.num_children();
             self.container.children::<_, ()>(|summary| {
                 let mut layout_hints = self.layout.positions(summary.ident, summary.index, num_children).unwrap_or(WidgetPos::default());
+                let widget_size_bounds = summary.widget.size_bounds();
+
                 layout_hints.size_bounds = SizeBounds {
-                    min: layout_hints.size_bounds.bound_rect(summary.size_bounds.min),
-                    max: layout_hints.size_bounds.bound_rect(summary.size_bounds.max),
+                    min: layout_hints.size_bounds.bound_rect(widget_size_bounds.min),
+                    max: layout_hints.size_bounds.bound_rect(widget_size_bounds.max),
                 };
                 hints_vec.push(layout_hints);
                 rects_vec.push(Ok(BoundBox::new2(0, 0, 0, 0)));

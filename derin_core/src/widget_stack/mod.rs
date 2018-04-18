@@ -348,7 +348,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
 
                         top_widget_as_parent.children(&mut |children_summaries| {
                             for child_summary in children_summaries.iter() {
-                                let child_flags = get_update_flags(&child_summary.update_tag);
+                                let child_flags = get_update_flags(&child_summary.widget.update_tag());
                                 if child_flags & flag_trail_flags != ChildEventRecv::empty() {
                                     on_flag_trail = Some(child_flags & flag_trail_flags);
                                     child_ident = Some(child_summary.ident.clone());

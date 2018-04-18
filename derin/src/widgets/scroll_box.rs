@@ -69,6 +69,20 @@ impl<W> ScrollBox<W> {
         self.update_tag.mark_update_child().mark_update_layout_post();
         self.clip.widget_mut()
     }
+
+    fn child_summary<A, F>(&self) -> WidgetSummary<&Widget<A, F>>
+        where W: Widget<A, F>,
+              F: PrimFrame
+    {
+        WidgetSummary::new(CLIP_IDENT.clone(), 0, &self.clip as &Widget<A, F>)
+    }
+
+    fn child_summary_mut<A, F>(&mut self) -> WidgetSummary<&mut Widget<A, F>>
+        where W: Widget<A, F>,
+              F: PrimFrame
+    {
+        WidgetSummary::new_mut(CLIP_IDENT.clone(), 0, &mut self.clip as &mut Widget<A, F>)
+    }
 }
 
 impl<A, F, W> Widget<A, F> for ScrollBox<W>
@@ -252,27 +266,13 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
 
     fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>> {
         match widget_ident {
-            _ if widget_ident == *CLIP_IDENT => Some(WidgetSummary {
-                widget: &self.clip as &Widget<A, F>,
-                ident: CLIP_IDENT.clone(),
-                rect: self.clip.rect(),
-                size_bounds: self.clip.size_bounds(),
-                update_tag: self.clip.update_tag().clone(),
-                index: 0
-            }),
+            _ if widget_ident == *CLIP_IDENT => Some(self.child_summary()),
             _ => None
         }
     }
     fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>> {
         match widget_ident {
-            _ if widget_ident == *CLIP_IDENT => Some(WidgetSummary {
-                ident: CLIP_IDENT.clone(),
-                rect: self.clip.rect(),
-                size_bounds: self.clip.size_bounds(),
-                update_tag: self.clip.update_tag().clone(),
-                widget: &mut self.clip as &mut Widget<A, F>,
-                index: 0
-            }),
+            _ if widget_ident == *CLIP_IDENT => Some(self.child_summary_mut()),
             _ => None
         }
     }
@@ -281,14 +281,7 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
         where A: 'a,
               G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow<R>
     {
-        let flow = for_each(WidgetSummary {
-            widget: &self.clip as &Widget<A, F>,
-            ident: CLIP_IDENT.clone(),
-            rect: self.clip.rect(),
-            size_bounds: self.clip.size_bounds(),
-            update_tag: self.clip.update_tag().clone(),
-            index: 0
-        });
+        let flow = for_each(self.child_summary());
 
         match flow {
             LoopFlow::Continue => None,
@@ -300,14 +293,7 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
         where A: 'a,
               G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow<R>
     {
-        let flow = for_each(WidgetSummary {
-            ident: CLIP_IDENT.clone(),
-            rect: self.clip.rect(),
-            size_bounds: self.clip.size_bounds(),
-            update_tag: self.clip.update_tag().clone(),
-            widget: &mut self.clip as &mut Widget<A, F>,
-            index: 0
-        });
+        let flow = for_each(self.child_summary_mut());
 
         match flow {
             LoopFlow::Continue => None,
@@ -317,27 +303,13 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
 
     fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>> {
         match index {
-            0 => Some(WidgetSummary {
-                widget: &self.clip as &Widget<A, F>,
-                ident: CLIP_IDENT.clone(),
-                rect: self.clip.rect(),
-                size_bounds: self.clip.size_bounds(),
-                update_tag: self.clip.update_tag().clone(),
-                index: 0
-            }),
+            0 => Some(self.child_summary()),
             _ => None
         }
     }
     fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
         match index {
-            0 => Some(WidgetSummary {
-                ident: CLIP_IDENT.clone(),
-                rect: self.clip.rect(),
-                size_bounds: self.clip.size_bounds(),
-                update_tag: self.clip.update_tag().clone(),
-                widget: &mut self.clip as &mut Widget<A, F>,
-                index: 0
-            }),
+            0 => Some(self.child_summary_mut()),
             _ => None
         }
     }

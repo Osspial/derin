@@ -205,9 +205,6 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
                 let widget: OffsetWidget<'b, _> = OffsetWidget::new(summary.widget, child_offset, clip_rect);
                 let summary_offset = WidgetSummary {
                     ident: summary.ident,
-                    rect: summary.rect + child_offset,
-                    size_bounds: summary.size_bounds,
-                    update_tag: summary.update_tag.clone(),
                     index: summary.index,
                     widget
                 };
