@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(conservative_impl_trait, universal_impl_trait, range_contains, nll, specialization)]
+#![feature(range_contains, nll, specialization)]
 
 use cgmath_geometry::cgmath;
 extern crate cgmath_geometry;

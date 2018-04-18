@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(conservative_impl_trait, nll)]
+#![feature(nll)]
 
 // Quote recurses a lot.
 #![recursion_limit="256"]
