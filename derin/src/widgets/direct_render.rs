@@ -16,6 +16,7 @@ use core::event::{EventOps, WidgetEvent, InputState};
 use core::tree::{WidgetIdent, WidgetTag, Widget, };
 use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
+use core::timer::TimerRegister;
 
 use cgmath::Point2;
 use cgmath_geometry::BoundBox;
@@ -23,11 +24,13 @@ use cgmath_geometry::BoundBox;
 use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 
 use std::mem;
+use std::time::Duration;
 
 pub struct DirectRender<R> {
     widget_tag: WidgetTag,
     bounds: BoundBox<Point2<i32>>,
-    render_state: R
+    render_state: R,
+    refresh_rate: Option<Duration>
 }
 
 pub trait DirectRenderState<A> {
@@ -39,7 +42,8 @@ pub trait DirectRenderState<A> {
         _event: WidgetEvent,
         _input_state: InputState,
         _popups: Option<ChildPopupsMut<A, F>>,
-        _source_child: &[WidgetIdent]
+        _source_child: &[WidgetIdent],
+        _refresh_rate: &mut Option<Duration>
     ) -> EventOps<A, F>
         where F: PrimFrame<DirectRender = Self::RenderType>
     {
@@ -55,11 +59,12 @@ pub trait DirectRenderState<A> {
 }
 
 impl<R> DirectRender<R> {
-    pub fn new(render_state: R) -> DirectRender<R> {
+    pub fn new(render_state: R, refresh_rate: Option<Duration>) -> DirectRender<R> {
         DirectRender {
             widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
-            render_state
+            render_state,
+            refresh_rate
         }
     }
 
@@ -74,6 +79,11 @@ impl<R> DirectRender<R> {
 
     pub fn mark_redraw(&mut self) {
         self.widget_tag.mark_render_self();
+    }
+
+    pub fn set_refresh_rate(&mut self, refresh_rate: Option<Duration>) {
+        self.widget_tag.mark_update_timer();
+        self.refresh_rate = refresh_rate;
     }
 }
 
@@ -115,6 +125,21 @@ impl<A, F, R> Widget<A, F> for DirectRender<R>
 
     #[inline]
     fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, popups: Option<ChildPopupsMut<A, F>>, source_child: &[WidgetIdent]) -> EventOps<A, F> {
-        self.render_state.on_widget_event(event, input_state, popups, source_child)
+        if let WidgetEvent::Timer{name: "render_refresh", ..} = event {
+            self.widget_tag.mark_render_self();
+        }
+        let old_refresh_rate = self.refresh_rate;
+        let ops = self.render_state.on_widget_event(event, input_state, popups, source_child, &mut self.refresh_rate);
+        if old_refresh_rate != self.refresh_rate {
+            self.widget_tag.mark_update_timer();
+        }
+
+        ops
+    }
+
+    fn register_timers(&self, register: &mut TimerRegister) {
+        if let Some(duration) = self.refresh_rate {
+            register.add_timer("render_refresh", duration, false);
+        }
     }
 }
