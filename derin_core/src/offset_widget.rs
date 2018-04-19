@@ -21,7 +21,7 @@ use render::RenderFrame;
 use timer::TimerRegister;
 use mbseq::MouseButtonSequenceTrackPos;
 
-use derin_common_types::buttons::ModifierKeys;
+use derin_common_types::buttons::{Key, ModifierKeys};
 use derin_common_types::layout::SizeBounds;
 
 use cgmath::{Point2, Vector2, EuclideanSpace};
@@ -74,6 +74,7 @@ pub trait OffsetWidgetTrait<A, F>
         event: WidgetEvent,
         mouse_pos: Point2<i32>,
         mouse_buttons_down: &MouseButtonSequenceTrackPos,
+        keys_down: &[Key],
         modifiers: ModifierKeys,
         popups: Option<ChildPopupsMut<A, F>>,
         source_child: &[WidgetIdent]
@@ -129,6 +130,7 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
         event: WidgetEvent,
         mouse_pos: Point2<i32>,
         mouse_buttons_down: &MouseButtonSequenceTrackPos,
+        keys_down: &[Key],
         modifiers: ModifierKeys,
         popups: Option<ChildPopupsMut<A, F>>,
         source_child: &[WidgetIdent]
@@ -152,7 +154,8 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
             mouse_pos: mouse_pos - offset,
             modifiers: modifiers,
             mouse_buttons_down: &mbd_array,
-            mouse_buttons_down_in_widget: &mbdin_array
+            mouse_buttons_down_in_widget: &mbdin_array,
+            keys_down
         };
         let mut ops = self.widget.on_widget_event(
             event.translate(-offset),

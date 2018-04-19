@@ -83,7 +83,9 @@ pub struct InputState<'a> {
     /// The position of the mouse, relative to the widget's origin.
     pub mouse_pos: Point2<i32>,
     /// The modifier keys that have been pressed down.
-    pub modifiers: ModifierKeys
+    pub modifiers: ModifierKeys,
+    /// The keys that have been pressed inside of the window.
+    pub keys_down: &'a [Key]
 }
 
 /// Direct user input and timers, which are recieved and handled by widgets through the

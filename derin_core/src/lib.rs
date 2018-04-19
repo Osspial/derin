@@ -62,6 +62,7 @@ pub struct Root<A, N, F>
     pub modifiers: ModifierKeys,
     cursor_icon: CursorIcon,
     mouse_buttons_down: MouseButtonSequenceTrackPos,
+    keys_down: Vec<Key>,
 
     pub actions: VecDeque<A>,
     widget_stack_base: WidgetStackBase<A, F>,
@@ -119,6 +120,7 @@ impl<A, N, F> Root<A, N, F>
             id: RootID::new(),
             mouse_pos: Point2::new(-1, -1),
             mouse_buttons_down: MouseButtonSequenceTrackPos::new(),
+            keys_down: Vec::new(),
             modifiers: ModifierKeys::empty(),
             cursor_icon: CursorIcon::default(),
             actions: VecDeque::new(),

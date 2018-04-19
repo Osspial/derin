@@ -76,6 +76,7 @@ impl<A, N, F> Root<A, N, F>
             id: root_id,
             mouse_pos: ref mut root_mouse_pos,
             ref mut mouse_buttons_down,
+            ref mut keys_down,
             ref mut actions,
             ref mut widget_stack_base,
             needs_redraw: ref mut root_needs_redraw,
@@ -131,6 +132,7 @@ impl<A, N, F> Root<A, N, F>
                     event.clone(),
                     *mouse_pos,
                     &mouse_buttons_down,
+                    keys_down,
                     *modifiers,
                     popup_widgets.popups_owned_by_mut(widget_id),
                     if_tokens!(($($bubble_path)*) {
@@ -571,11 +573,17 @@ impl<A, N, F> Root<A, N, F>
             },
 
             WindowEvent::KeyDown(key) => {
+                if !keys_down.contains(&key) {
+                    keys_down.push(key);
+                }
                 if let Some(WidgetPath{ widget: mut focus_widget, path }) = widget_stack.move_to_keyboard_focus() {
                     try_push_action!(focus_widget, path.iter().cloned(), WidgetEvent::KeyDown(key, *modifiers));
                 }
             },
             WindowEvent::KeyUp(key) => {
+                if let Some((i, _)) = keys_down.iter().enumerate().skip_while(|&(_, k)| *k != key).next() {
+                    keys_down.remove(i);
+                }
                 if let Some(WidgetPath{ widget: mut focus_widget, path }) = widget_stack.move_to_keyboard_focus() {
                     try_push_action!(focus_widget, path.iter().cloned(), WidgetEvent::KeyUp(key, *modifiers));
                 }
