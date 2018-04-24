@@ -261,6 +261,7 @@ impl Renderer for GLRenderer {
         self.frame.draw.render_state.viewport = DimsBox::new2(width_scaled, height_scaled).into();
         self.frame.draw.fb.clear_color(Rgba::new(1., 1., 1., 1.));
         self.frame.draw.fb.clear_depth(1.0);
+        self.frame.draw.fb.clear_stencil(0);
         self.frame.output_vertices = draw_output;
 
         (&mut self.frame, BoundBox::new2(0, 0, width as i32, height as i32))
