@@ -20,7 +20,7 @@ use std::cmp::Ordering;
 use {WindowEvent, LoopFlow, Root};
 use tree::*;
 use tree::dyn::*;
-use timer::Timer;
+use timer::{Timer, TimerList};
 use popup::{PopupSummary, PopupID};
 use event::{WidgetEvent, FocusChange};
 use render::{Renderer, RenderFrame, FrameRectStack};
@@ -124,8 +124,8 @@ impl<A, N, F> Root<A, N, F>
                 $widget:expr, $path:expr $(=> ($meta_tracker:expr))*,
                 $event:expr $(, bubble ($bubble:expr, $bubble_store:expr, $bubble_path:expr))*
             ) => {{
-                let widget_widget_tag = $widget.widget_tag();
-                let widget_id = widget_widget_tag.widget_id;
+                let widget_tag = $widget.widget_tag();
+                let widget_id = widget_tag.widget_id;
 
                 let event = $event;
                 let event_ops = $widget.on_widget_event(
@@ -142,7 +142,7 @@ impl<A, N, F> Root<A, N, F>
                     })
                 );
 
-                let widget_widget_tag = $widget.widget_tag();
+                let widget_tag = $widget.widget_tag();
 
                 let ref mut meta_tracker = if_tokens!(($($meta_tracker)*) {
                     $($meta_tracker)*
@@ -154,7 +154,7 @@ impl<A, N, F> Root<A, N, F>
                     meta_tracker.push_focus(focus, $path);
                 }
                 if let Some((popup_widget, popup_attributes)) = event_ops.popup {
-                    let owner_id = widget_widget_tag.widget_id;
+                    let owner_id = widget_tag.widget_id;
                     popup_map_insert.push((owner_id, popup_widget, popup_attributes));
                 }
                 if event_ops.bubble $(& $bubble)* {
@@ -167,16 +167,16 @@ impl<A, N, F> Root<A, N, F>
                 *set_cursor_icon = set_cursor_icon.or(event_ops.cursor_icon);
                 $(*$bubble_store = event_ops.bubble;)*
 
-                widget_widget_tag.last_event_stamp.set(*event_stamp);
-                let widget_update = widget_widget_tag.needs_update(root_id);
+                widget_tag.last_event_stamp.set(*event_stamp);
+                let widget_update = widget_tag.needs_update(root_id);
                 if widget_update.update_timer {
-                    let mut register = timer_list.new_timer_register(widget_widget_tag.widget_id);
+                    let mut register = timer_list.new_timer_register(widget_tag.widget_id);
                     $widget.register_timers(&mut register);
-                    widget_widget_tag.unmark_update_timer();
+                    widget_tag.unmark_update_timer();
                 }
-                widget_widget_tag.last_event_stamp.set(*event_stamp);
+                widget_tag.last_event_stamp.set(*event_stamp);
 
-                widget_widget_tag
+                widget_tag
             }};
         }
 
@@ -481,8 +481,8 @@ impl<A, N, F> Root<A, N, F>
 
                 widget_stack.move_to_hover();
                 widget_stack.drain_to_root(|widget, _| {
-                    let widget_widget_tag = widget.widget_tag();
-                    widget_widget_tag.child_event_recv.set(widget_widget_tag.child_event_recv.get() | button_mask);
+                    let widget_tag = widget.widget_tag();
+                    widget_tag.child_event_recv.set(widget_tag.child_event_recv.get() | button_mask);
                 });
             },
             WindowEvent::MouseUp(button) => {
@@ -804,6 +804,8 @@ impl<A, N, F> Root<A, N, F>
             popup_widgets.replace(event_popup_id.unwrap(), taken_popup_widget);
         }
 
+        update_widget_timers(root_id, timer_list, root_widget);
+
         EventLoopResult {
             wait_until_call_timer: timer_list.time_until_trigger(),
             popup_deltas
@@ -823,19 +825,10 @@ impl<A, N, F> Root<A, N, F>
             ref mut popup_widgets,
             ref mut set_cursor_icon,
             ref mut set_cursor_pos,
+            ref mut timer_list,
             ..
         } = *self;
 
-        // match taken_popup_widget.as_mut() {
-        //     Some(popup_widget) => {
-        //         redraw_widget = &mut *popup_widget.widget;
-        //         needs_redraw = &mut popup_widget.needs_redraw;
-        //     },
-        //     None => {
-        //         redraw_widget = root_widget;
-        //         needs_redraw = root_needs_redraw;
-        //     }
-        // };
         let mut redraw = |redraw_widget: &mut Widget<A, F>, renderer: &mut R, needs_redraw: &mut bool| {
             let mut root_update = redraw_widget.widget_tag().needs_update(root_id);
             let mark_active_widgets_redraw = root_update.needs_redraw();
@@ -892,7 +885,7 @@ impl<A, N, F> Root<A, N, F>
                     // when rendering, which factors into layout calculations.
                     render!(true);
                     if let Some(root_as_parent) = redraw_widget.as_parent_mut() {
-                        update_widget_layout(root_id, force_full_redraw, root_as_parent);
+                        update_widget_layout(root_id, force_full_redraw, timer_list, root_as_parent);
                         root_as_parent.widget_tag().unmark_update_layout();
                     }
 
@@ -912,13 +905,39 @@ impl<A, N, F> Root<A, N, F>
         for (id, popup) in popup_widgets.popups_mut() {
             with_renderer(Some(id), &mut |renderer| redraw(&mut *popup.widget, renderer, &mut popup.needs_redraw));
         }
-        // with_renderer(event_popup_id, &mut |renderer| {
-        //     *needs_redraw = false;
-        // });
     }
 }
 
-fn update_widget_layout<A: 'static, F: RenderFrame>(root_id: RootID, force_full_redraw: bool, widget: &mut ParentDyn<A, F>) -> bool {
+fn update_widget_timers<A: 'static, F: RenderFrame>(root_id: RootID, timer_list: &mut TimerList, widget: &mut Widget<A, F>) {
+    let widget_tag = widget.widget_tag();
+    let Update {
+        update_child,
+        update_timer,
+        ..
+    } = widget_tag.needs_update(root_id);
+
+    if update_timer {
+        widget_tag.unmark_update_timer();
+        let mut register = timer_list.new_timer_register(widget_tag.widget_id);
+        widget.register_timers(&mut register);
+    }
+
+    if update_child {
+        if let Some(widget_as_parent) = widget.as_parent_mut() {
+            widget_as_parent.children_mut(&mut |children_summaries| {
+                for mut summary in children_summaries {
+                    update_widget_timers(root_id, timer_list, summary.widget);
+                }
+
+                LoopFlow::Continue
+            });
+        }
+    }
+
+    // TODO: PROPERLY UNSET update_child IF ALL CHILDREN HAVE RECIEVED NECESSARY UPDATES
+}
+
+fn update_widget_layout<A: 'static, F: RenderFrame>(root_id: RootID, force_full_redraw: bool, timer_list: &mut TimerList, widget: &mut ParentDyn<A, F>) -> bool {
     // Loop to re-solve widget layout, if children break their size bounds. Is 0..4 so that
     // it doesn't enter an infinite loop if children can never be properly solved.
     for _ in 0..4 {
@@ -944,7 +963,7 @@ fn update_widget_layout<A: 'static, F: RenderFrame>(root_id: RootID, force_full_
 
                     let mut update_successful = true;
                     if let Some(child_widget_as_parent) = child_widget.as_parent_mut() {
-                        update_successful = !update_widget_layout(root_id, force_full_redraw, child_widget_as_parent);
+                        update_successful = !update_widget_layout(root_id, force_full_redraw, timer_list, child_widget_as_parent);
                         children_break_bounds |= !update_successful;
                     }
 
