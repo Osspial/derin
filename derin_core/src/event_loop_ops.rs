@@ -19,7 +19,7 @@ use std::cmp::Ordering;
 
 use {WindowEvent, LoopFlow, Root};
 use tree::*;
-use tree::dyn::*;
+use tree::dynamic::*;
 use timer::{Timer, TimerList};
 use popup::{PopupSummary, PopupID};
 use event::{WidgetEvent, FocusChange};

@@ -15,7 +15,7 @@
 use LoopFlow;
 use popup::ChildPopupsMut;
 use tree::{OnFocus, Widget, WidgetIdent, WidgetTag, WidgetSummary};
-use tree::dyn::ParentDyn;
+use tree::dynamic::ParentDyn;
 use event::{InputState, WidgetEvent, EventOps};
 use render::RenderFrame;
 use timer::TimerRegister;

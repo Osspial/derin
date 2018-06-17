@@ -19,7 +19,7 @@ use std::cmp::{Ordering, Ord};
 use std::iter::{DoubleEndedIterator, ExactSizeIterator};
 use render::RenderFrame;
 use tree::{Widget, WidgetSummary, WidgetIdent, ChildEventRecv, WidgetTag, RootID, WidgetID};
-use tree::dyn::ParentDyn;
+use tree::dynamic::ParentDyn;
 
 use self::inner::{NRAllocCache, NRVec};
 pub use self::inner::WidgetPath;

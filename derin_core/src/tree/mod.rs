@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) mod dyn;
+pub(crate) mod dynamic;
 
-use dyn::ParentDyn;
+use dynamic::ParentDyn;
 use std::sync::Arc;
 use std::cell::Cell;
 
@@ -360,7 +360,7 @@ impl<'a, W: ?Sized> WidgetSummary<&'a W> {
         WidgetSummary {
             ident: self.ident,
             index: self.index,
-            widget: dyn::to_widget_object(self.widget)
+            widget: dynamic::to_widget_object(self.widget)
         }
     }
 }
@@ -384,7 +384,7 @@ impl<'a, W: ?Sized> WidgetSummary<&'a mut W> {
         WidgetSummary {
             ident: self.ident,
             index: self.index,
-            widget: dyn::to_widget_object_mut(self.widget)
+            widget: dynamic::to_widget_object_mut(self.widget)
         }
     }
 }
