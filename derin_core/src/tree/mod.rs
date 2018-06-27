@@ -29,6 +29,7 @@ use event::{WidgetEvent, EventOps, InputState};
 use render::{RenderFrame, FrameRectStack};
 use timer::TimerRegister;
 use popup::ChildPopupsMut;
+use bus::BusTerminal;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum WidgetIdent {
@@ -36,15 +37,6 @@ pub enum WidgetIdent {
     Num(u32),
     StrCollection(Arc<str>, u32),
     NumCollection(u32, u32)
-}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Update {
-    pub render_self: bool,
-    pub update_child: bool,
-    pub update_timer: bool,
-    pub update_layout: bool,
-    pub update_layout_post: bool
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -57,15 +49,30 @@ pub(crate) enum MouseState {
     Untracked
 }
 
-#[derive(Debug, Clone)]
+// #[derive(Debug)]
 pub struct WidgetTag {
-    last_root: Cell<RootID>,
-    widget_tag: Cell<UpdateTag>,
-    pub(crate) widget_id: WidgetID,
-    pub(crate) last_event_stamp: Cell<u32>,
-    pub(crate) mouse_state: Cell<MouseState>,
-    pub(crate) has_keyboard_focus: Cell<bool>,
-    pub(crate) child_event_recv: Cell<ChildEventRecv>
+    update_sender: BusTerminal<UpdateEvent, WidgetID>
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct WidgetState {
+    widget_id: WidgetID,
+    pub last_event_stamp: u32,
+    pub mouse_state: MouseState,
+    pub has_keyboard_focus: bool,
+    pub child_event_recv: ChildEventRecv
+}
+
+impl Default for WidgetState {
+    fn default() -> WidgetState {
+        WidgetState {
+            widget_id: WidgetID::new(),
+            last_event_stamp: 0,
+            mouse_state: MouseState::Untracked,
+            has_keyboard_focus: false,
+            child_event_recv: ChildEventRecv::empty()
+        }
+    }
 }
 
 impl MouseState {
@@ -76,6 +83,14 @@ impl MouseState {
             MouseState::Hovering(_, mbseq) |
             MouseState::Tracking(_, mbseq) => mbseq
         }
+    }
+}
+
+impl Clone for WidgetTag {
+    /// This implementation doesn't actually clone - it creates a new instance. It is simply
+    /// provided to allow deriving `Clone` on widgets using this.
+    fn clone(&self) -> WidgetTag {
+        WidgetTag::new()
     }
 }
 
@@ -112,18 +127,18 @@ impl From<MouseButtonSequence> for ChildEventRecv {
     }
 }
 
-impl<'a> From<&'a WidgetTag> for ChildEventRecv {
+impl<'a> From<&'a WidgetState> for ChildEventRecv {
     #[inline]
-    fn from(widget_tag: &'a WidgetTag) -> ChildEventRecv {
-        let widget_mb_flags = ChildEventRecv::from(widget_tag.mouse_state.get().mouse_button_sequence());
+    fn from(widget_state: &'a WidgetState) -> ChildEventRecv {
+        let widget_mb_flags = ChildEventRecv::from(widget_state.mouse_state.mouse_button_sequence());
 
         widget_mb_flags |
-        match widget_tag.mouse_state.get() {
+        match widget_state.mouse_state {
             MouseState::Hovering(_, _) => ChildEventRecv::MOUSE_HOVER,
             MouseState::Tracking(_, _)  |
             MouseState::Untracked   => ChildEventRecv::empty()
         } |
-        match widget_tag.has_keyboard_focus.get() {
+        match widget_state.has_keyboard_focus {
             true => ChildEventRecv::KEYBOARD,
             false => ChildEventRecv::empty()
         }
@@ -404,121 +419,65 @@ impl Default for OnFocusOverflow {
 }
 
 
-bitflags!{
-    pub(crate) struct UpdateTag: u8 {
-        const RENDER_SELF = 1 << 0;
-        const UPDATE_CHILD = 1 << 1;
-        const UPDATE_LAYOUT = 1 << 2;
-        const UPDATE_LAYOUT_POST = 1 << 3;
-        const UPDATE_TIMER = 1 << 4;
-        const RENDER_ALL = UpdateTag::RENDER_SELF.bits | UpdateTag::UPDATE_CHILD.bits;
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum UpdateEvent {
+    /// Render the widget.
+    Render,
+    /// Scan children for updates.
+    Child,
+    /// Run the layout update function.
+    Layout,
+    /// Run the timer update function.
+    Timer,
 }
 
 impl WidgetTag {
     #[inline]
     pub fn new() -> WidgetTag {
         WidgetTag {
-            last_root: Cell::new(RootID::dummy()),
-            widget_tag: Cell::new(UpdateTag::all()),
-            widget_id: WidgetID::new(),
-            last_event_stamp: Cell::new(0),
-            mouse_state: Cell::new(MouseState::Untracked),
-            has_keyboard_focus: Cell::new(false),
-            child_event_recv: Cell::new(ChildEventRecv::empty())
+            update_sender: BusTerminal::new(WidgetID::new())
         }
     }
 
     #[inline]
     pub fn mark_render_self(&mut self) -> &mut WidgetTag {
-        self.widget_tag.set(self.widget_tag.get() | UpdateTag::RENDER_SELF);
+        self.update_sender.send(UpdateEvent::Render);
         self
     }
 
     #[inline]
     pub fn mark_update_child(&mut self) -> &mut WidgetTag {
-        self.widget_tag.set(self.widget_tag.get() | UpdateTag::UPDATE_CHILD);
+        self.update_sender.send(UpdateEvent::Child);
         self
     }
 
     #[inline]
     pub fn mark_update_layout(&mut self) -> &mut WidgetTag {
-        self.widget_tag.set(self.widget_tag.get() | UpdateTag::UPDATE_LAYOUT);
+        self.update_sender.send(UpdateEvent::Layout);
         self
     }
 
-
-    #[inline]
-    pub fn mark_update_layout_post(&mut self) -> &mut WidgetTag {
-        self.widget_tag.set(self.widget_tag.get() | UpdateTag::UPDATE_LAYOUT_POST);
-        self
-    }
 
     #[inline]
     pub fn mark_update_timer(&mut self) -> &mut WidgetTag {
-        self.widget_tag.set(self.widget_tag.get() | UpdateTag::UPDATE_TIMER);
+        self.update_sender.send(UpdateEvent::Timer);
         self
     }
 
     #[inline]
     pub fn has_keyboard_focus(&self) -> bool {
-        self.has_keyboard_focus.get()
-    }
-
-    #[inline]
-    pub(crate) fn mark_updated(&self, root_id: RootID) {
-        self.last_root.set(root_id);
-        self.widget_tag.set(UpdateTag::empty());
-    }
-
-    #[inline]
-    pub(crate) fn unmark_update_layout(&self) {
-        self.widget_tag.set(self.widget_tag.get() & !(UpdateTag::UPDATE_LAYOUT | UpdateTag::UPDATE_LAYOUT_POST));
-    }
-
-    #[inline]
-    pub(crate) fn unmark_update_timer(&self) {
-        self.widget_tag.set(self.widget_tag.get() & !UpdateTag::UPDATE_TIMER);
-    }
-
-    #[inline]
-    pub(crate) fn mark_update_child_immutable(&self) {
-        self.widget_tag.set(self.widget_tag.get() | UpdateTag::UPDATE_CHILD);
-    }
-
-    #[inline]
-    pub(crate) fn needs_update(&self, root_id: RootID) -> Update {
-        if root_id != self.last_root.get() {
-            Update {
-                render_self: true,
-                update_child: true,
-                update_timer: true,
-                update_layout: true,
-                update_layout_post: true
-            }
-        } else {
-            let widget_tag = self.widget_tag.get();
-            Update {
-                render_self: widget_tag.contains(UpdateTag::RENDER_SELF),
-                update_child: widget_tag.contains(UpdateTag::UPDATE_CHILD),
-                update_timer: widget_tag.contains(UpdateTag::UPDATE_TIMER),
-                update_layout: widget_tag.contains(UpdateTag::UPDATE_LAYOUT),
-                update_layout_post: widget_tag.contains(UpdateTag::UPDATE_LAYOUT_POST),
-            }
+        enum Query {
+            HasKeyboardFocus(Option<bool>)
         }
+
+        let mut has_keyboard_focus = Query::HasKeyboardFocus(None);
+        self.update_sender.ask(&mut has_keyboard_focus);
+        let Query::HasKeyboardFocus(has_keyboard_focus) = has_keyboard_focus;
+        has_keyboard_focus.unwrap_or(false)
     }
-}
 
-impl Update {
-    pub fn needs_redraw(self) -> bool {
-        let Update {
-            render_self,
-            update_child,
-            update_timer: _,
-            update_layout,
-            update_layout_post
-        } = self;
-
-        render_self || update_child || update_layout || update_layout_post
+    #[inline(always)]
+    pub(crate) fn widget_id(&self) -> WidgetID {
+        self.update_sender.id()
     }
 }

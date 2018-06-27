@@ -19,7 +19,7 @@ use tree::dynamic::ParentDyn;
 use event::{InputState, WidgetEvent, EventOps};
 use render::RenderFrame;
 use timer::TimerRegister;
-use mbseq::MouseButtonSequenceTrackPos;
+use mbseq::{MouseButtonSequence, MouseButtonSequenceTrackPos};
 
 use derin_common_types::buttons::{Key, ModifierKeys};
 use derin_common_types::layout::SizeBounds;
@@ -74,6 +74,7 @@ pub trait OffsetWidgetTrait<A, F>
         event: WidgetEvent,
         mouse_pos: Point2<i32>,
         mouse_buttons_down: &MouseButtonSequenceTrackPos,
+        mouse_buttons_down_in_widget: &MouseButtonSequence,
         keys_down: &[Key],
         modifiers: ModifierKeys,
         popups: Option<ChildPopupsMut<A, F>>,
@@ -130,20 +131,20 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
         event: WidgetEvent,
         mouse_pos: Point2<i32>,
         mouse_buttons_down: &MouseButtonSequenceTrackPos,
+        mouse_buttons_down_in_widget: &MouseButtonSequence,
         keys_down: &[Key],
         modifiers: ModifierKeys,
         popups: Option<ChildPopupsMut<A, F>>,
         source_child: &[WidgetIdent]
     ) -> EventOps<A, F>
     {
-        let widget_tag = self.widget_tag();
         let offset = self.rect().min().to_vec();
         let mbd_array: ArrayVec<[_; 5]> = mouse_buttons_down.clone().into_iter()
             .map(|mut down| {
                 down.down_pos -= offset;
                 down
             }).collect();
-        let mbdin_array: ArrayVec<[_; 5]> = widget_tag.mouse_state.get().mouse_button_sequence()
+        let mbdin_array: ArrayVec<[_; 5]> = mouse_buttons_down_in_widget
             .into_iter().filter_map(|b| mouse_buttons_down.contains(b))
             .map(|mut down| {
                 down.down_pos -= offset;

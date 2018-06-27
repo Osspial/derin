@@ -14,7 +14,7 @@
 
 use std::mem;
 use render::RenderFrame;
-use tree::{Widget, WidgetIdent, WidgetSummary, RootID, Update};
+use tree::{Widget, WidgetIdent, WidgetSummary, RootID};
 
 use cgmath::{Bounded, EuclideanSpace, Point2, Vector2};
 use cgmath_geometry::{BoundBox, GeoBox};
@@ -122,10 +122,6 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
         for widget_slice in self.vec[len-1..].windows(2).rev() {
             let parent = unsafe{ &*widget_slice[0].widget };
             let child = unsafe{ &*widget_slice[1].widget };
-
-            if child.widget_tag().needs_update(self.root_id) != Update::default() {
-                parent.widget_tag().mark_update_child_immutable();
-            }
         }
 
         self.vec.truncate(len);
@@ -218,11 +214,6 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
                 self.clip_rect = rectangles.bounds_clipped;
             }
         }
-
-        if popped.widget_tag().needs_update(self.root_id) != Update::default() {
-            self.top().widget.widget_tag().mark_update_child_immutable();
-        }
-
 
         Some(popped)
     }

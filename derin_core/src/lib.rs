@@ -34,12 +34,12 @@ mod widget_stack;
 mod meta_tracker;
 mod offset_widget;
 mod event_loop_ops;
+mod bus;
 
 use cgmath::{Point2, Vector2, Bounded};
 use cgmath_geometry::DimsBox;
 
-use std::marker::PhantomData;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 
 use tree::*;
 pub use event_loop_ops::{EventLoopResult, PopupDelta};
@@ -75,10 +75,10 @@ pub struct Root<A, N, F>
     pub theme: F::Theme,
     popup_widgets: PopupMap<A, F>,
 
+    widget_state_map: HashMap<WidgetID, WidgetState>,
+
     set_cursor_pos: Option<Point2<i32>>,
     set_cursor_icon: Option<CursorIcon>,
-
-    _marker: PhantomData<*const F>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -132,11 +132,10 @@ impl<A, N, F> Root<A, N, F>
             timer_list: TimerList::new(None),
             root_widget, theme,
             popup_widgets: PopupMap::new(),
+            widget_state_map: HashMap::new(),
 
             set_cursor_pos: None,
             set_cursor_icon: None,
-
-            _marker: PhantomData
         }
     }
 

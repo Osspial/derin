@@ -89,6 +89,7 @@ impl<A, N, F> Root<A, N, F>
             ref mut modifiers,
             ref mut set_cursor_pos,
             ref mut set_cursor_icon,
+            ref mut widget_state_map,
             ..
         } = *self;
 
@@ -124,14 +125,16 @@ impl<A, N, F> Root<A, N, F>
                 $widget:expr, $path:expr $(=> ($meta_tracker:expr))*,
                 $event:expr $(, bubble ($bubble:expr, $bubble_store:expr, $bubble_path:expr))*
             ) => {{
-                let widget_tag = $widget.widget_tag();
-                let widget_id = widget_tag.widget_id;
+                let widget_id = $widget.widget_tag().widget_id();
+                let widget_state = widget_state_map.entry(widget_id).or_default();
+                // TODO: MIGRATE TO WIDGET TAG
 
                 let event = $event;
                 let event_ops = $widget.on_widget_event(
                     event.clone(),
                     *mouse_pos,
                     &mouse_buttons_down,
+                    &widget_state.mouse_state.mouse_button_sequence(),
                     keys_down,
                     *modifiers,
                     popup_widgets.popups_owned_by_mut(widget_id),
@@ -141,8 +144,6 @@ impl<A, N, F> Root<A, N, F>
                         &[]
                     })
                 );
-
-                let widget_tag = $widget.widget_tag();
 
                 let ref mut meta_tracker = if_tokens!(($($meta_tracker)*) {
                     $($meta_tracker)*
@@ -154,7 +155,7 @@ impl<A, N, F> Root<A, N, F>
                     meta_tracker.push_focus(focus, $path);
                 }
                 if let Some((popup_widget, popup_attributes)) = event_ops.popup {
-                    let owner_id = widget_tag.widget_id;
+                    let owner_id = widget_id;
                     popup_map_insert.push((owner_id, popup_widget, popup_attributes));
                 }
                 if event_ops.bubble $(& $bubble)* {
@@ -167,16 +168,9 @@ impl<A, N, F> Root<A, N, F>
                 *set_cursor_icon = set_cursor_icon.or(event_ops.cursor_icon);
                 $(*$bubble_store = event_ops.bubble;)*
 
-                widget_tag.last_event_stamp.set(*event_stamp);
-                let widget_update = widget_tag.needs_update(root_id);
-                if widget_update.update_timer {
-                    let mut register = timer_list.new_timer_register(widget_tag.widget_id);
-                    $widget.register_timers(&mut register);
-                    widget_tag.unmark_update_timer();
-                }
-                widget_tag.last_event_stamp.set(*event_stamp);
+                widget_state.last_event_stamp = *event_stamp;
 
-                widget_tag
+                widget_state
             }};
         }
 
@@ -196,8 +190,8 @@ impl<A, N, F> Root<A, N, F>
                     WidgetEvent::MouseEnter(enter_pos)
                 );
 
-                let top_mbseq = top_widget_tag.mouse_state.get().mouse_button_sequence();
-                top_widget_tag.mouse_state.set(MouseState::Hovering(enter_pos, top_mbseq));
+                let top_mbseq = top_widget_tag.mouse_state.mouse_button_sequence();
+                top_widget_tag.mouse_state = MouseState::Hovering(enter_pos, top_mbseq);
             },
             WindowEvent::MouseExit(exit_pos) => {
                 widget_stack.move_to_hover();
@@ -208,12 +202,12 @@ impl<A, N, F> Root<A, N, F>
                     );
 
 
-                    let mbseq = widget_tag.mouse_state.get().mouse_button_sequence();
+                    let mbseq = widget_tag.mouse_state.mouse_button_sequence();
                     match mbseq.len() {
-                        0 => widget_tag.mouse_state.set(MouseState::Untracked),
-                        _ => widget_tag.mouse_state.set(MouseState::Tracking(exit_pos, mbseq))
+                        0 => widget_tag.mouse_state = MouseState::Untracked,
+                        _ => widget_tag.mouse_state = MouseState::Tracking(exit_pos, mbseq)
                     }
-                    widget_tag.child_event_recv.set(widget_tag.child_event_recv.get() & !ChildEventRecv::MOUSE_HOVER);
+                    widget_tag.child_event_recv &= !ChildEventRecv::MOUSE_HOVER;
                 });
             },
 
@@ -225,10 +219,9 @@ impl<A, N, F> Root<A, N, F>
                 loop {
                     widget_stack.move_to_hover();
 
-                    // Get a read-only copy of the update tag.
-                    let widget_tag_copy = widget_stack.top().widget.widget_tag().clone();
+                    let widget_id = widget_stack.top().widget.widget_tag().widget_id();
 
-                    if let MouseState::Hovering(widget_old_pos, mbseq) = widget_tag_copy.mouse_state.get() {
+                    if let MouseState::Hovering(widget_old_pos, mbseq) = widget_state_map.entry(widget_id).or_default().mouse_state {
                         let move_line = Segment {
                             start: widget_old_pos,
                             end: new_pos
@@ -250,29 +243,14 @@ impl<A, N, F> Root<A, N, F>
                         let top_bounds = widget_stack.top().widget.rect_clipped();
                         match top_bounds.map(|r| r.contains(new_pos)).unwrap_or(false) {
                             true => {
-                                // Whether or not to update the child layout.
-                                let update_layout: bool;
-                                {
-                                    let top = widget_stack.top().widget;
-                                    let top_widget_tag = top.widget_tag();
-                                    top_widget_tag.mouse_state.set(MouseState::Hovering(new_pos, mbseq));
-
-                                    // Store whether or not the layout needs to be updated. We can set that the layout
-                                    // no longer needs to be updated here because it's going to be updated in the subtrait
-                                    // match below.
-                                    update_layout = top_widget_tag.needs_update(root_id).update_layout;
-                                    top_widget_tag.unmark_update_layout();
-                                }
-
                                 // Send actions to the child widget. If the hover widget isn't a parent, there's
                                 // nothing we need to do.
                                 let WidgetPath{ widget: mut top_widget, path: top_path, .. } = widget_stack.top();
-                                if let Some(mut top_widget_as_parent) = top_widget.as_parent_mut() {
-                                    // Actually update the layout, if necessary.
-                                    if update_layout {
-                                        top_widget_as_parent.update_child_layout();
-                                    }
 
+                                // Set the top widget's mouse state to hovering.
+                                widget_state_map.entry(top_widget.widget_tag().widget_id()).or_default().mouse_state = MouseState::Hovering(new_pos, mbseq);
+
+                                if let Some(mut top_widget_as_parent) = top_widget.as_parent_mut() {
                                     struct EnterChildData {
                                         child_ident: WidgetIdent,
                                         enter_pos: Point2<i32>
@@ -301,15 +279,9 @@ impl<A, N, F> Root<A, N, F>
 
                                         // Get the mouse buttons already down in the child, and set the mouse
                                         // state to hover.
-                                        let child_mbdin;
-                                        {
-                                            let child_widget_tag = child.widget_tag();
-                                            child_mbdin = child_widget_tag.mouse_state.get().mouse_button_sequence();
-                                            child_widget_tag.mouse_state.set(MouseState::Hovering(
-                                                widget_old_pos,
-                                                child_mbdin
-                                            ));
-                                        }
+                                        let mouse_state = &mut widget_state_map.entry(child.widget_tag().widget_id()).or_default().mouse_state;
+                                        let child_mbdin = mouse_state.mouse_button_sequence();
+                                        *mouse_state = MouseState::Hovering(widget_old_pos, child_mbdin);
 
                                         // SEND ENTER ACTION TO CHILD
                                         try_push_action!(
@@ -335,22 +307,6 @@ impl<A, N, F> Root<A, N, F>
                                             }
                                         );
 
-                                        // Update the layout again, if the events we've sent have triggered a
-                                        // relayout.
-                                        let update_layout: bool;
-                                        {
-                                            let top_widget_tag = top_widget_as_parent.widget_tag();
-                                            match mbseq.len() {
-                                                0 => top_widget_tag.mouse_state.set(MouseState::Untracked),
-                                                _ => top_widget_tag.mouse_state.set(MouseState::Tracking(new_pos, mbseq))
-                                            }
-                                            top_widget_tag.child_event_recv.set(top_widget_tag.child_event_recv.get() | ChildEventRecv::MOUSE_HOVER);
-                                            update_layout = top_widget_tag.needs_update(root_id).update_layout;
-                                        }
-                                        if update_layout {
-                                            top_widget_as_parent.update_child_layout();
-                                        }
-
                                         continue;
                                     }
                                 }
@@ -361,18 +317,14 @@ impl<A, N, F> Root<A, N, F>
 
                                 {
                                     let WidgetPath{ mut widget, path, .. } = widget_stack.top();
-                                    try_push_action!(
+                                    let widget_state = try_push_action!(
                                         widget, path.iter().cloned(),
                                         WidgetEvent::MouseExit(mouse_exit)
                                     );
-                                }
 
-                                {
-                                    let top = widget_stack.top().widget;
-                                    let top_widget_tag = top.widget_tag();
                                     match mbseq.len() {
-                                        0 => top_widget_tag.mouse_state.set(MouseState::Untracked),
-                                        _ => top_widget_tag.mouse_state.set(MouseState::Tracking(new_pos, mbseq))
+                                        0 => widget_state.mouse_state = MouseState::Untracked,
+                                        _ => widget_state.mouse_state = MouseState::Tracking(new_pos, mbseq)
                                     }
                                 }
 
@@ -381,22 +333,18 @@ impl<A, N, F> Root<A, N, F>
                                     let child_ident = widget_stack.top_ident();
 
                                     widget_stack.pop();
-                                    {
-                                        let WidgetPath{ mut widget, path, .. } = widget_stack.top();
-                                        try_push_action!(
-                                            widget, path.iter().cloned(),
-                                            WidgetEvent::MouseExitChild {
-                                                exit_pos: mouse_exit,
-                                                child: child_ident
-                                            }
-                                        );
-                                    }
+                                    let WidgetPath{ mut widget, path, .. } = widget_stack.top();
+                                    let widget_state = try_push_action!(
+                                        widget, path.iter().cloned(),
+                                        WidgetEvent::MouseExitChild {
+                                            exit_pos: mouse_exit,
+                                            child: child_ident
+                                        }
+                                    );
 
-                                    let top = widget_stack.top().widget;
-                                    let top_widget_tag = top.widget_tag();
-                                    let top_mbseq = top_widget_tag.mouse_state.get().mouse_button_sequence();
-                                    top_widget_tag.mouse_state.set(MouseState::Hovering(mouse_exit, top_mbseq));
-                                    top_widget_tag.child_event_recv.set(top_widget_tag.child_event_recv.get() & !ChildEventRecv::MOUSE_HOVER);
+                                    let top_mbseq = widget_state.mouse_state.mouse_button_sequence();
+                                    widget_state.mouse_state = MouseState::Hovering(mouse_exit, top_mbseq);
+                                    widget_state.child_event_recv &= !ChildEventRecv::MOUSE_HOVER;
 
                                     continue;
                                 }
@@ -407,9 +355,9 @@ impl<A, N, F> Root<A, N, F>
                         // event. So, set the root as hover and re-calculate from there.
                         let root = widget_stack.move_to_root().widget;
 
-                        let top_widget_tag = root.widget_tag();
-                        let top_mbseq = top_widget_tag.mouse_state.get().mouse_button_sequence();
-                        top_widget_tag.mouse_state.set(MouseState::Hovering(new_pos, top_mbseq));
+                        let top_widget_state = widget_state_map.entry(root.widget_tag().widget_id()).or_default();
+                        let top_mbseq = top_widget_state.mouse_state.mouse_button_sequence();
+                        top_widget_state.mouse_state = MouseState::Hovering(new_pos, top_mbseq);
                         continue;
                     }
 
@@ -421,12 +369,12 @@ impl<A, N, F> Root<A, N, F>
                     let (widget_needs_move_event, widget_old_pos): (bool, Point2<i32>);
 
                     {
-                        let widget_tag = widget.widget_tag();
+                        let widget_state = widget_state_map.entry(widget.widget_tag().widget_id()).or_default();
 
-                        widget_needs_move_event = widget_tag.last_event_stamp.get() != *event_stamp;
-                        match widget_tag.mouse_state.get() {
+                        widget_needs_move_event = widget_state.last_event_stamp != *event_stamp;
+                        match widget_state.mouse_state {
                             MouseState::Tracking(old_pos, mbseq) => {
-                                widget_tag.mouse_state.set(MouseState::Tracking(new_pos, mbseq));
+                                widget_state.mouse_state = MouseState::Tracking(new_pos, mbseq);
                                 widget_old_pos = old_pos;
                             },
                             s if widget_needs_move_event => panic!("unexpected mouse state: {:?}", s),
@@ -464,25 +412,25 @@ impl<A, N, F> Root<A, N, F>
                         }
                     );
 
-                    let top_widget_tag = top_widget.widget_tag();
-                    match top_widget_tag.mouse_state.get() {
+                    let top_widget_state = widget_state_map.entry(widget.widget_tag().widget_id()).or_default();
+                    match top_widget_state.mouse_state {
                         MouseState::Untracked     |
                         MouseState::Tracking(..) => (),
                         MouseState::Hovering(mouse_pos, mut top_mbseq) => if in_widget {
-                            top_widget_tag.mouse_state.set(MouseState::Hovering(mouse_pos, *top_mbseq.push_button(button)));
+                            top_widget_state.mouse_state = MouseState::Hovering(mouse_pos, *top_mbseq.push_button(button));
                         }
                     }
 
                     if in_widget {
-                        top_widget_tag.child_event_recv.set(top_widget_tag.child_event_recv.get() | button_mask)
+                        top_widget_state.child_event_recv |= button_mask;
                     }
                 });
                 mouse_buttons_down.push_button(button, *mouse_pos);
 
                 widget_stack.move_to_hover();
                 widget_stack.drain_to_root(|widget, _| {
-                    let widget_tag = widget.widget_tag();
-                    widget_tag.child_event_recv.set(widget_tag.child_event_recv.get() | button_mask);
+                    let widget_state = widget_state_map.entry(widget.widget_tag().widget_id()).or_default();
+                    widget_state.child_event_recv |= button_mask;
                 });
             },
             WindowEvent::MouseUp(button) => {
@@ -495,12 +443,13 @@ impl<A, N, F> Root<A, N, F>
                 let mut move_to_tracked = true;
                 widget_stack.move_over_flags(ChildEventRecv::MOUSE_HOVER, |mut widget, path| {
                     let in_widget = widget.rect_clipped().map(|r| r.contains(*mouse_pos)).unwrap_or(false);
-                    let pressed_in_widget = widget.widget_tag().mouse_state.get().mouse_button_sequence().contains(button);
+                    let pressed_in_widget = widget_state_map.entry(widget.widget_tag().widget_id()).or_default()
+                        .mouse_state.mouse_button_sequence().contains(button);
                     // If the hover widget wasn't the one where the mouse was originally pressed, ensure that
                     // we move to the widget where it was pressed.
                     move_to_tracked = !pressed_in_widget;
 
-                    try_push_action!(
+                    let widget_state = try_push_action!(
                         widget, path.iter().cloned(),
                         WidgetEvent::MouseUp {
                             pos: *mouse_pos,
@@ -511,16 +460,13 @@ impl<A, N, F> Root<A, N, F>
                         }
                     );
 
-                    let widget_tag = widget.widget_tag();
-
-                    let set_mouse_state = match widget_tag.mouse_state.get() {
+                    widget_state.mouse_state = match widget_state.mouse_state {
                         MouseState::Hovering(mouse_pos, mut top_mbseq) => {
                             MouseState::Hovering(mouse_pos, *top_mbseq.release_button(button))
                         },
                         MouseState::Untracked => unreachable!(),
                         MouseState::Tracking(..) => unreachable!()
                     };
-                    widget_tag.mouse_state.set(set_mouse_state);
                 });
 
                 // If the hover widget wasn't the widget where the mouse button was originally pressed,
@@ -528,7 +474,7 @@ impl<A, N, F> Root<A, N, F>
                 if move_to_tracked {
                     widget_stack.move_over_flags(button_mask, |mut widget, path| {
                         let widget_rect = widget.rect_clipped();
-                        try_push_action!(
+                        let widget_state = try_push_action!(
                             widget, path.iter().cloned(),
                             WidgetEvent::MouseUp {
                                 pos: *mouse_pos,
@@ -539,9 +485,7 @@ impl<A, N, F> Root<A, N, F>
                             }
                         );
 
-                        let widget_tag = widget.widget_tag();
-
-                        let set_mouse_state = match widget_tag.mouse_state.get() {
+                        widget_state.mouse_state = match widget_state.mouse_state {
                             MouseState::Untracked => unreachable!(),
                             MouseState::Tracking(mouse_pos, mut top_mbseq) => {
                                 top_mbseq.release_button(button);
@@ -552,13 +496,12 @@ impl<A, N, F> Root<A, N, F>
                             },
                             MouseState::Hovering(mouse_pos, mut top_mbseq) => MouseState::Hovering(mouse_pos, *top_mbseq.release_button(button))
                         };
-                        widget_tag.mouse_state.set(set_mouse_state);
                     });
                 }
 
                 for widget in widget_stack.widgets() {
-                    let widget_tag = widget.widget_tag();
-                    widget_tag.child_event_recv.set(widget_tag.child_event_recv.get() & !button_mask);
+                    let widget_state = widget_state_map.entry(widget.widget_tag().widget_id()).or_default();
+                    widget_state.child_event_recv &= !button_mask;
                 }
             },
             WindowEvent::MouseScrollLines(scroll_lines) => {
@@ -633,21 +576,23 @@ impl<A, N, F> Root<A, N, F>
                     if path == widget_ident_stack {
                         return;
                     }
-                    widget.widget_tag().has_keyboard_focus.set(false);
+                    widget_state_map.entry(widget.widget_tag().widget_id()).or_default()
+                        .has_keyboard_focus = false;
 
                     try_push_action!(widget, path.into_iter().cloned() => (*meta_drain), WidgetEvent::LoseFocus);
 
-                    for widget_tag in widget_stack.widgets().map(|n| n.widget_tag()) {
-                        widget_tag.child_event_recv.set(widget_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
+                    for widget_state in widget_stack.widgets().map(|w| widget_state_map.entry(w.widget_tag().widget_id()).or_default()) {
+                        widget_state.child_event_recv &= !ChildEventRecv::KEYBOARD;
                     }
                 }
                 if let Some(WidgetPath{ mut widget, path }) = widget_stack.move_to_path(widget_ident_stack.iter().cloned()) {
-                    widget.widget_tag().has_keyboard_focus.set(true);
+                    widget_state_map.entry(widget.widget_tag().widget_id()).or_default()
+                        .has_keyboard_focus = true;
                     try_push_action!(widget, path.into_iter().cloned() => (*meta_drain), WidgetEvent::GainFocus);
 
                     widget_stack.pop();
-                    for widget_tag in widget_stack.widgets().map(|n| n.widget_tag()) {
-                        widget_tag.child_event_recv.set(widget_tag.child_event_recv.get() | ChildEventRecv::KEYBOARD);
+                    for widget_state in widget_stack.widgets().map(|w| widget_state_map.entry(w.widget_tag().widget_id()).or_default()) {
+                        widget_state.child_event_recv |= ChildEventRecv::KEYBOARD;
                     }
                 }
             };
@@ -663,16 +608,17 @@ impl<A, N, F> Root<A, N, F>
                 MetaEventVariant::FocusChange(focus) => match focus {
                     FocusChange::Remove => {
                         if let Some(WidgetPath{ mut widget, path }) = widget_stack.move_to_path(widget_ident_stack.iter().cloned()) {
-                            if widget.widget_tag().has_keyboard_focus.get() {
-                                widget.widget_tag().has_keyboard_focus.set(false);
+                            let widget_state = widget_state_map.entry(widget.widget_tag().widget_id()).or_default();
+                            if widget_state.has_keyboard_focus {
+                                widget_state.has_keyboard_focus = false;
 
                                 try_push_action!(
                                     widget,
                                     path.into_iter().cloned() => (meta_drain),
                                     WidgetEvent::LoseFocus
                                 );
-                                for widget_tag in widget_stack.widgets().map(|n| n.widget_tag()) {
-                                    widget_tag.child_event_recv.set(widget_tag.child_event_recv.get() & !ChildEventRecv::KEYBOARD);
+                                for widget_state in widget_stack.widgets().map(|w| widget_state_map.entry(w.widget_tag().widget_id()).or_default()) {
+                                    widget_state.child_event_recv &= !ChildEventRecv::KEYBOARD;
                                 }
                             }
                         }
@@ -918,7 +864,7 @@ fn update_widget_timers<A: 'static, F: RenderFrame>(root_id: RootID, timer_list:
 
     if update_timer {
         widget_tag.unmark_update_timer();
-        let mut register = timer_list.new_timer_register(widget_tag.widget_id);
+        let mut register = timer_list.new_timer_register(widget_tag.widget_id());
         widget.register_timers(&mut register);
     }
 

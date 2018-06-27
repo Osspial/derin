@@ -287,111 +287,112 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
     pub(crate) fn move_over_flags<G>(&mut self, mut flags: ChildEventRecv, mut for_each_flag: G) -> usize
         where G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent])
     {
-        assert_ne!(self.stack.widgets().len(), 0);
+        unimplemented!()
+        // assert_ne!(self.stack.widgets().len(), 0);
 
-        let get_update_flags = |update: &WidgetTag| update.child_event_recv.get() | ChildEventRecv::from(update);
-        // Remove flags from the search set that aren't found at the root of the tree.
-        flags &= {
-            let root_update = self.stack.widgets().next().unwrap().widget_tag();
-            get_update_flags(root_update)
-        };
+        // let get_update_flags = |update: &WidgetTag| update.child_event_recv.get() | ChildEventRecv::from(update);
+        // // Remove flags from the search set that aren't found at the root of the tree.
+        // flags &= {
+        //     let root_update = self.stack.widgets().next().unwrap().widget_tag();
+        //     get_update_flags(root_update)
+        // };
 
-        let mut widgets_visited = 0;
-        let mut on_flag_trail = None;
+        // let mut widgets_visited = 0;
+        // let mut on_flag_trail = None;
 
-        while !flags.is_empty() {
-            if on_flag_trail.is_none() {
-                // The index and update tag of the closest flagged parent
-                let (cfp_index, cfp_widget_tag) =
-                    self.stack.widgets().map(|n| n.widget_tag()).enumerate().rev()
-                        .find(|&(_, u)| flags & (get_update_flags(u)) != ChildEventRecv::empty())
-                        .unwrap();
+        // while !flags.is_empty() {
+        //     if on_flag_trail.is_none() {
+        //         // The index and update tag of the closest flagged parent
+        //         let (cfp_index, cfp_widget_tag) =
+        //             self.stack.widgets().map(|n| n.widget_tag()).enumerate().rev()
+        //                 .find(|&(_, u)| flags & (get_update_flags(u)) != ChildEventRecv::empty())
+        //                 .unwrap();
 
-                self.stack.truncate(cfp_index + 1);
-                on_flag_trail = Some(get_update_flags(cfp_widget_tag) & flags);
-            }
-            let flag_trail_flags = on_flag_trail.unwrap();
-            let mut remove_flags = ChildEventRecv::empty();
-            let top_parent_offset = self.stack.top_parent_offset();
-            let clip_rect = self.stack.clip_rect();
+        //         self.stack.truncate(cfp_index + 1);
+        //         on_flag_trail = Some(get_update_flags(cfp_widget_tag) & flags);
+        //     }
+        //     let flag_trail_flags = on_flag_trail.unwrap();
+        //     let mut remove_flags = ChildEventRecv::empty();
+        //     let top_parent_offset = self.stack.top_parent_offset();
+        //     let clip_rect = self.stack.clip_rect();
 
-            let mut top_widget_offset = Vector2::new(0, 0);
-            self.stack.try_push(|top_widget, path| {
-                top_widget_offset = top_widget.rect().min().to_vec();
-                match top_widget.as_parent_mut() {
-                    None => {
-                        let widget_tags = ChildEventRecv::from(top_widget.widget_tag());
-                        if widget_tags & flag_trail_flags != ChildEventRecv::empty() {
-                            for_each_flag(
-                                OffsetWidget::new(
-                                    top_widget,
-                                    top_parent_offset,
-                                    clip_rect
-                                ),
-                                path
-                            );
+        //     let mut top_widget_offset = Vector2::new(0, 0);
+        //     self.stack.try_push(|top_widget, path| {
+        //         top_widget_offset = top_widget.rect().min().to_vec();
+        //         match top_widget.as_parent_mut() {
+        //             None => {
+        //                 let widget_tags = ChildEventRecv::from(top_widget.widget_tag());
+        //                 if widget_tags & flag_trail_flags != ChildEventRecv::empty() {
+        //                     for_each_flag(
+        //                         OffsetWidget::new(
+        //                             top_widget,
+        //                             top_parent_offset,
+        //                             clip_rect
+        //                         ),
+        //                         path
+        //                     );
 
-                            let widget_tag = top_widget.widget_tag();
-                            let flags_removed = flag_trail_flags - ChildEventRecv::from(widget_tag);
-                            widgets_visited += 1;
-                            remove_flags |= flags_removed;
-                        }
+        //                     let widget_tag = top_widget.widget_tag();
+        //                     let flags_removed = flag_trail_flags - ChildEventRecv::from(widget_tag);
+        //                     widgets_visited += 1;
+        //                     remove_flags |= flags_removed;
+        //                 }
 
-                        flags &= !flag_trail_flags;
-                        on_flag_trail = None;
+        //                 flags &= !flag_trail_flags;
+        //                 on_flag_trail = None;
 
-                        None
-                    },
-                    Some(top_widget_as_parent) => {
-                        let mut child_ident = None;
+        //                 None
+        //             },
+        //             Some(top_widget_as_parent) => {
+        //                 let mut child_ident = None;
 
-                        top_widget_as_parent.children(&mut |children_summaries| {
-                            for child_summary in children_summaries.iter() {
-                                let child_flags = get_update_flags(&child_summary.widget.widget_tag());
-                                if child_flags & flag_trail_flags != ChildEventRecv::empty() {
-                                    on_flag_trail = Some(child_flags & flag_trail_flags);
-                                    child_ident = Some(child_summary.ident.clone());
-                                    return LoopFlow::Break(());
-                                }
-                            }
+        //                 top_widget_as_parent.children(&mut |children_summaries| {
+        //                     for child_summary in children_summaries.iter() {
+        //                         let child_flags = get_update_flags(&child_summary.widget.widget_tag());
+        //                         if child_flags & flag_trail_flags != ChildEventRecv::empty() {
+        //                             on_flag_trail = Some(child_flags & flag_trail_flags);
+        //                             child_ident = Some(child_summary.ident.clone());
+        //                             return LoopFlow::Break(());
+        //                         }
+        //                     }
 
-                            LoopFlow::Continue
-                        });
+        //                     LoopFlow::Continue
+        //                 });
 
-                        if child_ident.is_none() {
-                            let widget_tags = ChildEventRecv::from(top_widget_as_parent.widget_tag());
-                            if widget_tags & flag_trail_flags != ChildEventRecv::empty() {
-                                for_each_flag(
-                                    OffsetWidget::new(
-                                        top_widget_as_parent.as_widget(),
-                                        top_parent_offset,
-                                        clip_rect
-                                    ),
-                                    path
-                                );
+        //                 if child_ident.is_none() {
+        //                     let widget_tags = ChildEventRecv::from(top_widget_as_parent.widget_tag());
+        //                     if widget_tags & flag_trail_flags != ChildEventRecv::empty() {
+        //                         for_each_flag(
+        //                             OffsetWidget::new(
+        //                                 top_widget_as_parent.as_widget(),
+        //                                 top_parent_offset,
+        //                                 clip_rect
+        //                             ),
+        //                             path
+        //                         );
 
-                                let widget_tag = top_widget_as_parent.widget_tag();
-                                let flags_removed = flag_trail_flags - ChildEventRecv::from(widget_tag);
-                                widgets_visited += 1;
-                                remove_flags |= flags_removed;
-                            }
+        //                         let widget_tag = top_widget_as_parent.widget_tag();
+        //                         let flags_removed = flag_trail_flags - ChildEventRecv::from(widget_tag);
+        //                         widgets_visited += 1;
+        //                         remove_flags |= flags_removed;
+        //                     }
 
-                            flags &= !flag_trail_flags;
-                            on_flag_trail = None;
-                        }
+        //                     flags &= !flag_trail_flags;
+        //                     on_flag_trail = None;
+        //                 }
 
-                        match child_ident {
-                            Some(i) => top_widget_as_parent.child_mut(i),
-                            None => None
-                        }
-                    }
-                }
-            });
+        //                 match child_ident {
+        //                     Some(i) => top_widget_as_parent.child_mut(i),
+        //                     None => None
+        //                 }
+        //             }
+        //         }
+        //     });
 
-            flags &= !remove_flags;
-        }
+        //     flags &= !remove_flags;
+        // }
 
-        widgets_visited
+        // widgets_visited
     }
 
     pub(crate) fn move_over_widgets<I, G>(&mut self, widget_ids: I, mut for_each_widget: G)
@@ -405,7 +406,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
             let top_parent_offset = self.stack.top_parent_offset();
             let clip_rect = self.stack.clip_rect();
             let valid_child = self.stack.try_push(|top_widget, top_path| {
-                let top_id = top_widget.widget_tag().widget_id;
+                let top_id = top_widget.widget_tag().widget_id();
 
                 if let Some((iter_index, _)) = widget_ids.clone().into_iter().enumerate().find(|&(_, id)| id == top_id) {
                     for_each_widget(OffsetWidget::new(top_widget, top_parent_offset, clip_rect), top_path, iter_index);
