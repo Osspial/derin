@@ -16,7 +16,6 @@ pub(crate) mod dynamic;
 
 use dynamic::ParentDyn;
 use std::sync::Arc;
-use std::cell::Cell;
 
 use LoopFlow;
 use cgmath::Point2;
@@ -49,7 +48,7 @@ pub(crate) enum MouseState {
     Untracked
 }
 
-// #[derive(Debug)]
+#[derive(Debug)]
 pub struct WidgetTag {
     update_sender: BusTerminal<UpdateEvent, WidgetID>
 }
@@ -60,7 +59,13 @@ pub(crate) struct WidgetState {
     pub last_event_stamp: u32,
     pub mouse_state: MouseState,
     pub has_keyboard_focus: bool,
-    pub child_event_recv: ChildEventRecv
+}
+
+impl WidgetState {
+    #[inline(always)]
+    pub(crate) fn widget_id(&self) -> WidgetID {
+        self.widget_id
+    }
 }
 
 impl Default for WidgetState {
@@ -70,7 +75,6 @@ impl Default for WidgetState {
             last_event_stamp: 0,
             mouse_state: MouseState::Untracked,
             has_keyboard_focus: false,
-            child_event_recv: ChildEventRecv::empty()
         }
     }
 }
@@ -91,57 +95,6 @@ impl Clone for WidgetTag {
     /// provided to allow deriving `Clone` on widgets using this.
     fn clone(&self) -> WidgetTag {
         WidgetTag::new()
-    }
-}
-
-bitflags! {
-    pub(crate) struct ChildEventRecv: u8 {
-        const MOUSE_L        = 1 << 0;
-        const MOUSE_R        = 1 << 1;
-        const MOUSE_M        = 1 << 2;
-        const MOUSE_X1       = 1 << 3;
-        const MOUSE_X2       = 1 << 4;
-        const MOUSE_HOVER    = 1 << 5;
-        const KEYBOARD       = 1 << 6;
-
-        const MOUSE_BUTTONS =
-            Self::MOUSE_L.bits  |
-            Self::MOUSE_R.bits  |
-            Self::MOUSE_M.bits  |
-            Self::MOUSE_X1.bits |
-            Self::MOUSE_X2.bits;
-    }
-}
-
-impl ChildEventRecv {
-    #[inline]
-    pub(crate) fn mouse_button_mask(button: MouseButton) -> ChildEventRecv {
-        ChildEventRecv::from_bits_truncate(1 << (u8::from(button) - 1))
-    }
-}
-
-impl From<MouseButtonSequence> for ChildEventRecv {
-    #[inline]
-    fn from(mbseq: MouseButtonSequence) -> ChildEventRecv {
-        mbseq.into_iter().fold(ChildEventRecv::empty(), |child_event_recv, mb| child_event_recv | ChildEventRecv::mouse_button_mask(mb))
-    }
-}
-
-impl<'a> From<&'a WidgetState> for ChildEventRecv {
-    #[inline]
-    fn from(widget_state: &'a WidgetState) -> ChildEventRecv {
-        let widget_mb_flags = ChildEventRecv::from(widget_state.mouse_state.mouse_button_sequence());
-
-        widget_mb_flags |
-        match widget_state.mouse_state {
-            MouseState::Hovering(_, _) => ChildEventRecv::MOUSE_HOVER,
-            MouseState::Tracking(_, _)  |
-            MouseState::Untracked   => ChildEventRecv::empty()
-        } |
-        match widget_state.has_keyboard_focus {
-            true => ChildEventRecv::KEYBOARD,
-            false => ChildEventRecv::empty()
-        }
     }
 }
 

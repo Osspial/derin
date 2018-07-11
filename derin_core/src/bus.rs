@@ -1,4 +1,5 @@
 use std::{
+    fmt,
     rc::{Rc, Weak},
     cell::{RefCell, UnsafeCell},
     collections::VecDeque,
@@ -124,5 +125,11 @@ impl<T, ID: Copy> BusHub<T, ID> {
     #[inline(always)]
     pub fn recv_attachment(&mut self) -> Option<BusEvent<ID>> {
         self.0.borrow_mut().bus_events.pop_front()
+    }
+}
+
+impl<T, ID: Copy + fmt::Debug> fmt::Debug for BusTerminal<T, ID> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "BusTerminal({:?})", self.id)
     }
 }

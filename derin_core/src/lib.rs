@@ -42,7 +42,7 @@ use cgmath_geometry::DimsBox;
 use std::collections::{HashMap, VecDeque};
 
 use tree::*;
-pub use event_loop_ops::{EventLoopResult, PopupDelta};
+pub use event_loop_ops::{ActiveWidgets, EventLoopResult, PopupDelta};
 use timer::TimerList;
 use popup::PopupMap;
 use render::RenderFrame;
@@ -51,6 +51,7 @@ use widget_stack::WidgetStackBase;
 use meta_tracker::MetaEventTracker;
 use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
 use derin_common_types::cursor::CursorIcon;
+use bus::BusHub;
 
 pub struct Root<A, N, F>
     where N: Widget<A, F> + 'static,
@@ -76,6 +77,8 @@ pub struct Root<A, N, F>
     popup_widgets: PopupMap<A, F>,
 
     widget_state_map: HashMap<WidgetID, WidgetState>,
+    update_receiver: BusHub<UpdateEvent, WidgetID>,
+    active_widgets: ActiveWidgets,
 
     set_cursor_pos: Option<Point2<i32>>,
     set_cursor_icon: Option<CursorIcon>,
@@ -133,6 +136,8 @@ impl<A, N, F> Root<A, N, F>
             root_widget, theme,
             popup_widgets: PopupMap::new(),
             widget_state_map: HashMap::new(),
+            update_receiver: BusHub::new(),
+            active_widgets: ActiveWidgets::default(),
 
             set_cursor_pos: None,
             set_cursor_icon: None,

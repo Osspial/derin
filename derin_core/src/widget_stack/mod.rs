@@ -18,7 +18,7 @@ use LoopFlow;
 use std::cmp::{Ordering, Ord};
 use std::iter::{DoubleEndedIterator, ExactSizeIterator};
 use render::RenderFrame;
-use tree::{Widget, WidgetSummary, WidgetIdent, ChildEventRecv, WidgetTag, RootID, WidgetID};
+use tree::{Widget, WidgetSummary, WidgetIdent, WidgetTag, RootID, WidgetID};
 use tree::dynamic::ParentDyn;
 
 use self::inner::{NRAllocCache, NRVec};
@@ -221,19 +221,10 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
     }
 
     #[inline]
-    pub fn move_to_hover(&mut self) -> Option<WidgetPath<Widget<A, F>>> {
+    #[must_use]
+    pub(crate) fn move_to_widget(&mut self, widget_id: WidgetID) -> Option<WidgetPath<Widget<A, F>>> {
         let mut found_widget = false;
-        self.move_over_flags(ChildEventRecv::MOUSE_HOVER, |_, _| found_widget = true);
-        match found_widget {
-            false => None,
-            true => Some(self.top())
-        }
-    }
-
-    #[inline]
-    pub fn move_to_keyboard_focus(&mut self) -> Option<WidgetPath<Widget<A, F>>> {
-        let mut found_widget = false;
-        self.move_over_flags(ChildEventRecv::KEYBOARD, |_, _| found_widget = true);
+        self.move_over_widgets(Some(widget_id), |_, _, _| found_widget = true);
         match found_widget {
             false => None,
             true => Some(self.top())
@@ -283,124 +274,12 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         }
     }
 
-    /// Returns number of widgets visited. `for_each_flag` takes widget at flag, and ident path of widget.
-    pub(crate) fn move_over_flags<G>(&mut self, mut flags: ChildEventRecv, mut for_each_flag: G) -> usize
-        where G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent])
-    {
-        unimplemented!()
-        // assert_ne!(self.stack.widgets().len(), 0);
-
-        // let get_update_flags = |update: &WidgetTag| update.child_event_recv.get() | ChildEventRecv::from(update);
-        // // Remove flags from the search set that aren't found at the root of the tree.
-        // flags &= {
-        //     let root_update = self.stack.widgets().next().unwrap().widget_tag();
-        //     get_update_flags(root_update)
-        // };
-
-        // let mut widgets_visited = 0;
-        // let mut on_flag_trail = None;
-
-        // while !flags.is_empty() {
-        //     if on_flag_trail.is_none() {
-        //         // The index and update tag of the closest flagged parent
-        //         let (cfp_index, cfp_widget_tag) =
-        //             self.stack.widgets().map(|n| n.widget_tag()).enumerate().rev()
-        //                 .find(|&(_, u)| flags & (get_update_flags(u)) != ChildEventRecv::empty())
-        //                 .unwrap();
-
-        //         self.stack.truncate(cfp_index + 1);
-        //         on_flag_trail = Some(get_update_flags(cfp_widget_tag) & flags);
-        //     }
-        //     let flag_trail_flags = on_flag_trail.unwrap();
-        //     let mut remove_flags = ChildEventRecv::empty();
-        //     let top_parent_offset = self.stack.top_parent_offset();
-        //     let clip_rect = self.stack.clip_rect();
-
-        //     let mut top_widget_offset = Vector2::new(0, 0);
-        //     self.stack.try_push(|top_widget, path| {
-        //         top_widget_offset = top_widget.rect().min().to_vec();
-        //         match top_widget.as_parent_mut() {
-        //             None => {
-        //                 let widget_tags = ChildEventRecv::from(top_widget.widget_tag());
-        //                 if widget_tags & flag_trail_flags != ChildEventRecv::empty() {
-        //                     for_each_flag(
-        //                         OffsetWidget::new(
-        //                             top_widget,
-        //                             top_parent_offset,
-        //                             clip_rect
-        //                         ),
-        //                         path
-        //                     );
-
-        //                     let widget_tag = top_widget.widget_tag();
-        //                     let flags_removed = flag_trail_flags - ChildEventRecv::from(widget_tag);
-        //                     widgets_visited += 1;
-        //                     remove_flags |= flags_removed;
-        //                 }
-
-        //                 flags &= !flag_trail_flags;
-        //                 on_flag_trail = None;
-
-        //                 None
-        //             },
-        //             Some(top_widget_as_parent) => {
-        //                 let mut child_ident = None;
-
-        //                 top_widget_as_parent.children(&mut |children_summaries| {
-        //                     for child_summary in children_summaries.iter() {
-        //                         let child_flags = get_update_flags(&child_summary.widget.widget_tag());
-        //                         if child_flags & flag_trail_flags != ChildEventRecv::empty() {
-        //                             on_flag_trail = Some(child_flags & flag_trail_flags);
-        //                             child_ident = Some(child_summary.ident.clone());
-        //                             return LoopFlow::Break(());
-        //                         }
-        //                     }
-
-        //                     LoopFlow::Continue
-        //                 });
-
-        //                 if child_ident.is_none() {
-        //                     let widget_tags = ChildEventRecv::from(top_widget_as_parent.widget_tag());
-        //                     if widget_tags & flag_trail_flags != ChildEventRecv::empty() {
-        //                         for_each_flag(
-        //                             OffsetWidget::new(
-        //                                 top_widget_as_parent.as_widget(),
-        //                                 top_parent_offset,
-        //                                 clip_rect
-        //                             ),
-        //                             path
-        //                         );
-
-        //                         let widget_tag = top_widget_as_parent.widget_tag();
-        //                         let flags_removed = flag_trail_flags - ChildEventRecv::from(widget_tag);
-        //                         widgets_visited += 1;
-        //                         remove_flags |= flags_removed;
-        //                     }
-
-        //                     flags &= !flag_trail_flags;
-        //                     on_flag_trail = None;
-        //                 }
-
-        //                 match child_ident {
-        //                     Some(i) => top_widget_as_parent.child_mut(i),
-        //                     None => None
-        //                 }
-        //             }
-        //         }
-        //     });
-
-        //     flags &= !remove_flags;
-        // }
-
-        // widgets_visited
-    }
-
     pub(crate) fn move_over_widgets<I, G>(&mut self, widget_ids: I, mut for_each_widget: G)
-        where I: IntoIterator<Item=WidgetID> + ExactSizeIterator + Clone,
+        where I: IntoIterator<Item=WidgetID> + Clone,
               G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent], usize)
     {
         self.move_to_root();
-        let mut widgets_left = widget_ids.len();
+        let mut widgets_left = widget_ids.clone().into_iter().count();
         let mut child_index = 0;
         while widgets_left > 0 {
             let top_parent_offset = self.stack.top_parent_offset();

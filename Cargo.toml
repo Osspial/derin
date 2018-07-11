@@ -1,5 +1,7 @@
 [workspace]
 members = ["./derin_atlas", "./derin_common_types", "./derin_layout_engine", "./derin_macros", "./derin_core", "./derin"]
 
-[replace]
-"winit:0.11.3" = { git = "https://github.com/osspial/winit", branch="prs_merged" }
+[patch.crates-io]
+"winit" = { git = "https://github.com/osspial/winit", branch="prs_merged" }
+"cmake" = { git = "https://github.com/osspial/cmake-rs" }
+"harfbuzz-sys" = { git = "https://github.com/osspial/rust-harfbuzz" }

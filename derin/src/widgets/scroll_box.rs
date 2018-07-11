@@ -66,7 +66,7 @@ impl<W> ScrollBox<W> {
 
     /// Retrieves the scrollable widget, for mutation.
     pub fn widget_mut(&mut self) -> &mut W {
-        self.widget_tag.mark_update_child().mark_update_layout_post();
+        self.widget_tag.mark_update_child().mark_update_layout();
         self.clip.widget_mut()
     }
 
@@ -101,7 +101,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
-        self.widget_tag.mark_update_layout_post();
+        self.widget_tag.mark_update_layout();
         &mut self.rect
     }
     fn size_bounds(&self) -> SizeBounds {
@@ -235,7 +235,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
             _ => ()
         }
         if values(&self.slider_x, &self.slider_y) != start_values {
-            self.widget_tag.mark_render_self().mark_update_layout_post();
+            self.widget_tag.mark_render_self().mark_update_layout();
         }
         EventOps {
             action: None,
