@@ -223,12 +223,36 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
     #[inline]
     #[must_use]
     pub(crate) fn move_to_widget(&mut self, widget_id: WidgetID) -> Option<WidgetPath<Widget<A, F>>> {
-        let mut found_widget = false;
-        self.move_over_widgets(Some(widget_id), |_, _, _| found_widget = true);
-        match found_widget {
-            false => None,
-            true => Some(self.top())
+        self.move_to_root();
+
+        let mut child_index = 0;
+        while self.top().widget.widget_tag().widget_id() != widget_id {
+            let new_widget = self.stack.try_push(|top_widget, _| {
+                if let Some(top_widget_as_parent) = top_widget.as_parent_mut() {
+                    return top_widget_as_parent.child_by_index_mut(child_index);
+                }
+
+                None
+            });
+
+            if let Some(ref widget_path) = new_widget {
+                if widget_id == widget_path.widget.widget_tag().widget_id() {
+                    return Some(self.top());
+                }
+            }
+
+            match new_widget.is_some() {
+                true => child_index = 0,
+                false => {
+                    child_index = self.stack.top_index() + 1;
+                    if self.stack.pop().is_none() {
+                        break
+                    }
+                }
+            }
         }
+
+        None
     }
 
     pub fn move_to_path<I>(&mut self, ident_path: I) -> Option<WidgetPath<Widget<A, F>>>
@@ -287,7 +311,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
             let valid_child = self.stack.try_push(|top_widget, top_path| {
                 let top_id = top_widget.widget_tag().widget_id();
 
-                if let Some((iter_index, _)) = widget_ids.clone().into_iter().enumerate().find(|&(_, id)| id == top_id) {
+                if let Some((iter_index, wid)) = widget_ids.clone().into_iter().enumerate().find(|&(_, id)| id == top_id) {
                     for_each_widget(OffsetWidget::new(top_widget, top_parent_offset, clip_rect), top_path, iter_index);
                     widgets_left -= 1;
                 }

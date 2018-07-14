@@ -248,12 +248,19 @@ impl<A, N, F> Root<A, N, F>
                 loop {
                     // TODO: CONTINUE REMOVING move_over_flags, REPLACING WITH move_over_widgets
                     if let Some(mouse_hover) = active_widgets.mouse_hover {
-                        widget_stack.move_to_widget(mouse_hover);
+                        if let None = widget_stack.move_to_widget(mouse_hover) {
+                            active_widgets.mouse_hover = None;
+                            break;
+                        }
+
                         let widget_id = widget_stack.top().widget.widget_tag().widget_id();
 
-                        let (widget_old_pos, mbseq) = match widget_state_map.entry(widget_id).or_default().mouse_state {
-                            MouseState::Hovering(widget_old_pos, mbseq) => (widget_old_pos, mbseq),
-                            _ => unreachable!()
+                        let (widget_old_pos, mbseq) = {
+                            let ws = widget_state_map.entry(widget_id).or_default();
+                            match ws.mouse_state {
+                                MouseState::Hovering(widget_old_pos, mbseq) => (widget_old_pos, mbseq),
+                                _ => unreachable!()
+                            }
                         };
                         let move_line = Segment {
                             start: widget_old_pos,
@@ -400,9 +407,6 @@ impl<A, N, F> Root<A, N, F>
                         active_widgets.mouse_hover = Some(root_widget_id);
                         continue;
                     }
-
-                    let widget_id = widget_stack.top().widget.widget_tag().widget_id();
-
 
                     break;
                 }
