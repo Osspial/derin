@@ -19,7 +19,7 @@ use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 
 use cgmath::{EuclideanSpace, Point2};
-use cgmath_geometry::{BoundBox, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 use gl_render::PrimFrame;
 
@@ -29,7 +29,7 @@ use gl_render::PrimFrame;
 #[derive(Debug, Clone)]
 pub struct Clip<W> {
     widget_tag: WidgetTag,
-    rect: BoundBox<Point2<i32>>,
+    rect: BoundBox<D2, i32>,
     widget: W
 }
 
@@ -65,12 +65,12 @@ impl<A, F, W> Widget<A, F> for Clip<W>
     }
 
     #[inline]
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         self.rect
     }
 
     #[inline]
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         self.widget_tag.mark_update_layout();
         &mut self.rect
     }

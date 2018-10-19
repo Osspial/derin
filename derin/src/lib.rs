@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(slice_rotate, nll, range_contains, specialization)]
+#![feature(slice_rotate, nll, range_contains, specialization, never_type)]
 //! # The Derin User Interface Library
 //! The Derin User Interface Library aims to be a simple, albeit powerful, set of widgets and
 //! containers that makes it easy to design and compose your own complex desktop GUI applications.
@@ -80,5 +80,5 @@ pub mod event {
 /// The types within this module are all re-exported, either from `cgmath` or `cgmath-geometry`.
 pub mod geometry {
     pub use cgmath::{Point2, Vector2};
-    pub use cgmath_geometry::{GeoBox, DimsBox, BoundBox, OffsetBox, Line, Ray, Segment, Linear, Intersection};
+    pub use cgmath_geometry::{D2, rect, line};
 }

@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#![feature(never_type)]
 
 extern crate derin;
 extern crate gullery;
@@ -21,31 +22,31 @@ use derin::{LoopFlow, Window, WindowConfig};
 use derin::layout::{Margins, LayoutHorizontal};
 use derin::container::SingleContainer;
 use derin::widgets::{Group, DirectRender, DirectRenderState};
-use derin::geometry::{DimsBox, OffsetBox, Point2};
+use derin::geometry::{rect::{DimsBox, OffsetBox}, Point2, D2};
 
 use gullery::ContextState;
-use gullery::buffers::*;
+use gullery::buffer::*;
 use gullery::framebuffer::*;
 use gullery::program::*;
-use gullery::vao::*;
-use gullery::render_state::*;
+use gullery::vertex::*;
+use gullery::framebuffer::render_state::*;
 use std::rc::Rc;
 
 struct DD(Option<DirectDraw>);
 
 struct DirectDraw {
-    vao: VertexArrayObj<Vertex, ()>,
+    vao: VertexArrayObject<Vertex, !>,
     program: Program<Vertex, ()>
 }
 
-#[derive(TypeGroup, Debug, Clone, Copy)]
+#[derive(Vertex, Debug, Clone, Copy)]
 struct Vertex {
     pos: Point2<f32>
 }
 
 fn main() {
     let direct_draw_ui = Group::new(
-        SingleContainer::new(DirectRender::new(DD(None))),
+        SingleContainer::new(DirectRender::new(DD(None), None)),
         LayoutHorizontal::new(Margins::new(8, 8, 8, 8), Default::default())
     );
     let theme = derin::theme::Theme::default();
@@ -61,7 +62,7 @@ fn main() {
     {
         let direct = &mut window.root_mut().container_mut().widget.render_state_mut();
         direct.0 = Some(DirectDraw {
-            vao: VertexArrayObj::new_noindex(
+            vao: VertexArrayObject::new(
                 Buffer::with_data(
                     BufferUsage::StaticDraw,
                     &[
@@ -70,7 +71,8 @@ fn main() {
                         Vertex{ pos: Point2::new( 0.,  1.) },
                     ],
                     context_state.clone()
-                )
+                ),
+                None
             ),
             program: {
                 let vertex_shader = Shader::new(VERTEX_SHADER, context_state.clone()).unwrap();
@@ -87,9 +89,9 @@ fn main() {
     );
 }
 
-impl DirectRenderState for DD
+impl<A> DirectRenderState<A> for DD
 {
-    type RenderType = (DefaultFramebuffer, OffsetBox<Point2<u32>>, Rc<ContextState>);
+    type RenderType = (DefaultFramebuffer, OffsetBox<D2, u32>, Rc<ContextState>);
     fn render(&mut self, &mut (ref mut fb, viewport_rect, _): &mut Self::RenderType) {
         if let Some(ref draw_params) = self.0 {
             let render_state = RenderState {

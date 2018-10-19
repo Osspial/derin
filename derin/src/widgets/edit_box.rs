@@ -20,7 +20,7 @@ use core::popup::ChildPopupsMut;
 use core::timer::TimerRegister;
 
 use cgmath::Point2;
-use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use derin_common_types::layout::SizeBounds;
 
 use gl_render::{ThemedPrim, PrimFrame, RenderString, EditString, RelPoint, Prim};
@@ -33,18 +33,18 @@ use arrayvec::ArrayVec;
 #[derive(Debug, Clone)]
 pub struct EditBox {
     widget_tag: WidgetTag,
-    bounds: BoundBox<Point2<i32>>,
+    bounds: BoundBox<D2, i32>,
     edit: TextEditAssist,
-    min_size: DimsBox<Point2<i32>>
+    min_size: DimsBox<D2, i32>
 }
 
 /// Single-line editable text widget.
 #[derive(Debug, Clone)]
 pub struct LineBox {
     widget_tag: WidgetTag,
-    bounds: BoundBox<Point2<i32>>,
+    bounds: BoundBox<D2, i32>,
     edit: TextEditAssist<LineCharFilter>,
-    min_size: DimsBox<Point2<i32>>
+    min_size: DimsBox<D2, i32>
 }
 
 impl EditBox {
@@ -193,12 +193,12 @@ impl<A, F> Widget<A, F> for EditBox
     }
 
     #[inline]
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         self.bounds
     }
 
     #[inline]
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         &mut self.bounds
     }
 
@@ -219,12 +219,12 @@ impl<A, F> Widget<A, F> for LineBox
     }
 
     #[inline]
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         self.bounds
     }
 
     #[inline]
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         &mut self.bounds
     }
 

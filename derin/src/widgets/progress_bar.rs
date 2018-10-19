@@ -18,7 +18,7 @@ use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 
 use cgmath::Point2;
-use cgmath_geometry::BoundBox;
+use cgmath_geometry::{D2, rect::BoundBox};
 
 use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 
@@ -27,7 +27,7 @@ use arrayvec::ArrayVec;
 #[derive(Debug, Clone)]
 pub struct ProgressBar {
     widget_tag: WidgetTag,
-    bounds: BoundBox<Point2<i32>>,
+    bounds: BoundBox<D2, i32>,
 
     value: f32,
     min: f32,
@@ -88,12 +88,12 @@ impl<A, F> Widget<A, F> for ProgressBar
     }
 
     #[inline]
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         self.bounds
     }
 
     #[inline]
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         &mut self.bounds
     }
 

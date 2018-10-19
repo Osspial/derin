@@ -16,11 +16,10 @@ mod image;
 mod text;
 
 use cgmath::{Point2, EuclideanSpace};
-use cgmath_geometry::{GeoBox, OffsetBox, BoundBox};
+use cgmath_geometry::{D2, rect::{GeoBox, OffsetBox, BoundBox}};
 use glyphydog::{ShapedBuffer, Shaper, FaceSize, DPI};
 
-use gullery::glsl::Nu8;
-use gullery::colors::Rgba;
+use gullery::image_format::Rgba;
 
 use gl_render::{FrameDraw, GLFrame, PrimFrame};
 
@@ -42,7 +41,7 @@ pub struct ThemedPrim<D> {
     pub max: Point2<RelPoint>,
     pub prim: Prim<D>,
     /// Optionally outputs the widget's transformed pixel rectangle.
-    pub rect_px_out: Option<*mut BoundBox<Point2<i32>>>
+    pub rect_px_out: Option<*mut BoundBox<D2, i32>>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -81,8 +80,8 @@ impl Translator {
 
     pub(in gl_render) fn translate_prims(
         &mut self,
-        parent_rect: BoundBox<Point2<i32>>,
-        clip_rect: BoundBox<Point2<i32>>,
+        parent_rect: BoundBox<D2, i32>,
+        clip_rect: BoundBox<D2, i32>,
         theme: &Theme,
         dpi: DPI,
         prims: impl IntoIterator<Item=ThemedPrim<<GLFrame as PrimFrame>::DirectRender>>,
@@ -127,7 +126,7 @@ impl Translator {
                             abs_rect,
                             parent_clipped,
                             atlas_rect,
-                            Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                            Rgba::new(255, 255, 255, 255),
                             image.rescale
                         );
                         if let (Some(rect_px_out), Some(image_rect)) = (prim.rect_px_out, image_translate.rect()) {

@@ -16,7 +16,7 @@ use gl_render::EditString;
 use event::{Key, ModifierKeys, WidgetEvent, FocusChange, InputState};
 use theme::CursorIcon;
 use clipboard::{ClipboardContext, ClipboardProvider};
-use cgmath_geometry::Segment;
+use cgmath_geometry::line::Segment;
 
 pub trait CharFilter {
     fn char_allowed(&mut self, c: char) -> bool;

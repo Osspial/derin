@@ -27,19 +27,18 @@ use derin_common_types::layout::SizeBounds;
 use cgmath::{Array, Bounded, Point2, Vector2, EuclideanSpace};
 
 use gullery::ContextState;
-use gullery::render_state::{RenderState, BlendFunc, BlendFuncs};
+use gullery::framebuffer::render_state::{RenderState, BlendFunc, BlendFuncs};
 use gullery::program::{Shader, Program};
-use gullery::textures::Texture;
-use gullery::textures::targets::SimpleTex;
+use gullery::texture::Texture;
+use gullery::texture::targets::SimpleTex;
 use gullery::framebuffer::{DrawMode, Framebuffer, DefaultFramebuffer};
-use gullery::buffers::{Buffer, BufferUsage};
-use gullery::vao::VertexArrayObj;
-use gullery::glsl::Nu8;
-use gullery::colors::Rgba;
+use gullery::buffer::{Buffer, BufferUsage};
+use gullery::vertex::VertexArrayObject;
+use gullery::image_format::Rgba;
 
 use glyphydog::DPI;
 
-use cgmath_geometry::{BoundBox, OffsetBox, DimsBox, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, OffsetBox, DimsBox, GeoBox}};
 
 use glutin::*;
 
@@ -71,19 +70,19 @@ struct FrameDraw {
 
     // OpenGL structs
     context_state: Rc<ContextState>,
-    gl_tex_atlas: Texture<Rgba<Nu8>, SimpleTex<DimsBox<Point2<u32>>>>,
+    gl_tex_atlas: Texture<SimpleTex<D2, Rgba<u8>>>,
     render_state: RenderState,
     fb: DefaultFramebuffer,
     program: Program<GLVertex, GLUniforms<'static>>,
-    vao: VertexArrayObj<GLVertex, ()>,
-    window_dims: DimsBox<Point2<u32>>,
+    vao: VertexArrayObject<GLVertex, !>,
+    window_dims: DimsBox<D2, u32>,
     scale_factor: f32
 }
 
-#[derive(TypeGroup, Debug, Clone, Copy)]
+#[derive(Vertex, Debug, Clone, Copy)]
 struct GLVertex {
-    loc: Point2<i32>,
-    color: Rgba<Nu8>,
+    loc: Point2<f32>,
+    color: Rgba<u8>,
     tex_coord: Point2<f32>
 }
 
@@ -91,7 +90,7 @@ struct GLVertex {
 struct GLUniforms<'a> {
     atlas_size: Vector2<u32>,
     window_size: Point2<f32>,
-    tex_atlas: &'a Texture<Rgba<Nu8>, SimpleTex<DimsBox<Point2<u32>>>>
+    tex_atlas: &'a Texture<SimpleTex<D2, Rgba<u8>>>
 }
 
 pub trait PrimFrame: RenderFrame<Primitive=ThemedPrim<<Self as PrimFrame>::DirectRender>, Theme=Theme> {
@@ -160,7 +159,7 @@ impl GLRenderer {
                     atlas: Atlas::new(),
                     font_cache: FontCache::new(),
                     fb: DefaultFramebuffer::new(context_state.clone()),
-                    vao: VertexArrayObj::new_noindex(Buffer::with_size(BufferUsage::StreamDraw, 2048 * 3, context_state.clone())),
+                    vao: VertexArrayObject::new(Buffer::with_size(BufferUsage::StreamDraw, 2048 * 3, context_state.clone()), None),
                     render_state: RenderState {
                         blend: Some(BlendFuncs {
                             src_rgb: BlendFunc::SrcAlpha,
@@ -221,11 +220,11 @@ impl Renderer for GLRenderer {
         self.window.set_cursor_state(CursorState::Normal).ok();
         self.window.set_cursor(glutin_icon);
     }
-    fn resized(&mut self, new_size: DimsBox<Point2<u32>>) {
+    fn resized(&mut self, new_size: DimsBox<D2, u32>) {
         self.window.context().resize(new_size.width(), new_size.height());
     }
 
-    fn dims(&self) -> DimsBox<Point2<u32>> {
+    fn dims(&self) -> DimsBox<D2, u32> {
         let (width, height) = self.window.get_inner_size().unwrap();
         DimsBox::new2(width, height)
     }
@@ -251,7 +250,7 @@ impl Renderer for GLRenderer {
         }
     }
 
-    fn make_frame(&mut self, draw_output: bool) -> (&mut GLFrame, BoundBox<Point2<i32>>) {
+    fn make_frame(&mut self, draw_output: bool) -> (&mut GLFrame, BoundBox<D2, i32>) {
         let (width, height) = self.window.get_inner_size().unwrap();
         let scale_factor = self.window.hidpi_factor();
         self.frame.draw.window_dims = DimsBox::new2(width, height);
@@ -297,14 +296,14 @@ impl FrameDraw {
 }
 
 impl PrimFrame for GLFrame {
-    type DirectRender = (DefaultFramebuffer, OffsetBox<Point2<u32>>, Rc<ContextState>);
+    type DirectRender = (DefaultFramebuffer, OffsetBox<D2, u32>, Rc<ContextState>);
 }
 
 impl RenderFrame for GLFrame {
     type Primitive = ThemedPrim<<Self as PrimFrame>::DirectRender>;
     type Theme = Theme;
 
-    fn upload_primitives<I>(&mut self, _ident: &[WidgetIdent], theme: &Theme, transform: BoundBox<Point2<i32>>, clip_rect: BoundBox<Point2<i32>>, prim_iter: I)
+    fn upload_primitives<I>(&mut self, _ident: &[WidgetIdent], theme: &Theme, transform: BoundBox<D2, i32>, clip_rect: BoundBox<D2, i32>, prim_iter: I)
         where I: Iterator<Item=ThemedPrim<<GLFrame as PrimFrame>::DirectRender>>
     {
         let dpi_axis = 72;// (72. * self.draw.scale_factor) as u32;
@@ -322,7 +321,7 @@ impl RenderFrame for GLFrame {
 
 const VERT_SHADER: &str = r#"
     #version 140
-    in ivec2 loc;
+    in vec2 loc;
     in vec4 color;
     in vec2 tex_coord;
 

@@ -19,7 +19,7 @@ use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 
 use cgmath::Point2;
-use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use derin_common_types::layout::{SizeBounds, WidgetPos};
 
 use container::WidgetContainer;
@@ -40,7 +40,7 @@ pub struct Group<C, L>
     where L: GridLayout
 {
     widget_tag: WidgetTag,
-    bounds: BoundBox<Point2<i32>>,
+    bounds: BoundBox<D2, i32>,
     layout_engine: GridEngine,
     container: C,
     layout: L
@@ -85,12 +85,12 @@ impl<A, F, C, L> Widget<A, F> for Group<C, L>
     }
 
     #[inline]
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         self.bounds
     }
 
     #[inline]
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         self.widget_tag.mark_update_layout();
         &mut self.bounds
     }
@@ -177,7 +177,7 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
         struct HeapCache {
             update_heap_cache: UpdateHeapCache,
             hints_vec: Vec<WidgetPos>,
-            rects_vec: Vec<Result<BoundBox<Point2<i32>>, SolveError>>
+            rects_vec: Vec<Result<BoundBox<D2, i32>, SolveError>>
         }
         thread_local! {
             static HEAP_CACHE: RefCell<HeapCache> = RefCell::new(HeapCache::default());

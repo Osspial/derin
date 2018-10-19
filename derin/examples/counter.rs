@@ -19,7 +19,7 @@ extern crate derin_macros;
 use derin::{Window, WindowConfig, LoopFlow};
 use derin::layout::{Margins, LayoutHorizontal};
 use derin::widgets::{Button, Group, Label, Contents};
-use derin::geometry::DimsBox;
+use derin::geometry::rect::DimsBox;
 
 #[derive(WidgetContainer)]
 #[derin(action = "i32")]

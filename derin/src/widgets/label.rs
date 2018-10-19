@@ -19,7 +19,7 @@ use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 
 use cgmath::Point2;
-use cgmath_geometry::{BoundBox, DimsBox};
+use cgmath_geometry::{D2, rect::{BoundBox, DimsBox}};
 use derin_common_types::layout::SizeBounds;
 
 use gl_render::PrimFrame;
@@ -30,9 +30,9 @@ use gl_render::PrimFrame;
 #[derive(Debug, Clone)]
 pub struct Label {
     widget_tag: WidgetTag,
-    bounds: BoundBox<Point2<i32>>,
+    bounds: BoundBox<D2, i32>,
     contents: ContentsInner,
-    min_size: DimsBox<Point2<i32>>
+    min_size: DimsBox<D2, i32>
 }
 
 impl Label {
@@ -70,12 +70,12 @@ impl<A, F> Widget<A, F> for Label
     }
 
     #[inline]
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         self.bounds
     }
 
     #[inline]
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         &mut self.bounds
     }
 

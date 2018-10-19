@@ -30,13 +30,13 @@ use std::time::Duration;
 use std::collections::HashMap;
 use std::rc::Rc;
 use cgmath::{Point2, Vector2};
-use cgmath_geometry::{DimsBox, GeoBox};
+use cgmath_geometry::{D2, rect::{DimsBox, GeoBox}};
 
 use parking_lot::Mutex;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WindowConfig {
-    pub dimensions: Option<DimsBox<Point2<u32>>>,
+    pub dimensions: Option<DimsBox<D2, u32>>,
     pub title: String,
 
     pub multisampling: u16,

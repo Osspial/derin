@@ -55,7 +55,7 @@ fn main() {
     image::save_buffer("./skyline_atlas.bmp", unsafe{slice::from_raw_parts(pixels.as_ptr() as *const u8, pixels.len() * 4)}, 512, 512, ColorType::RGBA(8)).unwrap();
 }
 
-fn extract_buffer(img: DynamicImage) -> (DimsBox<Point2<u32>>, Vec<[u8; 4]>) {
+fn extract_buffer(img: DynamicImage) -> (DimsBox<D2, u32>, Vec<[u8; 4]>) {
     match img {
         DynamicImage::ImageRgba8(img) => {
             let rect = DimsBox::new2(img.width(), img.height());

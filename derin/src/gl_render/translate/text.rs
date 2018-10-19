@@ -18,10 +18,9 @@ use gl_render::translate::image::ImageTranslate;
 use theme::{ThemeText, RescaleRules, LineWrap};
 
 use cgmath::{EuclideanSpace, ElementWise, Point2, Vector2};
-use cgmath_geometry::{BoundBox, DimsBox, OffsetBox, Segment, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, OffsetBox, GeoBox}, line::Segment};
 
-use gullery::colors::Rgba;
-use gullery::glsl::Nu8;
+use gullery::image_format::Rgba;
 
 use glyphydog::{ShapedBuffer, ShapedGlyph, Face, FaceSize, DPI, LoadFlags, RenderMode};
 use derin_common_types::layout::Align;
@@ -55,7 +54,7 @@ pub(in gl_render) struct TextTranslate<'a> {
 #[derive(Debug, Clone, Copy)]
 pub struct RenderGlyph {
     pos: Point2<i32>,
-    highlight_rect: BoundBox<Point2<i32>>,
+    highlight_rect: BoundBox<D2, i32>,
     str_index: usize,
     glyph_index: Option<u32>,
 }
@@ -73,7 +72,7 @@ pub struct EditString {
 pub struct RenderString {
     pub offset: Vector2<i32>,
     string: String,
-    min_size: DimsBox<Point2<i32>>,
+    min_size: DimsBox<D2, i32>,
     draw_data: Option<StringDrawData>
 }
 
@@ -82,13 +81,13 @@ struct StringDrawData {
     shaped_glyphs: Vec<RenderGlyph>,
     text_style: ThemeText,
     dpi: DPI,
-    draw_rect: BoundBox<Point2<i32>>,
-    text_rect: Option<BoundBox<Point2<i32>>>
+    draw_rect: BoundBox<D2, i32>,
+    text_rect: Option<BoundBox<D2, i32>>
 }
 
 struct GlyphDraw<'a> {
-    rect: BoundBox<Point2<i32>>,
-    clip_rect: BoundBox<Point2<i32>>,
+    rect: BoundBox<D2, i32>,
+    clip_rect: BoundBox<D2, i32>,
     face: &'a mut Face<Any>,
     atlas: &'a mut Atlas,
     text_style: ThemeText,
@@ -110,7 +109,7 @@ struct GlyphIter {
     font_descender: i32,
     line_height: i32,
 
-    text_rect: Option<BoundBox<Point2<i32>>>,
+    text_rect: Option<BoundBox<D2, i32>>,
 
     tab_advance: i32,
     bounds_width: i32,
@@ -174,8 +173,8 @@ struct Run {
 
 impl<'a> TextTranslate<'a> {
     pub fn new_rs<'b, F>(
-        rect: BoundBox<Point2<i32>>,
-        clip_rect: BoundBox<Point2<i32>>,
+        rect: BoundBox<D2, i32>,
+        clip_rect: BoundBox<D2, i32>,
         text_style: ThemeText,
         face: &'a mut Face<Any>,
         dpi: DPI,
@@ -189,8 +188,8 @@ impl<'a> TextTranslate<'a> {
     }
 
     pub fn new_es<'b, F>(
-        rect: BoundBox<Point2<i32>>,
-        clip_rect: BoundBox<Point2<i32>>,
+        rect: BoundBox<D2, i32>,
+        clip_rect: BoundBox<D2, i32>,
         text_style: ThemeText,
         face: &'a mut Face<Any>,
         dpi: DPI,
@@ -212,8 +211,8 @@ impl<'a> TextTranslate<'a> {
     }
 
     fn new_raw<'b, F>(
-        mut rect: BoundBox<Point2<i32>>,
-        clip_rect: BoundBox<Point2<i32>>,
+        mut rect: BoundBox<D2, i32>,
+        clip_rect: BoundBox<D2, i32>,
         text_style: ThemeText,
         face: &'a mut Face<Any>,
         dpi: DPI,
@@ -258,7 +257,7 @@ impl<'a> TextTranslate<'a> {
 
 impl GlyphIter {
     fn new(
-        rect: BoundBox<Point2<i32>>,
+        rect: BoundBox<D2, i32>,
         shaped_text: &ShapedBuffer,
         text_style: &ThemeText,
         face: &mut Face<Any>,
@@ -493,14 +492,14 @@ impl GlyphIter {
         }
     }
 
-    fn highlight_rect(&self, glyph_pos: Point2<i32>, glyph_advance: i32) -> BoundBox<Point2<i32>> {
+    fn highlight_rect(&self, glyph_pos: Point2<i32>, glyph_advance: i32) -> BoundBox<D2, i32> {
         BoundBox::new2(
             glyph_pos.x, glyph_pos.y - self.font_ascender,
             glyph_pos.x + glyph_advance, glyph_pos.y - self.font_descender
         )
     }
 
-    fn update_text_rect(&mut self, glyph_rect: BoundBox<Point2<i32>>) {
+    fn update_text_rect(&mut self, glyph_rect: BoundBox<D2, i32>) {
         match self.text_rect {
             None => self.text_rect = Some(glyph_rect),
             Some(ref mut rect) => {
@@ -775,7 +774,7 @@ impl Run {
 }
 
 impl<'a> GlyphDraw<'a> {
-    fn glyph_atlas_image(&mut self, mut glyph_pos: Point2<i32>, glyph_index: u32, is_highlighted: bool, rect: BoundBox<Point2<i32>>) -> ImageTranslate {
+    fn glyph_atlas_image(&mut self, mut glyph_pos: Point2<i32>, glyph_index: u32, is_highlighted: bool, rect: BoundBox<D2, i32>) -> ImageTranslate {
         let GlyphDraw {
             ref mut face,
             ref mut atlas,
@@ -813,10 +812,10 @@ impl<'a> GlyphDraw<'a> {
                         (
                             bytes.chunks(pitch)
                                 .map(move |b|
-                                    Nu8::slice_from_raw(&b[..dims.width() as usize])
+                                    b[..dims.width() as usize]
                                         // We upload white glyphs to the atlas, which are colored by
                                         // vertex colors.
-                                        .into_iter().map(|t| Rgba::new(Nu8(255), Nu8(255), Nu8(255), *t))
+                                        .into_iter().map(|t| Rgba::new(255, 255, 255, *t))
                                 ),
                             bitmap.dims,
                             glyph_metrics.hori_bearing / 64
@@ -895,17 +894,17 @@ impl RenderString {
     }
 
     #[inline]
-    pub fn min_size(&self) -> DimsBox<Point2<i32>> {
+    pub fn min_size(&self) -> DimsBox<D2, i32> {
         self.min_size
     }
 
     #[inline]
-    pub fn text_rect(&self) -> Option<BoundBox<Point2<i32>>> {
+    pub fn text_rect(&self) -> Option<BoundBox<D2, i32>> {
         self.draw_data.as_ref().and_then(|d| d.text_rect)
     }
 
     fn reshape_glyphs<'a, F>(&mut self,
-        rect: BoundBox<Point2<i32>>,
+        rect: BoundBox<D2, i32>,
         shape_text: F,
         text_style: &ThemeText,
         face: &mut Face<Any>,
@@ -1162,7 +1161,7 @@ impl EditString {
         }
     }
 
-    pub fn select_on_line(&mut self, segment: Segment<Point2<i32>>) {
+    pub fn select_on_line(&mut self, segment: Segment<D2, i32>) {
         let shaped_glyphs = match self.render_string.draw_data {
             Some(ref draw_data) => &draw_data.shaped_glyphs,
             None => {self.highlight_range = 0..0; return}

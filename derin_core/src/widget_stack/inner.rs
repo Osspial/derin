@@ -17,7 +17,7 @@ use render::RenderFrame;
 use tree::{Widget, WidgetIdent, WidgetSummary, RootID, Update};
 
 use cgmath::{Bounded, EuclideanSpace, Point2, Vector2};
-use cgmath_geometry::{BoundBox, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 use offset_widget::{OffsetWidget, OffsetWidgetTrait};
 
@@ -31,8 +31,8 @@ struct StackElement<A, F: RenderFrame> {
 
 #[derive(Debug, Clone, Copy)]
 struct ElementRects {
-    bounds: BoundBox<Point2<i32>>,
-    bounds_clipped: Option<BoundBox<Point2<i32>>>
+    bounds: BoundBox<D2, i32>,
+    bounds_clipped: Option<BoundBox<D2, i32>>
 }
 
 pub(crate) struct NRAllocCache<A, F: RenderFrame> {
@@ -44,7 +44,7 @@ pub struct NRVec<'a, A: 'static, F: 'a + RenderFrame> {
     cache: &'a mut Vec<StackElement<A, F>>,
     vec: Vec<StackElement<A, F>>,
     ident_vec: &'a mut Vec<WidgetIdent>,
-    clip_rect: Option<BoundBox<Point2<i32>>>,
+    clip_rect: Option<BoundBox<D2, i32>>,
     top_parent_offset: Vector2<i32>,
     root_id: RootID
 }
@@ -149,7 +149,7 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn clip_rect(&self) -> Option<BoundBox<Point2<i32>>> {
+    pub fn clip_rect(&self) -> Option<BoundBox<D2, i32>> {
         self.clip_rect
     }
 

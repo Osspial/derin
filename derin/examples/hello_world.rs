@@ -16,7 +16,7 @@ extern crate derin;
 
 use derin::{Window, WindowConfig, LoopFlow};
 use derin::widgets::{Button, Contents};
-use derin::geometry::DimsBox;
+use derin::geometry::rect::DimsBox;
 
 fn main() {
     let print_string = "Prints to the console.";

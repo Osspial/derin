@@ -20,7 +20,7 @@ use core::popup::ChildPopupsMut;
 use theme::RescaleRules;
 
 use cgmath::Point2;
-use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 
 use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 
@@ -43,7 +43,7 @@ pub trait SliderHandler: 'static {
 #[derive(Debug, Clone)]
 pub struct Slider<H: SliderHandler> {
     widget_tag: WidgetTag,
-    bounds: BoundBox<Point2<i32>>,
+    bounds: BoundBox<D2, i32>,
 
     assist: SliderAssist,
     handler: H
@@ -129,12 +129,12 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
     }
 
     #[inline]
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         self.bounds
     }
 
     #[inline]
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         &mut self.bounds
     }
 

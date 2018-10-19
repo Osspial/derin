@@ -25,7 +25,7 @@ use derin_common_types::buttons::{Key, ModifierKeys};
 use derin_common_types::layout::SizeBounds;
 
 use cgmath::{Point2, Vector2, EuclideanSpace};
-use cgmath_geometry::{BoundBox, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 use arrayvec::ArrayVec;
 
@@ -33,12 +33,12 @@ use arrayvec::ArrayVec;
 pub struct OffsetWidget<'a, W: 'a + ?Sized> {
     widget: &'a mut W,
     offset: Vector2<i32>,
-    clip: Option<BoundBox<Point2<i32>>>
+    clip: Option<BoundBox<D2, i32>>
 }
 
 impl<'a, W: ?Sized> OffsetWidget<'a, W> {
     #[inline]
-    pub fn new(widget: &'a mut W, offset: Vector2<i32>, clip: Option<BoundBox<Point2<i32>>>) -> OffsetWidget<'a, W> {
+    pub fn new(widget: &'a mut W, offset: Vector2<i32>, clip: Option<BoundBox<D2, i32>>) -> OffsetWidget<'a, W> {
         OffsetWidget {
             widget,
             offset,
@@ -63,9 +63,9 @@ pub trait OffsetWidgetTrait<A, F>
     type Widget: Widget<A, F> + ?Sized;
 
     fn widget_tag(&self) -> &WidgetTag;
-    fn rect(&self) -> BoundBox<Point2<i32>>;
-    fn rect_clipped(&self) -> Option<BoundBox<Point2<i32>>>;
-    fn set_rect(&mut self, rect: BoundBox<Point2<i32>>);
+    fn rect(&self) -> BoundBox<D2, i32>;
+    fn rect_clipped(&self) -> Option<BoundBox<D2, i32>>;
+    fn set_rect(&mut self, rect: BoundBox<D2, i32>);
     // fn render(&mut self, frame: &mut FrameRectStack<F>) {
     //     self.widget.render(frame);
     // }
@@ -113,13 +113,13 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
     fn widget_tag(&self) -> &WidgetTag {
         self.widget.widget_tag()
     }
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         self.widget.rect() + self.offset
     }
-    fn rect_clipped(&self) -> Option<BoundBox<Point2<i32>>> {
+    fn rect_clipped(&self) -> Option<BoundBox<D2, i32>> {
         self.clip.and_then(|clip_rect| clip_rect.intersect_rect(self.rect()))
     }
-    fn set_rect(&mut self, rect: BoundBox<Point2<i32>>) {
+    fn set_rect(&mut self, rect: BoundBox<D2, i32>) {
         *self.widget.rect_mut() = rect - self.offset;
     }
     // fn render(&mut self, frame: &mut FrameRectStack<F>) {

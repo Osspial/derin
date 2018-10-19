@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use cgmath::{Point2, Array, Bounded};
-use cgmath_geometry::{GeoBox, DimsBox, Segment};
+use cgmath_geometry::{rect::{GeoBox, DimsBox}, line::Segment};
 
 use std::cmp::Ordering;
 

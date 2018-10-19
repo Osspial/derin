@@ -20,7 +20,7 @@ use core::render::{FrameRectStack, Theme};
 use core::popup::ChildPopupsMut;
 
 use cgmath::Point2;
-use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use derin_common_types::layout::SizeBounds;
 
 use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
@@ -59,7 +59,7 @@ impl<A: 'static> ButtonHandler<A> for () {
 #[derive(Debug, Clone)]
 pub struct Button<H> {
     widget_tag: WidgetTag,
-    bounds: BoundBox<Point2<i32>>,
+    bounds: BoundBox<D2, i32>,
     state: ButtonState,
     handler: H,
     contents: ContentsInner,
@@ -105,12 +105,12 @@ impl<A, F, H> Widget<A, F> for Button<H>
     }
 
     #[inline]
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         self.bounds
     }
 
     #[inline]
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         &mut self.bounds
     }
 

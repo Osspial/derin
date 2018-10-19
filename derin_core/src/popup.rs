@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use cgmath::Point2;
-use cgmath_geometry::BoundBox;
+use cgmath_geometry::{D2, rect::BoundBox};
 
 use tree::{WidgetID, Widget, WidgetIdent};
 use render::RenderFrame;
@@ -24,7 +24,7 @@ id!(pub PopupID);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PopupAttributes {
-    pub rect: BoundBox<Point2<i32>>,
+    pub rect: BoundBox<D2, i32>,
     pub title: String,
     pub decorations: bool,
     // pub tool_window: bool,

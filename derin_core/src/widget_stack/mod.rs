@@ -25,7 +25,7 @@ use self::inner::{NRAllocCache, NRVec};
 pub use self::inner::WidgetPath;
 
 use cgmath::{Vector2, EuclideanSpace};
-use cgmath_geometry::{BoundBox, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 use offset_widget::{OffsetWidget, OffsetWidgetTrait, OffsetWidgetTraitAs};
 
 pub(crate) struct WidgetStackBase<A, F: RenderFrame> {
@@ -318,8 +318,8 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
             let mut top_widget_offset = Vector2::new(0, 0);
             self.stack.try_push(|top_widget, path| {
                 top_widget_offset = top_widget.rect().min().to_vec();
-                match top_widget.as_parent_mut() {
-                    None => {
+                match top_widget.as_parent_mut().is_some() {
+                    false => {
                         let widget_tags = ChildEventRecv::from(top_widget.widget_tag());
                         if widget_tags & flag_trail_flags != ChildEventRecv::empty() {
                             for_each_flag(
@@ -342,7 +342,8 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
 
                         None
                     },
-                    Some(top_widget_as_parent) => {
+                    true => {
+                        let top_widget_as_parent = top_widget.as_parent_mut().unwrap();
                         let mut child_ident = None;
 
                         top_widget_as_parent.children(&mut |children_summaries| {

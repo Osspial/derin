@@ -15,11 +15,9 @@
 //! Types used to specify how widgets should be drawn.
 
 use png;
-use gullery::colors::Rgba;
-use gullery::glsl::Nu8;
+use gullery::image_format::Rgba;
 
-use cgmath::Point2;
-use cgmath_geometry::DimsBox;
+use cgmath_geometry::{D2, rect::DimsBox};
 use derin_common_types::layout::{Align, Align2, Margins, SizeBounds};
 
 use std::io;
@@ -34,15 +32,14 @@ use core::render::Theme as CoreTheme;
 pub use derin_common_types::cursor::CursorIcon;
 
 pub mod color {
-    pub use gullery::colors::Rgba;
-    pub use gullery::glsl::Nu8;
+    pub use gullery::image_format::Rgba;
 }
 
 /// An RGBA representation of an image.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Image {
-    pub pixels: Vec<Rgba<Nu8>>,
-    pub dims: DimsBox<Point2<u32>>,
+    pub pixels: Vec<Rgba<u8>>,
+    pub dims: DimsBox<D2, u32>,
     pub rescale: RescaleRules,
     pub size_bounds: SizeBounds
 }
@@ -76,11 +73,11 @@ pub struct ThemeText {
     /// A handle to the font face used to draw the text.
     pub face: ThemeFace,
     /// The color to draw text.
-    pub color: Rgba<Nu8>,
+    pub color: Rgba<u8>,
     /// The color of the highlight when highlighting text.
-    pub highlight_bg_color: Rgba<Nu8>,
+    pub highlight_bg_color: Rgba<u8>,
     /// The color of highlighted text.
-    pub highlight_text_color: Rgba<Nu8>,
+    pub highlight_text_color: Rgba<u8>,
     /// The size of the text being drawn, in 64ths of a [point].
     ///
     /// [point]: https://en.wikipedia.org/wiki/Point_(typography)
@@ -282,9 +279,9 @@ impl Default for Theme {
                     ThemeWidget {
                         text: Some(ThemeText {
                             face: font.clone(),
-                            color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
-                            highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
-                            highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                            color: Rgba::new(0, 0, 0, 255),
+                            highlight_bg_color: Rgba::new(0, 120, 215, 255),
+                            highlight_text_color: Rgba::new(255, 255, 255, 255),
                             face_size: 16 * 64,
                             tab_size: 8,
                             justify: $text_align,
@@ -346,9 +343,9 @@ impl Default for Theme {
             ThemeWidget {
                 text: Some(ThemeText {
                     face: font.clone(),
-                    color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
-                    highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
-                    highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                    color: Rgba::new(0, 0, 0, 255),
+                    highlight_bg_color: Rgba::new(0, 120, 215, 255),
+                    highlight_text_color: Rgba::new(255, 255, 255, 255),
                     face_size: 16 * 64,
                     tab_size: 8,
                     justify: Align2::new(Align::Center, Align::Start),
@@ -363,9 +360,9 @@ impl Default for Theme {
             ThemeWidget {
                 text: Some(ThemeText {
                     face: font.clone(),
-                    color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
-                    highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
-                    highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                    color: Rgba::new(0, 0, 0, 255),
+                    highlight_bg_color: Rgba::new(0, 120, 215, 255),
+                    highlight_text_color: Rgba::new(255, 255, 255, 255),
                     face_size: 16 * 64,
                     tab_size: 8,
                     justify: Align2::new(Align::Start, Align::Center),
@@ -405,9 +402,9 @@ impl Default for Theme {
             ThemeWidget {
                 text: Some(ThemeText {
                     face: font.clone(),
-                    color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
-                    highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
-                    highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                    color: Rgba::new(0, 0, 0, 255),
+                    highlight_bg_color: Rgba::new(0, 120, 215, 255),
+                    highlight_text_color: Rgba::new(255, 255, 255, 255),
                     face_size: 16 * 64,
                     tab_size: 8,
                     justify: Align2::new(Align::Start, Align::Center),
@@ -472,9 +469,9 @@ impl Default for Theme {
                     ThemeWidget {
                         text: Some(ThemeText {
                             face: font.clone(),
-                            color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
-                            highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
-                            highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                            color: Rgba::new(0, 0, 0, 255),
+                            highlight_bg_color: Rgba::new(0, 120, 215, 255),
+                            highlight_text_color: Rgba::new(255, 255, 255, 255),
                             face_size: 16 * 64,
                             tab_size: 8,
                             justify: Align2::new(Align::Center, Align::Center),
@@ -502,9 +499,9 @@ impl Default for Theme {
             ThemeWidget {
                 text: Some(ThemeText {
                     face: font.clone(),
-                    color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
-                    highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
-                    highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                    color: Rgba::new(0, 0, 0, 255),
+                    highlight_bg_color: Rgba::new(0, 120, 215, 255),
+                    highlight_text_color: Rgba::new(255, 255, 255, 255),
                     face_size: 16 * 64,
                     tab_size: 8,
                     justify: Align2::new(Align::Start, Align::Start),
@@ -527,9 +524,9 @@ impl Default for Theme {
             ThemeWidget {
                 text: Some(ThemeText {
                     face: font.clone(),
-                    color: Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(255)),
-                    highlight_bg_color: Rgba::new(Nu8(0), Nu8(120), Nu8(215), Nu8(255)),
-                    highlight_text_color: Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255)),
+                    color: Rgba::new(0, 0, 0, 255),
+                    highlight_bg_color: Rgba::new(0, 120, 215, 255),
+                    highlight_text_color: Rgba::new(255, 255, 255, 255),
                     face_size: 16 * 64,
                     tab_size: 8,
                     justify: Align2::new(Align::Start, Align::Start),
@@ -553,7 +550,7 @@ impl Default for Theme {
 }
 
 impl Image {
-    pub fn min_size(&self) -> DimsBox<Point2<i32>> {
+    pub fn min_size(&self) -> DimsBox<D2, i32> {
         self.size_bounds.min
         // match self.rescale {
         //     RescaleRules::Align(_) => self.dims.cast().unwrap_or(DimsBox::new2(i32::max_value(), i32::max_value())),

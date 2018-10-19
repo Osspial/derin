@@ -14,7 +14,7 @@
 
 use widgets::assistants::ButtonState;
 use cgmath::Point2;
-use cgmath_geometry::{BoundBox, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 use core::LoopFlow;
 use core::event::{EventOps, WidgetEvent, InputState};
@@ -42,7 +42,7 @@ pub struct TabPage<W> {
     pub page: W,
     open: bool,
     button_state: ButtonState,
-    rect: BoundBox<Point2<i32>>
+    rect: BoundBox<D2, i32>
 }
 
 /// A list of tabs.
@@ -52,7 +52,7 @@ pub struct TabPage<W> {
 #[derive(Debug, Clone)]
 pub struct TabList<W> {
     widget_tag: WidgetTag,
-    rect: BoundBox<Point2<i32>>,
+    rect: BoundBox<D2, i32>,
     layout_engine: GridEngine,
 
     tabs: Vec<TabPage<W>>
@@ -120,12 +120,12 @@ impl<A, F, W> Widget<A, F> for TabList<W>
     }
 
     #[inline]
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         self.rect
     }
 
     #[inline]
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         self.widget_tag.mark_update_layout().mark_render_self();
         &mut self.rect
     }
@@ -344,7 +344,7 @@ impl<A, F, W> Parent<A, F> for TabList<W>
         struct HeapCache {
             update_heap_cache: UpdateHeapCache,
             hints_vec: Vec<WidgetPos>,
-            rects_vec: Vec<Result<BoundBox<Point2<i32>>, SolveError>>
+            rects_vec: Vec<Result<BoundBox<D2, i32>, SolveError>>
         }
         thread_local! {
             static HEAP_CACHE: RefCell<HeapCache> = RefCell::new(HeapCache::default());

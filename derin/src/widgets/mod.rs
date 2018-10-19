@@ -43,7 +43,7 @@ pub use self::tabs::*;
 
 use gl_render::{Prim, ThemedPrim, RenderString, RelPoint};
 use cgmath::Point2;
-use cgmath_geometry::{BoundBox, DimsBox};
+use cgmath_geometry::{D2, rect::{BoundBox, DimsBox}};
 use theme::Theme;
 use core::render::Theme as CoreTheme;
 
@@ -123,7 +123,7 @@ impl Contents<String> {
 }
 
 impl ContentsInner {
-    fn to_prim<D>(&mut self, background_name: &str, rect_px_out: Option<&mut BoundBox<Point2<i32>>>) -> ThemedPrim<D> {
+    fn to_prim<D>(&mut self, background_name: &str, rect_px_out: Option<&mut BoundBox<D2, i32>>) -> ThemedPrim<D> {
         match *self {
             ContentsInner::Text(ref mut s) => ThemedPrim {
                 theme_path: background_name,
@@ -136,7 +136,7 @@ impl ContentsInner {
                     RelPoint::new( 1.0, 0)
                 ),
                 prim: Prim::String(s),
-                rect_px_out: rect_px_out.map(|r| r as *mut BoundBox<Point2<i32>>)
+                rect_px_out: rect_px_out.map(|r| r as *mut BoundBox<D2, i32>)
             },
             ContentsInner::Image(ref i) => ThemedPrim {
                 theme_path: &**i,
@@ -149,7 +149,7 @@ impl ContentsInner {
                     RelPoint::new( 1.0, 0)
                 ),
                 prim: Prim::Image,
-                rect_px_out: rect_px_out.map(|r| r as *mut BoundBox<Point2<i32>>)
+                rect_px_out: rect_px_out.map(|r| r as *mut BoundBox<D2, i32>)
             }
         }
     }
@@ -168,7 +168,7 @@ impl ContentsInner {
         }
     }
 
-    fn min_size(&self, theme: &Theme) -> DimsBox<Point2<i32>> {
+    fn min_size(&self, theme: &Theme) -> DimsBox<D2, i32> {
         match *self {
             ContentsInner::Text(ref s) => s.min_size(),
             ContentsInner::Image(ref i) => theme.widget_theme(&**i).image.as_ref().and_then(|img| img.dims.cast()).unwrap_or(DimsBox::new2(0, 0))

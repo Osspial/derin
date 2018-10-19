@@ -36,7 +36,7 @@ mod offset_widget;
 mod event_loop_ops;
 
 use cgmath::{Point2, Vector2, Bounded};
-use cgmath_geometry::DimsBox;
+use cgmath_geometry::{D2, rect::DimsBox};
 
 use std::marker::PhantomData;
 use std::collections::VecDeque;
@@ -90,7 +90,7 @@ pub enum WindowEvent {
     MouseUp(MouseButton),
     MouseScrollLines(Vector2<i32>),
     MouseScrollPx(Vector2<i32>),
-    WindowResize(DimsBox<Point2<u32>>),
+    WindowResize(DimsBox<D2, u32>),
     KeyDown(Key),
     KeyUp(Key),
     Char(char),
@@ -113,7 +113,7 @@ impl<A, N, F> Root<A, N, F>
           F: RenderFrame
 {
     #[inline]
-    pub fn new(mut root_widget: N, theme: F::Theme, dims: DimsBox<Point2<u32>>) -> Root<A, N, F> {
+    pub fn new(mut root_widget: N, theme: F::Theme, dims: DimsBox<D2, u32>) -> Root<A, N, F> {
         // TODO: DRAW ROOT AND DO INITIAL LAYOUT
         *root_widget.rect_mut() = dims.cast().unwrap_or(DimsBox::max_value()).into();
         Root {

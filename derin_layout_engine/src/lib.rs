@@ -24,7 +24,7 @@ mod grid;
 
 use derin_common_types::Px;
 use cgmath::{Point2, Vector2, EuclideanSpace};
-use cgmath_geometry::{DimsBox, BoundBox, GeoBox};
+use cgmath_geometry::{D2, rect::{DimsBox, BoundBox, GeoBox}};
 use derin_common_types::layout::{Fr, Tr, Align2, Align, GridSize, WidgetPos, TrackHints, SizeBounds, Margins};
 use grid::{TrackVec, SizeResult};
 
@@ -43,10 +43,10 @@ pub struct UpdateHeapCache {
 pub struct GridEngine {
     grid: TrackVec,
     /// The pixel size of the layout engine, as requested by the programmer.
-    pub desired_size: DimsBox<Point2<Px>>,
+    pub desired_size: DimsBox<D2, Px>,
     /// The pixel size of the layout engine, accounting for the size bounds of the widgets and the size
     /// bounds of the engine.
-    actual_size: DimsBox<Point2<Px>>,
+    actual_size: DimsBox<D2, Px>,
     /// The size bounds of the engine, as requested by the programmer.
     pub desired_size_bounds: SizeBounds,
     /// The size bounds of the engine, accounting for the size bounds of the widgets.
@@ -98,7 +98,7 @@ impl GridEngine {
         self.grid.get_col_mut(col).expect(&format!("Col {} out of range", col)).set_hints(hints).ok();
     }
 
-    pub fn actual_size(&self) -> DimsBox<Point2<Px>> {
+    pub fn actual_size(&self) -> DimsBox<D2, Px> {
         self.actual_size
     }
 
@@ -117,7 +117,7 @@ impl GridEngine {
     pub fn update_engine(
         &mut self,
         hints: &[WidgetPos],
-        rects: &mut [Result<BoundBox<Point2<Px>>, SolveError>],
+        rects: &mut [Result<BoundBox<D2, Px>, SolveError>],
         heap_cache: &mut UpdateHeapCache
     ) {
         assert_eq!(hints.len(), rects.len());
@@ -399,7 +399,7 @@ impl GridEngine {
 
                                 frac_min_size.dims.$axis = cmp::max(
                                     match fr_widget > 0.0 {
-                                        true => 
+                                        true =>
                                             (widget_size_bounds.min.$size() as Fr * $fr_axis / fr_widget).ceil() as Px,
                                         false => 0
                                     },
@@ -541,19 +541,19 @@ impl Default for SolveAxis {
 
 #[derive(Debug, Clone, Copy)]
 struct CellHinter {
-    outer_rect: BoundBox<Point2<Px>>,
+    outer_rect: BoundBox<D2, Px>,
     place_in_or: Align2
 }
 
 impl CellHinter {
-    pub fn new(outer_rect: BoundBox<Point2<Px>>, place_in_or: Align2) -> CellHinter {
+    pub fn new(outer_rect: BoundBox<D2, Px>, place_in_or: Align2) -> CellHinter {
         CellHinter {
             outer_rect: outer_rect,
             place_in_or: place_in_or,
         }
     }
 
-    pub fn hint(&self, bounds: SizeBounds, margins: Margins<Px>) -> Result<BoundBox<Point2<Px>>, HintError> {
+    pub fn hint(&self, bounds: SizeBounds, margins: Margins<Px>) -> Result<BoundBox<D2, Px>, HintError> {
         let margins_x = margins.left + margins.right;
         let margins_y = margins.top + margins.bottom;
 
@@ -672,8 +672,8 @@ mod tests {
     #[derive(Clone)]
     struct A<T>(T);
 
-    impl Arbitrary for A<BoundBox<Point2<i32>>> {
-        fn arbitrary<G: Gen>(g: &mut G) -> A<BoundBox<Point2<i32>>> {
+    impl Arbitrary for A<BoundBox<D2, i32>> {
+        fn arbitrary<G: Gen>(g: &mut G) -> A<BoundBox<D2, i32>> {
             let mut topleft = <A<Point2<i32>>>::arbitrary(g).0;
             let mut lowright = <A<Point2<i32>>>::arbitrary(g).0;
 

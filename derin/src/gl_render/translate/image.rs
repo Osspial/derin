@@ -13,11 +13,10 @@
 // limitations under the License.
 
 use gl_render::GLVertex;
-use gullery::glsl::Nu8;
-use gullery::colors::Rgba;
+use gullery::image_format::Rgba;
 
 use cgmath::{Point2, EuclideanSpace};
-use cgmath_geometry::{OffsetBox, BoundBox, GeoBox};
+use cgmath_geometry::{D2, rect::{OffsetBox, BoundBox, GeoBox}};
 
 use theme::RescaleRules;
 
@@ -25,7 +24,7 @@ use derin_common_types::layout::{Align, Margins};
 
 pub(in gl_render) struct ImageTranslate {
     verts: TranslateVerts,
-    rect: Option<BoundBox<Point2<i32>>>,
+    rect: Option<BoundBox<D2, i32>>,
     cur_vertex: usize
 }
 
@@ -46,7 +45,7 @@ enum TranslateVerts {
 }
 
 impl ImageTranslate {
-    pub fn new(rect: BoundBox<Point2<i32>>, clip: BoundBox<Point2<i32>>, atlas_rect: OffsetBox<Point2<u16>>, color: Rgba<Nu8>, rescale: RescaleRules) -> ImageTranslate {
+    pub fn new(rect: BoundBox<D2, i32>, clip: BoundBox<D2, i32>, atlas_rect: OffsetBox<D2, u16>, color: Rgba<u8>, rescale: RescaleRules) -> ImageTranslate {
         let clipped_rect = match clip.intersect_rect(rect) {
             Some(clipped_rect) => clipped_rect,
             None => return ImageTranslate {
@@ -76,22 +75,22 @@ impl ImageTranslate {
             atlas_rect_clipped.max.y -= atlas_clip_margins.bottom;
 
             let tl_out = GLVertex {
-                loc: min,
+                loc: min.cast::<f32>().unwrap(),
                 color,
                 tex_coord: atlas_rect_clipped.min()
             };
             let tr_out = GLVertex {
-                loc: Point2::new(max.x, min.y),
+                loc: Point2::new(max.x as f32, min.y as f32),
                 color,
                 tex_coord: Point2::new(atlas_rect_clipped.max().x, atlas_rect_clipped.min().y)
             };
             let br_out = GLVertex {
-                loc: max,
+                loc: max.cast::<f32>().unwrap(),
                 color,
                 tex_coord: atlas_rect_clipped.max()
             };
             let bl_out = GLVertex {
-                loc: Point2::new(min.x, max.y),
+                loc: Point2::new(min.x as f32, max.y as f32),
                 color,
                 tex_coord: Point2::new(atlas_rect_clipped.min().x, atlas_rect_clipped.max().y)
             };
@@ -103,17 +102,17 @@ impl ImageTranslate {
                 [
                     $base,
                     GLVertex {
-                        loc: Point2::new($base.loc.x $sign_x $loc_slice_x as i32, $base.loc.y),
+                        loc: Point2::new($base.loc.x $sign_x $loc_slice_x, $base.loc.y),
                         tex_coord: Point2::new($base.tex_coord.x $sign_x $atlas_slice_x $sign_x 0.5, $base.tex_coord.y),
                         ..$base
                     },
                     GLVertex {
-                        loc: Point2::new($base.loc.x $sign_x $loc_slice_x as i32, $base.loc.y $sign_y $loc_slice_y as i32),
+                        loc: Point2::new($base.loc.x $sign_x $loc_slice_x, $base.loc.y $sign_y $loc_slice_y),
                         tex_coord: Point2::new($base.tex_coord.x $sign_x $atlas_slice_x $sign_x 0.5, $base.tex_coord.y $sign_y $atlas_slice_y $sign_y 0.5),
                         ..$base
                     },
                     GLVertex {
-                        loc: Point2::new($base.loc.x, $base.loc.y $sign_y $loc_slice_y as i32),
+                        loc: Point2::new($base.loc.x, $base.loc.y $sign_y $loc_slice_y),
                         tex_coord: Point2::new($base.tex_coord.x, $base.tex_coord.y $sign_y $atlas_slice_y $sign_y 0.5),
                         ..$base
                     },
@@ -224,22 +223,22 @@ impl ImageTranslate {
 
                 verts = TranslateVerts::Stretch {
                     tl: GLVertex {
-                        loc: bounds.min(),
+                        loc: bounds.min().cast::<f32>().unwrap(),
                         color,
                         tex_coord: atlas_rect_clipped.min()
                     },
                     tr: GLVertex {
-                        loc: Point2::new(bounds.max.x, bounds.min.y),
+                        loc: Point2::new(bounds.max.x as f32, bounds.min.y as f32),
                         color,
                         tex_coord: Point2::new(atlas_rect_clipped.max().x, atlas_rect_clipped.min().y)
                     },
                     br: GLVertex {
-                        loc: bounds.max,
+                        loc: bounds.max.cast::<f32>().unwrap(),
                         color,
                         tex_coord: atlas_rect_clipped.max()
                     },
                     bl: GLVertex {
-                        loc: Point2::new(bounds.min.x, bounds.max.y),
+                        loc: Point2::new(bounds.min.x as f32, bounds.max.y as f32),
                         color,
                         tex_coord: Point2::new(atlas_rect_clipped.min().x, atlas_rect_clipped.max().y)
                     }
@@ -254,7 +253,7 @@ impl ImageTranslate {
         }
     }
 
-    pub fn rect(&self) -> Option<BoundBox<Point2<i32>>> {
+    pub fn rect(&self) -> Option<BoundBox<D2, i32>> {
         self.rect
     }
 }

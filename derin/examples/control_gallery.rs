@@ -19,7 +19,7 @@ extern crate derin_macros;
 use derin::{LoopFlow, Window, WindowConfig};
 use derin::layout::{Margins, LayoutHorizontal, LayoutVertical};
 use derin::widgets::*;
-use derin::geometry::DimsBox;
+use derin::geometry::{D2, rect::DimsBox};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum GalleryEvent {

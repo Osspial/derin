@@ -16,7 +16,7 @@ use container::WidgetContainer;
 use widgets::assistants::ButtonState;
 use widgets::{Contents, ContentsInner};
 use cgmath::Point2;
-use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 
 use core::LoopFlow;
 use core::event::{EventOps, WidgetEvent, InputState};
@@ -42,8 +42,8 @@ use layout::GridLayout;
 #[derive(Debug, Clone)]
 pub struct RadioButton {
     widget_tag: WidgetTag,
-    rect: BoundBox<Point2<i32>>,
-    min_size: DimsBox<Point2<i32>>,
+    rect: BoundBox<D2, i32>,
+    min_size: DimsBox<D2, i32>,
 
     selected: bool,
     button_state: ButtonState,
@@ -58,7 +58,7 @@ pub struct RadioButtonList<C, L>
     where L: GridLayout
 {
     widget_tag: WidgetTag,
-    rect: BoundBox<Point2<i32>>,
+    rect: BoundBox<D2, i32>,
 
     layout_engine: GridEngine,
     buttons: C,
@@ -145,12 +145,12 @@ impl<A, F> Widget<A, F> for RadioButton
     }
 
     #[inline]
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         self.rect
     }
 
     #[inline]
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         &mut self.rect
     }
 
@@ -289,12 +289,12 @@ impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
     }
 
     #[inline]
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         self.rect
     }
 
     #[inline]
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         self.widget_tag.mark_update_layout();
         &mut self.rect
     }
@@ -384,7 +384,7 @@ impl<A, F, C, L> Parent<A, F> for RadioButtonList<C, L>
         struct HeapCache {
             update_heap_cache: UpdateHeapCache,
             hints_vec: Vec<WidgetPos>,
-            rects_vec: Vec<Result<BoundBox<Point2<i32>>, SolveError>>
+            rects_vec: Vec<Result<BoundBox<D2, i32>, SolveError>>
         }
         thread_local! {
             static HEAP_CACHE: RefCell<HeapCache> = RefCell::new(HeapCache::default());

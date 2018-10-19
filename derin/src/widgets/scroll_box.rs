@@ -19,7 +19,7 @@ use core::render::FrameRectStack;
 use core::popup::ChildPopupsMut;
 
 use cgmath::{Point2, Vector2};
-use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use derin_common_types::layout::SizeBounds;
 use derin_common_types::buttons::MouseButton;
 
@@ -41,7 +41,7 @@ const SCROLL_BAR_SIZE: i32 = 16;
 #[derive(Debug, Clone)]
 pub struct ScrollBox<W> {
     widget_tag: WidgetTag,
-    rect: BoundBox<Point2<i32>>,
+    rect: BoundBox<D2, i32>,
     slider_x: Option<SliderAssist>,
     slider_y: Option<SliderAssist>,
     clip: Clip<W>
@@ -95,12 +95,12 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
     }
 
     #[inline]
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         self.rect
     }
 
     #[inline]
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         self.widget_tag.mark_update_layout_post();
         &mut self.rect
     }
@@ -316,7 +316,7 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
 
     fn update_child_layout(&mut self) {
         let child_size_bounds = self.clip.widget().size_bounds();
-        let mut child_dims: DimsBox<Point2<_>> = self.rect.dims();
+        let mut child_dims: DimsBox<D2, _> = self.rect.dims();
         let mut offset = Vector2 {
             x: self.slider_x.as_ref().map(|s| s.value as i32).unwrap_or(0),
             y: self.slider_y.as_ref().map(|s| s.value as i32).unwrap_or(0)
@@ -341,7 +341,7 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
         offset.x = offset.x.min((child_dims.width() as u32).saturating_sub(clip_dims.width() as u32) as i32);
         offset.y = offset.y.min((child_dims.height() as u32).saturating_sub(clip_dims.height() as u32) as i32);
 
-        let self_dims: DimsBox<Point2<_>> = self.rect.dims();
+        let self_dims: DimsBox<D2, _> = self.rect.dims();
         self.slider_x = match has_x_scroll {
             false => None,
             true => Some(SliderAssist {

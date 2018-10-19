@@ -14,7 +14,7 @@
 
 use tree::WidgetIdent;
 use cgmath::{EuclideanSpace, Point2};
-use cgmath_geometry::{BoundBox, DimsBox, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use derin_common_types::cursor::CursorIcon;
 use derin_common_types::layout::SizeBounds;
 
@@ -25,9 +25,9 @@ pub trait Renderer {
     fn set_cursor_pos(&mut self, pos: Point2<i32>);
     fn set_cursor_icon(&mut self, icon: CursorIcon);
     fn set_size_bounds(&mut self, size_bounds: SizeBounds);
-    fn resized(&mut self, new_size: DimsBox<Point2<u32>>);
-    fn dims(&self) -> DimsBox<Point2<u32>>;
-    fn make_frame(&mut self, draw_output: bool) -> (&mut Self::Frame, BoundBox<Point2<i32>>);
+    fn resized(&mut self, new_size: DimsBox<D2, u32>);
+    fn dims(&self) -> DimsBox<D2, u32>;
+    fn make_frame(&mut self, draw_output: bool) -> (&mut Self::Frame, BoundBox<D2, i32>);
     fn finish_frame(&mut self, theme: &<Self::Frame as RenderFrame>::Theme);
 }
 
@@ -39,8 +39,8 @@ pub trait RenderFrame: 'static {
         &mut self,
         widget_ident: &[WidgetIdent],
         theme: &Self::Theme,
-        transform: BoundBox<Point2<i32>>,
-        clip: BoundBox<Point2<i32>>,
+        transform: BoundBox<D2, i32>,
+        clip: BoundBox<D2, i32>,
         prim_iter: I
     )
         where I: Iterator<Item=Self::Primitive>;
@@ -54,8 +54,8 @@ pub trait Theme {
 
 pub struct FrameRectStack<'a, F: 'a + RenderFrame> {
     frame: &'a mut F,
-    transform: BoundBox<Point2<i32>>,
-    clip_rect: BoundBox<Point2<i32>>,
+    transform: BoundBox<D2, i32>,
+    clip_rect: BoundBox<D2, i32>,
 
     theme: &'a F::Theme,
 
@@ -67,7 +67,7 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
     #[inline]
     pub(crate) fn new(
         frame: &'a mut F,
-        base_transform: BoundBox<Point2<i32>>,
+        base_transform: BoundBox<D2, i32>,
         theme: &'a F::Theme,
         widget_ident_vec: &'a mut Vec<WidgetIdent>
     ) -> FrameRectStack<'a, F>
@@ -98,7 +98,7 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
     }
 
     #[inline]
-    pub fn enter_child_rect<'b>(&'b mut self, child_rect: BoundBox<Point2<i32>>) -> Option<FrameRectStack<'b, F>> {
+    pub fn enter_child_rect<'b>(&'b mut self, child_rect: BoundBox<D2, i32>) -> Option<FrameRectStack<'b, F>> {
         let child_transform = child_rect + self.transform.min().to_vec();
         Some(FrameRectStack {
             frame: self.frame,

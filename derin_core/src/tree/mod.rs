@@ -20,7 +20,7 @@ use std::cell::Cell;
 
 use LoopFlow;
 use cgmath::Point2;
-use cgmath_geometry::BoundBox;
+use cgmath_geometry::{D2, rect::BoundBox};
 
 use mbseq::MouseButtonSequence;
 use derin_common_types::buttons::MouseButton;
@@ -184,8 +184,8 @@ pub enum OnFocusOverflow {
 
 pub trait Widget<A, F: RenderFrame> {
     fn widget_tag(&self) -> &WidgetTag;
-    fn rect(&self) -> BoundBox<Point2<i32>>;
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>>;
+    fn rect(&self) -> BoundBox<D2, i32>;
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32>;
     fn render(&mut self, frame: &mut FrameRectStack<F>);
     fn on_widget_event(
         &mut self,
@@ -222,10 +222,10 @@ impl<'a, A, F, W> Widget<A, F> for &'a mut W
     fn widget_tag(&self) -> &WidgetTag {
         W::widget_tag(self)
     }
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         W::rect(self)
     }
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         W::rect_mut(self)
     }
     fn render(&mut self, frame: &mut FrameRectStack<F>) {
@@ -271,10 +271,10 @@ impl<A, F, W> Widget<A, F> for Box<W>
     fn widget_tag(&self) -> &WidgetTag {
         W::widget_tag(self)
     }
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         W::rect(self)
     }
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         W::rect_mut(self)
     }
     fn render(&mut self, frame: &mut FrameRectStack<F>) {

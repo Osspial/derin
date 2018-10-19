@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use cgmath::Point2;
-use cgmath_geometry::{BoundBox, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 #[derive(Debug, Clone)]
 pub struct SliderAssist {
@@ -23,7 +23,7 @@ pub struct SliderAssist {
     pub max: f32,
 
     pub head_size: i32,
-    pub bar_rect: BoundBox<Point2<i32>>,
+    pub bar_rect: BoundBox<D2, i32>,
     pub head_click_pos: Option<i32>,
     pub horizontal: bool
 }
@@ -35,7 +35,7 @@ impl SliderAssist {
         self.value = self.value.min(self.max).max(self.min);
     }
 
-    pub fn head_rect(&self) -> BoundBox<Point2<i32>> {
+    pub fn head_rect(&self) -> BoundBox<D2, i32> {
         let (bar_size, bar_min) = match self.horizontal {
             true => (self.bar_rect.width(), self.bar_rect.min.x),
             false => (self.bar_rect.height(), self.bar_rect.min.y)

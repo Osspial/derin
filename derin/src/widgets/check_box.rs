@@ -15,7 +15,7 @@
 use widgets::assistants::ButtonState;
 use widgets::{Contents, ContentsInner, ToggleHandler};
 use cgmath::Point2;
-use cgmath_geometry::{BoundBox, GeoBox};
+use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 use core::event::{EventOps, InputState, WidgetEvent};
 use core::popup::ChildPopupsMut;
@@ -34,9 +34,9 @@ use gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame};
 #[derive(Debug, Clone)]
 pub struct CheckBox<H> {
     widget_tag: WidgetTag,
-    rect: BoundBox<Point2<i32>>,
+    rect: BoundBox<D2, i32>,
 
-    check_rect: BoundBox<Point2<i32>>,
+    check_rect: BoundBox<D2, i32>,
     contents: ContentsInner,
     checked: bool,
     button_state: ButtonState,
@@ -99,12 +99,12 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
     }
 
     #[inline]
-    fn rect(&self) -> BoundBox<Point2<i32>> {
+    fn rect(&self) -> BoundBox<D2, i32> {
         self.rect
     }
 
     #[inline]
-    fn rect_mut(&mut self) -> &mut BoundBox<Point2<i32>> {
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         &mut self.rect
     }
 

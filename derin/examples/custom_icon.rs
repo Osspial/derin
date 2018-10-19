@@ -20,8 +20,8 @@ use derin::layout::{Align, Align2, Margins, SizeBounds, LayoutHorizontal};
 use derin::container::SingleContainer;
 use derin::widgets::{Contents, Group, Label};
 use derin::theme::{ThemeWidget, Image, RescaleRules};
-use derin::theme::color::{Rgba, Nu8};
-use derin::geometry::DimsBox;
+use derin::theme::color::Rgba;
+use derin::geometry::rect::DimsBox;
 
 use std::rc::Rc;
 
@@ -42,7 +42,7 @@ fn main() {
                     // Allocate the output buffer.
                     let mut image = vec![0; info.buffer_size()];
                     reader.next_frame(&mut image).unwrap();
-                    Rgba::slice_from_raw(Nu8::slice_from_raw(&image)).to_vec()
+                    Rgba::slice_from_raw(&image).to_vec()
                 },
                 dims: DimsBox::new2(32, 32),
                 rescale: RescaleRules::Align(Align2::new(Align::Center, Align::Center)),

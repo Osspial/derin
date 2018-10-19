@@ -148,6 +148,7 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
             use self::_derive_derin::container::WidgetContainer;
             use self::_derive_derin::widgets::custom::{Widget, WidgetSummary};
             use std::sync::Arc;
+            use super::*;
 
             // Ideally we'd be using lazy_static, but macro re-exporting doesn't work. Maybe we'll
             // do this when declarative macros 2.0 gets stable.

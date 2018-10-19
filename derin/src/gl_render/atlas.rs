@@ -16,10 +16,9 @@ use std::cmp;
 use std::collections::HashMap;
 
 use cgmath::{Point2, Vector2};
-use cgmath_geometry::{OffsetBox, DimsBox, GeoBox};
+use cgmath_geometry::{D2, rect::{OffsetBox, DimsBox, GeoBox}};
 
-use gullery::glsl::Nu8;
-use gullery::colors::Rgba;
+use gullery::image_format::Rgba;
 
 use derin_atlas::SkylineAtlas;
 
@@ -33,10 +32,10 @@ struct GlyphKey {
 }
 
 pub struct Atlas {
-    atlas: SkylineAtlas<Rgba<Nu8>>,
-    white_rect: Option<OffsetBox<Point2<u32>>>,
-    // image_rects: HashMap<(), OffsetBox<Point2<u32>>>,
-    glyph_rects: HashMap<GlyphKey, (OffsetBox<Point2<u32>>, Vector2<i32>)>,
+    atlas: SkylineAtlas<Rgba<u8>>,
+    white_rect: Option<OffsetBox<D2, u32>>,
+    // image_rects: HashMap<(), OffsetBox<D2, u32>>,
+    glyph_rects: HashMap<GlyphKey, (OffsetBox<D2, u32>, Vector2<i32>)>,
     // image_rects: hashmap,
     // glyph_rects: hashmap
 }
@@ -44,18 +43,18 @@ pub struct Atlas {
 impl Atlas {
     pub fn new() -> Atlas {
         Atlas {
-            atlas: SkylineAtlas::new(Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(0)), DimsBox::new2(1024, 1024)),
+            atlas: SkylineAtlas::new(Rgba::new(0, 0, 0, 0), DimsBox::new2(1024, 1024)),
             white_rect: None,
             // image_rects: HashMap::new(),
             glyph_rects: HashMap::new()
         }
     }
 
-    pub fn dims(&self) -> DimsBox<Point2<u32>> {
+    pub fn dims(&self) -> DimsBox<D2, u32> {
         self.atlas.dims()
     }
 
-    pub fn pixels(&self) -> &[Rgba<Nu8>] {
+    pub fn pixels(&self) -> &[Rgba<u8>] {
         self.atlas.pixels()
     }
 
@@ -68,9 +67,9 @@ impl Atlas {
         self.glyph_rects.clear();
     }
 
-    pub fn white(&mut self) -> OffsetBox<Point2<u32>> {
+    pub fn white(&mut self) -> OffsetBox<D2, u32> {
         let white_pic = (
-            &[Rgba::new(Nu8(255), Nu8(255), Nu8(255), Nu8(255))][..],
+            &[Rgba::new(255, 255, 255, 255)][..],
             DimsBox::new2(1, 1)
         );
         self.white_rect.unwrap_or_else(|| self.image_rect("TODO: REPLACE WHEN STRINGS MATTER", || white_pic))
@@ -78,8 +77,8 @@ impl Atlas {
 
     /// Retrieve an image from the atlas. `image_path` refers to the theme's name for the image,
     /// while `get_image` is used to add the image to the atlas in case it's not already stored.
-    pub fn image_rect<'a, F>(&mut self, _image_path: &str, get_image: F) -> OffsetBox<Point2<u32>>
-        where F: FnOnce() -> (&'a [Rgba<Nu8>], DimsBox<Point2<u32>>)
+    pub fn image_rect<'a, F>(&mut self, _image_path: &str, get_image: F) -> OffsetBox<D2, u32>
+        where F: FnOnce() -> (&'a [Rgba<u8>], DimsBox<D2, u32>)
     {
         let (pixels, dims) = get_image();
         match self.atlas.add_image(dims, dims.into(), pixels) {
@@ -88,7 +87,7 @@ impl Atlas {
                 let new_width = cmp::max(dims.width(), self.atlas.dims().width());
                 let new_height = self.atlas.dims().height() + cmp::max(self.atlas.dims().height(), dims.height());
                 self.atlas.set_dims(
-                    Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(0)),
+                    Rgba::new(0, 0, 0, 0),
                     DimsBox::new2(new_width, new_height)
                 );
 
@@ -102,10 +101,10 @@ impl Atlas {
     /// within the atlas.
     ///
     /// `get_glyph` returns `(pixel_buf, image_dims, glyph_bearing)`
-    pub fn glyph_rect<'a, F, I, J>(&mut self, face: ThemeFace, face_size: u32, glyph_index: u32, get_glyph: F) -> (OffsetBox<Point2<u32>>, Vector2<i32>)
-        where F: FnOnce() -> (I, DimsBox<Point2<u32>>, Vector2<i32>),
+    pub fn glyph_rect<'a, F, I, J>(&mut self, face: ThemeFace, face_size: u32, glyph_index: u32, get_glyph: F) -> (OffsetBox<D2, u32>, Vector2<i32>)
+        where F: FnOnce() -> (I, DimsBox<D2, u32>, Vector2<i32>),
               I: 'a + IntoIterator<Item=J>,
-              J: 'a + IntoIterator<Item=Rgba<Nu8>>
+              J: 'a + IntoIterator<Item=Rgba<u8>>
     {
         let key = GlyphKey {
             face_fingerprint: face.fingerprint(),
@@ -126,7 +125,7 @@ impl Atlas {
                     let new_width = cmp::max(dims.width(), atlas.dims().width());
                     let new_height = atlas.dims().height() + cmp::max(atlas.dims().height(), dims.height());
                     atlas.set_dims(
-                        Rgba::new(Nu8(0), Nu8(0), Nu8(0), Nu8(0)),
+                        Rgba::new(0, 0, 0, 0),
                         DimsBox::new2(new_width, new_height)
                     );
 
