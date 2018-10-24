@@ -68,7 +68,7 @@ impl TimerList {
         }
     }
 
-    pub fn new_timer_register(&mut self, widget_id: WidgetID) -> TimerRegister {
+    pub fn new_timer_register(&mut self, widget_id: WidgetID) -> TimerRegister<'_> {
         TimerRegister {
             widget_id,
             new_timers: Vec::new(),
@@ -76,7 +76,7 @@ impl TimerList {
         }
     }
 
-    pub(crate) fn trigger_timers(&mut self) -> TriggeredTimers {
+    pub(crate) fn trigger_timers(&mut self) -> TriggeredTimers<'_> {
         let trigger_time = Instant::now();
         if (trigger_time - self.last_trigger) < self.rate_limiter.unwrap_or(Duration::new(0, 0)) {
             return TriggeredTimers {

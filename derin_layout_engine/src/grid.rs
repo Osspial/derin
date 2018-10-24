@@ -356,7 +356,7 @@ impl TrackVec<GridTrack> {
 }
 
 impl<T: Debug> Debug for TrackVec<T> {
-    fn fmt(&self, fmt: &mut Formatter) -> Result<(), Error> {
+    fn fmt(&self, fmt: &mut Formatter<'_>) -> Result<(), Error> {
         fmt.debug_struct("TrackVec")
             .field("cols", &self.col_range(..).unwrap())
             .field("rows", &self.row_range(..).unwrap())
@@ -452,7 +452,7 @@ mod tests {
             tv
         }
 
-        fn shrink(&self) -> Box<Iterator<Item=TrackVec<A>>> {
+        fn shrink(&self) -> Box<dyn Iterator<Item=TrackVec<A>>> {
             struct TrackVecShrinker<A: Arbitrary> {
                 source: TrackVec<A>,
                 index: usize

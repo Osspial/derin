@@ -15,7 +15,7 @@
 #![feature(splice)]
 
 use cgmath_geometry::cgmath;
-extern crate cgmath_geometry;
+
 
 use std::{cmp, mem};
 use std::ops::Range;

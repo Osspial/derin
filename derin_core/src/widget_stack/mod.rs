@@ -32,7 +32,7 @@ pub(crate) struct WidgetStackBase<A, F: RenderFrame> {
     stack: NRAllocCache<A, F>
 }
 
-pub struct WidgetStack<'a, A: 'static, F: 'a + RenderFrame, Root: 'a + ?Sized> {
+pub struct WidgetStack<'a, A: 'static, F: RenderFrame, Root: 'a + ?Sized> {
     stack: NRVec<'a, A, F>,
     root: *mut Root
 }
@@ -51,7 +51,7 @@ impl<A: 'static, F: RenderFrame> WidgetStackBase<A, F> {
     //     }
     // }
 
-    pub fn use_stack_dyn<'a>(&'a mut self, widget: &'a mut Widget<A, F>, root_id: RootID) -> WidgetStack<'a, A, F, Widget<A, F>> {
+    pub fn use_stack_dyn<'a>(&'a mut self, widget: &'a mut dyn Widget<A, F>, root_id: RootID) -> WidgetStack<'a, A, F, dyn Widget<A, F>> {
         WidgetStack {
             root: widget,
             stack: self.stack.use_cache(widget, root_id)
@@ -60,14 +60,14 @@ impl<A: 'static, F: RenderFrame> WidgetStackBase<A, F> {
 }
 
 impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, Root> {
-    pub fn drain_to_root<G>(&mut self, mut for_each: G) -> WidgetPath<Root>
-        where G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent])
+    pub fn drain_to_root<G>(&mut self, mut for_each: G) -> WidgetPath<'_, Root>
+        where G: FnMut(OffsetWidget<dyn Widget<A, F>>, &[WidgetIdent])
     {
         self.drain_to_root_while(|widget, ident| {for_each(widget, ident); true}).unwrap()
     }
 
-    pub fn drain_to_root_while<G>(&mut self, mut for_each: G) -> Option<WidgetPath<Root>>
-        where G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent]) -> bool
+    pub fn drain_to_root_while<G>(&mut self, mut for_each: G) -> Option<WidgetPath<'_, Root>>
+        where G: FnMut(OffsetWidget<dyn Widget<A, F>>, &[WidgetIdent]) -> bool
     {
         let mut continue_drain = true;
         while self.stack.len() > 1 && continue_drain {
@@ -98,7 +98,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
     }
 
     #[inline]
-    pub fn move_to_root(&mut self) -> WidgetPath<Root> {
+    pub fn move_to_root(&mut self) -> WidgetPath<'_, Root> {
         self.stack.truncate(1);
 
         let mut top = self.stack.top();
@@ -113,7 +113,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         }
     }
 
-    pub fn move_to_sibling_delta(&mut self, sibling_dist: isize) -> Result<WidgetPath<Widget<A, F>>, Ordering> {
+    pub fn move_to_sibling_delta(&mut self, sibling_dist: isize) -> Result<WidgetPath<dyn Widget<A, F>>, Ordering> {
         if sibling_dist == 0 {
             return Ok(self.stack.top());
         }
@@ -150,7 +150,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         }
     }
 
-    pub fn move_to_sibling_index(&mut self, sibling_index: usize) -> Result<WidgetPath<Widget<A, F>>, Ordering> {
+    pub fn move_to_sibling_index(&mut self, sibling_index: usize) -> Result<WidgetPath<dyn Widget<A, F>>, Ordering> {
         let top_index = self.stack.top_index();
         if self.stack.pop().is_none() {
             return match sibling_index {
@@ -180,7 +180,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
     }
 
     #[inline]
-    pub fn top(&mut self) -> WidgetPath<Widget<A, F>> {
+    pub fn top(&mut self) -> WidgetPath<dyn Widget<A, F>> {
         self.stack.top()
     }
 
@@ -194,23 +194,23 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         self.stack.ident()
     }
 
-    pub fn parent(&self) -> Option<&ParentDyn<A, F>> {
+    pub fn parent(&self) -> Option<&dyn ParentDyn<A, F>> {
         self.stack.widgets().rev().skip(1).next().map(|n| n.as_parent().unwrap())
     }
 
     #[inline]
-    pub fn widgets<'b>(&'b self) -> impl 'b + Iterator<Item=&'a Widget<A, F>> + DoubleEndedIterator + ExactSizeIterator {
+    pub fn widgets<'b>(&'b self) -> impl 'b + Iterator<Item=&'a dyn Widget<A, F>> + DoubleEndedIterator + ExactSizeIterator {
         self.stack.widgets()
     }
 
-    pub fn try_push<G>(&mut self, with_top: G) -> Option<WidgetSummary<&'a mut Widget<A, F>>>
-        where G: FnOnce(&'a mut Widget<A, F>, &[WidgetIdent]) -> Option<WidgetSummary<&'a mut Widget<A, F>>>
+    pub fn try_push<G>(&mut self, with_top: G) -> Option<WidgetSummary<&'a mut dyn Widget<A, F>>>
+        where G: FnOnce(&'a mut dyn Widget<A, F>, &[WidgetIdent]) -> Option<WidgetSummary<&'a mut dyn Widget<A, F>>>
     {
         self.stack.try_push(with_top)
     }
 
     #[inline]
-    pub fn pop(&mut self) -> Option<&'a mut Widget<A, F>> {
+    pub fn pop(&mut self) -> Option<&'a mut dyn Widget<A, F>> {
         self.stack.pop()
     }
 
@@ -221,7 +221,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
     }
 
     #[inline]
-    pub fn move_to_hover(&mut self) -> Option<WidgetPath<Widget<A, F>>> {
+    pub fn move_to_hover(&mut self) -> Option<WidgetPath<dyn Widget<A, F>>> {
         let mut found_widget = false;
         self.move_over_flags(ChildEventRecv::MOUSE_HOVER, |_, _| found_widget = true);
         match found_widget {
@@ -231,7 +231,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
     }
 
     #[inline]
-    pub fn move_to_keyboard_focus(&mut self) -> Option<WidgetPath<Widget<A, F>>> {
+    pub fn move_to_keyboard_focus(&mut self) -> Option<WidgetPath<dyn Widget<A, F>>> {
         let mut found_widget = false;
         self.move_over_flags(ChildEventRecv::KEYBOARD, |_, _| found_widget = true);
         match found_widget {
@@ -240,7 +240,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         }
     }
 
-    pub fn move_to_path<I>(&mut self, ident_path: I) -> Option<WidgetPath<Widget<A, F>>>
+    pub fn move_to_path<I>(&mut self, ident_path: I) -> Option<WidgetPath<dyn Widget<A, F>>>
         where I: IntoIterator<Item=WidgetIdent>
     {
         let mut ident_path_iter = ident_path.into_iter().peekable();
@@ -285,7 +285,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
 
     /// Returns number of widgets visited. `for_each_flag` takes widget at flag, and ident path of widget.
     pub(crate) fn move_over_flags<G>(&mut self, mut flags: ChildEventRecv, mut for_each_flag: G) -> usize
-        where G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent])
+        where G: FnMut(OffsetWidget<dyn Widget<A, F>>, &[WidgetIdent])
     {
         assert_ne!(self.stack.widgets().len(), 0);
 
@@ -397,7 +397,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
 
     pub(crate) fn move_over_widgets<I, G>(&mut self, widget_ids: I, mut for_each_widget: G)
         where I: IntoIterator<Item=WidgetID> + ExactSizeIterator + Clone,
-              G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent], usize)
+              G: FnMut(OffsetWidget<dyn Widget<A, F>>, &[WidgetIdent], usize)
     {
         self.move_to_root();
         let mut widgets_left = widget_ids.len();

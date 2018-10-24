@@ -52,7 +52,7 @@ pub trait Theme {
     fn widget_theme(&self, key: &Self::Key) -> Self::ThemeValue;
 }
 
-pub struct FrameRectStack<'a, F: 'a + RenderFrame> {
+pub struct FrameRectStack<'a, F: RenderFrame> {
     frame: &'a mut F,
     transform: BoundBox<D2, i32>,
     clip_rect: BoundBox<D2, i32>,

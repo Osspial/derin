@@ -64,7 +64,7 @@ pub(crate) struct PopupMap<A, F: RenderFrame> {
 }
 
 pub(crate) struct PopupWidget<A, F: RenderFrame> {
-    pub widget: Box<Widget<A, F>>,
+    pub widget: Box<dyn Widget<A, F>>,
     pub mouse_pos: Point2<i32>,
     pub needs_redraw: bool,
     pub owner_id: WidgetID,
@@ -86,7 +86,7 @@ impl<A, F: RenderFrame> PopupMap<A, F> {
         }
     }
 
-    pub fn insert(&mut self, owner_id: WidgetID, ident: WidgetIdent, widget: Box<Widget<A, F>>) -> PopupID {
+    pub fn insert(&mut self, owner_id: WidgetID, ident: WidgetIdent, widget: Box<dyn Widget<A, F>>) -> PopupID {
         let ident_map = self.owners.entry(owner_id).or_insert(HashMap::new());
         let popup_id = *ident_map.entry(ident.clone()).or_insert(PopupID::new());
         match self.popups.get_mut(&popup_id) {
@@ -113,7 +113,7 @@ impl<A, F: RenderFrame> PopupMap<A, F> {
     //     self.popups.get_mut(&popup_id)
     // }
 
-    pub fn popups_owned_by_mut(&mut self, owner_id: WidgetID) -> Option<ChildPopupsMut<A, F>> {
+    pub fn popups_owned_by_mut(&mut self, owner_id: WidgetID) -> Option<ChildPopupsMut<'_, A, F>> {
         let PopupMap {
             ref mut popups,
             ref mut owners,
@@ -175,21 +175,21 @@ impl<'a, A, F: RenderFrame> ChildPopupsMut<'a, A, F> {
         self.valid_popups.keys().cloned()
     }
 
-    pub fn get(&self, ident: WidgetIdent) -> Option<&Widget<A, F>> {
+    pub fn get(&self, ident: WidgetIdent) -> Option<&dyn Widget<A, F>> {
         match self.valid_popups.get(&ident) {
             Some(popup_id) => self.popup_map.get(popup_id).map(|p| &*p.widget),
             None => None
         }
     }
 
-    pub fn get_mut(&mut self, ident: WidgetIdent) -> Option<&mut Widget<A, F>> {
+    pub fn get_mut(&mut self, ident: WidgetIdent) -> Option<&mut dyn Widget<A, F>> {
         match self.valid_popups.get(&ident) {
             Some(popup_id) => Some(&mut*self.popup_map.get_mut(popup_id).unwrap().widget),
             None => None
         }
     }
 
-    pub fn remove(&mut self, ident: WidgetIdent) -> Option<Box<Widget<A, F>>> {
+    pub fn remove(&mut self, ident: WidgetIdent) -> Option<Box<dyn Widget<A, F>>> {
         match self.valid_popups.remove(&ident) {
             Some(popup_id) => {
                 let popup_removed = self.popup_map.remove(&popup_id).unwrap();

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate derin_atlas;
-extern crate image;
-extern crate cgmath_geometry;
+
+use image;
+
 
 use std::slice;
 use derin_atlas::SkylineAtlas;

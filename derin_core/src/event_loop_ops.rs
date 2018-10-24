@@ -70,7 +70,7 @@ impl<A, N, F> Root<A, N, F>
         &mut self,
         event_popup_id: Option<PopupID>,
         event: WindowEvent,
-        bubble_fallthrough: &mut FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
+        bubble_fallthrough: &mut dyn FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
     ) -> EventLoopResult {
         let Root {
             id: root_id,
@@ -625,9 +625,9 @@ impl<A, N, F> Root<A, N, F>
         assert_eq!(0, widget_ident_stack.len());
         loop {
             let mut take_focus_to = |
-                widget_stack: &mut WidgetStack<_, _, _>,
+                widget_stack: &mut WidgetStack<'_, _, _, _>,
                 widget_ident_stack: &[WidgetIdent],
-                meta_drain: &mut MetaDrain
+                meta_drain: &mut MetaDrain<'_>
             | {
                 if let Some(WidgetPath{ mut widget, path }) = widget_stack.move_to_keyboard_focus() {
                     if path == widget_ident_stack {
@@ -812,7 +812,7 @@ impl<A, N, F> Root<A, N, F>
         }
     }
 
-    pub fn redraw<R>(&mut self, mut with_renderer: impl FnMut(Option<PopupID>, &mut FnMut(&mut R)))
+    pub fn redraw<R>(&mut self, mut with_renderer: impl FnMut(Option<PopupID>, &mut dyn FnMut(&mut R)))
         where R: Renderer<Frame=F>
     {
         let Root {
@@ -829,7 +829,7 @@ impl<A, N, F> Root<A, N, F>
             ..
         } = *self;
 
-        let mut redraw = |redraw_widget: &mut Widget<A, F>, renderer: &mut R, needs_redraw: &mut bool| {
+        let mut redraw = |redraw_widget: &mut dyn Widget<A, F>, renderer: &mut R, needs_redraw: &mut bool| {
             let mut root_update = redraw_widget.widget_tag().needs_update(root_id);
             let mark_active_widgets_redraw = root_update.needs_redraw();
 
@@ -901,14 +901,14 @@ impl<A, N, F> Root<A, N, F>
             *needs_redraw = false;
         };
 
-        with_renderer(None, &mut |renderer| redraw(root_widget as &mut Widget<A, F>, renderer, root_needs_redraw));
+        with_renderer(None, &mut |renderer| redraw(root_widget as &mut dyn Widget<A, F>, renderer, root_needs_redraw));
         for (id, popup) in popup_widgets.popups_mut() {
             with_renderer(Some(id), &mut |renderer| redraw(&mut *popup.widget, renderer, &mut popup.needs_redraw));
         }
     }
 }
 
-fn update_widget_timers<A: 'static, F: RenderFrame>(root_id: RootID, timer_list: &mut TimerList, widget: &mut Widget<A, F>) {
+fn update_widget_timers<A: 'static, F: RenderFrame>(root_id: RootID, timer_list: &mut TimerList, widget: &mut dyn Widget<A, F>) {
     let widget_tag = widget.widget_tag();
     let Update {
         update_child,
@@ -937,7 +937,7 @@ fn update_widget_timers<A: 'static, F: RenderFrame>(root_id: RootID, timer_list:
     // TODO: PROPERLY UNSET update_child IF ALL CHILDREN HAVE RECIEVED NECESSARY UPDATES
 }
 
-fn update_widget_layout<A: 'static, F: RenderFrame>(root_id: RootID, force_full_redraw: bool, timer_list: &mut TimerList, widget: &mut ParentDyn<A, F>) -> bool {
+fn update_widget_layout<A: 'static, F: RenderFrame>(root_id: RootID, force_full_redraw: bool, timer_list: &mut TimerList, widget: &mut dyn ParentDyn<A, F>) -> bool {
     // Loop to re-solve widget layout, if children break their size bounds. Is 0..4 so that
     // it doesn't enter an infinite loop if children can never be properly solved.
     for _ in 0..4 {
@@ -990,7 +990,7 @@ fn update_widget_layout<A: 'static, F: RenderFrame>(root_id: RootID, force_full_
 }
 
 struct WidgetRenderer<'a, F>
-    where F: 'a + RenderFrame
+    where F: RenderFrame
 {
     root_id: RootID,
     frame: FrameRectStack<'a, F>,
@@ -1002,7 +1002,7 @@ struct WidgetRenderer<'a, F>
 impl<'a, F> WidgetRenderer<'a, F>
     where F: 'a + RenderFrame
 {
-    fn render_widget_children<A: 'static>(&mut self, parent: &mut ParentDyn<A, F>) {
+    fn render_widget_children<A: 'static>(&mut self, parent: &mut dyn ParentDyn<A, F>) {
         parent.children_mut(&mut |children_summaries| {
             for mut summary in children_summaries {
                 let WidgetSummary {

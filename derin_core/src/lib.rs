@@ -15,13 +15,13 @@
 #![feature(range_contains, nll, specialization)]
 
 use cgmath_geometry::cgmath;
-extern crate cgmath_geometry;
+
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate derin_common_types;
-extern crate arrayvec;
-extern crate itertools;
+
+
 
 pub mod timer;
 #[macro_use]

@@ -18,7 +18,7 @@
 #![recursion_limit="256"]
 
 extern crate proc_macro;
-extern crate syn;
+use syn;
 #[macro_use]
 extern crate quote;
 
@@ -300,7 +300,7 @@ fn derin_attribute_iter<F>(attrs: &[Attribute], mut for_each: F)
     }
 }
 
-fn expand_generics(generics: &Generics, action_ty: &Ty, widget_fields: &[WidgetField]) -> Generics {
+fn expand_generics(generics: &Generics, action_ty: &Ty, widget_fields: &[WidgetField<'_>]) -> Generics {
     let mut generics = generics.clone();
     generics.ty_params.insert(0, TyParam {
         attrs: Vec::new(),

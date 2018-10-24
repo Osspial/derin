@@ -45,7 +45,7 @@ pub struct EventOps<A, F: RenderFrame> {
     ///
     /// This *does not count as a child widget*, and events bubbled from the popup will not be
     /// delivered to the current widget.
-    pub popup: Option<(Box<Widget<A, F>>, PopupAttributes)>
+    pub popup: Option<(Box<dyn Widget<A, F>>, PopupAttributes)>
 }
 
 /// Changes the keyboard focus, removing the focus from another widget if necessary.

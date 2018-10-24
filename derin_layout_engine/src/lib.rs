@@ -15,10 +15,10 @@
 #[cfg(test)]
 #[cfg_attr(test, macro_use)]
 extern crate quickcheck;
-extern crate num_traits;
+
 use cgmath_geometry::cgmath;
-extern crate cgmath_geometry;
-extern crate derin_common_types;
+
+
 
 mod grid;
 

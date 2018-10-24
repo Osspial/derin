@@ -30,7 +30,7 @@ use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 use arrayvec::ArrayVec;
 
 #[derive(Debug)]
-pub struct OffsetWidget<'a, W: 'a + ?Sized> {
+pub struct OffsetWidget<'a, W: ?Sized> {
     widget: &'a mut W,
     offset: Vector2<i32>,
     clip: Option<BoundBox<D2, i32>>
@@ -76,7 +76,7 @@ pub trait OffsetWidgetTrait<A, F>
         mouse_buttons_down: &MouseButtonSequenceTrackPos,
         keys_down: &[Key],
         modifiers: ModifierKeys,
-        popups: Option<ChildPopupsMut<A, F>>,
+        popups: Option<ChildPopupsMut<'_, A, F>>,
         source_child: &[WidgetIdent]
     ) -> EventOps<A, F>;
 
@@ -84,7 +84,7 @@ pub trait OffsetWidgetTrait<A, F>
     // fn subtrait_mut(&mut self) -> WidgetSubtraitMut<A, F>;
 
     fn size_bounds(&self) -> SizeBounds;
-    fn register_timers(&self, register: &mut TimerRegister);
+    fn register_timers(&self, register: &mut TimerRegister<'_>);
     fn accepts_focus(&self) -> OnFocus;
 
     fn num_children(&self) -> usize
@@ -94,7 +94,7 @@ pub trait OffsetWidgetTrait<A, F>
     fn children_mut<'b, G>(&'b mut self, for_each: G)
         where A: 'b,
               Self::Widget: ParentDyn<A, F>,
-              G: FnMut(WidgetSummary<OffsetWidget<'b, Widget<A, F>>>) -> LoopFlow<()>;
+              G: FnMut(WidgetSummary<OffsetWidget<'b, dyn Widget<A, F>>>) -> LoopFlow<()>;
 }
 
 pub trait OffsetWidgetTraitAs<'a, A, F: RenderFrame> {
@@ -132,7 +132,7 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
         mouse_buttons_down: &MouseButtonSequenceTrackPos,
         keys_down: &[Key],
         modifiers: ModifierKeys,
-        popups: Option<ChildPopupsMut<A, F>>,
+        popups: Option<ChildPopupsMut<'_, A, F>>,
         source_child: &[WidgetIdent]
     ) -> EventOps<A, F>
     {
@@ -177,7 +177,7 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
     fn size_bounds(&self) -> SizeBounds {
         self.widget.size_bounds()
     }
-    fn register_timers(&self, register: &mut TimerRegister) {
+    fn register_timers(&self, register: &mut TimerRegister<'_>) {
         self.widget.register_timers(register)
     }
     fn accepts_focus(&self) -> OnFocus {
@@ -198,7 +198,7 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
     fn children_mut<'b, G>(&'b mut self, mut for_each: G)
         where A: 'b,
               Self::Widget: ParentDyn<A, F>,
-              G: FnMut(WidgetSummary<OffsetWidget<'b, Widget<A, F>>>) -> LoopFlow<()>
+              G: FnMut(WidgetSummary<OffsetWidget<'b, dyn Widget<A, F>>>) -> LoopFlow<()>
     {
         let child_offset = self.rect().min().to_vec();
         let clip_rect = self.rect_clipped();
@@ -226,9 +226,9 @@ impl<'a, 'b, A, F, W> OffsetWidgetTraitAs<'b, A, F> for &'b mut OffsetWidget<'a,
           F: RenderFrame,
           W: Widget<A, F> + ?Sized
 {
-    type AsParent = OffsetWidget<'b, ParentDyn<A, F>>;
+    type AsParent = OffsetWidget<'b, dyn ParentDyn<A, F>>;
 
-    fn as_parent_mut(self) -> Option<OffsetWidget<'b, ParentDyn<A, F>>> {
+    fn as_parent_mut(self) -> Option<OffsetWidget<'b, dyn ParentDyn<A, F>>> {
         match self.widget.as_parent_mut() {
             Some(self_as_parent) => Some(OffsetWidget {
                 widget: self_as_parent,

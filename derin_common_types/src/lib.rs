@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use cgmath_geometry::cgmath;
-extern crate num_traits;
-extern crate cgmath_geometry;
+
+
 #[macro_use]
 extern crate bitflags;
 #[cfg(feature = "serde")]

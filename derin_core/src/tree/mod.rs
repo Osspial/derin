@@ -186,30 +186,30 @@ pub trait Widget<A, F: RenderFrame> {
     fn widget_tag(&self) -> &WidgetTag;
     fn rect(&self) -> BoundBox<D2, i32>;
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32>;
-    fn render(&mut self, frame: &mut FrameRectStack<F>);
+    fn render(&mut self, frame: &mut FrameRectStack<'_, F>);
     fn on_widget_event(
         &mut self,
         event: WidgetEvent,
-        input_state: InputState,
-        popups: Option<ChildPopupsMut<A, F>>,
+        input_state: InputState<'_>,
+        popups: Option<ChildPopupsMut<'_, A, F>>,
         source_child: &[WidgetIdent]
     ) -> EventOps<A, F>;
 
     fn size_bounds(&self) -> SizeBounds {
         SizeBounds::default()
     }
-    fn register_timers(&self, _register: &mut TimerRegister) {}
+    fn register_timers(&self, _register: &mut TimerRegister<'_>) {}
     fn accepts_focus(&self) -> OnFocus {
         OnFocus::default()
     }
 
     #[doc(hidden)]
-    fn as_parent(&self) -> Option<&ParentDyn<A, F>> {
+    fn as_parent(&self) -> Option<&dyn ParentDyn<A, F>> {
         ParentDyn::from_widget(self)
     }
 
     #[doc(hidden)]
-    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<A, F>> {
+    fn as_parent_mut(&mut self) -> Option<&mut dyn ParentDyn<A, F>> {
         ParentDyn::from_widget_mut(self)
     }
 }
@@ -228,14 +228,14 @@ impl<'a, A, F, W> Widget<A, F> for &'a mut W
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         W::rect_mut(self)
     }
-    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut FrameRectStack<'_, F>) {
         W::render(self, frame)
     }
     fn on_widget_event(
         &mut self,
         event: WidgetEvent,
-        input_state: InputState,
-        popups: Option<ChildPopupsMut<A, F>>,
+        input_state: InputState<'_>,
+        popups: Option<ChildPopupsMut<'_, A, F>>,
         source_child: &[WidgetIdent]
     ) -> EventOps<A, F> {
         W::on_widget_event(self, event, input_state, popups, source_child)
@@ -244,7 +244,7 @@ impl<'a, A, F, W> Widget<A, F> for &'a mut W
     fn size_bounds(&self) -> SizeBounds {
         W::size_bounds(self)
     }
-    fn register_timers(&self, register: &mut TimerRegister) {
+    fn register_timers(&self, register: &mut TimerRegister<'_>) {
         W::register_timers(self, register)
     }
     fn accepts_focus(&self) -> OnFocus {
@@ -252,12 +252,12 @@ impl<'a, A, F, W> Widget<A, F> for &'a mut W
     }
 
     #[doc(hidden)]
-    fn as_parent(&self) -> Option<&ParentDyn<A, F>> {
+    fn as_parent(&self) -> Option<&dyn ParentDyn<A, F>> {
         W::as_parent(self)
     }
 
     #[doc(hidden)]
-    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<A, F>> {
+    fn as_parent_mut(&mut self) -> Option<&mut dyn ParentDyn<A, F>> {
         W::as_parent_mut(self)
     }
 }
@@ -277,14 +277,14 @@ impl<A, F, W> Widget<A, F> for Box<W>
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         W::rect_mut(self)
     }
-    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut FrameRectStack<'_, F>) {
         W::render(self, frame)
     }
     fn on_widget_event(
         &mut self,
         event: WidgetEvent,
-        input_state: InputState,
-        popups: Option<ChildPopupsMut<A, F>>,
+        input_state: InputState<'_>,
+        popups: Option<ChildPopupsMut<'_, A, F>>,
         source_child: &[WidgetIdent]
     ) -> EventOps<A, F> {
         W::on_widget_event(self, event, input_state, popups, source_child)
@@ -293,7 +293,7 @@ impl<A, F, W> Widget<A, F> for Box<W>
     fn size_bounds(&self) -> SizeBounds {
         W::size_bounds(self)
     }
-    fn register_timers(&self, register: &mut TimerRegister) {
+    fn register_timers(&self, register: &mut TimerRegister<'_>) {
         W::register_timers(self, register)
     }
     fn accepts_focus(&self) -> OnFocus {
@@ -301,12 +301,12 @@ impl<A, F, W> Widget<A, F> for Box<W>
     }
 
     #[doc(hidden)]
-    fn as_parent(&self) -> Option<&ParentDyn<A, F>> {
+    fn as_parent(&self) -> Option<&dyn ParentDyn<A, F>> {
         W::as_parent(self)
     }
 
     #[doc(hidden)]
-    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<A, F>> {
+    fn as_parent_mut(&mut self) -> Option<&mut dyn ParentDyn<A, F>> {
         W::as_parent_mut(self)
     }
 }
@@ -321,18 +321,18 @@ pub struct WidgetSummary<W: ?Sized> {
 pub trait Parent<A, F: RenderFrame>: Widget<A, F> {
     fn num_children(&self) -> usize;
 
-    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>>;
-    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>>;
+    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&dyn Widget<A, F>>>;
+    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut dyn Widget<A, F>>>;
 
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>>;
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>>;
+    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&dyn Widget<A, F>>>;
+    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut dyn Widget<A, F>>>;
 
     fn children<'a, G, R>(&'a self, for_each: G) -> Option<R>
         where A: 'a,
-              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow<R>;
+              G: FnMut(WidgetSummary<&'a dyn Widget<A, F>>) -> LoopFlow<R>;
     fn children_mut<'a, G, R>(&'a mut self, for_each: G) -> Option<R>
         where A: 'a,
-              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow<R>;
+              G: FnMut(WidgetSummary<&'a mut dyn Widget<A, F>>) -> LoopFlow<R>;
 
     fn update_child_layout(&mut self);
 
@@ -353,7 +353,7 @@ impl<'a, W: ?Sized> WidgetSummary<&'a W> {
         }
     }
 
-    pub fn to_dyn<A, F>(self) -> WidgetSummary<&'a Widget<A, F>>
+    pub fn to_dyn<A, F>(self) -> WidgetSummary<&'a dyn Widget<A, F>>
         where W: Widget<A, F>,
               F: RenderFrame
     {
@@ -377,7 +377,7 @@ impl<'a, W: ?Sized> WidgetSummary<&'a mut W> {
         }
     }
 
-    pub fn to_dyn_mut<A, F>(self) -> WidgetSummary<&'a mut Widget<A, F>>
+    pub fn to_dyn_mut<A, F>(self) -> WidgetSummary<&'a mut dyn Widget<A, F>>
         where W: Widget<A, F>,
               F: RenderFrame
     {

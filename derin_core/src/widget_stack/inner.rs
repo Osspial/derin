@@ -24,7 +24,7 @@ use crate::offset_widget::{OffsetWidget, OffsetWidgetTrait};
 // TODO: GET CODE REVIEWED FOR SAFETY
 
 struct StackElement<A, F: RenderFrame> {
-    widget: *mut (Widget<A, F>),
+    widget: *mut (dyn Widget<A, F>),
     rectangles: Option<ElementRects>,
     index: usize
 }
@@ -40,7 +40,7 @@ pub(crate) struct NRAllocCache<A, F: RenderFrame> {
     ident_vec: Vec<WidgetIdent>
 }
 
-pub struct NRVec<'a, A: 'static, F: 'a + RenderFrame> {
+pub struct NRVec<'a, A: 'static, F: RenderFrame> {
     cache: &'a mut Vec<StackElement<A, F>>,
     vec: Vec<StackElement<A, F>>,
     ident_vec: &'a mut Vec<WidgetIdent>,
@@ -50,7 +50,7 @@ pub struct NRVec<'a, A: 'static, F: 'a + RenderFrame> {
 }
 
 #[derive(Debug)]
-pub struct WidgetPath<'a, N: 'a + ?Sized> {
+pub struct WidgetPath<'a, N: ?Sized> {
     pub widget: OffsetWidget<'a, N>, // WHAT YOU'RE DOING: REPLACING WIDGET WITH OFFSETWIDGET
     pub path: &'a [WidgetIdent]
 }
@@ -63,7 +63,7 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
         }
     }
 
-    pub fn use_cache<'a>(&'a mut self, widget: &mut (Widget<A, F> + 'a), root_id: RootID) -> NRVec<'a, A, F> {
+    pub fn use_cache<'a>(&'a mut self, widget: &mut (dyn Widget<A, F> + 'a), root_id: RootID) -> NRVec<'a, A, F> {
         let mut cache_swap = Vec::new();
         mem::swap(&mut cache_swap, &mut self.vec);
 
@@ -93,7 +93,7 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
 
 impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
     #[inline]
-    pub fn top(&mut self) -> WidgetPath<Widget<A, F>> {
+    pub fn top(&mut self) -> WidgetPath<dyn Widget<A, F>> {
         let widget = self.vec.last_mut().map(|n| unsafe{ &mut *n.widget }).unwrap();
         WidgetPath {
             widget: OffsetWidget::new(widget, self.top_parent_offset(), self.clip_rect()),
@@ -154,7 +154,7 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn widgets<'b>(&'b self) -> impl 'b + Iterator<Item=&'a Widget<A, F>> + DoubleEndedIterator + ExactSizeIterator {
+    pub fn widgets<'b>(&'b self) -> impl 'b + Iterator<Item=&'a dyn Widget<A, F>> + DoubleEndedIterator + ExactSizeIterator {
         self.vec.iter().map(|n| unsafe{ &*n.widget })
     }
 
@@ -165,12 +165,12 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn try_push<G>(&mut self, with_top: G) -> Option<WidgetSummary<&'a mut Widget<A, F>>>
-        where G: FnOnce(&'a mut Widget<A, F>, &[WidgetIdent]) -> Option<WidgetSummary<&'a mut Widget<A, F>>>
+    pub fn try_push<G>(&mut self, with_top: G) -> Option<WidgetSummary<&'a mut dyn Widget<A, F>>>
+        where G: FnOnce(&'a mut dyn Widget<A, F>, &[WidgetIdent]) -> Option<WidgetSummary<&'a mut dyn Widget<A, F>>>
     {
         let new_top_opt = with_top(unsafe{ mem::transmute(self.top().widget.inner_mut()) }, &self.ident_vec );
         if let Some(new_top_summary) = new_top_opt {
-            assert_ne!(new_top_summary.widget as *mut Widget<A, F>, self.top().widget.inner_mut() as *mut Widget<A, F>);
+            assert_ne!(new_top_summary.widget as *mut dyn Widget<A, F>, self.top().widget.inner_mut() as *mut dyn Widget<A, F>);
             {
                 let cur_top = self.vec.last_mut().unwrap();
 
@@ -198,7 +198,7 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn pop(&mut self) -> Option<&'a mut Widget<A, F>> {
+    pub fn pop(&mut self) -> Option<&'a mut dyn Widget<A, F>> {
         // Ensure the base is never popped
         if self.vec.len() == 1 {
             return None;
