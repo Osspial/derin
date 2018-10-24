@@ -30,7 +30,6 @@ use gullery::ContextState;
 use gullery::framebuffer::render_state::{RenderState, BlendFunc, BlendFuncs};
 use gullery::program::{Shader, Program};
 use gullery::texture::Texture;
-use gullery::texture::targets::SimpleTex;
 use gullery::framebuffer::{DrawMode, Framebuffer, DefaultFramebuffer};
 use gullery::buffer::{Buffer, BufferUsage};
 use gullery::vertex::VertexArrayObject;
@@ -70,7 +69,7 @@ struct FrameDraw {
 
     // OpenGL structs
     context_state: Rc<ContextState>,
-    gl_tex_atlas: Texture<SimpleTex<D2, Rgba<u8>>>,
+    gl_tex_atlas: Texture<D2, Rgba<u8>>,
     render_state: RenderState,
     fb: DefaultFramebuffer,
     program: Program<GLVertex, GLUniforms<'static>>,
@@ -90,7 +89,7 @@ struct GLVertex {
 struct GLUniforms<'a> {
     atlas_size: Vector2<u32>,
     window_size: Point2<f32>,
-    tex_atlas: &'a Texture<SimpleTex<D2, Rgba<u8>>>
+    tex_atlas: &'a Texture<D2, Rgba<u8>>
 }
 
 pub trait PrimFrame: RenderFrame<Primitive=ThemedPrim<<Self as PrimFrame>::DirectRender>, Theme=Theme> {
@@ -150,16 +149,27 @@ impl GLRenderer {
 
         let gl_tex_atlas = Texture::new(DimsBox::new2(1024, 1024), 1, context_state.clone()).unwrap();
 
+        let mut vertices = vec![
+            GLVertex {
+                loc: Point2::new(0., 0.),
+                color: Rgba::new(0, 0, 0, 0),
+                tex_coord: Point2::new(0., 0.)
+            };
+            2048 * 3
+        ];
+        let vao = VertexArrayObject::new(Buffer::with_data(BufferUsage::StreamDraw, &vertices, context_state.clone()), None);
+        vertices.clear();
+
         Ok(GLRenderer {
             frame: GLFrame {
                 output_vertices: true,
                 poly_translator: Translator::new(),
                 draw: FrameDraw {
-                    vertices: Vec::new(),
+                    vertices,
                     atlas: Atlas::new(),
                     font_cache: FontCache::new(),
                     fb: DefaultFramebuffer::new(context_state.clone()),
-                    vao: VertexArrayObject::new(Buffer::with_size(BufferUsage::StreamDraw, 2048 * 3, context_state.clone()), None),
+                    vao,
                     render_state: RenderState {
                         blend: Some(BlendFuncs {
                             src_rgb: BlendFunc::SrcAlpha,
