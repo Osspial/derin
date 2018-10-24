@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::time::{Duration, Instant};
-use tree::WidgetID;
+use crate::tree::WidgetID;
 use std::cmp;
 use std::ops::Range;
 

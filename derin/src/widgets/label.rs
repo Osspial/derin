@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use widgets::{Contents, ContentsInner};
-use core::event::{EventOps, WidgetEvent, InputState};
-use core::tree::{WidgetIdent, WidgetTag, Widget};
-use core::render::FrameRectStack;
-use core::popup::ChildPopupsMut;
+use crate::widgets::{Contents, ContentsInner};
+use crate::core::event::{EventOps, WidgetEvent, InputState};
+use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
+use crate::core::render::FrameRectStack;
+use crate::core::popup::ChildPopupsMut;
 
-use cgmath::Point2;
+use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox}};
 use derin_common_types::layout::SizeBounds;
 
-use gl_render::PrimFrame;
+use crate::gl_render::PrimFrame;
 
 /// A simple, non-interactive label.
 ///

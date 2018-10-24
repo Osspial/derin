@@ -14,14 +14,14 @@
 
 use glutin::*;
 use glutin::{MouseButton as GMouseButton, WindowEvent as GWindowEvent, MouseScrollDelta};
-use gl_render::{GLRenderer, GLFrame};
+use crate::gl_render::{GLRenderer, GLFrame};
 use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
-use core::{Root, LoopFlow, WindowEvent, PopupDelta};
-use core::tree::{Widget, WidgetIdent};
-use core::event::WidgetEvent;
-use core::popup::PopupID;
-use core::render::Renderer;
-use theme::Theme;
+use crate::core::{Root, LoopFlow, WindowEvent, PopupDelta};
+use crate::core::tree::{Widget, WidgetIdent};
+use crate::core::event::WidgetEvent;
+use crate::core::popup::PopupID;
+use crate::core::render::Renderer;
+use crate::theme::Theme;
 use gullery::ContextState;
 
 use std::thread::{self, JoinHandle};
@@ -29,7 +29,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::collections::HashMap;
 use std::rc::Rc;
-use cgmath::{Point2, Vector2};
+use crate::cgmath::{Point2, Vector2};
 use cgmath_geometry::{D2, rect::{DimsBox, GeoBox}};
 
 use parking_lot::Mutex;

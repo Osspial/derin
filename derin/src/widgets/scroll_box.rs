@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::LoopFlow;
-use core::event::{EventOps, WidgetEvent, InputState};
-use core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
-use core::render::FrameRectStack;
-use core::popup::ChildPopupsMut;
+use crate::core::LoopFlow;
+use crate::core::event::{EventOps, WidgetEvent, InputState};
+use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
+use crate::core::render::FrameRectStack;
+use crate::core::popup::ChildPopupsMut;
 
-use cgmath::{Point2, Vector2};
+use crate::cgmath::{Point2, Vector2};
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use derin_common_types::layout::SizeBounds;
 use derin_common_types::buttons::MouseButton;
 
-use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
-use widgets::Clip;
-use widgets::assistants::SliderAssist;
+use crate::gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
+use crate::widgets::Clip;
+use crate::widgets::assistants::SliderAssist;
 
 use arrayvec::ArrayVec;
 

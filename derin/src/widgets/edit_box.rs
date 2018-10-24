@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use widgets::assistants::text_edit::{TextEditAssist, TextEditOps, LineCharFilter};
-use core::event::{EventOps, WidgetEvent, InputState};
-use core::tree::{WidgetIdent, WidgetTag, Widget};
-use core::render::{FrameRectStack, Theme};
-use core::popup::ChildPopupsMut;
-use core::timer::TimerRegister;
+use crate::widgets::assistants::text_edit::{TextEditAssist, TextEditOps, LineCharFilter};
+use crate::core::event::{EventOps, WidgetEvent, InputState};
+use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
+use crate::core::render::{FrameRectStack, Theme};
+use crate::core::popup::ChildPopupsMut;
+use crate::core::timer::TimerRegister;
 
-use cgmath::Point2;
+use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use derin_common_types::layout::SizeBounds;
 
-use gl_render::{ThemedPrim, PrimFrame, RenderString, EditString, RelPoint, Prim};
+use crate::gl_render::{ThemedPrim, PrimFrame, RenderString, EditString, RelPoint, Prim};
 
 use std::time::Duration;
 

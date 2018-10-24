@@ -14,19 +14,19 @@
 
 mod inner;
 
-use LoopFlow;
+use crate::LoopFlow;
 use std::cmp::{Ordering, Ord};
 use std::iter::{DoubleEndedIterator, ExactSizeIterator};
-use render::RenderFrame;
-use tree::{Widget, WidgetSummary, WidgetIdent, ChildEventRecv, WidgetTag, RootID, WidgetID};
-use tree::dynamic::ParentDyn;
+use crate::render::RenderFrame;
+use crate::tree::{Widget, WidgetSummary, WidgetIdent, ChildEventRecv, WidgetTag, RootID, WidgetID};
+use crate::tree::dynamic::ParentDyn;
 
 use self::inner::{NRAllocCache, NRVec};
 pub use self::inner::WidgetPath;
 
-use cgmath::{Vector2, EuclideanSpace};
+use crate::cgmath::{Vector2, EuclideanSpace};
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
-use offset_widget::{OffsetWidget, OffsetWidgetTrait, OffsetWidgetTraitAs};
+use crate::offset_widget::{OffsetWidget, OffsetWidgetTrait, OffsetWidgetTraitAs};
 
 pub(crate) struct WidgetStackBase<A, F: RenderFrame> {
     stack: NRAllocCache<A, F>

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use cgmath::Point2;
+use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 #[derive(Debug, Clone)]

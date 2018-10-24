@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use theme::ThemeFace;
+use crate::theme::ThemeFace;
 use glyphydog::{Face, FTLib, Error};
 
 use std::path::PathBuf;

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use gl_render::GLVertex;
-use gl_render::atlas::Atlas;
-use gl_render::translate::image::ImageTranslate;
-use theme::{ThemeText, RescaleRules, LineWrap};
+use crate::gl_render::GLVertex;
+use crate::gl_render::atlas::Atlas;
+use crate::gl_render::translate::image::ImageTranslate;
+use crate::theme::{ThemeText, RescaleRules, LineWrap};
 
-use cgmath::{EuclideanSpace, ElementWise, Point2, Vector2};
+use crate::cgmath::{EuclideanSpace, ElementWise, Point2, Vector2};
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, OffsetBox, GeoBox}, line::Segment};
 
 use gullery::image_format::Rgba;
@@ -34,7 +34,7 @@ use std::ops::Range;
 use std::any::Any;
 
 
-pub(in gl_render) struct TextTranslate<'a> {
+pub(in crate::gl_render) struct TextTranslate<'a> {
     glyph_draw: GlyphDraw<'a>,
 
     glyph_slice_index: usize,

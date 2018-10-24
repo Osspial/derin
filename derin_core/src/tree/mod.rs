@@ -14,21 +14,21 @@
 
 pub(crate) mod dynamic;
 
-use dynamic::ParentDyn;
+use crate::dynamic::ParentDyn;
 use std::sync::Arc;
 use std::cell::Cell;
 
-use LoopFlow;
-use cgmath::Point2;
+use crate::LoopFlow;
+use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::BoundBox};
 
-use mbseq::MouseButtonSequence;
+use crate::mbseq::MouseButtonSequence;
 use derin_common_types::buttons::MouseButton;
 use derin_common_types::layout::SizeBounds;
-use event::{WidgetEvent, EventOps, InputState};
-use render::{RenderFrame, FrameRectStack};
-use timer::TimerRegister;
-use popup::ChildPopupsMut;
+use crate::event::{WidgetEvent, EventOps, InputState};
+use crate::render::{RenderFrame, FrameRectStack};
+use crate::timer::TimerRegister;
+use crate::popup::ChildPopupsMut;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum WidgetIdent {

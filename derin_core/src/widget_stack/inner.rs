@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use std::mem;
-use render::RenderFrame;
-use tree::{Widget, WidgetIdent, WidgetSummary, RootID, Update};
+use crate::render::RenderFrame;
+use crate::tree::{Widget, WidgetIdent, WidgetSummary, RootID, Update};
 
-use cgmath::{Bounded, EuclideanSpace, Point2, Vector2};
+use crate::cgmath::{Bounded, EuclideanSpace, Point2, Vector2};
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
-use offset_widget::{OffsetWidget, OffsetWidgetTrait};
+use crate::offset_widget::{OffsetWidget, OffsetWidgetTrait};
 
 // TODO: GET CODE REVIEWED FOR SAFETY
 

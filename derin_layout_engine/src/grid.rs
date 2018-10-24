@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use Tr;
+use crate::Tr;
 use derin_common_types::Px;
-use cgmath::Point2;
+use crate::cgmath::Point2;
 use derin_common_types::layout::{GridSize, TrRange, TrackHints};
 
 use std::cmp;

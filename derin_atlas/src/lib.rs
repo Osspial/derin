@@ -20,7 +20,7 @@ extern crate cgmath_geometry;
 use std::{cmp, mem};
 use std::ops::Range;
 
-use cgmath::{EuclideanSpace, Point2, Vector2};
+use crate::cgmath::{EuclideanSpace, Point2, Vector2};
 use cgmath_geometry::{D2, rect::{DimsBox, OffsetBox, GeoBox}};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use cgmath::{Point2, Array, Bounded};
+use crate::cgmath::{Point2, Array, Bounded};
 use cgmath_geometry::{rect::{GeoBox, DimsBox}, line::Segment};
 
 use std::cmp::Ordering;
 
-use {WindowEvent, LoopFlow, Root};
-use tree::*;
-use tree::dynamic::*;
-use timer::{Timer, TimerList};
-use popup::{PopupSummary, PopupID};
-use event::{WidgetEvent, FocusChange};
-use render::{Renderer, RenderFrame, FrameRectStack};
-use widget_stack::{WidgetPath, WidgetStack};
-use meta_tracker::{MetaDrain, MetaEvent, MetaEventVariant};
-use offset_widget::*;
+use crate::{WindowEvent, LoopFlow, Root};
+use crate::tree::*;
+use crate::tree::dynamic::*;
+use crate::timer::{Timer, TimerList};
+use crate::popup::{PopupSummary, PopupID};
+use crate::event::{WidgetEvent, FocusChange};
+use crate::render::{Renderer, RenderFrame, FrameRectStack};
+use crate::widget_stack::{WidgetPath, WidgetStack};
+use crate::meta_tracker::{MetaDrain, MetaEvent, MetaEventVariant};
+use crate::offset_widget::*;
 
 use std::time::Duration;
 

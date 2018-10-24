@@ -14,9 +14,9 @@
 
 //! This module is Rust at its ugliest.
 
-use LoopFlow;
-use render::RenderFrame;
-use tree::{Parent, WidgetIdent, WidgetSummary, Widget, OnFocusOverflow};
+use crate::LoopFlow;
+use crate::render::RenderFrame;
+use crate::tree::{Parent, WidgetIdent, WidgetSummary, Widget, OnFocusOverflow};
 
 use arrayvec::ArrayVec;
 use std::mem;

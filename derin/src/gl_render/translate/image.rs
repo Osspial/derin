@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use gl_render::GLVertex;
+use crate::gl_render::GLVertex;
 use gullery::image_format::Rgba;
 
-use cgmath::{Point2, EuclideanSpace};
+use crate::cgmath::{Point2, EuclideanSpace};
 use cgmath_geometry::{D2, rect::{OffsetBox, BoundBox, GeoBox}};
 
-use theme::RescaleRules;
+use crate::theme::RescaleRules;
 
 use derin_common_types::layout::{Align, Margins};
 
-pub(in gl_render) struct ImageTranslate {
+pub(in crate::gl_render) struct ImageTranslate {
     verts: TranslateVerts,
     rect: Option<BoundBox<D2, i32>>,
     cur_vertex: usize

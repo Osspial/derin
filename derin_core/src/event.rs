@@ -14,10 +14,10 @@
 
 use derin_common_types::cursor::CursorIcon;
 use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
-use cgmath::{Point2, Vector2};
-use tree::{Widget, WidgetIdent};
-use render::RenderFrame;
-use popup::PopupAttributes;
+use crate::cgmath::{Point2, Vector2};
+use crate::tree::{Widget, WidgetIdent};
+use crate::render::RenderFrame;
+use crate::popup::PopupAttributes;
 
 use std::time::{Instant, Duration};
 

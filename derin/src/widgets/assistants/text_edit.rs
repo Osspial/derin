@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use gl_render::EditString;
-use event::{Key, ModifierKeys, WidgetEvent, FocusChange, InputState};
-use theme::CursorIcon;
+use crate::gl_render::EditString;
+use crate::event::{Key, ModifierKeys, WidgetEvent, FocusChange, InputState};
+use crate::theme::CursorIcon;
 use clipboard::{ClipboardContext, ClipboardProvider};
 use cgmath_geometry::line::Segment;
 

@@ -12,19 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use LoopFlow;
-use popup::ChildPopupsMut;
-use tree::{OnFocus, Widget, WidgetIdent, WidgetTag, WidgetSummary};
-use tree::dynamic::ParentDyn;
-use event::{InputState, WidgetEvent, EventOps};
-use render::RenderFrame;
-use timer::TimerRegister;
-use mbseq::MouseButtonSequenceTrackPos;
+use crate::LoopFlow;
+use crate::popup::ChildPopupsMut;
+use crate::tree::{OnFocus, Widget, WidgetIdent, WidgetTag, WidgetSummary};
+use crate::tree::dynamic::ParentDyn;
+use crate::event::{InputState, WidgetEvent, EventOps};
+use crate::render::RenderFrame;
+use crate::timer::TimerRegister;
+use crate::mbseq::MouseButtonSequenceTrackPos;
 
 use derin_common_types::buttons::{Key, ModifierKeys};
 use derin_common_types::layout::SizeBounds;
 
-use cgmath::{Point2, Vector2, EuclideanSpace};
+use crate::cgmath::{Point2, Vector2, EuclideanSpace};
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 use arrayvec::ArrayVec;

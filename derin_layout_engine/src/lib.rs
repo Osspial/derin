@@ -23,10 +23,10 @@ extern crate derin_common_types;
 mod grid;
 
 use derin_common_types::Px;
-use cgmath::{Point2, Vector2, EuclideanSpace};
+use crate::cgmath::{Point2, Vector2, EuclideanSpace};
 use cgmath_geometry::{D2, rect::{DimsBox, BoundBox, GeoBox}};
 use derin_common_types::layout::{Fr, Tr, Align2, Align, GridSize, WidgetPos, TrackHints, SizeBounds, Margins};
-use grid::{TrackVec, SizeResult};
+use crate::grid::{TrackVec, SizeResult};
 
 use std::cmp;
 
@@ -638,7 +638,7 @@ mod tests {
     use super::*;
     use quickcheck::{Arbitrary, Gen};
     use cgmath_geometry::*;
-    use cgmath::Point2;
+    use crate::cgmath::Point2;
     use std::mem;
 
     quickcheck!{

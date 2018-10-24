@@ -15,16 +15,16 @@
 mod image;
 mod text;
 
-use cgmath::{Point2, EuclideanSpace};
+use crate::cgmath::{Point2, EuclideanSpace};
 use cgmath_geometry::{D2, rect::{GeoBox, OffsetBox, BoundBox}};
 use glyphydog::{ShapedBuffer, Shaper, FaceSize, DPI};
 
 use gullery::image_format::Rgba;
 
-use gl_render::{FrameDraw, GLFrame, PrimFrame};
+use crate::gl_render::{FrameDraw, GLFrame, PrimFrame};
 
-use theme::Theme;
-use core::render::Theme as CoreTheme;
+use crate::theme::Theme;
+use crate::core::render::Theme as CoreTheme;
 
 use self::image::ImageTranslate;
 use self::text::TextTranslate;
@@ -78,7 +78,7 @@ impl Translator {
         }
     }
 
-    pub(in gl_render) fn translate_prims(
+    pub(in crate::gl_render) fn translate_prims(
         &mut self,
         parent_rect: BoundBox<D2, i32>,
         clip_rect: BoundBox<D2, i32>,

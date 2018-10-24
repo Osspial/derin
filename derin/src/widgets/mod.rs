@@ -41,17 +41,17 @@ pub use self::scroll_box::*;
 pub use self::slider::*;
 pub use self::tabs::*;
 
-use gl_render::{Prim, ThemedPrim, RenderString, RelPoint};
-use cgmath::Point2;
+use crate::gl_render::{Prim, ThemedPrim, RenderString, RelPoint};
+use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox}};
-use theme::Theme;
-use core::render::Theme as CoreTheme;
+use crate::theme::Theme;
+use crate::core::render::Theme as CoreTheme;
 
 /// The `Widget` trait, as well as associated types used to create custom widgets.
 pub mod custom {
-    pub use core::popup;
-    pub use core::timer::TimerRegister;
-    pub use core::tree::{WidgetTag, Widget, WidgetSummary, WidgetIdent};
+    pub use crate::core::popup;
+    pub use crate::core::timer::TimerRegister;
+    pub use crate::core::tree::{WidgetTag, Widget, WidgetSummary, WidgetIdent};
 }
 
 /// Determines which action, if any, should be taken in response to a button toggle.

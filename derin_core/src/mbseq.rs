@@ -15,9 +15,9 @@
 use std::iter::{ExactSizeIterator, FromIterator};
 
 use derin_common_types::buttons::{MouseButton, MOUSE_INT_MASK, MOUSE_INT_MASK_LEN, NUM_MOUSE_BUTTONS};
-use cgmath::Point2;
+use crate::cgmath::Point2;
 use arrayvec::{ArrayVec, IntoIter};
-use event::MouseDown;
+use crate::event::MouseDown;
 
 type PointArray = [Point2<i32>; MOUSE_INT_MASK_LEN as usize];
 

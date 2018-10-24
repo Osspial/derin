@@ -35,20 +35,20 @@ mod meta_tracker;
 mod offset_widget;
 mod event_loop_ops;
 
-use cgmath::{Point2, Vector2, Bounded};
+use crate::cgmath::{Point2, Vector2, Bounded};
 use cgmath_geometry::{D2, rect::DimsBox};
 
 use std::marker::PhantomData;
 use std::collections::VecDeque;
 
-use tree::*;
-pub use event_loop_ops::{EventLoopResult, PopupDelta};
-use timer::TimerList;
-use popup::PopupMap;
-use render::RenderFrame;
-use mbseq::MouseButtonSequenceTrackPos;
-use widget_stack::WidgetStackBase;
-use meta_tracker::MetaEventTracker;
+use crate::tree::*;
+pub use crate::event_loop_ops::{EventLoopResult, PopupDelta};
+use crate::timer::TimerList;
+use crate::popup::PopupMap;
+use crate::render::RenderFrame;
+use crate::mbseq::MouseButtonSequenceTrackPos;
+use crate::widget_stack::WidgetStackBase;
+use crate::meta_tracker::MetaEventTracker;
 use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
 use derin_common_types::cursor::CursorIcon;
 

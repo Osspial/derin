@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::LoopFlow;
-use core::event::{EventOps, WidgetEvent, InputState};
-use core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
-use core::render::FrameRectStack;
-use core::popup::ChildPopupsMut;
+use crate::core::LoopFlow;
+use crate::core::event::{EventOps, WidgetEvent, InputState};
+use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
+use crate::core::render::FrameRectStack;
+use crate::core::popup::ChildPopupsMut;
 
-use cgmath::{EuclideanSpace, Point2};
+use crate::cgmath::{EuclideanSpace, Point2};
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
-use gl_render::PrimFrame;
+use crate::gl_render::PrimFrame;
 
 /// Assistant widget that is used to clip another widget
 ///

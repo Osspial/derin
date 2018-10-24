@@ -15,14 +15,14 @@
 use std::cmp;
 use std::collections::HashMap;
 
-use cgmath::{Point2, Vector2};
+use crate::cgmath::{Point2, Vector2};
 use cgmath_geometry::{D2, rect::{OffsetBox, DimsBox, GeoBox}};
 
 use gullery::image_format::Rgba;
 
 use derin_atlas::SkylineAtlas;
 
-use theme::ThemeFace;
+use crate::theme::ThemeFace;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct GlyphKey {

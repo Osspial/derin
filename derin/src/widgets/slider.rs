@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use widgets::assistants::SliderAssist;
-use event::{EventOps, WidgetEvent, InputState, MouseButton};
-use core::tree::{WidgetIdent, WidgetTag, Widget};
-use core::render::{FrameRectStack, Theme};
-use core::popup::ChildPopupsMut;
-use theme::RescaleRules;
+use crate::widgets::assistants::SliderAssist;
+use crate::event::{EventOps, WidgetEvent, InputState, MouseButton};
+use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
+use crate::core::render::{FrameRectStack, Theme};
+use crate::core::popup::ChildPopupsMut;
+use crate::theme::RescaleRules;
 
-use cgmath::Point2;
+use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 
-use gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
+use crate::gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 
 pub trait SliderHandler: 'static {
     type Action: 'static;

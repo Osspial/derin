@@ -65,13 +65,13 @@ pub mod layout;
 pub mod theme;
 pub mod widgets;
 
-pub use glutin_window::{GlutinWindow as Window, WindowConfig};
+pub use crate::glutin_window::{GlutinWindow as Window, WindowConfig};
 pub use glutin::WindowAttributes;
-pub use core::LoopFlow;
+pub use crate::core::LoopFlow;
 
 /// `WidgetEvent` type and associated helpers.
 pub mod event {
-    pub use core::event::{EventOps, InputState, MouseDown, FocusChange, WidgetEvent};
+    pub use crate::core::event::{EventOps, InputState, MouseDown, FocusChange, WidgetEvent};
     pub use derin_common_types::buttons::{ModifierKeys, Key, MouseButton};
 }
 
@@ -79,6 +79,6 @@ pub mod event {
 ///
 /// The types within this module are all re-exported, either from `cgmath` or `cgmath-geometry`.
 pub mod geometry {
-    pub use cgmath::{Point2, Vector2};
+    pub use crate::cgmath::{Point2, Vector2};
     pub use cgmath_geometry::{D2, rect, line};
 }

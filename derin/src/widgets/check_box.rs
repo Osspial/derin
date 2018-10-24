@@ -12,18 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use widgets::assistants::ButtonState;
-use widgets::{Contents, ContentsInner, ToggleHandler};
-use cgmath::Point2;
+use crate::widgets::assistants::ButtonState;
+use crate::widgets::{Contents, ContentsInner, ToggleHandler};
+use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
-use core::event::{EventOps, InputState, WidgetEvent};
-use core::popup::ChildPopupsMut;
-use core::tree::{WidgetIdent, WidgetTag, Widget};
-use core::render::FrameRectStack;
+use crate::core::event::{EventOps, InputState, WidgetEvent};
+use crate::core::popup::ChildPopupsMut;
+use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
+use crate::core::render::FrameRectStack;
 use derin_common_types::layout::SizeBounds;
 
-use gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame};
+use crate::gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame};
 
 /// A toggleable box that can be either checked or unchecked.
 ///

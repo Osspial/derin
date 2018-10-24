@@ -18,9 +18,9 @@
 //! which contains a single widget is provided with the `SingleContainer` struct.
 use std::marker::PhantomData;
 
-use core::LoopFlow;
-use core::render::RenderFrame;
-use core::tree::{WidgetIdent, WidgetSummary, Widget};
+use crate::core::LoopFlow;
+use crate::core::render::RenderFrame;
+use crate::core::tree::{WidgetIdent, WidgetSummary, Widget};
 
 /// Designates a struct that contains other widgets.
 ///

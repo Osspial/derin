@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use tree::WidgetIdent;
-use cgmath::{EuclideanSpace, Point2};
+use crate::tree::WidgetIdent;
+use crate::cgmath::{EuclideanSpace, Point2};
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use derin_common_types::cursor::CursorIcon;
 use derin_common_types::layout::SizeBounds;

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use event::{FocusChange, WidgetEvent};
-use tree::WidgetIdent;
+use crate::event::{FocusChange, WidgetEvent};
+use crate::tree::WidgetIdent;
 use std::cmp;
 use std::ops::RangeFrom;
 use itertools::Itertools;
