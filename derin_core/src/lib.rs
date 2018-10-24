@@ -57,28 +57,33 @@ pub struct Root<A, N, F>
           A: 'static,
           F: RenderFrame + 'static
 {
+    // Event handing and dispatch
     id: RootID,
-    mouse_pos: Point2<i32>,
-    pub modifiers: ModifierKeys,
-    cursor_icon: CursorIcon,
-    mouse_buttons_down: MouseButtonSequenceTrackPos,
-    keys_down: Vec<Key>,
-
-    pub actions: VecDeque<A>,
     widget_stack_base: WidgetStackBase<A, F>,
-    needs_redraw: bool,
+    pub actions: VecDeque<A>,
     event_stamp: u32,
     widget_ident_stack: Vec<WidgetIdent>,
     meta_tracker: MetaEventTracker,
     timer_list: TimerList,
+
+    // Input State
+    mouse_pos: Point2<i32>,
+    mouse_buttons_down: MouseButtonSequenceTrackPos,
+    pub modifiers: ModifierKeys,
+    keys_down: Vec<Key>,
+
+    // Render State
+    cursor_icon: CursorIcon,
+    needs_redraw: bool,
+
+    // User data
     pub root_widget: N,
     pub theme: F::Theme,
     popup_widgets: PopupMap<A, F>,
 
+    // Per-frame information
     set_cursor_pos: Option<Point2<i32>>,
     set_cursor_icon: Option<CursorIcon>,
-
-    _marker: PhantomData<*const F>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -118,25 +123,26 @@ impl<A, N, F> Root<A, N, F>
         *root_widget.rect_mut() = dims.cast().unwrap_or(DimsBox::max_value()).into();
         Root {
             id: RootID::new(),
-            mouse_pos: Point2::new(-1, -1),
-            mouse_buttons_down: MouseButtonSequenceTrackPos::new(),
-            keys_down: Vec::new(),
-            modifiers: ModifierKeys::empty(),
-            cursor_icon: CursorIcon::default(),
-            actions: VecDeque::new(),
             widget_stack_base: WidgetStackBase::new(),
-            needs_redraw: true,
+            actions: VecDeque::new(),
             event_stamp: 1,
             widget_ident_stack: Vec::new(),
             meta_tracker: MetaEventTracker::default(),
             timer_list: TimerList::new(None),
+
+            mouse_pos: Point2::new(-1, -1),
+            mouse_buttons_down: MouseButtonSequenceTrackPos::new(),
+            modifiers: ModifierKeys::empty(),
+            keys_down: Vec::new(),
+
+            cursor_icon: CursorIcon::default(),
+            needs_redraw: true,
+
             root_widget, theme,
             popup_widgets: PopupMap::new(),
 
             set_cursor_pos: None,
             set_cursor_icon: None,
-
-            _marker: PhantomData
         }
     }
 
