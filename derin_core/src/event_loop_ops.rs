@@ -925,7 +925,7 @@ fn update_widget_timers<A: 'static, F: RenderFrame>(root_id: RootID, timer_list:
     if update_child {
         if let Some(widget_as_parent) = widget.as_parent_mut() {
             widget_as_parent.children_mut(&mut |children_summaries| {
-                for mut summary in children_summaries {
+                for summary in children_summaries {
                     update_widget_timers(root_id, timer_list, summary.widget);
                 }
 

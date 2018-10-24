@@ -19,8 +19,7 @@ extern crate cgmath_geometry;
 use std::slice;
 use derin_atlas::SkylineAtlas;
 use image::{DynamicImage, ColorType};
-use cgmath_geometry::cgmath::Point2;
-use cgmath_geometry::DimsBox;
+use cgmath_geometry::{D2, rect::DimsBox};
 
 fn main() {
     let mut atlas = SkylineAtlas::new([0; 4], DimsBox::new2(512, 512));
