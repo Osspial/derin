@@ -1,7 +1,4 @@
-use crate::{
-    tree::{Widget, WidgetID, WidgetIdent},
-    render::RenderFrame
-};
+use crate::tree::{WidgetID, WidgetIdent};
 use std::collections::{
     VecDeque,
     hash_map::{HashMap, Entry}
@@ -186,6 +183,10 @@ impl WidgetTree {
     }
 
     // pub(crate) fn child_from_end(&self, widget_id: WidgetID, offset: usize) -> Option<WidgetID> {unimplemented!()}
+
+    pub(crate) fn children(&self, widget_id: WidgetID) -> Option<impl Iterator<Item=(WidgetID, &'_ WidgetData)>> {
+        Some(self.children_nodes(widget_id)?.map(|(id, node)| (id, &node.data)))
+    }
 
     fn children_nodes(&self, widget_id: WidgetID) -> Option<impl Iterator<Item=(WidgetID, &'_ WidgetTreeNode)>> {
         let (_, children) = self.get_widget_node(widget_id)?;

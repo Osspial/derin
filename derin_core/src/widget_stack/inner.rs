@@ -14,7 +14,7 @@
 
 use std::mem;
 use crate::render::RenderFrame;
-use crate::tree::{Widget, WidgetIdent, WidgetSummary, RootID, Update};
+use crate::tree::{Widget, WidgetIdent, WidgetSummary, RootID, Update, ROOT_IDENT};
 
 use crate::cgmath::{Bounded, EuclideanSpace, Point2, Vector2};
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
@@ -41,18 +41,17 @@ pub(crate) struct NRAllocCache<A, F: RenderFrame> {
 }
 
 pub struct NRVec<'a, A: 'static, F: 'a + RenderFrame> {
-    cache: &'a mut Vec<StackElement<A, F>>,
-    vec: Vec<StackElement<A, F>>,
+    vec: &'a mut Vec<StackElement<A, F>>,
     ident_vec: &'a mut Vec<WidgetIdent>,
     clip_rect: Option<BoundBox<D2, i32>>,
     top_parent_offset: Vector2<i32>,
     root_id: RootID
 }
 
-#[derive(Debug)]
-pub struct WidgetPath<'a, N: 'a + ?Sized> {
-    pub widget: OffsetWidget<'a, N>, // WHAT YOU'RE DOING: REPLACING WIDGET WITH OFFSETWIDGET
-    pub path: &'a [WidgetIdent]
+pub struct WidgetPath<'a, A: 'static, F: 'a + RenderFrame> {
+    pub widget: OffsetWidget<'a, dyn Widget<A, F>>,
+    pub path: &'a [WidgetIdent],
+    pub index: usize
 }
 
 impl<A, F: RenderFrame> NRAllocCache<A, F> {
@@ -67,23 +66,16 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
         let mut cache_swap = Vec::new();
         mem::swap(&mut cache_swap, &mut self.vec);
 
-        let mut vec = unsafe {
-            let (ptr, len, cap) = (cache_swap.as_ptr(), cache_swap.len(), cache_swap.capacity());
-            mem::forget(cache_swap);
-            Vec::from_raw_parts(mem::transmute::<_, *mut StackElement<A, F>>(ptr), len, cap)
-        };
-        let ident_vec = &mut self.ident_vec;
-
-        vec.push(StackElement {
+        self.vec.push(StackElement {
             widget: widget,
             rectangles: None,
             index: 0
         });
-        ident_vec.push(WidgetIdent::Num(0));
+        self.ident_vec.push(ROOT_IDENT);
 
         NRVec {
-            cache: &mut self.vec,
-            vec, ident_vec,
+            vec: &mut self.vec,
+            ident_vec: &mut self.ident_vec,
             clip_rect: Some(BoundBox::new(Point2::new(0, 0), Point2::max_value())),
             top_parent_offset: Vector2::new(0, 0),
             root_id
@@ -93,11 +85,12 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
 
 impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
     #[inline]
-    pub fn top(&mut self) -> WidgetPath<Widget<A, F>> {
+    pub fn top(&mut self) -> WidgetPath<A, F> {
         let widget = self.vec.last_mut().map(|n| unsafe{ &mut *n.widget }).unwrap();
         WidgetPath {
             widget: OffsetWidget::new(widget, self.top_parent_offset(), self.clip_rect()),
-            path: &self.ident_vec
+            path: &self.ident_vec,
+            index: self.top_index()
         }
     }
 
@@ -159,7 +152,7 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn ident(&self) -> &[WidgetIdent] {
+    pub fn path(&self) -> &[WidgetIdent] {
         debug_assert_eq!(self.ident_vec.len(), self.vec.len());
         &self.ident_vec
     }
@@ -233,21 +226,6 @@ impl<'a, A: 'static, F: RenderFrame> Drop for NRVec<'a, A, F> {
         while let Some(_) = self.pop() {}
         self.vec.clear();
         self.ident_vec.clear();
-
-        let mut vec = unsafe {
-            let (ptr, len, cap) = (self.vec.as_ptr(), self.vec.len(), self.vec.capacity());
-            Vec::from_raw_parts(mem::transmute::<_, *mut StackElement<A, F>>(ptr), len, cap)
-        };
-        let mut empty_vec = unsafe {
-            let (ptr, len, cap) = (self.cache.as_ptr(), self.cache.len(), self.cache.capacity());
-            Vec::from_raw_parts(mem::transmute::<_, *mut StackElement<A, F>>(ptr), len, cap)
-        };
-
-        mem::swap(self.cache, &mut vec);
-        mem::swap(&mut self.vec, &mut empty_vec);
-
-        mem::forget(vec);
-        mem::forget(empty_vec);
     }
 }
 

@@ -30,6 +30,7 @@ use crate::render::{RenderFrame, FrameRectStack};
 use crate::timer::TimerRegister;
 use crate::popup::ChildPopupsMut;
 
+pub(crate) const ROOT_IDENT: WidgetIdent = WidgetIdent::Num(0);
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum WidgetIdent {
     Str(Arc<str>),

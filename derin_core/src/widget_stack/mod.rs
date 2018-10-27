@@ -18,7 +18,7 @@ use crate::LoopFlow;
 use std::cmp::{Ordering, Ord};
 use std::iter::{DoubleEndedIterator, ExactSizeIterator};
 use crate::render::RenderFrame;
-use crate::tree::{Widget, WidgetSummary, WidgetIdent, ChildEventRecv, WidgetTag, RootID, WidgetID};
+use crate::tree::{Widget, WidgetSummary, WidgetIdent, ChildEventRecv, WidgetTag, RootID, WidgetID, ROOT_IDENT};
 use crate::tree::dynamic::ParentDyn;
 
 use self::inner::{NRAllocCache, NRVec};
@@ -32,7 +32,7 @@ pub(crate) struct WidgetStackBase<A, F: RenderFrame> {
     stack: NRAllocCache<A, F>
 }
 
-pub struct WidgetStack<'a, A: 'static, F: 'a + RenderFrame, Root: 'a + ?Sized> {
+pub struct WidgetStack<'a, A: 'static, F: 'a + RenderFrame, Root: 'a + ?Sized = Widget<A, F>> {
     stack: NRVec<'a, A, F>,
     root: *mut Root
 }
@@ -60,127 +60,8 @@ impl<A: 'static, F: RenderFrame> WidgetStackBase<A, F> {
 }
 
 impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, Root> {
-    pub fn drain_to_root<G>(&mut self, mut for_each: G) -> WidgetPath<Root>
-        where G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent])
-    {
-        self.drain_to_root_while(|widget, ident| {for_each(widget, ident); true}).unwrap()
-    }
-
-    pub fn drain_to_root_while<G>(&mut self, mut for_each: G) -> Option<WidgetPath<Root>>
-        where G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent]) -> bool
-    {
-        let mut continue_drain = true;
-        while self.stack.len() > 1 && continue_drain {
-            {
-                let top = self.stack.top();
-                continue_drain = for_each(top.widget, top.path);
-            }
-            self.stack.pop();
-        }
-
-        if !continue_drain {
-            return None;
-        }
-
-        let top = self.stack.top();
-        for_each(top.widget, top.path);
-
-        let mut top = self.stack.top();
-        assert_eq!(self.root as *mut () as usize, top.widget.inner_mut() as *mut _ as *mut () as usize);
-        Some(WidgetPath {
-            widget: OffsetWidget::new(
-                unsafe{ &mut *self.root },
-                Vector2::new(0, 0),
-                Some(BoundBox::new2(0, 0, i32::max_value(), i32::max_value()))
-            ),
-            path: top.path
-        })
-    }
-
     #[inline]
-    pub fn move_to_root(&mut self) -> WidgetPath<Root> {
-        self.stack.truncate(1);
-
-        let mut top = self.stack.top();
-        assert_eq!(self.root as *mut () as usize, top.widget.inner_mut() as *mut _ as *mut () as usize);
-        WidgetPath {
-            widget: OffsetWidget::new(
-                unsafe{ &mut *self.root },
-                Vector2::new(0, 0),
-                Some(BoundBox::new2(0, 0, i32::max_value(), i32::max_value()))
-            ),
-            path: top.path
-        }
-    }
-
-    pub fn move_to_sibling_delta(&mut self, sibling_dist: isize) -> Result<WidgetPath<Widget<A, F>>, Ordering> {
-        if sibling_dist == 0 {
-            return Ok(self.stack.top());
-        }
-
-        let top_index = self.stack.top_index();
-        let sibling_index = top_index as isize + sibling_dist;
-        let left_cmp = sibling_index.cmp(&0);
-        self.stack.pop().ok_or(left_cmp)?;
-
-        let num_children = self.stack.top().widget.as_parent_mut().unwrap().num_children();
-        let right_cmp = sibling_index.cmp(&(num_children as isize));
-
-        match (left_cmp, right_cmp) {
-            (Ordering::Greater, Ordering::Less) |
-            (Ordering::Equal, Ordering::Less) => {
-                let child = self.stack.try_push(|widget, _|
-                    widget.as_parent_mut().unwrap().child_by_index_mut(sibling_index as usize)
-                ).unwrap();
-                Ok(WidgetPath {
-                    widget: OffsetWidget::new(
-                        child.widget,
-                        self.stack.top_parent_offset(),
-                        self.stack.clip_rect()
-                    ),
-                    path: self.stack.ident()
-                })
-            },
-            _ => {
-                self.stack.try_push(|widget, _|
-                    widget.as_parent_mut().unwrap().child_by_index_mut(top_index)
-                ).unwrap();
-                Err(left_cmp)
-            }
-        }
-    }
-
-    pub fn move_to_sibling_index(&mut self, sibling_index: usize) -> Result<WidgetPath<Widget<A, F>>, Ordering> {
-        let top_index = self.stack.top_index();
-        if self.stack.pop().is_none() {
-            return match sibling_index {
-                0 => Ok(self.stack.top()),
-                _ => Err(Ordering::Greater)
-            };
-        }
-        let child = self.stack.try_push(|widget, _|
-            widget.as_parent_mut().unwrap().child_by_index_mut(sibling_index)
-        );
-        match child {
-            Some(child) => Ok(WidgetPath {
-                widget: OffsetWidget::new(
-                    child.widget,
-                    self.stack.top_parent_offset(),
-                    self.stack.clip_rect()
-                ),
-                path: self.stack.ident()
-            }),
-            None => {
-                self.stack.try_push(|widget, _|
-                    widget.as_parent_mut().unwrap().child_by_index_mut(top_index)
-                ).unwrap();
-                Err(Ordering::Greater)
-            }
-        }
-    }
-
-    #[inline]
-    pub fn top(&mut self) -> WidgetPath<Widget<A, F>> {
+    pub fn top(&mut self) -> WidgetPath<A, F> {
         self.stack.top()
     }
 
@@ -190,8 +71,8 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
     }
 
     #[inline]
-    pub fn ident(&self) -> &[WidgetIdent] {
-        self.stack.ident()
+    pub fn path(&self) -> &[WidgetIdent] {
+        self.stack.path()
     }
 
     pub fn parent(&self) -> Option<&ParentDyn<A, F>> {
@@ -220,27 +101,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         self.stack.len() - 1
     }
 
-    #[inline]
-    pub fn move_to_hover(&mut self) -> Option<WidgetPath<Widget<A, F>>> {
-        let mut found_widget = false;
-        self.move_over_flags(ChildEventRecv::MOUSE_HOVER, |_, _| found_widget = true);
-        match found_widget {
-            false => None,
-            true => Some(self.top())
-        }
-    }
-
-    #[inline]
-    pub fn move_to_keyboard_focus(&mut self) -> Option<WidgetPath<Widget<A, F>>> {
-        let mut found_widget = false;
-        self.move_over_flags(ChildEventRecv::KEYBOARD, |_, _| found_widget = true);
-        match found_widget {
-            false => None,
-            true => Some(self.top())
-        }
-    }
-
-    pub fn move_to_path<I>(&mut self, ident_path: I) -> Option<WidgetPath<Widget<A, F>>>
+    pub fn move_to_path<I>(&mut self, ident_path: I) -> Option<WidgetPath<A, F>>
         where I: IntoIterator<Item=WidgetIdent>
     {
         let mut ident_path_iter = ident_path.into_iter().peekable();
@@ -249,7 +110,7 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         // to that depth.
         let mut diverge_depth = 0;
         {
-            let mut active_path_iter = self.stack.ident().iter();
+            let mut active_path_iter = self.stack.path().iter();
             // While the next item in the ident path and the active path are equal, increment the
             // diverge depth.
             while active_path_iter.next().and_then(|ident| ident_path_iter.peek().map(|i| i == ident)).unwrap_or(false) {
@@ -283,134 +144,19 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         }
     }
 
-    /// Returns number of widgets visited. `for_each_flag` takes widget at flag, and ident path of widget.
-    pub(crate) fn move_over_flags<G>(&mut self, mut flags: ChildEventRecv, mut for_each_flag: G) -> usize
-        where G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent])
-    {
-        assert_ne!(self.stack.widgets().len(), 0);
-
-        let get_update_flags = |update: &WidgetTag| update.child_event_recv.get() | ChildEventRecv::from(update);
-        // Remove flags from the search set that aren't found at the root of the tree.
-        flags &= {
-            let root_update = self.stack.widgets().next().unwrap().widget_tag();
-            get_update_flags(root_update)
-        };
-
-        let mut widgets_visited = 0;
-        let mut on_flag_trail = None;
-
-        while !flags.is_empty() {
-            if on_flag_trail.is_none() {
-                // The index and update tag of the closest flagged parent
-                let (cfp_index, cfp_widget_tag) =
-                    self.stack.widgets().map(|n| n.widget_tag()).enumerate().rev()
-                        .find(|&(_, u)| flags & (get_update_flags(u)) != ChildEventRecv::empty())
-                        .unwrap();
-
-                self.stack.truncate(cfp_index + 1);
-                on_flag_trail = Some(get_update_flags(cfp_widget_tag) & flags);
-            }
-            let flag_trail_flags = on_flag_trail.unwrap();
-            let mut remove_flags = ChildEventRecv::empty();
-            let top_parent_offset = self.stack.top_parent_offset();
-            let clip_rect = self.stack.clip_rect();
-
-            let mut top_widget_offset = Vector2::new(0, 0);
-            self.stack.try_push(|top_widget, path| {
-                top_widget_offset = top_widget.rect().min().to_vec();
-                match top_widget.as_parent_mut().is_some() {
-                    false => {
-                        let widget_tags = ChildEventRecv::from(top_widget.widget_tag());
-                        if widget_tags & flag_trail_flags != ChildEventRecv::empty() {
-                            for_each_flag(
-                                OffsetWidget::new(
-                                    top_widget,
-                                    top_parent_offset,
-                                    clip_rect
-                                ),
-                                path
-                            );
-
-                            let widget_tag = top_widget.widget_tag();
-                            let flags_removed = flag_trail_flags - ChildEventRecv::from(widget_tag);
-                            widgets_visited += 1;
-                            remove_flags |= flags_removed;
-                        }
-
-                        flags &= !flag_trail_flags;
-                        on_flag_trail = None;
-
-                        None
-                    },
-                    true => {
-                        let top_widget_as_parent = top_widget.as_parent_mut().unwrap();
-                        let mut child_ident = None;
-
-                        top_widget_as_parent.children(&mut |children_summaries| {
-                            for child_summary in children_summaries.iter() {
-                                let child_flags = get_update_flags(&child_summary.widget.widget_tag());
-                                if child_flags & flag_trail_flags != ChildEventRecv::empty() {
-                                    on_flag_trail = Some(child_flags & flag_trail_flags);
-                                    child_ident = Some(child_summary.ident.clone());
-                                    return LoopFlow::Break(());
-                                }
-                            }
-
-                            LoopFlow::Continue
-                        });
-
-                        if child_ident.is_none() {
-                            let widget_tags = ChildEventRecv::from(top_widget_as_parent.widget_tag());
-                            if widget_tags & flag_trail_flags != ChildEventRecv::empty() {
-                                for_each_flag(
-                                    OffsetWidget::new(
-                                        top_widget_as_parent.as_widget(),
-                                        top_parent_offset,
-                                        clip_rect
-                                    ),
-                                    path
-                                );
-
-                                let widget_tag = top_widget_as_parent.widget_tag();
-                                let flags_removed = flag_trail_flags - ChildEventRecv::from(widget_tag);
-                                widgets_visited += 1;
-                                remove_flags |= flags_removed;
-                            }
-
-                            flags &= !flag_trail_flags;
-                            on_flag_trail = None;
-                        }
-
-                        match child_ident {
-                            Some(i) => top_widget_as_parent.child_mut(i),
-                            None => None
-                        }
-                    }
-                }
-            });
-
-            flags &= !remove_flags;
-        }
-
-        widgets_visited
-    }
-
-    pub(crate) fn move_over_widgets<I, G>(&mut self, widget_ids: I, mut for_each_widget: G)
-        where I: IntoIterator<Item=WidgetID> + ExactSizeIterator + Clone,
-              G: FnMut(OffsetWidget<Widget<A, F>>, &[WidgetIdent], usize)
-    {
-        self.move_to_root();
-        let mut widgets_left = widget_ids.len();
+    pub(crate) fn search_for_widget(&mut self, widget_id: WidgetID) -> Option<WidgetPath<A, F>> {
+        self.move_to_path(Some(ROOT_IDENT));
+        let mut widget_found = false;
         let mut child_index = 0;
-        while widgets_left > 0 {
+        loop {
             let top_parent_offset = self.stack.top_parent_offset();
             let clip_rect = self.stack.clip_rect();
             let valid_child = self.stack.try_push(|top_widget, top_path| {
                 let top_id = top_widget.widget_tag().widget_id;
 
-                if let Some((iter_index, _)) = widget_ids.clone().into_iter().enumerate().find(|&(_, id)| id == top_id) {
-                    for_each_widget(OffsetWidget::new(top_widget, top_parent_offset, clip_rect), top_path, iter_index);
-                    widgets_left -= 1;
+                if widget_id == top_id {
+                    widget_found = true;
+                    return None;
                 }
 
                 if let Some(top_widget_as_parent) = top_widget.as_parent_mut() {
@@ -420,12 +166,16 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
                 None
             }).is_some();
 
+            if widget_found {
+                break Some(self.top());
+            }
+
             match valid_child {
                 true => child_index = 0,
                 false => {
                     child_index = self.stack.top_index() + 1;
                     if self.stack.pop().is_none() {
-                        break
+                        break None
                     }
                 }
             }

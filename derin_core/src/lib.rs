@@ -35,11 +35,11 @@ mod meta_tracker;
 mod offset_widget;
 mod event_loop_ops;
 mod widget_tree;
+mod event_dispatcher;
 
 use crate::cgmath::{Point2, Vector2, Bounded};
 use cgmath_geometry::{D2, rect::DimsBox};
 
-use std::marker::PhantomData;
 use std::collections::VecDeque;
 
 use crate::tree::*;

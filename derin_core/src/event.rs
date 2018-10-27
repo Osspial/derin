@@ -102,21 +102,17 @@ pub struct InputState<'a> {
 /// All point coordinates are given relative to the widget's origin.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WidgetEvent {
-    /// The mouse cursor has entered the widget at the given position.
-    MouseEnter(Point2<i32>),
-    /// The mouse cursor has exited the widget at the given position.
-    MouseExit(Point2<i32>),
-    /// The mouse cursor has entered a child at a given position.
+    /// The mouse cursor has entered the widget.
+    MouseEnter,
+    /// The mouse cursor has exited the widget.
+    MouseExit,
+    /// The mouse cursor has entered a child.
     MouseEnterChild {
-        /// The position where the cursor entered the child.
-        enter_pos: Point2<i32>,
         /// The identifier of the child entered.
         child: WidgetIdent
     },
-    /// The mouse cursor has exitd a child at a given position.
+    /// The mouse cursor has exited a child.
     MouseExitChild {
-        /// The position where the cursor exited the child.
-        exit_pos: Point2<i32>,
         /// The identifier of the child entered.
         child: WidgetIdent
     },
@@ -199,8 +195,8 @@ impl WidgetEvent {
             WidgetEvent::KeyDown(..) |
             WidgetEvent::KeyUp(..) => true,
 
-            WidgetEvent::MouseEnter(..) |
-            WidgetEvent::MouseExit(..) |
+            WidgetEvent::MouseEnter |
+            WidgetEvent::MouseExit |
             WidgetEvent::MouseEnterChild{..} |
             WidgetEvent::MouseExitChild{..} |
             WidgetEvent::MouseMove{..} |
@@ -213,20 +209,6 @@ impl WidgetEvent {
     /// Shift coordinates within the widget by the specified vector.
     pub fn translate(self, dir: Vector2<i32>) -> WidgetEvent {
         match self {
-            WidgetEvent::MouseEnter(enter_pos) =>
-                WidgetEvent::MouseEnter(enter_pos + dir),
-            WidgetEvent::MouseExit(exit_pos) =>
-                WidgetEvent::MouseExit(exit_pos + dir),
-            WidgetEvent::MouseEnterChild{ enter_pos, child } =>
-                WidgetEvent::MouseEnterChild {
-                    enter_pos: enter_pos + dir,
-                    child,
-                },
-            WidgetEvent::MouseExitChild{ exit_pos, child } =>
-                WidgetEvent::MouseExitChild {
-                    exit_pos: exit_pos + dir,
-                    child,
-                },
             WidgetEvent::MouseMove{ old_pos, new_pos, in_widget } =>
                 WidgetEvent::MouseMove {
                     old_pos: old_pos + dir, new_pos: new_pos + dir,
@@ -243,6 +225,10 @@ impl WidgetEvent {
                     down_pos: down_pos + dir,
                     in_widget, pressed_in_widget, button
                 },
+            WidgetEvent::MouseEnter            |
+            WidgetEvent::MouseExit             |
+            WidgetEvent::MouseEnterChild{..}   |
+            WidgetEvent::MouseExitChild{..}    |
             WidgetEvent::Char(..)              |
             WidgetEvent::LoseFocus             |
             WidgetEvent::GainFocus             |
