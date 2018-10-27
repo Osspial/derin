@@ -415,6 +415,16 @@ bitflags!{
     }
 }
 
+impl WidgetIdent {
+    pub fn new_str(s: &str) -> WidgetIdent {
+        WidgetIdent::Str(Arc::from(s))
+    }
+
+    pub fn new_str_collection(s: &str, i: u32) -> WidgetIdent {
+        WidgetIdent::StrCollection(Arc::from(s), i)
+    }
+}
+
 impl WidgetTag {
     #[inline]
     pub fn new() -> WidgetTag {
