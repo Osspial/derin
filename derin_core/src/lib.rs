@@ -31,7 +31,6 @@ pub mod popup;
 pub mod render;
 mod mbseq;
 mod widget_stack;
-mod meta_tracker;
 mod offset_widget;
 mod event_loop_ops;
 mod widget_tree;
@@ -49,7 +48,6 @@ use crate::popup::PopupMap;
 use crate::render::RenderFrame;
 use crate::mbseq::MouseButtonSequenceTrackPos;
 use crate::widget_stack::WidgetStackBase;
-use crate::meta_tracker::MetaEventTracker;
 use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
 use derin_common_types::cursor::CursorIcon;
 
@@ -63,8 +61,6 @@ pub struct Root<A, N, F>
     widget_stack_base: WidgetStackBase<A, F>,
     pub actions: VecDeque<A>,
     event_stamp: u32,
-    widget_ident_stack: Vec<WidgetIdent>,
-    meta_tracker: MetaEventTracker,
     timer_list: TimerList,
 
     // Input State
@@ -127,8 +123,6 @@ impl<A, N, F> Root<A, N, F>
             widget_stack_base: WidgetStackBase::new(),
             actions: VecDeque::new(),
             event_stamp: 1,
-            widget_ident_stack: Vec::new(),
-            meta_tracker: MetaEventTracker::default(),
             timer_list: TimerList::new(None),
 
             mouse_pos: Point2::new(-1, -1),

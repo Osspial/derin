@@ -25,7 +25,6 @@ use crate::popup::{PopupSummary, PopupID};
 use crate::event::{WidgetEvent, FocusChange};
 use crate::render::{Renderer, RenderFrame, FrameRectStack};
 use crate::widget_stack::{WidgetPath, WidgetStack};
-use crate::meta_tracker::{MetaDrain, MetaEvent, MetaEventVariant};
 use crate::offset_widget::*;
 
 use std::time::Duration;
@@ -81,7 +80,6 @@ impl<A, N, F> Root<A, N, F>
         let Root {
             id: root_id,
             needs_redraw: ref mut root_needs_redraw,
-            ref mut widget_ident_stack,
             ref mut root_widget,
             ref mut theme,
             ref mut cursor_icon,
@@ -124,7 +122,7 @@ impl<A, N, F> Root<A, N, F>
                     macro_rules! render {
                         ($prerender_pass:expr) => {{
                             let (frame, base_transform) = renderer.make_frame(!$prerender_pass);
-                            let mut frame_rect_stack = FrameRectStack::new(frame, base_transform, theme, widget_ident_stack);
+                            let mut frame_rect_stack = FrameRectStack::new(frame, base_transform, theme);
 
                             if root_update.render_self {
                                 redraw_widget.render(&mut frame_rect_stack);
@@ -288,7 +286,7 @@ impl<'a, F> WidgetRenderer<'a, F>
 
                 match child_widget.as_parent_mut() {
                     Some(child_widget_as_parent) => {
-                        if let Some(mut child_frame) = self.frame.enter_child_widget(ident.clone()).enter_child_rect(child_rect) {
+                        if let Some(mut child_frame) = self.frame.enter_child_rect(child_rect) {
                             if render_self {
                                 child_widget_as_parent.render(&mut child_frame);
                             }
@@ -305,7 +303,7 @@ impl<'a, F> WidgetRenderer<'a, F>
                     },
                     None => {
                         if render_self {
-                            if let Some(mut child_frame) = self.frame.enter_child_widget(ident.clone()).enter_child_rect(child_rect) {
+                            if let Some(mut child_frame) = self.frame.enter_child_rect(child_rect) {
                                 child_widget.render(&mut child_frame);
                             }
                         }

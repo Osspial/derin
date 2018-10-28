@@ -313,7 +313,7 @@ impl RenderFrame for GLFrame {
     type Primitive = ThemedPrim<<Self as PrimFrame>::DirectRender>;
     type Theme = Theme;
 
-    fn upload_primitives<I>(&mut self, _ident: &[WidgetIdent], theme: &Theme, transform: BoundBox<D2, i32>, clip_rect: BoundBox<D2, i32>, prim_iter: I)
+    fn upload_primitives<I>(&mut self, theme: &Theme, transform: BoundBox<D2, i32>, clip_rect: BoundBox<D2, i32>, prim_iter: I)
         where I: Iterator<Item=ThemedPrim<<GLFrame as PrimFrame>::DirectRender>>
     {
         let dpi_axis = 72;// (72. * self.draw.scale_factor) as u32;

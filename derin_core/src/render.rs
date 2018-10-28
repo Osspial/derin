@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::tree::WidgetIdent;
 use crate::cgmath::{EuclideanSpace, Point2};
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use derin_common_types::cursor::CursorIcon;
@@ -37,7 +36,6 @@ pub trait RenderFrame: 'static {
 
     fn upload_primitives<I>(
         &mut self,
-        widget_ident: &[WidgetIdent],
         theme: &Self::Theme,
         transform: BoundBox<D2, i32>,
         clip: BoundBox<D2, i32>,
@@ -60,7 +58,6 @@ pub struct FrameRectStack<'a, F: 'a + RenderFrame> {
     theme: &'a F::Theme,
 
     pop_widget_ident: bool,
-    widget_ident: &'a mut Vec<WidgetIdent>,
 }
 
 impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
@@ -69,7 +66,6 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
         frame: &'a mut F,
         base_transform: BoundBox<D2, i32>,
         theme: &'a F::Theme,
-        widget_ident_vec: &'a mut Vec<WidgetIdent>
     ) -> FrameRectStack<'a, F>
     {
         FrameRectStack {
@@ -80,7 +76,6 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
             theme,
 
             pop_widget_ident: false,
-            widget_ident: widget_ident_vec
         }
     }
 
@@ -93,8 +88,7 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
     pub fn upload_primitives<I>(&mut self, prim_iter: I)
         where I: IntoIterator<Item=F::Primitive>
     {
-        let widget_ident = &self.widget_ident;
-        self.frame.upload_primitives(widget_ident, self.theme, self.transform, self.clip_rect, prim_iter.into_iter())
+        self.frame.upload_primitives(self.theme, self.transform, self.clip_rect, prim_iter.into_iter())
     }
 
     #[inline]
@@ -106,28 +100,7 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
             clip_rect: self.clip_rect.intersect_rect(child_transform)?,
 
             theme: self.theme,
-            widget_ident: self.widget_ident,
             pop_widget_ident: false,
         })
-    }
-
-    pub(crate) fn enter_child_widget<'b>(&'b mut self, child_ident: WidgetIdent) -> FrameRectStack<'b, F> {
-        self.widget_ident.push(child_ident);
-        FrameRectStack {
-            frame: self.frame,
-            transform: self.transform,
-            clip_rect: self.clip_rect,
-            theme: self.theme,
-            widget_ident: self.widget_ident,
-            pop_widget_ident: true,
-        }
-    }
-}
-
-impl<'a, F: RenderFrame> Drop for FrameRectStack<'a, F> {
-    fn drop(&mut self) {
-        if self.pop_widget_ident {
-            self.widget_ident.pop().expect("Too many pops");
-        }
     }
 }
