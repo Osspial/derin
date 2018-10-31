@@ -1,7 +1,10 @@
 use crate::tree::{WidgetID, WidgetIdent};
-use std::collections::{
-    VecDeque,
-    hash_map::{HashMap, Entry}
+use std::{
+    cell::Cell,
+    collections::{
+        VecDeque,
+        hash_map::{HashMap, Entry}
+    }
 };
 use fnv::FnvBuildHasher;
 
@@ -29,7 +32,8 @@ struct WidgetTreeNode {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct WidgetData {
-    pub ident: WidgetIdent
+    pub ident: WidgetIdent,
+    depth: Cell<u32>
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -52,7 +56,10 @@ impl WidgetTree {
     pub(crate) fn new(root: WidgetID, root_ident: WidgetIdent) -> WidgetTree {
         WidgetTree {
             root,
-            root_data: WidgetData{ ident: root_ident },
+            root_data: WidgetData {
+                ident: root_ident,
+                depth: Cell::new(0)
+            },
             root_children: Vec::new(),
             tree_data: HashMap::default()
         }
@@ -65,7 +72,8 @@ impl WidgetTree {
             return Err(WidgetInsertError::WidgetIsRoot);
         }
 
-        if let Some((_, children)) = self.get_widget_node_mut(parent_id) {
+        if let Some((parent_data, children)) = self.get_widget_node_mut(parent_id) {
+            let parent_depth = parent_data.depth();
 
             children.insert(child_index, widget_id);
 
@@ -77,16 +85,25 @@ impl WidgetTree {
                     node.parent_id = parent_id;
                     node.data.ident = widget_ident;
 
+                    self.update_node_depth(parent_depth + 1, &self.tree_data[&widget_id]);
+
                     let (_, old_parent_children) = self.get_widget_node_mut(old_parent_id).expect("Bad tree state");
                     vec_remove_element(old_parent_children, &widget_id);
                 },
                 Entry::Vacant(vac) => {
-                    vac.insert(WidgetTreeNode::new(parent_id, widget_ident));
+                    vac.insert(WidgetTreeNode::new(parent_id, widget_ident, parent_depth + 1));
                 }
             }
             Ok(())
         } else {
             Err(WidgetInsertError::ParentNotInTree)
+        }
+    }
+
+    fn update_node_depth(&self, depth: u32, node: &WidgetTreeNode) {
+        node.data.depth.set(depth);
+        for child_id in &node.children {
+            self.update_node_depth(depth + 1, &self.tree_data[child_id]);
         }
     }
 
@@ -263,12 +280,22 @@ impl WidgetTree {
 }
 
 impl WidgetTreeNode {
-    fn new(parent_id: WidgetID, ident: WidgetIdent) -> WidgetTreeNode {
+    fn new(parent_id: WidgetID, ident: WidgetIdent, depth: u32) -> WidgetTreeNode {
         WidgetTreeNode {
             parent_id,
             children: Vec::new(),
-            data: WidgetData { ident }
+            data: WidgetData {
+                ident,
+                depth: Cell::new(depth)
+            }
         }
+    }
+}
+
+impl WidgetData {
+    #[inline(always)]
+    pub fn depth(&self) -> u32 {
+        self.depth.get()
     }
 }
 
@@ -609,5 +636,68 @@ mod tests {
         assert_eq!(ident_chain![child_0_2_0, child_0_2, child_0, root], tree.ident_chain_reversed(child_0_2_0).unwrap().collect::<Vec<_>>());
         assert_eq!(ident_chain![child_1_0, child_1, root], tree.ident_chain_reversed(child_1_0).unwrap().collect::<Vec<_>>());
         assert_eq!(ident_chain![child_1_1, child_1, root], tree.ident_chain_reversed(child_1_1).unwrap().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn test_depth() {
+        widget_tree!{
+            let mut tree = root {
+                child_0 {
+                    child_0_1,
+                    child_0_3,
+                    child_0_2 {
+                        child_0_2_0
+                    }
+                },
+                child_1 {
+                    child_1_0,
+                    child_1_1
+                },
+                child_2
+            }
+        };
+
+        assert_eq!(Some(0), tree.get_widget(root).map(|w| w.depth()));
+        assert_eq!(Some(1), tree.get_widget(child_0).map(|w| w.depth()));
+        assert_eq!(Some(1), tree.get_widget(child_1).map(|w| w.depth()));
+        assert_eq!(Some(1), tree.get_widget(child_2).map(|w| w.depth()));
+        assert_eq!(Some(2), tree.get_widget(child_0_1).map(|w| w.depth()));
+        assert_eq!(Some(2), tree.get_widget(child_0_2).map(|w| w.depth()));
+        assert_eq!(Some(2), tree.get_widget(child_0_3).map(|w| w.depth()));
+        assert_eq!(Some(2), tree.get_widget(child_1_0).map(|w| w.depth()));
+        assert_eq!(Some(2), tree.get_widget(child_1_1).map(|w| w.depth()));
+        assert_eq!(Some(3), tree.get_widget(child_0_2_0).map(|w| w.depth()));
+
+        let child_1_ident = tree.get_widget(child_1).unwrap().ident.clone();
+        tree.insert(child_0_1, child_1, 0, child_1_ident).unwrap();
+        widget_tree!{
+            let tree_moved = root in old {
+                child_0 in old {
+                    child_0_1 in old {
+                        child_1 in old {
+                            child_1_0 in old,
+                            child_1_1 in old
+                        }
+                    },
+                    child_0_3 in old,
+                    child_0_2 in old {
+                        child_0_2_0 in old
+                    }
+                },
+                child_2 in old
+            }
+        };
+        assert_eq!(tree, tree_moved, "{:#?}\n!=\n{:#?}", tree, tree_moved);
+
+        assert_eq!(Some(0), tree.get_widget(root).map(|w| w.depth()));
+        assert_eq!(Some(1), tree.get_widget(child_0).map(|w| w.depth()));
+        assert_eq!(Some(3), tree.get_widget(child_1).map(|w| w.depth()));
+        assert_eq!(Some(1), tree.get_widget(child_2).map(|w| w.depth()));
+        assert_eq!(Some(2), tree.get_widget(child_0_1).map(|w| w.depth()));
+        assert_eq!(Some(2), tree.get_widget(child_0_2).map(|w| w.depth()));
+        assert_eq!(Some(2), tree.get_widget(child_0_3).map(|w| w.depth()));
+        assert_eq!(Some(4), tree.get_widget(child_1_0).map(|w| w.depth()));
+        assert_eq!(Some(4), tree.get_widget(child_1_1).map(|w| w.depth()));
+        assert_eq!(Some(3), tree.get_widget(child_0_2_0).map(|w| w.depth()));
     }
 }
