@@ -88,7 +88,7 @@ impl<C, L> RadioButtonList<C, L>
 
     /// Retrieves the collection of radio buttons stored within this list, for mutation.
     pub fn buttons_mut(&mut self) -> &mut C {
-        self.widget_tag.mark_update_child().mark_update_layout();
+        self.widget_tag.mark_update_child().request_relayout();
         &mut self.buttons
     }
 }
@@ -117,7 +117,7 @@ impl RadioButton {
     /// Calling this function forces the radio button to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn contents_mut(&mut self) -> Contents<&mut String> {
-        self.widget_tag.mark_render_self();
+        self.widget_tag.request_redraw();
         self.contents.borrow_mut()
     }
 
@@ -131,7 +131,7 @@ impl RadioButton {
     /// Calling this function forces the radio button to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn selected_mut(&mut self) -> &mut bool {
-        self.widget_tag.mark_render_self();
+        self.widget_tag.request_redraw();
         &mut self.selected
     }
 }
@@ -258,7 +258,7 @@ impl<A, F> Widget<A, F> for RadioButton
         };
 
         if new_selected != self.selected || new_state != self.button_state {
-            self.widget_tag.mark_render_self();
+            self.widget_tag.request_redraw();
             self.selected = new_selected;
             self.button_state = new_state;
         }
@@ -295,7 +295,7 @@ impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
-        self.widget_tag.mark_update_layout();
+        self.widget_tag.request_relayout();
         &mut self.rect
     }
 
@@ -315,7 +315,7 @@ impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
             self.buttons.children_mut::<_, ()>(|summary| {
                 if summary.ident != *child_ident {
                     if summary.widget.selected {
-                        summary.widget.widget_tag.mark_render_self();
+                        summary.widget.widget_tag.request_redraw();
                     }
                     state_changed |= summary.widget.selected;
                     summary.widget.selected = false;

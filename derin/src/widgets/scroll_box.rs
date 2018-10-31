@@ -66,7 +66,7 @@ impl<W> ScrollBox<W> {
 
     /// Retrieves the scrollable widget, for mutation.
     pub fn widget_mut(&mut self) -> &mut W {
-        self.widget_tag.mark_update_child().mark_update_layout_post();
+        self.widget_tag.mark_update_child().request_relayout_post();
         self.clip.widget_mut()
     }
 
@@ -101,7 +101,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
-        self.widget_tag.mark_update_layout_post();
+        self.widget_tag.request_relayout_post();
         &mut self.rect
     }
     fn size_bounds(&self) -> SizeBounds {
@@ -191,7 +191,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
                 if let Some(ref mut slider_y) = self.slider_y {
                     slider_y.click_head(pos);
                 }
-                self.widget_tag.mark_render_self();
+                self.widget_tag.request_redraw();
             },
             (0, WidgetEvent::MouseMove{new_pos, ..}) => {
                 if let Some(ref mut slider_x) = self.slider_x {
@@ -208,7 +208,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
                 if let Some(ref mut slider_y) = self.slider_y {
                     slider_y.head_click_pos = None;
                 }
-                self.widget_tag.mark_render_self();
+                self.widget_tag.request_redraw();
             },
             (_, WidgetEvent::MouseScrollLines(dir)) => {
                 allow_bubble = false;
@@ -235,7 +235,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
             _ => ()
         }
         if values(&self.slider_x, &self.slider_y) != start_values {
-            self.widget_tag.mark_render_self().mark_update_layout_post();
+            self.widget_tag.request_redraw().request_relayout_post();
         }
         EventOps {
             action: None,

@@ -46,10 +46,10 @@ impl<'a, W: ?Sized> OffsetWidget<'a, W> {
         }
     }
 
-    // #[inline]
-    // pub fn inner(&self) -> &W {
-    //     self.widget
-    // }
+    #[inline]
+    pub fn inner(&self) -> &W {
+        self.widget
+    }
 
     #[inline]
     pub fn inner_mut(&mut self) -> &mut W {
@@ -91,6 +91,10 @@ pub trait OffsetWidgetTrait<A, F>
         where Self::Widget: ParentDyn<A, F>;
     fn update_child_layout(&mut self)
         where Self::Widget: ParentDyn<A, F>;
+    fn children<'b, G>(&'b self, for_each: G)
+        where A: 'b,
+              Self::Widget: ParentDyn<A, F>,
+              G: FnMut(WidgetSummary<&'b Widget<A, F>>) -> LoopFlow<()>;
     fn children_mut<'b, G>(&'b mut self, for_each: G)
         where A: 'b,
               Self::Widget: ParentDyn<A, F>,
@@ -193,6 +197,25 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
         where W: ParentDyn<A, F>
     {
         self.widget.update_child_layout();
+    }
+
+    fn children<'b, G>(&'b self, mut for_each: G)
+        where A: 'b,
+              Self::Widget: ParentDyn<A, F>,
+              G: FnMut(WidgetSummary<&'b Widget<A, F>>) -> LoopFlow<()>
+    {
+        let child_offset = self.rect().min().to_vec();
+        let clip_rect = self.rect_clipped();
+
+        self.widget.children(&mut |summary_slice| {
+            for summary in summary_slice {
+                if LoopFlow::Break(()) == for_each(summary) {
+                    return LoopFlow::Break(());
+                }
+            }
+
+            LoopFlow::Continue
+        });
     }
 
     fn children_mut<'b, G>(&'b mut self, mut for_each: G)

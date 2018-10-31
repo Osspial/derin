@@ -14,21 +14,29 @@
 
 pub(crate) mod dynamic;
 
-use crate::dynamic::ParentDyn;
-use std::sync::Arc;
-use std::cell::Cell;
+use self::dynamic::ParentDyn;
+use crate::{
+    LoopFlow,
+    mbseq::MouseButtonSequence,
+    event::{WidgetEvent, EventOps, InputState},
+    render::{RenderFrame, FrameRectStack},
+    timer::TimerRegister,
+    popup::ChildPopupsMut,
+    update_state::UpdateStateShared
+};
+use derin_common_types::{
+    buttons::MouseButton,
+    layout::SizeBounds
+};
+use std::{
+    sync::Arc,
+    cell::Cell
+};
+use cgmath_geometry::{
+    D2, rect::BoundBox,
+    cgmath::Point2,
+};
 
-use crate::LoopFlow;
-use crate::cgmath::Point2;
-use cgmath_geometry::{D2, rect::BoundBox};
-
-use crate::mbseq::MouseButtonSequence;
-use derin_common_types::buttons::MouseButton;
-use derin_common_types::layout::SizeBounds;
-use crate::event::{WidgetEvent, EventOps, InputState};
-use crate::render::{RenderFrame, FrameRectStack};
-use crate::timer::TimerRegister;
-use crate::popup::ChildPopupsMut;
 
 pub(crate) const ROOT_IDENT: WidgetIdent = WidgetIdent::Num(0);
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -60,8 +68,7 @@ pub(crate) enum MouseState {
 
 #[derive(Debug, Clone)]
 pub struct WidgetTag {
-    last_root: Cell<RootID>,
-    widget_tag: Cell<UpdateTag>,
+    update_state: UpdateStateShared,
     pub(crate) widget_id: WidgetID,
     pub(crate) last_event_stamp: Cell<u32>,
     pub(crate) mouse_state: Cell<MouseState>,
@@ -405,17 +412,6 @@ impl Default for OnFocusOverflow {
 }
 
 
-bitflags!{
-    pub(crate) struct UpdateTag: u8 {
-        const RENDER_SELF = 1 << 0;
-        const UPDATE_CHILD = 1 << 1;
-        const UPDATE_LAYOUT = 1 << 2;
-        const UPDATE_LAYOUT_POST = 1 << 3;
-        const UPDATE_TIMER = 1 << 4;
-        const RENDER_ALL = UpdateTag::RENDER_SELF.bits | UpdateTag::UPDATE_CHILD.bits;
-    }
-}
-
 impl WidgetIdent {
     pub fn new_str(s: &str) -> WidgetIdent {
         WidgetIdent::Str(Arc::from(s))
@@ -430,8 +426,7 @@ impl WidgetTag {
     #[inline]
     pub fn new() -> WidgetTag {
         WidgetTag {
-            last_root: Cell::new(RootID::dummy()),
-            widget_tag: Cell::new(UpdateTag::all()),
+            update_state: UpdateStateShared::new(),
             widget_id: WidgetID::new(),
             last_event_stamp: Cell::new(0),
             mouse_state: Cell::new(MouseState::Untracked),
@@ -441,82 +436,24 @@ impl WidgetTag {
     }
 
     #[inline]
-    pub fn mark_render_self(&mut self) -> &mut WidgetTag {
-        self.widget_tag.set(self.widget_tag.get() | UpdateTag::RENDER_SELF);
+    pub fn request_redraw(&mut self) -> &mut WidgetTag {
+        self.update_state.request_redraw(self.widget_id);
         self
     }
 
     #[inline]
-    pub fn mark_update_child(&mut self) -> &mut WidgetTag {
-        self.widget_tag.set(self.widget_tag.get() | UpdateTag::UPDATE_CHILD);
+    pub fn request_relayout(&mut self) -> &mut WidgetTag {
+        self.update_state.request_relayout(self.widget_id);
         self
     }
 
-    #[inline]
-    pub fn mark_update_layout(&mut self) -> &mut WidgetTag {
-        self.widget_tag.set(self.widget_tag.get() | UpdateTag::UPDATE_LAYOUT);
-        self
-    }
-
-
-    #[inline]
-    pub fn mark_update_layout_post(&mut self) -> &mut WidgetTag {
-        self.widget_tag.set(self.widget_tag.get() | UpdateTag::UPDATE_LAYOUT_POST);
-        self
-    }
-
-    #[inline]
-    pub fn mark_update_timer(&mut self) -> &mut WidgetTag {
-        self.widget_tag.set(self.widget_tag.get() | UpdateTag::UPDATE_TIMER);
-        self
+    pub fn timers(&mut self) -> TimerRegister<'_> {
+        unimplemented!()
     }
 
     #[inline]
     pub fn has_keyboard_focus(&self) -> bool {
         self.has_keyboard_focus.get()
-    }
-
-    #[inline]
-    pub(crate) fn mark_updated(&self, root_id: RootID) {
-        self.last_root.set(root_id);
-        self.widget_tag.set(UpdateTag::empty());
-    }
-
-    #[inline]
-    pub(crate) fn unmark_update_layout(&self) {
-        self.widget_tag.set(self.widget_tag.get() & !(UpdateTag::UPDATE_LAYOUT | UpdateTag::UPDATE_LAYOUT_POST));
-    }
-
-    #[inline]
-    pub(crate) fn unmark_update_timer(&self) {
-        self.widget_tag.set(self.widget_tag.get() & !UpdateTag::UPDATE_TIMER);
-    }
-
-    #[inline]
-    pub(crate) fn mark_update_child_immutable(&self) {
-        self.widget_tag.set(self.widget_tag.get() | UpdateTag::UPDATE_CHILD);
-    }
-
-    #[inline]
-    pub(crate) fn needs_update(&self, root_id: RootID) -> Update {
-        if root_id != self.last_root.get() {
-            Update {
-                render_self: true,
-                update_child: true,
-                update_timer: true,
-                update_layout: true,
-                update_layout_post: true
-            }
-        } else {
-            let widget_tag = self.widget_tag.get();
-            Update {
-                render_self: widget_tag.contains(UpdateTag::RENDER_SELF),
-                update_child: widget_tag.contains(UpdateTag::UPDATE_CHILD),
-                update_timer: widget_tag.contains(UpdateTag::UPDATE_TIMER),
-                update_layout: widget_tag.contains(UpdateTag::UPDATE_LAYOUT),
-                update_layout_post: widget_tag.contains(UpdateTag::UPDATE_LAYOUT_POST),
-            }
-        }
     }
 }
 

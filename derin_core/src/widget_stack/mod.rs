@@ -14,27 +14,27 @@
 
 mod inner;
 
-use crate::LoopFlow;
-use std::cmp::{Ordering, Ord};
+use crate::{
+    render::RenderFrame,
+    tree::{
+        Widget, WidgetIdent, WidgetID, ROOT_IDENT,
+        dynamic::ParentDyn
+    },
+    widget_tree::WidgetTree
+};
 use std::iter::{DoubleEndedIterator, ExactSizeIterator};
-use crate::render::RenderFrame;
-use crate::tree::{Widget, WidgetSummary, WidgetIdent, ChildEventRecv, WidgetTag, RootID, WidgetID, ROOT_IDENT};
-use crate::tree::dynamic::ParentDyn;
 
 use self::inner::{NRAllocCache, NRVec};
 pub use self::inner::WidgetPath;
 
-use crate::cgmath::{Vector2, EuclideanSpace};
-use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
-use crate::offset_widget::{OffsetWidget, OffsetWidgetTrait, OffsetWidgetTraitAs};
+use crate::offset_widget::{OffsetWidgetTrait, OffsetWidgetTraitAs};
 
 pub(crate) struct WidgetStackBase<A, F: RenderFrame> {
     stack: NRAllocCache<A, F>
 }
 
-pub struct WidgetStack<'a, A: 'static, F: 'a + RenderFrame, Root: 'a + ?Sized = Widget<A, F>> {
+pub(crate) struct WidgetStack<'a, A: 'static, F: 'a + RenderFrame> {
     stack: NRVec<'a, A, F>,
-    root: *mut Root
 }
 
 impl<A: 'static, F: RenderFrame> WidgetStackBase<A, F> {
@@ -44,22 +44,14 @@ impl<A: 'static, F: RenderFrame> WidgetStackBase<A, F> {
         }
     }
 
-    // pub fn use_stack<'a, Root: Widget<A, F>>(&'a mut self, widget: &'a mut Root, root_id: RootID) -> WidgetStack<'a, A, F, Root> {
-    //     WidgetStack {
-    //         root: widget,
-    //         stack: self.stack.use_cache(widget, root_id)
-    //     }
-    // }
-
-    pub fn use_stack_dyn<'a>(&'a mut self, widget: &'a mut Widget<A, F>, root_id: RootID) -> WidgetStack<'a, A, F, Widget<A, F>> {
+    pub fn use_stack_dyn<'a>(&'a mut self, widget: &'a mut Widget<A, F>) -> WidgetStack<'a, A, F> {
         WidgetStack {
-            root: widget,
-            stack: self.stack.use_cache(widget, root_id)
+            stack: self.stack.use_cache(widget)
         }
     }
 }
 
-impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, Root> {
+impl<'a, A, F: RenderFrame> WidgetStack<'a, A, F> {
     #[inline]
     pub fn top(&mut self) -> WidgetPath<A, F> {
         self.stack.top()
@@ -84,12 +76,6 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         self.stack.widgets()
     }
 
-    pub fn try_push<G>(&mut self, with_top: G) -> Option<WidgetSummary<&'a mut Widget<A, F>>>
-        where G: FnOnce(&'a mut Widget<A, F>, &[WidgetIdent]) -> Option<WidgetSummary<&'a mut Widget<A, F>>>
-    {
-        self.stack.try_push(with_top)
-    }
-
     #[inline]
     pub fn pop(&mut self) -> Option<&'a mut Widget<A, F>> {
         self.stack.pop()
@@ -99,6 +85,37 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
     pub fn depth(&self) -> usize {
         // The len is always going to be >= 1, so when it's 1 we're at the root widget (dpeth 0)
         self.stack.len() - 1
+    }
+
+    pub fn move_to_widget_with_tree(&mut self, widget_id: WidgetID, widget_tree: &mut WidgetTree) -> Option<WidgetPath<A, F>> {
+        // TODO: GET RID OF COLLECT ALLOCATION
+        let mut active_ident_rev = widget_tree.ident_chain_reversed(widget_id)?.cloned().collect::<Vec<_>>();
+
+        // If the widget is where the tree says it is, return it.
+        if self.move_to_path(active_ident_rev.drain(..).rev()).is_some() {
+            return Some(self.top());
+        }
+
+        // If the widget wasn't found where the tree said it would be found, update the tree
+        // and store the new location.
+        let (widget_index, widget_ident);
+        match self.search_for_widget(widget_id) {
+            Some(widget) => {
+                widget_index = widget.index;
+                widget_ident = widget.path.last().unwrap().clone();
+            },
+            // If the widget isn't anywhere to be found, return none.
+            None => {
+                widget_tree.remove(widget_id);
+                return None
+            }
+        }
+
+        if let Some(parent) = self.parent() {
+            widget_tree.insert(parent.widget_tag().widget_id, widget_id, widget_index, widget_ident).ok();
+        }
+
+        Some(self.top())
     }
 
     pub fn move_to_path<I>(&mut self, ident_path: I) -> Option<WidgetPath<A, F>>
@@ -149,8 +166,6 @@ impl<'a, A, F: RenderFrame, Root: Widget<A, F> + ?Sized> WidgetStack<'a, A, F, R
         let mut widget_found = false;
         let mut child_index = 0;
         loop {
-            let top_parent_offset = self.stack.top_parent_offset();
-            let clip_rect = self.stack.clip_rect();
             let valid_child = self.stack.try_push(|top_widget, top_path| {
                 let top_id = top_widget.widget_tag().widget_id;
 

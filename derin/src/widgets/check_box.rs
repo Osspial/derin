@@ -69,7 +69,7 @@ impl<H> CheckBox<H> {
     /// Calling this function forces the checkbox to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn contents_mut(&mut self) -> Contents<&mut String> {
-        self.widget_tag.mark_render_self();
+        self.widget_tag.request_redraw();
         self.contents.borrow_mut()
     }
 
@@ -83,7 +83,7 @@ impl<H> CheckBox<H> {
     /// Calling this function forces the checkbox to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn checked_mut(&mut self) -> &mut bool {
-        self.widget_tag.mark_render_self();
+        self.widget_tag.request_redraw();
         &mut self.checked
     }
 }
@@ -189,7 +189,7 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
         };
 
         if new_checked != self.checked || new_state != self.button_state {
-            self.widget_tag.mark_render_self();
+            self.widget_tag.request_redraw();
             self.checked = new_checked;
             self.button_state = new_state;
         }

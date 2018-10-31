@@ -33,7 +33,7 @@ pub struct WidgetData {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct WidgetTree {
+pub(crate) struct WidgetTree {
     root: WidgetID,
     root_data: WidgetData,
     root_children: Vec<WidgetID>,

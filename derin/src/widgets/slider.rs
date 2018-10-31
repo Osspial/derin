@@ -94,7 +94,7 @@ impl<H: SliderHandler> Slider<H> {
     /// it unless you're actually changing the contents.
     #[inline]
     pub fn value_mut(&mut self) -> &mut f32 {
-        self.widget_tag.mark_render_self();
+        self.widget_tag.request_redraw();
         &mut self.assist.value
     }
 
@@ -104,7 +104,7 @@ impl<H: SliderHandler> Slider<H> {
     /// it unless you're actually changing the contents.
     #[inline]
     pub fn range_mut(&mut self) -> (&mut f32, &mut f32) {
-        self.widget_tag.mark_render_self();
+        self.widget_tag.request_redraw();
         (&mut self.assist.min, &mut self.assist.max)
     }
 
@@ -114,7 +114,7 @@ impl<H: SliderHandler> Slider<H> {
     /// it unless you're actually changing the contents.
     #[inline]
     pub fn step_mut(&mut self) -> &mut f32 {
-        self.widget_tag.mark_render_self();
+        self.widget_tag.request_redraw();
         &mut self.assist.step
     }
 }
@@ -197,20 +197,20 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
             match event {
                 WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left} => {
                     self.assist.click_head(pos);
-                    self.widget_tag.mark_render_self();
+                    self.widget_tag.request_redraw();
                 },
                 WidgetEvent::MouseMove{new_pos, ..} => {
                     self.assist.move_head(new_pos.x);
                 },
                 WidgetEvent::MouseUp{button: MouseButton::Left, ..} => {
                     self.assist.head_click_pos = None;
-                    self.widget_tag.mark_render_self();
+                    self.widget_tag.request_redraw();
                 },
                 _ => ()
             }
             if self.assist.value != start_value {
                 action = self.handler.on_move(start_value, self.assist.value);
-                self.widget_tag.mark_render_self();
+                self.widget_tag.request_redraw();
             }
         }
         EventOps {

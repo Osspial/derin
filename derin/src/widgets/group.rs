@@ -67,7 +67,7 @@ impl<C, L> Group<C, L>
 
     /// Retrieve the widgets contained within the group, for mutation.
     pub fn container_mut(&mut self) -> &mut C {
-        self.widget_tag.mark_update_child().mark_update_layout();
+        self.widget_tag.mark_update_child().request_relayout();
         &mut self.container
     }
 }
@@ -91,7 +91,7 @@ impl<A, F, C, L> Widget<A, F> for Group<C, L>
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
-        self.widget_tag.mark_update_layout();
+        self.widget_tag.request_relayout();
         &mut self.bounds
     }
     fn size_bounds(&self) -> SizeBounds {

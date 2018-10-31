@@ -35,6 +35,7 @@ mod offset_widget;
 mod event_loop_ops;
 mod widget_tree;
 mod event_dispatcher;
+mod update_state;
 
 use crate::cgmath::{Point2, Vector2, Bounded};
 use cgmath_geometry::{D2, rect::DimsBox};

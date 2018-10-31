@@ -89,7 +89,7 @@ impl<H> Button<H> {
     /// Calling this function forces the button to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn contents_mut(&mut self) -> Contents<&mut String> {
-        self.widget_tag.mark_render_self();
+        self.widget_tag.request_redraw();
         self.contents.borrow_mut()
     }
 }
@@ -179,7 +179,7 @@ impl<A, F, H> Widget<A, F> for Button<H>
         };
 
         if new_state != self.state {
-            self.widget_tag.mark_render_self();
+            self.widget_tag.request_redraw();
             self.state = new_state;
         }
 

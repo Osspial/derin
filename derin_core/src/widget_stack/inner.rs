@@ -14,7 +14,7 @@
 
 use std::mem;
 use crate::render::RenderFrame;
-use crate::tree::{Widget, WidgetIdent, WidgetSummary, RootID, Update, ROOT_IDENT};
+use crate::tree::{Widget, WidgetID, WidgetIdent, WidgetSummary, RootID, Update, ROOT_IDENT};
 
 use crate::cgmath::{Bounded, EuclideanSpace, Point2, Vector2};
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
@@ -26,7 +26,8 @@ use crate::offset_widget::{OffsetWidget, OffsetWidgetTrait};
 struct StackElement<A, F: RenderFrame> {
     widget: *mut (Widget<A, F>),
     rectangles: Option<ElementRects>,
-    index: usize
+    index: usize,
+    widget_id: WidgetID
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -45,7 +46,6 @@ pub struct NRVec<'a, A: 'static, F: 'a + RenderFrame> {
     ident_vec: &'a mut Vec<WidgetIdent>,
     clip_rect: Option<BoundBox<D2, i32>>,
     top_parent_offset: Vector2<i32>,
-    root_id: RootID
 }
 
 pub struct WidgetPath<'a, A: 'static, F: 'a + RenderFrame> {
@@ -58,18 +58,22 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
     pub fn new() -> NRAllocCache<A, F> {
         NRAllocCache {
             vec: Vec::new(),
-            ident_vec: Vec::new()
+            ident_vec: Vec::new(),
         }
     }
 
-    pub fn use_cache<'a>(&'a mut self, widget: &mut (Widget<A, F> + 'a), root_id: RootID) -> NRVec<'a, A, F> {
+    pub fn use_cache<'a>(&'a mut self, widget: &mut (Widget<A, F> + 'a)) -> NRVec<'a, A, F> {
         let mut cache_swap = Vec::new();
         mem::swap(&mut cache_swap, &mut self.vec);
 
+        self.vec.clear();
+        self.ident_vec.clear();
+
         self.vec.push(StackElement {
-            widget: widget,
+            widget_id: widget.widget_tag().widget_id,
+            widget,
             rectangles: None,
-            index: 0
+            index: 0,
         });
         self.ident_vec.push(ROOT_IDENT);
 
@@ -78,7 +82,6 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
             ident_vec: &mut self.ident_vec,
             clip_rect: Some(BoundBox::new(Point2::new(0, 0), Point2::max_value())),
             top_parent_offset: Vector2::new(0, 0),
-            root_id
         }
     }
 }
@@ -88,7 +91,7 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
     pub fn top(&mut self) -> WidgetPath<A, F> {
         let widget = self.vec.last_mut().map(|n| unsafe{ &mut *n.widget }).unwrap();
         WidgetPath {
-            widget: OffsetWidget::new(widget, self.top_parent_offset(), self.clip_rect()),
+            widget: OffsetWidget::new(widget, self.top_parent_offset, self.clip_rect),
             path: &self.ident_vec,
             index: self.top_index()
         }
@@ -115,10 +118,6 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
         for widget_slice in self.vec[len-1..].windows(2).rev() {
             let parent = unsafe{ &*widget_slice[0].widget };
             let child = unsafe{ &*widget_slice[1].widget };
-
-            if child.widget_tag().needs_update(self.root_id) != Update::default() {
-                parent.widget_tag().mark_update_child_immutable();
-            }
         }
 
         self.vec.truncate(len);
@@ -137,16 +136,6 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn top_parent_offset(&self) -> Vector2<i32> {
-        self.top_parent_offset
-    }
-
-    #[inline]
-    pub fn clip_rect(&self) -> Option<BoundBox<D2, i32>> {
-        self.clip_rect
-    }
-
-    #[inline]
     pub fn widgets<'b>(&'b self) -> impl 'b + Iterator<Item=&'a Widget<A, F>> + DoubleEndedIterator + ExactSizeIterator {
         self.vec.iter().map(|n| unsafe{ &*n.widget })
     }
@@ -158,8 +147,8 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn try_push<G>(&mut self, with_top: G) -> Option<WidgetSummary<&'a mut Widget<A, F>>>
-        where G: FnOnce(&'a mut Widget<A, F>, &[WidgetIdent]) -> Option<WidgetSummary<&'a mut Widget<A, F>>>
+    pub fn try_push<'b, G>(&'b mut self, with_top: G) -> Option<WidgetSummary<&'b mut Widget<A, F>>>
+        where G: FnOnce(&'b mut Widget<A, F>, &[WidgetIdent]) -> Option<WidgetSummary<&'b mut Widget<A, F>>>
     {
         let new_top_opt = with_top(unsafe{ mem::transmute(self.top().widget.inner_mut()) }, &self.ident_vec );
         if let Some(new_top_summary) = new_top_opt {
@@ -179,6 +168,7 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
             }
 
             self.vec.push(StackElement {
+                widget_id: new_top_summary.widget.widget_tag().widget_id,
                 widget: new_top_summary.widget,
                 rectangles: None,
                 index: new_top_summary.index
@@ -212,20 +202,6 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
             }
         }
 
-        if popped.widget_tag().needs_update(self.root_id) != Update::default() {
-            self.top().widget.widget_tag().mark_update_child_immutable();
-        }
-
-
         Some(popped)
     }
 }
-
-impl<'a, A: 'static, F: RenderFrame> Drop for NRVec<'a, A, F> {
-    fn drop(&mut self) {
-        while let Some(_) = self.pop() {}
-        self.vec.clear();
-        self.ident_vec.clear();
-    }
-}
-

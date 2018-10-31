@@ -73,12 +73,12 @@ impl<R> DirectRender<R> {
     }
 
     pub fn render_state_mut(&mut self) -> &mut R {
-        self.widget_tag.mark_render_self();
+        self.widget_tag.request_redraw();
         &mut self.render_state
     }
 
     pub fn mark_redraw(&mut self) {
-        self.widget_tag.mark_render_self();
+        self.widget_tag.request_redraw();
     }
 
     pub fn set_refresh_rate(&mut self, refresh_rate: Option<Duration>) {
@@ -126,7 +126,7 @@ impl<A, F, R> Widget<A, F> for DirectRender<R>
     #[inline]
     fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, popups: Option<ChildPopupsMut<A, F>>, source_child: &[WidgetIdent]) -> EventOps<A, F> {
         if let WidgetEvent::Timer{name: "render_refresh", ..} = event {
-            self.widget_tag.mark_render_self();
+            self.widget_tag.request_redraw();
         }
         let old_refresh_rate = self.refresh_rate;
         let ops = self.render_state.on_widget_event(event, input_state, popups, source_child, &mut self.refresh_rate);

@@ -71,7 +71,7 @@ impl EditBox {
     /// Calling this function forces the box to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn string_mut(&mut self) -> &mut String {
-        self.widget_tag.mark_render_self();
+        self.widget_tag.request_redraw();
         self.edit.string.render_string.string_mut()
     }
 }
@@ -100,7 +100,7 @@ impl LineBox {
     /// Calling this function forces the box to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn string_mut(&mut self) -> &mut String {
-        self.widget_tag.mark_render_self();
+        self.widget_tag.request_redraw();
         self.edit.string.render_string.string_mut()
     }
 }
@@ -156,13 +156,13 @@ macro_rules! render_and_event {
                     self.widget_tag.mark_update_timer();
                 }
                 if redraw {
-                    self.widget_tag.mark_render_self();
+                    self.widget_tag.request_redraw();
                 }
 
                 match event {
                     Timer{name: "cursor_flash", times_triggered, ..} => {
                         self.edit.string.draw_cursor = times_triggered % 2 == 0;
-                        self.widget_tag.mark_render_self();
+                        self.widget_tag.request_redraw();
                     },
                     _ => ()
                 };

@@ -56,7 +56,7 @@ impl Label {
     /// Calling this function forces the label to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn contents_mut(&mut self) -> Contents<&mut String> {
-        self.widget_tag.mark_render_self();
+        self.widget_tag.request_redraw();
         self.contents.borrow_mut()
     }
 }

@@ -81,31 +81,6 @@ impl EventDestination {
             Widget(id) => *id
         };
 
-        let mut active_ident_rev = widget_tree.ident_chain_reversed(target_id)?.cloned().collect::<Vec<_>>();
-        // If the widget is where the tree says it is, return it.
-        if widget_stack.move_to_path(active_ident_rev.drain(..).rev()).is_some() {
-            return Some(widget_stack.top());
-        }
-
-        // If the widget wasn't found where the tree said it would be found, update the tree
-        // and store the new location.
-        let (widget_index, widget_ident);
-        match widget_stack.search_for_widget(target_id) {
-            Some(widget) => {
-                widget_index = widget.index;
-                widget_ident = widget.path.last().unwrap().clone();
-            },
-            // If the widget isn't anywhere to be found, return none.
-            None => {
-                widget_tree.remove(target_id);
-                return None
-            }
-        }
-
-        if let Some(parent) = widget_stack.parent() {
-            widget_tree.insert(parent.widget_tag().widget_id, target_id, widget_index, widget_ident).ok();
-        }
-
-        Some(widget_stack.top())
+        widget_stack.move_to_widget_with_tree(target_id, widget_tree)
     }
 }

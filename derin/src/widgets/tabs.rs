@@ -104,7 +104,7 @@ impl<W> TabList<W> {
     /// Calling this function forces the tab list to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn tabs_mut(&mut self) -> &mut Vec<TabPage<W>> {
-        self.widget_tag.mark_update_child().mark_update_layout().mark_render_self();
+        self.widget_tag.mark_update_child().request_relayout().request_redraw();
         &mut self.tabs
     }
 }
@@ -126,7 +126,7 @@ impl<A, F, W> Widget<A, F> for TabList<W>
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
-        self.widget_tag.mark_update_layout().mark_render_self();
+        self.widget_tag.request_relayout().request_redraw();
         &mut self.rect
     }
 
@@ -189,7 +189,7 @@ impl<A, F, W> Widget<A, F> for TabList<W>
                         tab.button_state = new_state;
                     }
                     if state_changed {
-                        self.widget_tag.mark_render_self();
+                        self.widget_tag.request_redraw();
                     }
                 },
                 WidgetEvent::MouseEnterChild{..} => {
@@ -203,7 +203,7 @@ impl<A, F, W> Widget<A, F> for TabList<W>
                         tab.button_state = new_state;
                     }
                     if state_changed {
-                        self.widget_tag.mark_render_self();
+                        self.widget_tag.request_redraw();
                     }
                 }
                 WidgetEvent::MouseDown{pos, in_widget: true, ..} => {
@@ -217,7 +217,7 @@ impl<A, F, W> Widget<A, F> for TabList<W>
                         tab.button_state = new_state;
                     }
                     if state_changed {
-                        self.widget_tag.mark_render_self();
+                        self.widget_tag.request_redraw();
                     }
                 },
                 WidgetEvent::MouseUp{in_widget: true, pressed_in_widget: true, pos, down_pos, ..} => {
@@ -244,10 +244,10 @@ impl<A, F, W> Widget<A, F> for TabList<W>
                         tab.button_state = new_state;
                     }
                     if state_changed {
-                        self.widget_tag.mark_render_self();
+                        self.widget_tag.request_redraw();
                     }
                     if !(old_open == new_open || new_open == None) {
-                        self.widget_tag.mark_update_layout();
+                        self.widget_tag.request_relayout();
                     }
                 },
                 WidgetEvent::MouseUp{in_widget: false, pressed_in_widget: true, ..} => {
@@ -258,7 +258,7 @@ impl<A, F, W> Widget<A, F> for TabList<W>
                         tab.button_state = new_state;
                     }
                     if state_changed {
-                        self.widget_tag.mark_render_self();
+                        self.widget_tag.request_redraw();
                     }
                 },
                 _ => ()

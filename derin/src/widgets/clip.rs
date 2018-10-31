@@ -50,7 +50,7 @@ impl<W> Clip<W> {
 
     /// Retrieves the clipped widget for mutation.
     pub fn widget_mut(&mut self) -> &mut W {
-        self.widget_tag.mark_update_child().mark_update_layout();
+        self.widget_tag.mark_update_child().request_relayout();
         &mut self.widget
     }
 }
@@ -71,7 +71,7 @@ impl<A, F, W> Widget<A, F> for Clip<W>
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
-        self.widget_tag.mark_update_layout();
+        self.widget_tag.request_relayout();
         &mut self.rect
     }
 

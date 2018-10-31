@@ -64,7 +64,7 @@ impl ProgressBar {
     /// it unless you're actually changing the contents.
     #[inline]
     pub fn value_mut(&mut self) -> &mut f32 {
-        self.widget_tag.mark_render_self();
+        self.widget_tag.request_redraw();
         &mut self.value
     }
 
@@ -74,7 +74,7 @@ impl ProgressBar {
     /// it unless you're actually changing the contents.
     #[inline]
     pub fn range_mut(&mut self) -> (&mut f32, &mut f32) {
-        self.widget_tag.mark_render_self();
+        self.widget_tag.request_redraw();
         (&mut self.min, &mut self.max)
     }
 }
