@@ -14,7 +14,7 @@
 
 use crate::LoopFlow;
 use crate::popup::ChildPopupsMut;
-use crate::tree::{OnFocus, Widget, WidgetIdent, WidgetTag, WidgetSummary};
+use crate::tree::{Widget, WidgetIdent, WidgetTag, WidgetSummary};
 use crate::tree::dynamic::ParentDyn;
 use crate::event::{InputState, WidgetEvent, EventOps};
 use crate::render::RenderFrame;
@@ -85,7 +85,6 @@ pub trait OffsetWidgetTrait<A, F>
 
     fn size_bounds(&self) -> SizeBounds;
     fn register_timers(&self, register: &mut TimerRegister);
-    fn accepts_focus(&self) -> OnFocus;
 
     fn num_children(&self) -> usize
         where Self::Widget: ParentDyn<A, F>;
@@ -183,9 +182,6 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
     }
     fn register_timers(&self, register: &mut TimerRegister) {
         self.widget.register_timers(register)
-    }
-    fn accepts_focus(&self) -> OnFocus {
-        self.widget.accepts_focus()
     }
 
     fn num_children(&self) -> usize

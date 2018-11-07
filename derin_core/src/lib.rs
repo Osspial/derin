@@ -33,24 +33,34 @@ mod mbseq;
 mod widget_stack;
 mod offset_widget;
 mod event_loop_ops;
-mod widget_tree;
-mod event_dispatcher;
+mod virtual_widget_tree;
+mod event_translator;
 mod update_state;
 
 use crate::cgmath::{Point2, Vector2, Bounded};
 use cgmath_geometry::{D2, rect::DimsBox};
 
-use std::collections::VecDeque;
+use std::{
+    collections::VecDeque,
+    rc::Rc
+};
 
-use crate::tree::*;
 pub use crate::event_loop_ops::{EventLoopResult, PopupDelta};
-use crate::timer::TimerList;
-use crate::popup::PopupMap;
-use crate::render::RenderFrame;
-use crate::mbseq::MouseButtonSequenceTrackPos;
-use crate::widget_stack::WidgetStackBase;
+use crate::{
+    tree::*,
+    timer::TimerList,
+    popup::PopupMap,
+    render::RenderFrame,
+    mbseq::MouseButtonSequenceTrackPos,
+    widget_stack::WidgetStackBase,
+    event_translator::EventTranslator,
+    update_state::{UpdateStateBuffered},
+    virtual_widget_tree::VirtualWidgetTree
+};
 use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
 use derin_common_types::cursor::CursorIcon;
+
+const MAX_FRAME_UPDATE_ITERATIONS: usize = 16;
 
 pub struct Root<A, N, F>
     where N: Widget<A, F> + 'static,
@@ -58,21 +68,13 @@ pub struct Root<A, N, F>
           F: RenderFrame + 'static
 {
     // Event handing and dispatch
-    id: RootID,
-    widget_stack_base: WidgetStackBase<A, F>,
-    pub actions: VecDeque<A>,
-    event_stamp: u32,
-    timer_list: TimerList,
+    event_translator: EventTranslator<A, F>,
 
     // Input State
-    mouse_pos: Point2<i32>,
-    mouse_buttons_down: MouseButtonSequenceTrackPos,
-    pub modifiers: ModifierKeys,
-    keys_down: Vec<Key>,
+    input_state: InputState,
 
     // Render State
-    cursor_icon: CursorIcon,
-    needs_redraw: bool,
+    render_state: RenderState,
 
     // User data
     pub root_widget: N,
@@ -80,6 +82,23 @@ pub struct Root<A, N, F>
     popup_widgets: PopupMap<A, F>,
 
     // Per-frame information
+}
+
+struct InputState {
+    mouse_pos: Option<Point2<i32>>,
+    mouse_buttons_down: MouseButtonSequenceTrackPos,
+    pub modifiers: ModifierKeys,
+    keys_down: Vec<Key>,
+    mouse_hover_widget: Option<WidgetID>
+}
+
+struct RenderState {
+    cursor_icon: CursorIcon,
+    needs_redraw: bool,
+    frame_set_data: FrameSetData
+}
+
+struct FrameSetData {
     set_cursor_pos: Option<Point2<i32>>,
     set_cursor_icon: Option<CursorIcon>,
 }
@@ -87,8 +106,8 @@ pub struct Root<A, N, F>
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WindowEvent {
     MouseMove(Point2<i32>),
-    MouseEnter(Point2<i32>),
-    MouseExit(Point2<i32>),
+    MouseEnter,
+    MouseExit,
     MouseDown(MouseButton),
     MouseUp(MouseButton),
     MouseScrollLines(Vector2<i32>),
@@ -120,28 +139,33 @@ impl<A, N, F> Root<A, N, F>
         // TODO: DRAW ROOT AND DO INITIAL LAYOUT
         *root_widget.rect_mut() = dims.cast().unwrap_or(DimsBox::max_value()).into();
         Root {
-            id: RootID::new(),
-            widget_stack_base: WidgetStackBase::new(),
-            actions: VecDeque::new(),
-            event_stamp: 1,
-            timer_list: TimerList::new(None),
+            event_translator: EventTranslator::new(root_widget.widget_tag().widget_id),
 
-            mouse_pos: Point2::new(-1, -1),
-            mouse_buttons_down: MouseButtonSequenceTrackPos::new(),
-            modifiers: ModifierKeys::empty(),
-            keys_down: Vec::new(),
+            input_state: InputState {
+                mouse_pos: None,
+                mouse_buttons_down: MouseButtonSequenceTrackPos::new(),
+                modifiers: ModifierKeys::empty(),
+                keys_down: Vec::new(),
+                mouse_hover_widget: None
+            },
 
-            cursor_icon: CursorIcon::default(),
-            needs_redraw: true,
+            render_state: RenderState {
+                cursor_icon: CursorIcon::default(),
+                needs_redraw: true,
+                frame_set_data: FrameSetData {
+                    set_cursor_pos: None,
+                    set_cursor_icon: None,
+                }
+            },
 
             root_widget, theme,
             popup_widgets: PopupMap::new(),
-
-            set_cursor_pos: None,
-            set_cursor_icon: None,
         }
     }
 
+    pub fn drain_actions(&mut self) -> impl '_ + Iterator<Item=A> + ExactSizeIterator + DoubleEndedIterator {
+        self.event_translator.drain_actions()
+    }
 }
 
 impl<T> Into<Option<T>> for LoopFlow<T> {

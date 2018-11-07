@@ -4,7 +4,7 @@ use crate::{
     render::RenderFrame,
     offset_widget::{OffsetWidget, OffsetWidgetTrait},
     widget_stack::{WidgetStack, WidgetPath},
-    widget_tree::WidgetTree
+    virtual_widget_tree::VirtualWidgetTree
 };
 use std::collections::VecDeque;
 
@@ -43,18 +43,23 @@ pub(crate) enum DispatchableEvent {
 }
 
 impl EventDispatcher {
+    pub fn new() -> EventDispatcher {
+        EventDispatcher {
+            events: VecDeque::new()
+        }
+    }
+
     pub fn queue_event(&mut self, destination: EventDestination, event: DispatchableEvent) {
         self.events.push_back((destination, event));
     }
 
-    pub fn dispatch_events<Fun, A, F, Root>(
+    pub fn dispatch_events<A, F>(
         &mut self,
         widget_stack: &mut WidgetStack<A, F>,
-        widget_tree: &mut WidgetTree,
-        mut fun: Fun
+        widget_tree: &mut VirtualWidgetTree,
+        mut f: impl FnMut(&mut Self, WidgetPath<A, F>, DispatchableEvent)
     )
-        where Fun: FnMut(&mut Self, WidgetPath<A, F>, DispatchableEvent),
-              A: 'static,
+        where A: 'static,
               F: RenderFrame
     {
         while let Some((destination, event)) = self.events.pop_front() {
@@ -62,13 +67,13 @@ impl EventDispatcher {
                 Some(w) => w,
                 None => continue
             };
-            fun(self, widget, event);
+            f(self, widget, event);
         }
     }
 }
 
 impl EventDestination {
-    pub fn get_widget<'a, A, F>(&self, widget_stack: &'a mut WidgetStack<A, F>, widget_tree: &mut WidgetTree) -> Option<WidgetPath<'a, A, F>>
+    pub fn get_widget<'a, A, F>(&self, widget_stack: &'a mut WidgetStack<A, F>, widget_tree: &mut VirtualWidgetTree) -> Option<WidgetPath<'a, A, F>>
         where A: 'static,
               F: RenderFrame
     {

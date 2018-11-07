@@ -107,6 +107,14 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
         self.vec.last().unwrap().index
     }
 
+    pub fn top_parent_offset(&self) -> Vector2<i32> {
+        self.top_parent_offset
+    }
+
+    pub fn clip_rect(&self) -> Option<BoundBox<D2, i32>> {
+        self.clip_rect
+    }
+
     #[inline]
     pub fn len(&self) -> usize {
         self.vec.len()
@@ -147,12 +155,18 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn try_push<'b, G>(&'b mut self, with_top: G) -> Option<WidgetSummary<&'b mut Widget<A, F>>>
-        where G: FnOnce(&'b mut Widget<A, F>, &[WidgetIdent]) -> Option<WidgetSummary<&'b mut Widget<A, F>>>
+    pub fn try_push<G>(&mut self, with_top: G) -> Option<WidgetPath<'_, A, F>>
+        where G: FnOnce(&'_ mut dyn Widget<A, F>) -> Option<WidgetSummary<&'_ mut Widget<A, F>>>
     {
-        let new_top_opt = with_top(unsafe{ mem::transmute(self.top().widget.inner_mut()) }, &self.ident_vec );
+        let mut old_top = self.top();
+        let new_top_opt = with_top(old_top.widget.inner_mut());
         if let Some(new_top_summary) = new_top_opt {
-            assert_ne!(new_top_summary.widget as *mut Widget<A, F>, self.top().widget.inner_mut() as *mut Widget<A, F>);
+            let new_top_id = new_top_summary.widget.widget_tag().widget_id;
+            let new_top_widget = new_top_summary.widget as *mut _;
+            let new_top_index = new_top_summary.index;
+            let new_top_ident = new_top_summary.ident.clone();
+
+            assert_ne!(new_top_widget, self.top().widget.inner_mut() as *mut Widget<A, F>);
             {
                 let cur_top = self.vec.last_mut().unwrap();
 
@@ -168,13 +182,13 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
             }
 
             self.vec.push(StackElement {
-                widget_id: new_top_summary.widget.widget_tag().widget_id,
-                widget: new_top_summary.widget,
+                widget_id: new_top_id,
+                widget: new_top_widget,
                 rectangles: None,
-                index: new_top_summary.index
+                index: new_top_index
             });
-            self.ident_vec.push(new_top_summary.ident.clone());
-            Some(new_top_summary)
+            self.ident_vec.push(new_top_ident);
+            Some(self.top())
         } else {
             None
         }

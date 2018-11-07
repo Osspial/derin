@@ -22,7 +22,7 @@ use crate::{
     render::{RenderFrame, FrameRectStack},
     timer::TimerRegister,
     popup::ChildPopupsMut,
-    update_state::UpdateStateShared
+    update_state::{UpdateStateShared, UpdateStateBuffered}
 };
 use derin_common_types::{
     buttons::MouseButton,
@@ -30,7 +30,8 @@ use derin_common_types::{
 };
 use std::{
     sync::Arc,
-    cell::Cell
+    cell::{Cell, RefCell},
+    rc::Rc
 };
 use cgmath_geometry::{
     D2, rect::BoundBox,
@@ -68,9 +69,8 @@ pub(crate) enum MouseState {
 
 #[derive(Debug, Clone)]
 pub struct WidgetTag {
-    update_state: UpdateStateShared,
+    update_state: RefCell<UpdateStateShared>,
     pub(crate) widget_id: WidgetID,
-    pub(crate) last_event_stamp: Cell<u32>,
     pub(crate) mouse_state: Cell<MouseState>,
     pub(crate) has_keyboard_focus: Cell<bool>,
     pub(crate) child_event_recv: Cell<ChildEventRecv>
@@ -166,19 +166,6 @@ id!(pub(crate) RootID);
 id!(pub(crate) WidgetID);
 
 
-/// Behavior when another widget attempts to focus a given widget.
-///
-/// Note that this is *ignored* if the attempt to focus came from the return value of this widget's
-/// `on_widget_event` function.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum OnFocus {
-    /// Accept focus, and send a `GainFocus` event to this widget. Is default.
-    Accept,
-    /// Don't accept focus, and try to focus the next widget.
-    Skip,
-    FocusChild
-}
-
 /// Configures where to deliver focus when a child send a `FocusChange::Next` or `FocusChange::Prev`,
 /// and there is no next/previous widget to deliver focus to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -207,9 +194,6 @@ pub trait Widget<A, F: RenderFrame> {
         SizeBounds::default()
     }
     fn register_timers(&self, _register: &mut TimerRegister) {}
-    fn accepts_focus(&self) -> OnFocus {
-        OnFocus::default()
-    }
 
     #[doc(hidden)]
     fn as_parent(&self) -> Option<&ParentDyn<A, F>> {
@@ -254,9 +238,6 @@ impl<'a, A, F, W> Widget<A, F> for &'a mut W
     }
     fn register_timers(&self, register: &mut TimerRegister) {
         W::register_timers(self, register)
-    }
-    fn accepts_focus(&self) -> OnFocus {
-        W::accepts_focus(self)
     }
 
     #[doc(hidden)]
@@ -303,9 +284,6 @@ impl<A, F, W> Widget<A, F> for Box<W>
     }
     fn register_timers(&self, register: &mut TimerRegister) {
         W::register_timers(self, register)
-    }
-    fn accepts_focus(&self) -> OnFocus {
-        W::accepts_focus(self)
     }
 
     #[doc(hidden)]
@@ -397,13 +375,6 @@ impl<'a, W: ?Sized> WidgetSummary<&'a mut W> {
     }
 }
 
-impl Default for OnFocus {
-    #[inline(always)]
-    fn default() -> OnFocus {
-        OnFocus::Accept
-    }
-}
-
 impl Default for OnFocusOverflow {
     #[inline(always)]
     fn default() -> OnFocusOverflow {
@@ -426,9 +397,8 @@ impl WidgetTag {
     #[inline]
     pub fn new() -> WidgetTag {
         WidgetTag {
-            update_state: UpdateStateShared::new(),
+            update_state: RefCell::new(UpdateStateShared::new()),
             widget_id: WidgetID::new(),
-            last_event_stamp: Cell::new(0),
             mouse_state: Cell::new(MouseState::Untracked),
             has_keyboard_focus: Cell::new(false),
             child_event_recv: Cell::new(ChildEventRecv::empty())
@@ -437,13 +407,13 @@ impl WidgetTag {
 
     #[inline]
     pub fn request_redraw(&mut self) -> &mut WidgetTag {
-        self.update_state.request_redraw(self.widget_id);
+        self.update_state.get_mut().request_redraw(self.widget_id);
         self
     }
 
     #[inline]
     pub fn request_relayout(&mut self) -> &mut WidgetTag {
-        self.update_state.request_relayout(self.widget_id);
+        self.update_state.get_mut().request_relayout(self.widget_id);
         self
     }
 
@@ -454,6 +424,11 @@ impl WidgetTag {
     #[inline]
     pub fn has_keyboard_focus(&self) -> bool {
         self.has_keyboard_focus.get()
+    }
+
+    #[inline]
+    pub(crate) fn set_owning_update_state(&self, state: &Rc<UpdateStateBuffered>) {
+        self.update_state.borrow_mut().set_owning_update_state(self.widget_id, state);
     }
 }
 

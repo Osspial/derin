@@ -75,10 +75,10 @@ impl MouseButtonSequenceTrackPos {
             .map(|(i, b)| MouseDown{ button: b, down_pos: self.down_positions[i] })
     }
 
-    // #[inline]
-    // pub fn len(&self) -> u8 {
-    //     self.seq.len()
-    // }
+    #[inline]
+    pub fn len(&self) -> u8 {
+        self.seq.len()
+    }
 }
 
 impl MouseButtonSequence {

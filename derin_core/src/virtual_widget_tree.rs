@@ -1,4 +1,4 @@
-use crate::tree::{WidgetID, WidgetIdent};
+use crate::tree::{WidgetID, WidgetIdent, ROOT_IDENT};
 use std::{
     cell::Cell,
     collections::{
@@ -37,7 +37,7 @@ pub struct WidgetData {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub(crate) struct WidgetTree {
+pub(crate) struct VirtualWidgetTree {
     root: WidgetID,
     root_data: WidgetData,
     root_children: Vec<WidgetID>,
@@ -52,12 +52,12 @@ fn vec_remove_element<T: PartialEq>(v: &mut Vec<T>, element: &T) -> T {
     v.remove(find_index(v, element))
 }
 
-impl WidgetTree {
-    pub(crate) fn new(root: WidgetID, root_ident: WidgetIdent) -> WidgetTree {
-        WidgetTree {
+impl VirtualWidgetTree {
+    pub(crate) fn new(root: WidgetID) -> VirtualWidgetTree {
+        VirtualWidgetTree {
             root,
             root_data: WidgetData {
-                ident: root_ident,
+                ident: ROOT_IDENT,
                 depth: Cell::new(0)
             },
             root_children: Vec::new(),
@@ -323,7 +323,7 @@ mod tests {
                 #[allow(unused_mut)]
                 {
                     let root_id = $root;
-                    let mut tree = WidgetTree::new(root_id, WidgetIdent::Str(Arc::from(stringify!($root))));
+                    let mut tree = VirtualWidgetTree::new(root_id);
                     let mut rolling_index = 0;
                     widget_tree!(@insert root_id, tree, rolling_index, $($($rest)*)*);
                     let _ = rolling_index; // Silences warnings
@@ -374,7 +374,7 @@ mod tests {
             }
         };
 
-        let mut manual_tree = WidgetTree::new(root, WidgetIdent::new_str("root"));
+        let mut manual_tree = VirtualWidgetTree::new(root);
         manual_tree.insert(root, child_0, 0, WidgetIdent::new_str("child_0")).unwrap();
         manual_tree.insert(root, child_1, 1, WidgetIdent::new_str("child_1")).unwrap();
         manual_tree.insert(child_0, child_0_1, 0, WidgetIdent::new_str("child_0_1")).unwrap();

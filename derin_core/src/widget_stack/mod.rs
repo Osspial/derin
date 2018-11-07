@@ -15,12 +15,14 @@
 mod inner;
 
 use crate::{
+    LoopFlow,
     render::RenderFrame,
     tree::{
         Widget, WidgetIdent, WidgetID, ROOT_IDENT,
         dynamic::ParentDyn
     },
-    widget_tree::WidgetTree
+    offset_widget::OffsetWidget,
+    virtual_widget_tree::VirtualWidgetTree
 };
 use std::iter::{DoubleEndedIterator, ExactSizeIterator};
 
@@ -83,11 +85,11 @@ impl<'a, A, F: RenderFrame> WidgetStack<'a, A, F> {
 
     #[inline]
     pub fn depth(&self) -> usize {
-        // The len is always going to be >= 1, so when it's 1 we're at the root widget (dpeth 0)
+        // The len is always going to be >= 1, so when it's 1 we're at the root widget (depth 0)
         self.stack.len() - 1
     }
 
-    pub fn move_to_widget_with_tree(&mut self, widget_id: WidgetID, widget_tree: &mut WidgetTree) -> Option<WidgetPath<A, F>> {
+    pub fn move_to_widget_with_tree(&mut self, widget_id: WidgetID, widget_tree: &mut VirtualWidgetTree) -> Option<WidgetPath<A, F>> {
         // TODO: GET RID OF COLLECT ALLOCATION
         let mut active_ident_rev = widget_tree.ident_chain_reversed(widget_id)?.cloned().collect::<Vec<_>>();
 
@@ -99,7 +101,7 @@ impl<'a, A, F: RenderFrame> WidgetStack<'a, A, F> {
         // If the widget wasn't found where the tree said it would be found, update the tree
         // and store the new location.
         let (widget_index, widget_ident);
-        match self.search_for_widget(widget_id) {
+        match self.scan_for_widget(widget_id) {
             Some(widget) => {
                 widget_index = widget.index;
                 widget_ident = widget.path.last().unwrap().clone();
@@ -142,7 +144,7 @@ impl<'a, A, F: RenderFrame> WidgetStack<'a, A, F> {
 
         let mut valid_path = true;
         for ident in ident_path_iter {
-            valid_path = self.stack.try_push(|widget, _| {
+            valid_path = self.stack.try_push(|mut widget| {
                 if let Some(widget_as_parent) = widget.as_parent_mut() {
                     widget_as_parent.child_mut(ident)
                 } else {
@@ -161,12 +163,12 @@ impl<'a, A, F: RenderFrame> WidgetStack<'a, A, F> {
         }
     }
 
-    pub(crate) fn search_for_widget(&mut self, widget_id: WidgetID) -> Option<WidgetPath<A, F>> {
+    pub(crate) fn scan_for_widget(&mut self, widget_id: WidgetID) -> Option<WidgetPath<A, F>> {
         self.move_to_path(Some(ROOT_IDENT));
         let mut widget_found = false;
         let mut child_index = 0;
         loop {
-            let valid_child = self.stack.try_push(|top_widget, top_path| {
+            let valid_child = self.stack.try_push(|mut top_widget| {
                 let top_id = top_widget.widget_tag().widget_id;
 
                 if widget_id == top_id {
@@ -174,7 +176,7 @@ impl<'a, A, F: RenderFrame> WidgetStack<'a, A, F> {
                     return None;
                 }
 
-                if let Some(top_widget_as_parent) = top_widget.as_parent_mut() {
+                if let Some(mut top_widget_as_parent) = top_widget.as_parent_mut() {
                     return top_widget_as_parent.child_by_index_mut(child_index);
                 }
 
@@ -193,6 +195,52 @@ impl<'a, A, F: RenderFrame> WidgetStack<'a, A, F> {
                         break None
                     }
                 }
+            }
+        }
+    }
+
+    /// Scan the tree for the leftmost deepest widget that returns `true`, and has all its parents
+    /// return `true`, for the provided function.
+    pub(crate) fn scan_for_widget_with(&mut self, mut f: impl FnMut(&OffsetWidget<'_, dyn Widget<A, F>>) -> bool) -> Option<WidgetPath<'_, A, F>> {
+        if !f(&self.move_to_path(Some(ROOT_IDENT)).unwrap().widget) {
+            return None;
+        }
+        let mut deepest_found = false;
+
+        loop {
+            let top_parent_offset = self.stack.top_parent_offset();
+            let clip_rect = self.stack.clip_rect();
+
+            deepest_found = self.stack.try_push(|mut top_widget| {
+                match top_widget.as_parent_mut() {
+                    None => None,
+                    Some(mut top_widget_as_parent) => {
+                        let mut valid_index = None;
+                        top_widget_as_parent.children_mut(&mut |mut child_summary_list| {
+                            for child_summary in child_summary_list.drain(..) {
+                                if f(&OffsetWidget::new(child_summary.widget, top_parent_offset, clip_rect)) {
+                                    valid_index = Some(child_summary.index);
+                                    return LoopFlow::Break(());
+                                }
+                            }
+                            LoopFlow::Continue
+                        });
+
+                        // For some reason this works but Option::map doesn't.
+                        match valid_index {
+                            Some(i) => Some(
+                                top_widget_as_parent
+                                    .child_by_index_mut(i)
+                                    .expect("widget children changed at wrong time")
+                            ),
+                            None => None
+                        }
+                    }
+                }
+            }).is_none();
+
+            if deepest_found {
+                break Some(self.top());
             }
         }
     }
