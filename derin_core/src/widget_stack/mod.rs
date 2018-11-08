@@ -27,7 +27,7 @@ use crate::{
 use std::iter::{DoubleEndedIterator, ExactSizeIterator};
 
 use self::inner::{NRAllocCache, NRVec};
-pub use self::inner::WidgetPath;
+pub(crate) use self::inner::WidgetPath;
 
 use crate::offset_widget::{OffsetWidgetTrait, OffsetWidgetTraitAs};
 

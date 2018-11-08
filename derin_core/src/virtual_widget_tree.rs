@@ -44,14 +44,6 @@ pub(crate) struct VirtualWidgetTree {
     tree_data: HashMap<WidgetID, WidgetTreeNode, FnvBuildHasher>
 }
 
-fn find_index<T: PartialEq>(s: &[T], element: &T) -> usize {
-    s.iter().enumerate().find(|&(_, e)| e == element).unwrap().0
-}
-
-fn vec_remove_element<T: PartialEq>(v: &mut Vec<T>, element: &T) -> T {
-    v.remove(find_index(v, element))
-}
-
 impl VirtualWidgetTree {
     pub(crate) fn new(root: WidgetID) -> VirtualWidgetTree {
         VirtualWidgetTree {
@@ -88,7 +80,7 @@ impl VirtualWidgetTree {
                     self.update_node_depth(parent_depth + 1, &self.tree_data[&widget_id]);
 
                     let (_, old_parent_children) = self.get_widget_node_mut(old_parent_id).expect("Bad tree state");
-                    vec_remove_element(old_parent_children, &widget_id);
+                    crate::vec_remove_element(old_parent_children, &widget_id).unwrap();
                 },
                 Entry::Vacant(vac) => {
                     vac.insert(WidgetTreeNode::new(parent_id, widget_ident, parent_depth + 1));
@@ -110,7 +102,7 @@ impl VirtualWidgetTree {
     pub(crate) fn remove(&mut self, widget_id: WidgetID) -> Option<WidgetData> {
         if let Entry::Occupied(occ) = self.tree_data.entry(widget_id) {
             let node = occ.remove();
-            vec_remove_element(&mut self.get_widget_node_mut(node.parent_id).unwrap().1, &widget_id);
+            crate::vec_remove_element(&mut self.get_widget_node_mut(node.parent_id).unwrap().1, &widget_id).unwrap();
 
             // Remove all the child widgets.
             let mut widgets_to_remove = VecDeque::from(node.children);
@@ -157,7 +149,7 @@ impl VirtualWidgetTree {
 
         let siblings = &self.get_widget_node(node.parent_id).unwrap().1;
 
-        let sibling_index = find_index(&siblings, &widget_id) as isize + offset;
+        let sibling_index = crate::find_index(&siblings, &widget_id).unwrap() as isize + offset;
         siblings.get(sibling_index as usize).cloned().ok_or(WidgetRelationError::RelationNotFound)
     }
 
@@ -189,7 +181,7 @@ impl VirtualWidgetTree {
             }
         };
 
-        let sibling_index = find_index(siblings, &widget_id) as isize + offset;
+        let sibling_index = crate::find_index(siblings, &widget_id).unwrap() as isize + offset;
         Some(siblings[mod_euc(sibling_index, siblings.len() as isize) as usize])
     }
 

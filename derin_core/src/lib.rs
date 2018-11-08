@@ -62,6 +62,15 @@ use derin_common_types::cursor::CursorIcon;
 
 const MAX_FRAME_UPDATE_ITERATIONS: usize = 16;
 
+fn find_index<T: PartialEq>(s: &[T], element: &T) -> Option<usize> {
+    s.iter().enumerate().find(|&(_, e)| e == element).map(|(i, _)| i)
+}
+
+#[must_use]
+fn vec_remove_element<T: PartialEq>(v: &mut Vec<T>, element: &T) -> Option<T> {
+    find_index(v, element).map(|i| v.remove(i))
+}
+
 pub struct Root<A, N, F>
     where N: Widget<A, F> + 'static,
           A: 'static,
@@ -89,7 +98,8 @@ struct InputState {
     mouse_buttons_down: MouseButtonSequenceTrackPos,
     pub modifiers: ModifierKeys,
     keys_down: Vec<Key>,
-    mouse_hover_widget: Option<WidgetID>
+    mouse_hover_widget: Option<WidgetID>,
+    focused_widget: Option<WidgetID>
 }
 
 struct RenderState {
@@ -146,7 +156,8 @@ impl<A, N, F> Root<A, N, F>
                 mouse_buttons_down: MouseButtonSequenceTrackPos::new(),
                 modifiers: ModifierKeys::empty(),
                 keys_down: Vec::new(),
-                mouse_hover_widget: None
+                mouse_hover_widget: None,
+                focused_widget: None
             },
 
             render_state: RenderState {

@@ -41,17 +41,18 @@ pub(crate) struct NRAllocCache<A, F: RenderFrame> {
     ident_vec: Vec<WidgetIdent>
 }
 
-pub struct NRVec<'a, A: 'static, F: 'a + RenderFrame> {
+pub(crate) struct NRVec<'a, A: 'static, F: 'a + RenderFrame> {
     vec: &'a mut Vec<StackElement<A, F>>,
     ident_vec: &'a mut Vec<WidgetIdent>,
     clip_rect: Option<BoundBox<D2, i32>>,
     top_parent_offset: Vector2<i32>,
 }
 
-pub struct WidgetPath<'a, A: 'static, F: 'a + RenderFrame> {
+pub(crate) struct WidgetPath<'a, A: 'static, F: 'a + RenderFrame> {
     pub widget: OffsetWidget<'a, dyn Widget<A, F>>,
     pub path: &'a [WidgetIdent],
-    pub index: usize
+    pub index: usize,
+    pub widget_id: WidgetID
 }
 
 impl<A, F: RenderFrame> NRAllocCache<A, F> {
@@ -89,11 +90,12 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
 impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
     #[inline]
     pub fn top(&mut self) -> WidgetPath<A, F> {
-        let widget = self.vec.last_mut().map(|n| unsafe{ &mut *n.widget }).unwrap();
+        let (widget, widget_id) = self.vec.last_mut().map(|n| unsafe{ (&mut *n.widget, n.widget_id) }).unwrap();
         WidgetPath {
             widget: OffsetWidget::new(widget, self.top_parent_offset, self.clip_rect),
             path: &self.ident_vec,
-            index: self.top_index()
+            index: self.top_index(),
+            widget_id
         }
     }
 

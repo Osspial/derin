@@ -81,7 +81,7 @@ pub struct InputState<'a> {
     /// The mouse buttons that have been pressed inside of the widget.
     pub mouse_buttons_down_in_widget: &'a [MouseDown],
     /// The position of the mouse, relative to the widget's origin.
-    pub mouse_pos: Point2<i32>,
+    pub mouse_pos: Option<Point2<i32>>,
     /// The modifier keys that have been pressed down.
     pub modifiers: ModifierKeys,
     /// The keys that have been pressed inside of the window.

@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::LoopFlow;
+use crate::{LoopFlow, InputState};
 use crate::popup::ChildPopupsMut;
 use crate::tree::{Widget, WidgetIdent, WidgetTag, WidgetSummary};
 use crate::tree::dynamic::ParentDyn;
-use crate::event::{InputState, WidgetEvent, EventOps};
+use crate::event::{InputState as EventInputState, WidgetEvent, EventOps};
 use crate::render::RenderFrame;
 use crate::timer::TimerRegister;
 use crate::mbseq::MouseButtonSequenceTrackPos;
@@ -30,7 +30,7 @@ use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 use arrayvec::ArrayVec;
 
 #[derive(Debug)]
-pub struct OffsetWidget<'a, W: 'a + ?Sized> {
+pub(crate) struct OffsetWidget<'a, W: 'a + ?Sized> {
     widget: &'a mut W,
     offset: Vector2<i32>,
     clip: Option<BoundBox<D2, i32>>
@@ -57,7 +57,7 @@ impl<'a, W: ?Sized> OffsetWidget<'a, W> {
     }
 }
 
-pub trait OffsetWidgetTrait<A, F>
+pub(crate) trait OffsetWidgetTrait<A, F>
     where F: RenderFrame
 {
     type Widget: Widget<A, F> + ?Sized;
@@ -72,10 +72,7 @@ pub trait OffsetWidgetTrait<A, F>
     fn on_widget_event(
         &mut self,
         event: WidgetEvent,
-        mouse_pos: Point2<i32>,
-        mouse_buttons_down: &MouseButtonSequenceTrackPos,
-        keys_down: &[Key],
-        modifiers: ModifierKeys,
+        input_state: &InputState,
         popups: Option<ChildPopupsMut<A, F>>,
         source_child: &[WidgetIdent]
     ) -> EventOps<A, F>;
@@ -100,7 +97,7 @@ pub trait OffsetWidgetTrait<A, F>
               G: FnMut(WidgetSummary<OffsetWidget<'b, Widget<A, F>>>) -> LoopFlow<()>;
 }
 
-pub trait OffsetWidgetTraitAs<'a, A, F: RenderFrame> {
+pub(crate) trait OffsetWidgetTraitAs<'a, A, F: RenderFrame> {
     type AsParent: 'a;
 
     fn as_parent_mut(self) -> Option<Self::AsParent>;
@@ -131,14 +128,18 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
     fn on_widget_event(
         &mut self,
         event: WidgetEvent,
-        mouse_pos: Point2<i32>,
-        mouse_buttons_down: &MouseButtonSequenceTrackPos,
-        keys_down: &[Key],
-        modifiers: ModifierKeys,
+        input_state: &InputState,
         popups: Option<ChildPopupsMut<A, F>>,
         source_child: &[WidgetIdent]
     ) -> EventOps<A, F>
     {
+        let InputState {
+            mouse_pos,
+            mouse_buttons_down,
+            keys_down,
+            modifiers,
+            ..
+        } = input_state;
         let widget_tag = self.widget_tag();
         let offset = self.rect().min().to_vec();
         let mbd_array: ArrayVec<[_; 5]> = mouse_buttons_down.clone().into_iter()
@@ -153,10 +154,10 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
                 down
             }).collect();
 
-        let input_state = InputState {
-            mouse_pos: mouse_pos - offset,
-            modifiers: modifiers,
-            mouse_buttons_down: &mbd_array,
+        let input_state = EventInputState {
+            mouse_pos: mouse_pos.map(|p| p - offset),
+            modifiers: *modifiers,
+            mouse_buttons_down: &mbd_array[..],
             mouse_buttons_down_in_widget: &mbdin_array,
             keys_down
         };
