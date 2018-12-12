@@ -16,7 +16,7 @@
 
 use crate::LoopFlow;
 use crate::render::RenderFrame;
-use crate::tree::{Parent, WidgetIdent, WidgetSummary, Widget, OnFocusOverflow};
+use crate::tree::{Parent, WidgetIdent, WidgetSummary, Widget};
 
 use arrayvec::ArrayVec;
 use std::mem;
@@ -38,8 +38,6 @@ pub trait ParentDyn<A, F: RenderFrame>: Widget<A, F> {
     fn children_mut<'a>(&'a mut self, for_each: ForEachSummary<&'a mut Widget<A, F>>);
 
     fn update_child_layout(&mut self);
-
-    fn on_child_focus_overflow(&self) -> OnFocusOverflow;
 }
 
 impl<A, F, P> ParentDyn<A, F> for P
@@ -116,10 +114,6 @@ impl<A, F, P> ParentDyn<A, F> for P
 
     fn update_child_layout(&mut self) {
         <Self as Parent<A, F>>::update_child_layout(self)
-    }
-
-    fn on_child_focus_overflow(&self) -> OnFocusOverflow {
-        <Self as Parent<A, F>>::on_child_focus_overflow(self)
     }
 }
 

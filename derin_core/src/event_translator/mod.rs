@@ -2,7 +2,7 @@ mod dispatcher;
 
 use crate::{
     WindowEvent, InputState, LoopFlow,
-    event::WidgetEvent,
+    event::{FocusSource, MouseHoverChange, WidgetEvent},
     tree::*,
     timer::TimerList,
     render::RenderFrame,
@@ -59,7 +59,7 @@ impl<A, F> EventTranslator<A, F>
         }
     }
 
-    pub fn with_translator<'a>(&'a mut self, root: &'a mut Widget<A, F>) -> TranslatorActive<'a, A, F> {
+    pub fn with_widget<'a>(&'a mut self, root: &'a mut Widget<A, F>) -> TranslatorActive<'a, A, F> {
         TranslatorActive {
             widget_stack: self.widget_stack_base.use_stack_dyn(root),
             inner: &mut self.inner
@@ -90,166 +90,150 @@ impl<'a, A, F> TranslatorActive<'a, A, F>
             ref update_state
         } = inner;
 
-        let mut queue_hover_event = |event| {
-            let old_hover_widget_opt = match input_state.mouse_hover_widget {
-                Some(w) => widget_stack.move_to_widget_with_tree(w, virtual_widget_tree),
-                None => None
-            };
-
-            if let Some(old_hover_widget) = old_hover_widget_opt {
-                event_dispatcher.queue_event(
-                    EventDestination::Widget(old_hover_widget.widget.widget_tag().widget_id),
-                    DispatchableEvent::WidgetEvent {
-                        bubble_source: None,
-                        event: event
-                    }
-                );
-            }
+        let mut queue_direct_event = |widget_id, event| {
+            event_dispatcher.queue_event(
+                EventDestination::Widget(widget_id),
+                DispatchableEvent::Direct {
+                    bubble_source: None,
+                    event,
+                }
+            )
         };
 
+        let mut root_widget_rect = || widget_stack.move_to_path(Some(ROOT_IDENT)).unwrap().widget.rect();
+        let mut project_to_outside_root = |point| {
+            let border_point = root_widget_rect().nearest_points(point).next().unwrap();
+            let diff = (border_point - point).map(|i| i.signum());
+            border_point + diff
+        };
+
+        let _: Option<()> =
         match window_event {
-            MouseMove(new_pos) => {
-                let old_pos = input_state.mouse_pos.unwrap_or(new_pos);
+            MouseMove(new_pos) => try {
+                let old_pos = input_state.mouse_pos
+                    .unwrap_or_else(|| project_to_outside_root(new_pos));
                 input_state.mouse_pos = Some(new_pos);
 
-                let old_hover_widget_opt = match input_state.mouse_hover_widget {
-                    Some(w) => widget_stack.move_to_widget_with_tree(w, virtual_widget_tree),
-                    None => None
-                };
+                let hover_widget_id = input_state.mouse_hover_widget
+                    .unwrap_or(virtual_widget_tree.root_id());
 
-                if let Some(ohw) = old_hover_widget_opt {
-                    let mut ohw = ohw.widget;
-                    let ohw_id = ohw.widget_tag().widget_id;
-                    event_dispatcher.queue_event(
-                        EventDestination::Widget(ohw_id),
-                        DispatchableEvent::WidgetEvent {
-                            bubble_source: None,
-                            event: WidgetEvent::MouseMove {
-                                old_pos, new_pos,
-                                in_widget: true // This is a tentative value. The real value is calculated in the dispatch function.
-                            }
-                        }
-                    );
-
-                } else if let Some(hover_widget) = widget_stack.move_to_path(Some(ROOT_IDENT)).filter(|w| w.widget.rect().contains(new_pos)) {
-                    let hover_id = hover_widget.widget.widget_tag().widget_id;
-                    event_dispatcher.queue_event(
-                        EventDestination::Widget(hover_id),
-                        DispatchableEvent::WidgetEvent {
-                            bubble_source: None,
-                            event: WidgetEvent::MouseEnter
-                        }
-                    );
-                    event_dispatcher.queue_event(
-                        EventDestination::Widget(hover_id),
-                        DispatchableEvent::WidgetEvent {
-                            bubble_source: None,
-                            event: WidgetEvent::MouseMove {
-                                old_pos, new_pos,
-                                in_widget: true
-                            }
-                        }
-                    );
-                }
+                event_dispatcher.queue_event(
+                    EventDestination::Widget(hover_widget_id),
+                    DispatchableEvent::MouseMove {
+                        old_pos, new_pos,
+                        exiting_from_child: None,
+                    }
+                );
             },
-            MouseEnter => (),
-            MouseExit => {
-                queue_hover_event(WidgetEvent::MouseExit);
+            MouseEnter => None,
+            MouseExit => try {
+                let old_pos = input_state.mouse_pos?;
+                let new_pos = input_state.mouse_pos
+                    .unwrap_or_else(|| project_to_outside_root(old_pos));
+
+                let hover_widget_id = input_state.mouse_hover_widget
+                .unwrap_or(virtual_widget_tree.root_id());
+
+                event_dispatcher.queue_event(
+                    EventDestination::Widget(hover_widget_id),
+                    DispatchableEvent::MouseMove {
+                        old_pos, new_pos,
+                        exiting_from_child: None,
+                    }
+                );
                 if input_state.mouse_buttons_down.len() == 0 {
                     input_state.mouse_pos = None;
                 }
             }
-            MouseDown(mouse_button) => {
-                if let Some(mouse_pos) = input_state.mouse_pos {
-                    queue_hover_event(WidgetEvent::MouseDown {
+            MouseDown(mouse_button) => try {
+                let mouse_pos = input_state.mouse_pos?;
+                let hover_widget_id = input_state.mouse_hover_widget?;
+
+                queue_direct_event(
+                    hover_widget_id,
+                    WidgetEvent::MouseDown {
                         pos: mouse_pos,
                         in_widget: true,
                         button: mouse_button
-                    });
-                    input_state.mouse_buttons_down.push_button(mouse_button, mouse_pos);
-                }
+                    },
+                );
+                input_state.mouse_buttons_down.push_button(mouse_button, mouse_pos);
             },
-            MouseUp(mouse_button) => {
-                if let Some(mouse_pos) = input_state.mouse_pos {
-                    if let Some(mouse_down) = input_state.mouse_buttons_down.contains(mouse_button) {
-                        queue_hover_event(WidgetEvent::MouseUp {
-                            pos: mouse_pos,
-                            down_pos: mouse_down.down_pos,
-                            pressed_in_widget: unimplemented!(),
-                            in_widget: true,
-                            button: mouse_button
-                        });
-                        input_state.mouse_buttons_down.release_button(mouse_button);
-                    }
-                }
+            MouseUp(mouse_button) => try {
+                let mouse_pos = input_state.mouse_pos?;
+                let mouse_down = input_state.mouse_buttons_down.contains(mouse_button)?;
+                let hover_widget_id = input_state.mouse_hover_widget
+                    .unwrap_or(virtual_widget_tree.root_id());
+
+                queue_direct_event(
+                    hover_widget_id,
+                    WidgetEvent::MouseUp {
+                        pos: mouse_pos,
+                        down_pos: mouse_down.down_pos,
+                        pressed_in_widget: unimplemented!(),
+                        in_widget: true,
+                        button: mouse_button
+                    },
+                );
+                input_state.mouse_buttons_down.release_button(mouse_button);
             },
-            MouseScrollLines(dir) => queue_hover_event(WidgetEvent::MouseScrollLines(dir)),
-            MouseScrollPx(dir) => queue_hover_event(WidgetEvent::MouseScrollPx(dir)),
+            MouseScrollLines(dir) => try {
+                let hover_widget_id = input_state.mouse_hover_widget?;
+                queue_direct_event(
+                    hover_widget_id,
+                    WidgetEvent::MouseScrollLines(dir),
+                );
+            },
+            MouseScrollPx(dir) => try {
+                let hover_widget_id = input_state.mouse_hover_widget?;
+                queue_direct_event(
+                    hover_widget_id,
+                    WidgetEvent::MouseScrollPx(dir),
+                );
+            },
             WindowResize(_) => unimplemented!(),
-            KeyDown(key) => {
-                if crate::find_index(&input_state.keys_down, &key).is_none() {
+            KeyDown(key) => try {
+                if !input_state.keys_down.contains(&key) {
                     input_state.keys_down.push(key);
                     match input_state.focused_widget {
-                        Some(widget) => event_dispatcher.queue_event(
-                            EventDestination::Widget(widget),
-                            DispatchableEvent::WidgetEvent {
-                                bubble_source: None,
-                                event: WidgetEvent::KeyDown(key, input_state.modifiers)
-                            }
+                        Some(widget) => queue_direct_event(
+                            widget,
+                            WidgetEvent::KeyDown(key, input_state.modifiers),
                         ),
                         None => unimplemented!("dispatch to universal fallthrough")
                     }
                 }
             },
-            KeyUp(key) => {
+            KeyUp(key) => try {
                 if crate::vec_remove_element(&mut input_state.keys_down, &key).is_some() {
                     match input_state.focused_widget {
-                        Some(widget) => event_dispatcher.queue_event(
-                            EventDestination::Widget(widget),
-                            DispatchableEvent::WidgetEvent {
-                                bubble_source: None,
-                                event: WidgetEvent::KeyUp(key, input_state.modifiers)
-                            }
+                        Some(widget) => queue_direct_event(
+                            widget,
+                            WidgetEvent::KeyUp(key, input_state.modifiers),
                         ),
                         None => unimplemented!("dispatch to universal fallthrough")
                     }
                 }
             },
-            Char(c) => {
+            Char(c) => try {
                 match input_state.focused_widget {
-                    Some(widget) => event_dispatcher.queue_event(
-                        EventDestination::Widget(widget),
-                        DispatchableEvent::WidgetEvent {
-                            bubble_source: None,
-                            event: WidgetEvent::Char(c)
-                        }
+                    Some(widget) => queue_direct_event(
+                        widget,
+                        WidgetEvent::Char(c),
                     ),
                     None => unimplemented!("dispatch to universal fallthrough")
                 }
             },
             Timer => unimplemented!(),
             Redraw => unimplemented!()
-        }
-    }
-
-    pub fn dispatch_events(&mut self, input_state: &mut InputState) {
-        let TranslatorActive {
-            ref mut widget_stack,
-            ref mut inner
-        } = self;
-        let TranslatorInner {
-            ref mut actions,
-            ref mut timer_list,
-            ref mut event_dispatcher,
-            ref mut virtual_widget_tree,
-            ref update_state
-        } = inner;
+        };
 
         event_dispatcher.dispatch_events(
             widget_stack,
             virtual_widget_tree,
-            |event_dispatcher, WidgetPath{widget, path, widget_id, ..}, event| {
-                let perform_event_ops = |ops| {
+            |event_dispatcher, WidgetPath{mut widget, path, widget_id, index}, event| {
+                let widget_ident = path.last().unwrap();
+                let mut perform_event_ops = |ops| {
                     use crate::event::{EventOps, FocusChange};
                     let EventOps {
                         action,
@@ -263,21 +247,73 @@ impl<'a, A, F> TranslatorActive<'a, A, F>
                         actions.push(action);
                     }
                     if let Some(focus) = focus {
-                        let destination = match focus {
-                            FocusChange::Next =>
+                        let of = widget_id;
+                        let ident = widget_ident.clone();
+                        let destination_source_opt = {
+                            match focus.clone() {
+                                FocusChange::Next => Some((
+                                    EventDestination::Sibling{of, delta: 1},
+                                    FocusSource::Sibling{ident, delta: -1}
+                                )),
+                                FocusChange::Prev => Some((
+                                    EventDestination::Sibling{of, delta: -1},
+                                    FocusSource::Sibling{ident, delta: 1}
+                                )),
+                                FocusChange::Parent => Some((
+                                    EventDestination::Parent{of},
+                                    FocusSource::Child{ident, index}
+                                )),
+                                FocusChange::ChildIdent(ident) => Some((
+                                    EventDestination::ChildIdent{of, ident},
+                                    FocusSource::Parent
+                                )),
+                                FocusChange::ChildIndex(index) => Some((
+                                    EventDestination::ChildIndex{of, index},
+                                    FocusSource::Parent
+                                )),
+                                FocusChange::Take => Some((
+                                    EventDestination::Widget(widget_id),
+                                    FocusSource::This
+                                )),
+                                FocusChange::Remove => None
+                            }
+                        };
+
+                        let is_focused = input_state.focused_widget == Some(widget_id);
+                        if !(is_focused && focus == FocusChange::Take) {
+                            if let Some(focused_widget) = input_state.focused_widget {
+                                event_dispatcher.queue_event(
+                                    EventDestination::Widget(focused_widget),
+                                    DispatchableEvent::Direct {
+                                        bubble_source: None,
+                                        event: WidgetEvent::LoseFocus
+                                    }
+                                );
+                            }
+                            if let Some((destination, source)) = destination_source_opt {
+                                event_dispatcher.queue_event(
+                                    destination,
+                                    DispatchableEvent::Direct {
+                                        bubble_source: None,
+                                        event: WidgetEvent::GainFocus(source)
+                                    }
+                                );
+                            }
                         }
                     }
                 };
 
                 match event {
-                    DispatchableEvent::WidgetEvent{ bubble_source, event } => match event {
-                        WidgetEvent::MouseMove{old_pos, new_pos, in_widget} if bubble_source.is_none() => {
-                            if widget.rect().contains(new_pos) {
+                    DispatchableEvent::MouseMove{old_pos, new_pos, exiting_from_child} => {
+                        let widget_rect = widget.rect();
+                        let (contains_new, contains_old) = (widget_rect.contains(new_pos), widget_rect.contains(old_pos));
+                        match contains_new {
+                            true => {
                                 let mut enter_child_opt = None;
-                                if let Some(widget_as_parent) = widget.as_parent_mut() {
+                                if let Some(mut widget_as_parent) = widget.as_parent_mut() {
                                     widget_as_parent.children_mut(|child_summary| {
                                         if child_summary.widget.rect().contains(new_pos) {
-                                            enter_child_opt = Some(child_summary.widget.widget_tag().widget_id);
+                                            enter_child_opt = Some((child_summary.widget.widget_tag().widget_id, child_summary.ident));
                                             LoopFlow::Break(())
                                         } else {
                                             LoopFlow::Continue
@@ -286,27 +322,206 @@ impl<'a, A, F> TranslatorActive<'a, A, F>
                                 }
 
                                 match enter_child_opt {
-                                    Some(enter_child) => {
+                                    Some((enter_child_id, enter_child_ident)) => {
                                         perform_event_ops(widget.on_widget_event(
-                                            WidgetEvent::MouseMove{old_pos, new_pos, in_widget: false},
+                                            WidgetEvent::MouseMove {
+                                                old_pos, new_pos,
+                                                in_widget: false,
+                                                hover_change: Some(MouseHoverChange::EnterChild(enter_child_ident))
+                                            },
                                             input_state,
                                             None, // TODO: POPUPS
                                             &[]
                                         ));
                                         event_dispatcher.queue_event(
-                                            EventDestination::Widget(enter_child),
-                                            DispatchableEvent::WidgetEvent {
-                                                bubble_source: None,
-                                                event: WidgetEvent::MouseEnter
+                                            EventDestination::Widget(enter_child_id),
+                                            DispatchableEvent::MouseMove {
+                                                old_pos, new_pos,
+                                                exiting_from_child: None,
                                             }
                                         );
+                                    },
+                                    None => {
+                                        perform_event_ops(widget.on_widget_event(
+                                            WidgetEvent::MouseMove {
+                                                old_pos, new_pos,
+                                                in_widget: true,
+                                                hover_change: match contains_old {
+                                                    true => exiting_from_child.map(|ident| MouseHoverChange::ExitChild(ident)),
+                                                    false => Some(MouseHoverChange::Enter)
+                                                }
+                                            },
+                                            input_state,
+                                            None, // TODO: POPUPS
+                                            &[]
+                                        ));
+                                        input_state.mouse_hover_widget = Some(widget_id);
                                     }
                                 }
+                            },
+                            false => {
+                                // TODO: HANDLE EXIT/EXIT CHILD IN ONE MOVE
+                                perform_event_ops(widget.on_widget_event(
+                                    WidgetEvent::MouseMove {
+                                        old_pos, new_pos,
+                                        in_widget: false,
+                                        hover_change: Some(MouseHoverChange::Exit),
+                                    },
+                                    input_state,
+                                    None,
+                                    &[]
+                                ));
+                                event_dispatcher.queue_event(
+                                    EventDestination::Parent{of: widget_id},
+                                    DispatchableEvent::MouseMove {
+                                        old_pos, new_pos,
+                                        exiting_from_child: Some(path.last().cloned().unwrap()),
+                                    }
+                                );
                             }
                         }
+                    },
+                    DispatchableEvent::Direct{bubble_source, event} => {
+                        if bubble_source.is_some() {
+                            unimplemented!()
+                        }
+                        perform_event_ops(widget.on_widget_event(
+                            event,
+                            input_state,
+                            None,
+                            &[]
+                        ))
                     }
                 }
             }
         );
     }
+}
+
+pub fn test() {
+    tests::mouse_move();
+}
+
+// #[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::mpsc;
+    use crate::{
+        cgmath::Point2,
+        test_helpers::TestEvent,
+    };
+
+    fn assert_events<'a>(rx: mpsc::Receiver<TestEvent>, events: impl IntoIterator<Item=&'a TestEvent>) {
+        let mut iter = events.into_iter();
+        loop {
+            let rx_event = rx.try_recv().ok();
+            let iter_event = iter.next();
+
+            println!("rx event: {:#?}", rx_event);
+
+            assert_eq!(rx_event.as_ref(), iter_event, "rx event mismatched w/ test event: {:#?}", iter_event);
+
+            if let (None, None) = (rx_event, iter_event) {
+                return;
+            }
+        }
+    }
+
+    // #[test]
+    pub fn mouse_move() {
+        let (tx, rx) = mpsc::channel();
+        test_widget_tree!{
+            let sender = tx;
+            let mut tree = a {
+                rect: (0, 0, 40, 40);
+                b {
+                    rect: (10, 10, 30, 30);
+                    c {
+                        rect: (10, 10, 20, 20)
+                    }
+                }
+            };
+        }
+
+        let mut translator = EventTranslator::new(a);
+        let mut translator = translator.with_widget(&mut tree);
+        let mut input_state = InputState::new();
+
+        translator.translate_window_event(WindowEvent::MouseEnter, &mut input_state);
+        translator.translate_window_event(WindowEvent::MouseMove(Point2::new(1, 5)), &mut input_state);
+        translator.translate_window_event(WindowEvent::MouseMove(Point2::new(15, 15)), &mut input_state);
+        translator.translate_window_event(WindowEvent::MouseMove(Point2::new(25, 25)), &mut input_state);
+
+        assert_events(
+            rx,
+            &[
+                TestEvent {
+                    widget: a,
+                    source_child: vec![],
+                    event: WidgetEvent::MouseMove {
+                        old_pos: Point2::new(-1, 5),
+                        new_pos: Point2::new(1, 5),
+                        in_widget: true,
+                        hover_change: Some(MouseHoverChange::Enter),
+                    }
+                },
+                TestEvent {
+                    widget: a,
+                    source_child: vec![],
+                    event: WidgetEvent::MouseMove {
+                        old_pos: Point2::new(1, 5),
+                        new_pos: Point2::new(15, 15),
+                        in_widget: false,
+                        hover_change: Some(MouseHoverChange::EnterChild(WidgetIdent::new_str("b"))),
+                    }
+                },
+                TestEvent {
+                    widget: b,
+                    source_child: vec![],
+                    event: WidgetEvent::MouseMove {
+                        old_pos: Point2::new(-9, -4),
+                        new_pos: Point2::new(5, 5),
+                        in_widget: true,
+                        hover_change: Some(MouseHoverChange::Enter),
+                    }
+                },
+            ]
+        );
+    }
+
+    // #[test]
+    // fn mouse_move() {
+    //     let (tx, rx) = mpsc::channel();
+    //     test_widget_tree!{
+    //         let sender = tx;
+    //         let mut tree = root {
+    //             rect: (0, 0, 500, 500);
+    //             left {
+    //                 rect: (10, 10, 240, 490);
+    //                 tl {rect: (10, 10, 220, 230)},
+    //                 bl {rect: (10, 250, 220, 470)}
+    //             },
+    //             right {rect: (260, 10, 490, 490)}
+    //         };
+    //     }
+
+    //     let mut translator = EventTranslator::new(root);
+    //     let mut translator = translator.with_widget(&mut tree);
+    //     let mut input_state = InputState::new();
+
+    //     translator.translate_window_event(WindowEvent::MouseEnter, &mut input_state);
+    //     translator.translate_window_event(WindowEvent::MouseMove(Point2::new(250, 200)), &mut input_state);
+    //     translator.translate_window_event(WindowEvent::MouseMove(Point2::new(100, 250)), &mut input_state);
+    //     translator.translate_window_event(WindowEvent::MouseMove(Point2::new(50, 250)), &mut input_state);
+    //     translator.translate_window_event(WindowEvent::MouseMove(Point2::new(150, 250)), &mut input_state);
+    //     translator.translate_window_event(WindowEvent::MouseMove(Point2::new(250, 250)), &mut input_state);
+    //     translator.translate_window_event(WindowEvent::MouseMove(Point2::new(150, 250)), &mut input_state);
+    //     translator.translate_window_event(WindowEvent::MouseMove(Point2::new(300, 50)), &mut input_state);
+
+    //     while let Ok(e) = rx.try_recv() {
+    //         println!("{:#?}", e);
+    //     }
+
+    //     panic!();
+    // }
 }
