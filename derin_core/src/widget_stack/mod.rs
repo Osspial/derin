@@ -29,8 +29,6 @@ use std::iter::{DoubleEndedIterator, ExactSizeIterator};
 use self::inner::{NRAllocCache, NRVec};
 pub(crate) use self::inner::WidgetPath;
 
-use crate::offset_widget::{OffsetWidgetTrait, OffsetWidgetTraitAs};
-
 pub(crate) struct WidgetStackBase<A, F: RenderFrame> {
     stack: NRAllocCache<A, F>
 }
@@ -144,7 +142,7 @@ impl<'a, A, F: RenderFrame> WidgetStack<'a, A, F> {
 
         let mut valid_path = true;
         for ident in ident_path_iter {
-            valid_path = self.stack.try_push(|mut widget| {
+            valid_path = self.stack.try_push(|widget| {
                 if let Some(widget_as_parent) = widget.as_parent_mut() {
                     widget_as_parent.child_mut(ident)
                 } else {
@@ -168,7 +166,7 @@ impl<'a, A, F: RenderFrame> WidgetStack<'a, A, F> {
         let mut widget_found = false;
         let mut child_index = 0;
         loop {
-            let valid_child = self.stack.try_push(|mut top_widget| {
+            let valid_child = self.stack.try_push(|top_widget| {
                 let top_id = top_widget.widget_tag().widget_id;
 
                 if widget_id == top_id {
@@ -176,7 +174,7 @@ impl<'a, A, F: RenderFrame> WidgetStack<'a, A, F> {
                     return None;
                 }
 
-                if let Some(mut top_widget_as_parent) = top_widget.as_parent_mut() {
+                if let Some(top_widget_as_parent) = top_widget.as_parent_mut() {
                     return top_widget_as_parent.child_by_index_mut(child_index);
                 }
 
@@ -205,13 +203,13 @@ impl<'a, A, F: RenderFrame> WidgetStack<'a, A, F> {
         if !f(&self.move_to_path(Some(ROOT_IDENT)).unwrap().widget) {
             return None;
         }
-        let mut deepest_found = false;
+        let mut deepest_found: bool;
 
         loop {
             let top_parent_offset = self.stack.top_parent_offset();
             let clip_rect = self.stack.clip_rect();
 
-            deepest_found = self.stack.try_push(|mut top_widget| {
+            deepest_found = self.stack.try_push(|top_widget| {
                 match top_widget.as_parent_mut() {
                     None => None,
                     Some(mut top_widget_as_parent) => {

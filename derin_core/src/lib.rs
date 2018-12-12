@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(range_contains, nll, specialization)]
+#![feature(range_contains, nll, specialization, try_blocks)]
 
 use cgmath_geometry::cgmath;
-extern crate cgmath_geometry;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate derin_common_types;
-extern crate arrayvec;
-extern crate itertools;
+
+// #[cfg(test)]
+#[macro_use]
+pub mod test_helpers;
 
 pub mod timer;
 #[macro_use]
@@ -29,33 +30,26 @@ pub mod tree;
 pub mod event;
 pub mod popup;
 pub mod render;
-mod mbseq;
-mod widget_stack;
-mod offset_widget;
-mod event_loop_ops;
-mod virtual_widget_tree;
-mod event_translator;
-mod update_state;
+
+// TODO: UNPUBLICIZE
+pub mod mbseq;
+pub mod widget_stack;
+pub mod offset_widget;
+pub mod event_loop_ops;
+pub mod virtual_widget_tree;
+pub mod event_translator;
+pub mod update_state;
 
 use crate::cgmath::{Point2, Vector2, Bounded};
 use cgmath_geometry::{D2, rect::DimsBox};
 
-use std::{
-    collections::VecDeque,
-    rc::Rc
-};
-
 pub use crate::event_loop_ops::{EventLoopResult, PopupDelta};
 use crate::{
     tree::*,
-    timer::TimerList,
     popup::PopupMap,
     render::RenderFrame,
     mbseq::MouseButtonSequenceTrackPos,
-    widget_stack::WidgetStackBase,
     event_translator::EventTranslator,
-    update_state::{UpdateStateBuffered},
-    virtual_widget_tree::VirtualWidgetTree
 };
 use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
 use derin_common_types::cursor::CursorIcon;
@@ -140,6 +134,19 @@ pub enum LoopFlow<R> {
     Break(R)
 }
 
+impl InputState {
+    fn new() -> InputState {
+        InputState {
+            mouse_pos: None,
+            mouse_buttons_down: MouseButtonSequenceTrackPos::new(),
+            modifiers: ModifierKeys::empty(),
+            keys_down: Vec::new(),
+            mouse_hover_widget: None,
+            focused_widget: None
+        }
+    }
+}
+
 impl<A, N, F> Root<A, N, F>
     where N: Widget<A, F>,
           F: RenderFrame
@@ -151,14 +158,7 @@ impl<A, N, F> Root<A, N, F>
         Root {
             event_translator: EventTranslator::new(root_widget.widget_tag().widget_id),
 
-            input_state: InputState {
-                mouse_pos: None,
-                mouse_buttons_down: MouseButtonSequenceTrackPos::new(),
-                modifiers: ModifierKeys::empty(),
-                keys_down: Vec::new(),
-                mouse_hover_widget: None,
-                focused_widget: None
-            },
+            input_state: InputState::new(),
 
             render_state: RenderState {
                 cursor_icon: CursorIcon::default(),

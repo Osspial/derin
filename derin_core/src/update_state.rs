@@ -10,7 +10,6 @@ use fnv::FnvHashSet;
 use std::{
     rc::{Rc, Weak},
     cell::RefCell,
-    ops::Deref
 };
 
 #[derive(Debug, Clone)]

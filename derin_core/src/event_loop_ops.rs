@@ -12,20 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::cgmath::{Point2, Array, Bounded};
-use cgmath_geometry::{rect::{GeoBox, DimsBox}, line::Segment};
 
-use std::cmp::Ordering;
-
-use crate::{WindowEvent, LoopFlow, Root};
+use crate::{WindowEvent, Root};
 use crate::tree::*;
-use crate::tree::dynamic::*;
-use crate::timer::{Timer, TimerList};
 use crate::popup::{PopupSummary, PopupID};
-use crate::event::{WidgetEvent, FocusChange};
-use crate::render::{Renderer, RenderFrame, FrameRectStack};
-use crate::widget_stack::{WidgetPath, WidgetStack};
-use crate::offset_widget::*;
+use crate::event::WidgetEvent;
+use crate::render::{Renderer, RenderFrame};
 
 use std::time::Duration;
 
@@ -67,9 +59,9 @@ impl<A, N, F> Root<A, N, F>
 
     fn process_event_inner(
         &mut self,
-        event_popup_id: Option<PopupID>,
-        event: WindowEvent,
-        bubble_fallthrough: &mut FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
+        _event_popup_id: Option<PopupID>,
+        _event: WindowEvent,
+        _bubble_fallthrough: &mut FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
     ) -> EventLoopResult {
         // match event {
         //     WindowEvent::MouseEvent =>
@@ -78,7 +70,7 @@ impl<A, N, F> Root<A, N, F>
         unimplemented!()
     }
 
-    pub fn redraw<R>(&mut self, mut with_renderer: impl FnMut(Option<PopupID>, &mut FnMut(&mut R)))
+    pub fn redraw<R>(&mut self, _with_renderer: impl FnMut(Option<PopupID>, &mut FnMut(&mut R)))
         where R: Renderer<Frame=F>
     {
         unimplemented!()

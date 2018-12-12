@@ -1,8 +1,8 @@
 use crate::{
+    cgmath::Point2,
     event::{WidgetEvent, FocusChange},
-    tree::{Widget, WidgetID, WidgetIdent},
+    tree::{WidgetID, WidgetIdent},
     render::RenderFrame,
-    offset_widget::{OffsetWidget, OffsetWidgetTrait},
     widget_stack::{WidgetStack, WidgetPath},
     virtual_widget_tree::VirtualWidgetTree
 };
@@ -19,27 +19,28 @@ pub(crate) enum EventDestination {
         of: WidgetID,
         delta: isize
     },
-    SiblingWrapping {
-        of: WidgetID,
-        delta: isize
-    },
-    Child {
+    ChildIdent {
         of: WidgetID,
         ident: WidgetIdent
+    },
+    ChildIndex {
+        of: WidgetID,
+        index: usize
     },
     Widget(WidgetID),
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum DispatchableEvent {
-    WidgetEvent {
-        bubble_source: Option<WidgetID>,
-        event: WidgetEvent
+    MouseMove {
+        old_pos: Point2<i32>,
+        new_pos: Point2<i32>,
+        exiting_from_child: Option<WidgetIdent>,
     },
-    FocusEvent {
-        source: WidgetID,
-        focus_change: FocusChange
-    }
+    Direct {
+        bubble_source: Option<WidgetID>,
+        event: WidgetEvent,
+    },
 }
 
 impl EventDispatcher {
@@ -81,8 +82,8 @@ impl EventDestination {
         let target_id = match self {
             Parent{of} => widget_tree.parent(*of).ok()?,
             Sibling{of, delta} => widget_tree.sibling(*of, *delta).ok()?,
-            SiblingWrapping{of, delta} => widget_tree.sibling_wrapping(*of, *delta)?,
-            Child{of, ident} => widget_tree.children(*of)?.find(|&(_, data)| ident == &data.ident)?.0,
+            ChildIdent{of, ident} => widget_tree.children(*of)?.find(|&(_, data)| ident == &data.ident)?.0,
+            ChildIndex{of, index} => widget_tree.child_from_start(*of, *index).ok()?,
             Widget(id) => *id
         };
 
