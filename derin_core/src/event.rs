@@ -49,19 +49,22 @@ pub struct EventOps<A, F: RenderFrame> {
 }
 
 /// Changes the keyboard focus, removing the focus from another widget if necessary.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum FocusChange {
     /// Give keyboard focus to the widget after the widget sending a focus request.
     Next,
     /// Give keyboard focus to the widget before the widget sending a focus request.
     Prev,
+    Parent,
+    ChildIdent(WidgetIdent),
+    ChildIndex(usize),
     /// Give keyboard focus to the current widget.
     Take,
     /// Remove keyboard focus from the current widget.
     ///
     /// Note that, if another widget has keyboard focus, this event *does not remove focus from
     /// the other widget*. It only removes focus if the current widget has focus.
-    Remove
+    Remove,
 }
 
 /// Information regarding a pressed mouse button.
@@ -88,6 +91,32 @@ pub struct InputState<'a> {
     pub keys_down: &'a [Key]
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FocusSource {
+    This,
+    Parent,
+    Child {
+        ident: WidgetIdent,
+        index: usize
+    },
+    Sibling {
+        ident: WidgetIdent,
+        delta: isize
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MouseHoverChange {
+    /// The mouse cursor has entered the widget.
+    Enter,
+    /// The mouse cursor has exited the widget.
+    Exit,
+    /// The mouse cursor has entered a child.
+    EnterChild(WidgetIdent),
+    /// The mouse cursor has exited a child.
+    ExitChild(WidgetIdent),
+}
+
 /// Direct user input and timers, which are recieved and handled by widgets through the
 /// `on_widget_event` function.
 ///
@@ -102,20 +131,6 @@ pub struct InputState<'a> {
 /// All point coordinates are given relative to the widget's origin.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WidgetEvent {
-    /// The mouse cursor has entered the widget.
-    MouseEnter,
-    /// The mouse cursor has exited the widget.
-    MouseExit,
-    /// The mouse cursor has entered a child.
-    MouseEnterChild {
-        /// The identifier of the child entered.
-        child: WidgetIdent
-    },
-    /// The mouse cursor has exited a child.
-    MouseExitChild {
-        /// The identifier of the child entered.
-        child: WidgetIdent
-    },
     /// The mouse cursor has been moved to a new position.
     MouseMove {
         /// The position of the cursor, before it moved.
@@ -124,6 +139,7 @@ pub enum WidgetEvent {
         new_pos: Point2<i32>,
         /// Whether or not the cursor was moved to a position within the widget.
         in_widget: bool,
+        hover_change: Option<MouseHoverChange>,
     },
     /// A mouse button has been pressed.
     MouseDown {
@@ -136,8 +152,6 @@ pub enum WidgetEvent {
         /// The button that was pressed.
         button: MouseButton
     },
-    MouseScrollLines(Vector2<i32>),
-    MouseScrollPx(Vector2<i32>),
     /// A mouse button has been released.
     ///
     /// A `MouseUp` event will always be delivered for any given `MouseDown` event.
@@ -153,8 +167,10 @@ pub enum WidgetEvent {
         /// The button that was released.
         button: MouseButton
     },
+    MouseScrollLines(Vector2<i32>),
+    MouseScrollPx(Vector2<i32>),
     /// The widget has gained keyboard focus.
-    GainFocus,
+    GainFocus(FocusSource),
     /// The widget has lost keyboard focus.
     LoseFocus,
     /// The given character has been inputted by the user.
@@ -181,7 +197,7 @@ pub enum WidgetEvent {
         frequency: Duration,
         /// The number of times this timer has been triggered, not including this trigger.
         times_triggered: u64
-    }
+    },
 }
 
 impl WidgetEvent {
@@ -189,16 +205,12 @@ impl WidgetEvent {
         match *self {
             WidgetEvent::MouseScrollLines(..) |
             WidgetEvent::MouseScrollPx(..) |
-            WidgetEvent::GainFocus |
-            WidgetEvent::LoseFocus |
             WidgetEvent::Char(..) |
             WidgetEvent::KeyDown(..) |
             WidgetEvent::KeyUp(..) => true,
 
-            WidgetEvent::MouseEnter |
-            WidgetEvent::MouseExit |
-            WidgetEvent::MouseEnterChild{..} |
-            WidgetEvent::MouseExitChild{..} |
+            WidgetEvent::GainFocus(..) |
+            WidgetEvent::LoseFocus |
             WidgetEvent::MouseMove{..} |
             WidgetEvent::MouseDown{..} |
             WidgetEvent::MouseUp{..} |
@@ -209,29 +221,25 @@ impl WidgetEvent {
     /// Shift coordinates within the widget by the specified vector.
     pub fn translate(self, dir: Vector2<i32>) -> WidgetEvent {
         match self {
-            WidgetEvent::MouseMove{ old_pos, new_pos, in_widget } =>
+            WidgetEvent::MouseMove{ old_pos, new_pos, in_widget, hover_change } =>
                 WidgetEvent::MouseMove {
                     old_pos: old_pos + dir, new_pos: new_pos + dir,
-                    in_widget,
+                    in_widget, hover_change,
                 },
             WidgetEvent::MouseDown{ pos, in_widget, button } =>
                 WidgetEvent::MouseDown {
                     pos: pos + dir,
-                    in_widget, button
+                    in_widget, button,
                 },
             WidgetEvent::MouseUp{ pos, in_widget, pressed_in_widget, down_pos, button } =>
                 WidgetEvent::MouseUp {
                     pos: pos + dir,
                     down_pos: down_pos + dir,
-                    in_widget, pressed_in_widget, button
+                    in_widget, pressed_in_widget, button,
                 },
-            WidgetEvent::MouseEnter            |
-            WidgetEvent::MouseExit             |
-            WidgetEvent::MouseEnterChild{..}   |
-            WidgetEvent::MouseExitChild{..}    |
             WidgetEvent::Char(..)              |
             WidgetEvent::LoseFocus             |
-            WidgetEvent::GainFocus             |
+            WidgetEvent::GainFocus(..)         |
             WidgetEvent::Timer{..}             |
             WidgetEvent::KeyUp(..)             |
             WidgetEvent::KeyDown(..)           |

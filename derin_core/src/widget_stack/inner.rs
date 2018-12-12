@@ -14,12 +14,12 @@
 
 use std::mem;
 use crate::render::RenderFrame;
-use crate::tree::{Widget, WidgetID, WidgetIdent, WidgetSummary, RootID, Update, ROOT_IDENT};
+use crate::tree::{Widget, WidgetID, WidgetIdent, WidgetSummary, ROOT_IDENT};
 
 use crate::cgmath::{Bounded, EuclideanSpace, Point2, Vector2};
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
-use crate::offset_widget::{OffsetWidget, OffsetWidgetTrait};
+use crate::offset_widget::OffsetWidget;
 
 // TODO: GET CODE REVIEWED FOR SAFETY
 
@@ -125,10 +125,6 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
     #[inline]
     pub fn truncate(&mut self, len: usize) {
         assert_ne!(0, len);
-        for widget_slice in self.vec[len-1..].windows(2).rev() {
-            let parent = unsafe{ &*widget_slice[0].widget };
-            let child = unsafe{ &*widget_slice[1].widget };
-        }
 
         self.vec.truncate(len);
         self.ident_vec.truncate(len);

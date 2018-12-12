@@ -57,6 +57,10 @@ impl VirtualWidgetTree {
         }
     }
 
+    pub fn root_id(&self) -> WidgetID {
+        self.root
+    }
+
     /// Insert a widget ID into the tree. If the widget in already in the tree, change the widget's
     /// parent to the new parent.
     pub(crate) fn insert(&mut self, parent_id: WidgetID, widget_id: WidgetID, child_index: usize, widget_ident: WidgetIdent) -> Result<(), WidgetInsertError> {
@@ -296,28 +300,28 @@ mod tests {
     use super::*;
     use std::sync::Arc;
 
-    macro_rules! extract_tree_idents {
+    macro_rules! extract_virtual_tree_idents {
         ($(
             $root:ident $(in $old:ident)* $({$($rest:tt)*})*
         ),*) => {$(
             if_tokens!{($($old)*) {} else {let $root = WidgetID::new();}}
 
-            extract_tree_idents!{$($($rest)*)*}
+            extract_virtual_tree_idents!{$($($rest)*)*}
         )*};
     }
 
-    macro_rules! widget_tree {
+    macro_rules! virtual_widget_tree {
         (
             let $tree_ident:pat = $root:ident $(in $old:ident)* $({$($rest:tt)*})*
         ) => {
-            extract_tree_idents!{$root $(in $old)* $({$($rest)*})*}
+            extract_virtual_tree_idents!{$root $(in $old)* $({$($rest)*})*}
             let $tree_ident = {
                 #[allow(unused_mut)]
                 {
                     let root_id = $root;
                     let mut tree = VirtualWidgetTree::new(root_id);
                     let mut rolling_index = 0;
-                    widget_tree!(@insert root_id, tree, rolling_index, $($($rest)*)*);
+                    virtual_widget_tree!(@insert root_id, tree, rolling_index, $($($rest)*)*);
                     let _ = rolling_index; // Silences warnings
                     tree
                 }
@@ -338,7 +342,7 @@ mod tests {
 
             $(
                 let mut rolling_index = 0;
-                widget_tree!(
+                virtual_widget_tree!(
                     @insert
                         $child,
                         $tree,
@@ -352,7 +356,7 @@ mod tests {
 
     #[test]
     fn test_create_macro() {
-        widget_tree!{
+        virtual_widget_tree!{
             let macro_tree = root {
                 child_0 {
                     child_0_1,
@@ -380,7 +384,7 @@ mod tests {
 
     #[test]
     fn test_macro_in_old() {
-        widget_tree!{
+        virtual_widget_tree!{
             let macro_tree = root {
                 child_0 {
                     child_0_1,
@@ -394,7 +398,7 @@ mod tests {
             }
         };
 
-        widget_tree!{
+        virtual_widget_tree!{
             let macro_tree_old = root in old {
                 child_0 in old {
                     child_0_1 in old,
@@ -413,7 +417,7 @@ mod tests {
 
     #[test]
     fn test_remove() {
-        widget_tree!{
+        virtual_widget_tree!{
             let mut tree = root {
                 child_0 {
                     child_0_1,
@@ -431,7 +435,7 @@ mod tests {
         };
 
         assert!(tree.remove(child_1).is_some());
-        widget_tree!(
+        virtual_widget_tree!(
             let tree_removed_0 = root in old {
                 child_0 in old {
                     child_0_1 in old,
@@ -446,7 +450,7 @@ mod tests {
         assert_eq!(tree, tree_removed_0);
 
         assert!(tree.remove(child_0).is_some());
-        widget_tree!(
+        virtual_widget_tree!(
             let tree_removed_1 = root in old {
                 child_2 in old
             }
@@ -454,7 +458,7 @@ mod tests {
         assert_eq!(tree, tree_removed_1);
 
         assert!(tree.remove(child_2).is_some());
-        widget_tree!(
+        virtual_widget_tree!(
             let tree_removed_2 = root in old
         );
         assert_eq!(tree, tree_removed_2);
@@ -462,7 +466,7 @@ mod tests {
 
     #[test]
     fn test_move() {
-        widget_tree!{
+        virtual_widget_tree!{
             let mut tree = root {
                 child_0 {
                     child_0_1,
@@ -481,7 +485,7 @@ mod tests {
 
         let child_1_ident = tree.get_widget(child_1).unwrap().ident.clone();
         tree.insert(child_0_1, child_1, 0, child_1_ident).unwrap();
-        widget_tree!{
+        virtual_widget_tree!{
             let tree_moved = root in old {
                 child_0 in old {
                     child_0_1 in old {
@@ -503,7 +507,7 @@ mod tests {
 
     #[test]
     fn test_relations() {
-        widget_tree!{
+        virtual_widget_tree!{
             let tree = root {
                 child_0 {
                     child_0_1,
@@ -594,7 +598,7 @@ mod tests {
 
     #[test]
     fn test_ident_chain() {
-        widget_tree!{
+        virtual_widget_tree!{
             let tree = root {
                 child_0 {
                     child_0_1,
@@ -612,27 +616,27 @@ mod tests {
         };
 
         macro_rules! ident_chain {
-            ($($ident:ident),*) => {{
-                vec![$(&WidgetIdent::new_str(stringify!($ident))),*]
+            ($($ident:ident),* ;root) => {{
+                vec![$(&WidgetIdent::new_str(stringify!($ident)),)* &ROOT_IDENT]
             }}
         }
 
         assert!(tree.ident_chain_reversed(WidgetID::new()).is_none());
-        assert_eq!(ident_chain![root], tree.ident_chain_reversed(root).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_0, root], tree.ident_chain_reversed(child_0).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_1, root], tree.ident_chain_reversed(child_1).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_2, root], tree.ident_chain_reversed(child_2).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_0_1, child_0, root], tree.ident_chain_reversed(child_0_1).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_0_2, child_0, root], tree.ident_chain_reversed(child_0_2).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_0_3, child_0, root], tree.ident_chain_reversed(child_0_3).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_0_2_0, child_0_2, child_0, root], tree.ident_chain_reversed(child_0_2_0).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_1_0, child_1, root], tree.ident_chain_reversed(child_1_0).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_1_1, child_1, root], tree.ident_chain_reversed(child_1_1).unwrap().collect::<Vec<_>>());
+        assert_eq!(ident_chain![;root], tree.ident_chain_reversed(root).unwrap().collect::<Vec<_>>());
+        assert_eq!(ident_chain![child_0; root], tree.ident_chain_reversed(child_0).unwrap().collect::<Vec<_>>());
+        assert_eq!(ident_chain![child_1; root], tree.ident_chain_reversed(child_1).unwrap().collect::<Vec<_>>());
+        assert_eq!(ident_chain![child_2; root], tree.ident_chain_reversed(child_2).unwrap().collect::<Vec<_>>());
+        assert_eq!(ident_chain![child_0_1, child_0; root], tree.ident_chain_reversed(child_0_1).unwrap().collect::<Vec<_>>());
+        assert_eq!(ident_chain![child_0_2, child_0; root], tree.ident_chain_reversed(child_0_2).unwrap().collect::<Vec<_>>());
+        assert_eq!(ident_chain![child_0_3, child_0; root], tree.ident_chain_reversed(child_0_3).unwrap().collect::<Vec<_>>());
+        assert_eq!(ident_chain![child_0_2_0, child_0_2, child_0; root], tree.ident_chain_reversed(child_0_2_0).unwrap().collect::<Vec<_>>());
+        assert_eq!(ident_chain![child_1_0, child_1; root], tree.ident_chain_reversed(child_1_0).unwrap().collect::<Vec<_>>());
+        assert_eq!(ident_chain![child_1_1, child_1; root], tree.ident_chain_reversed(child_1_1).unwrap().collect::<Vec<_>>());
     }
 
     #[test]
     fn test_depth() {
-        widget_tree!{
+        virtual_widget_tree!{
             let mut tree = root {
                 child_0 {
                     child_0_1,
@@ -662,7 +666,7 @@ mod tests {
 
         let child_1_ident = tree.get_widget(child_1).unwrap().ident.clone();
         tree.insert(child_0_1, child_1, 0, child_1_ident).unwrap();
-        widget_tree!{
+        virtual_widget_tree!{
             let tree_moved = root in old {
                 child_0 in old {
                     child_0_1 in old {

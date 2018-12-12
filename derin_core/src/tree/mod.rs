@@ -29,9 +29,10 @@ use derin_common_types::{
     layout::SizeBounds
 };
 use std::{
-    sync::Arc,
     cell::{Cell, RefCell},
-    rc::Rc
+    fmt,
+    rc::Rc,
+    sync::Arc,
 };
 use cgmath_geometry::{
     D2, rect::BoundBox,
@@ -67,13 +68,28 @@ pub(crate) enum MouseState {
     Untracked
 }
 
-#[derive(Debug, Clone)]
 pub struct WidgetTag {
     update_state: RefCell<UpdateStateShared>,
     pub(crate) widget_id: WidgetID,
     pub(crate) mouse_state: Cell<MouseState>,
     pub(crate) has_keyboard_focus: Cell<bool>,
     pub(crate) child_event_recv: Cell<ChildEventRecv>
+}
+
+impl fmt::Debug for WidgetTag {
+    fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        f.debug_tuple("WidgetTag")
+            .field(&self.widget_id)
+            .finish()
+    }
+}
+
+impl Clone for WidgetTag {
+    /// This doesn't actually clone the `WidgetTag` - it just creates a new one and returns it. This
+    /// function is provided primarily to allow widgets to cleanly derive `Clone`.
+    fn clone(&self) -> WidgetTag {
+        WidgetTag::new()
+    }
 }
 
 impl MouseState {
@@ -165,17 +181,6 @@ macro_rules! id {
 id!(pub(crate) RootID);
 id!(pub(crate) WidgetID);
 
-
-/// Configures where to deliver focus when a child send a `FocusChange::Next` or `FocusChange::Prev`,
-/// and there is no next/previous widget to deliver focus to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum OnFocusOverflow {
-    /// Go the the parent widget and attempt to deliver focus to the next widget on the parent's level.
-    /// Is default.
-    Continue,
-    /// Wrap focus around, returning focus to the first/last widget on the current level.
-    Wrap
-}
 
 pub trait Widget<A, F: RenderFrame> {
     fn widget_tag(&self) -> &WidgetTag;
@@ -321,10 +326,6 @@ pub trait Parent<A, F: RenderFrame>: Widget<A, F> {
               G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow<R>;
 
     fn update_child_layout(&mut self);
-
-    fn on_child_focus_overflow(&self) -> OnFocusOverflow {
-        OnFocusOverflow::default()
-    }
 }
 
 impl<'a, W: ?Sized> WidgetSummary<&'a W> {
@@ -372,13 +373,6 @@ impl<'a, W: ?Sized> WidgetSummary<&'a mut W> {
             index: self.index,
             widget: dynamic::to_widget_object_mut(self.widget)
         }
-    }
-}
-
-impl Default for OnFocusOverflow {
-    #[inline(always)]
-    fn default() -> OnFocusOverflow {
-        OnFocusOverflow::Continue
     }
 }
 

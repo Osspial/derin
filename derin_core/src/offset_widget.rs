@@ -19,12 +19,10 @@ use crate::tree::dynamic::ParentDyn;
 use crate::event::{InputState as EventInputState, WidgetEvent, EventOps};
 use crate::render::RenderFrame;
 use crate::timer::TimerRegister;
-use crate::mbseq::MouseButtonSequenceTrackPos;
 
-use derin_common_types::buttons::{Key, ModifierKeys};
 use derin_common_types::layout::SizeBounds;
 
-use crate::cgmath::{Point2, Vector2, EuclideanSpace};
+use crate::cgmath::{Vector2, EuclideanSpace};
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 use arrayvec::ArrayVec;
@@ -201,9 +199,6 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
               Self::Widget: ParentDyn<A, F>,
               G: FnMut(WidgetSummary<&'b Widget<A, F>>) -> LoopFlow<()>
     {
-        let child_offset = self.rect().min().to_vec();
-        let clip_rect = self.rect_clipped();
-
         self.widget.children(&mut |summary_slice| {
             for summary in summary_slice {
                 if LoopFlow::Break(()) == for_each(summary) {

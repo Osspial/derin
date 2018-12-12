@@ -17,3 +17,6 @@ derin_common_types = { path = "../derin_common_types" }
 arrayvec = "0.4"
 itertools = "0.7"
 fnv = "1"
+
+# [dev-dependencies]
+indexmap = "1"
