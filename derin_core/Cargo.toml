@@ -18,5 +18,5 @@ arrayvec = "0.4"
 itertools = "0.7"
 fnv = "1"
 
-# [dev-dependencies]
+[dev-dependencies]
 indexmap = "1"

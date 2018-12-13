@@ -17,14 +17,13 @@ use indexmap::IndexMap;
 use std::{
     cell::RefCell,
     rc::Rc,
-    sync::mpsc::{self, Sender}
 };
 
 pub(crate) struct TestWidget {
     pub widget_tag: WidgetTag,
     pub rect: BoundBox<D2, i32>,
     pub size_bounds: SizeBounds,
-    pub event_list: Sender<TestEvent>,
+    pub event_list: EventList,
     pub children: Option<IndexMap<WidgetIdent, TestWidget>>,
 }
 
@@ -55,10 +54,14 @@ impl Theme for TestTheme {
 }
 
 impl EventList {
-    pub fn new(events: Vec<TestEvent>) -> EventList {
+    pub fn new() -> EventList {
         EventList {
-            events: Rc::new(RefCell::new(events.into_iter()))
+            events: Rc::new(RefCell::new(Vec::new().into_iter()))
         }
+    }
+
+    pub fn set_events(&self, events: Vec<TestEvent>) {
+        *self.events.borrow_mut() = events.into_iter();
     }
 
     fn next(&self) -> Option<TestEvent> {
@@ -103,14 +106,14 @@ impl Widget<TestAction, TestRenderFrame> for TestWidget {
         source_child: &[WidgetIdent]
     ) -> EventOps<TestAction, TestRenderFrame> {
         let ref_event = self.event_list.next();
-        println!("ref event: {:#?}", ref_event);
 
         let real_event = TestEvent {
             widget: self.widget_tag.widget_id,
             event,
             source_child: source_child.to_vec()
         };
-        assert_eq!(ref_event, Some(real_event), "ref event mismatched w/ real event: {:#?}", real_event);
+        println!("real event: {:#?}", real_event);
+        assert_eq!(ref_event.as_ref(), Some(&real_event), "real event mismatched w/ ref event: {:#?}", ref_event);
 
         EventOps::default()
     }
@@ -203,7 +206,7 @@ macro_rules! extract_widget_tree_idents {
 
 macro_rules! test_widget_tree {
     (
-        let $sender_ident:ident = $sender_expr:expr;
+        let $event_list:ident = $event_list_expr:expr;
         let $root_pat:pat = $root:ident {
             rect: ($x:expr, $y:expr, $w:expr, $h:expr)
             $(;$($rest:tt)*)*
@@ -215,7 +218,7 @@ macro_rules! test_widget_tree {
                 $(;$($rest)*)*
             }
         }
-        let $sender_ident = $sender_expr;
+        let $event_list: crate::test_helpers::EventList = $event_list_expr;
         let $root_pat = {
             #[allow(unused_mut)]
             {
@@ -223,7 +226,7 @@ macro_rules! test_widget_tree {
                 let mut children = indexmap::IndexMap::new();
                 test_widget_tree!(
                     @insert
-                    $sender_ident,
+                    $event_list,
                     children,
                     $($($rest)*)*
                 );
@@ -235,7 +238,7 @@ macro_rules! test_widget_tree {
                     widget_tag,
                     rect: cgmath_geometry::rect::BoundBox::new2($x, $y, $w, $h),
                     size_bounds: derin_common_types::layout::SizeBounds::default(),
-                    event_sender: $sender_ident.clone(),
+                    event_list: $event_list.clone(),
                     children: match children.len() {
                         0 => None,
                         _ => Some(children)
@@ -246,7 +249,7 @@ macro_rules! test_widget_tree {
         };
     };
     (
-        @insert $sender_ident:expr, $widget_map:ident,
+        @insert $event_list:expr, $widget_map:ident,
         $($child:ident {
             rect: ($x:expr, $y:expr, $w:expr, $h:expr)
             $(;$($children:tt)*)*
@@ -255,7 +258,7 @@ macro_rules! test_widget_tree {
         let mut children = indexmap::IndexMap::new();
         test_widget_tree!(
             @insert
-            $sender_ident,
+            $event_list,
             children,
             $($($children)*)*
         );
@@ -267,7 +270,7 @@ macro_rules! test_widget_tree {
             widget_tag,
             rect: cgmath_geometry::rect::BoundBox::new2($x, $y, $w, $h),
             size_bounds: derin_common_types::layout::SizeBounds::default(),
-            event_sender: $sender_ident.clone(),
+            event_list: $event_list.clone(),
             children: match children.len() {
                 0 => None,
                 _ => Some(children)
@@ -309,9 +312,8 @@ mod tests {
 
     #[test]
     fn widget_tree_macro() {
-        let (tx, rx) = mpsc::channel();
         test_widget_tree!{
-            let sender = tx;
+            let sender = EventList::new();
             let tree = root {
                 rect: (0, 0, 500, 500);
                 left {

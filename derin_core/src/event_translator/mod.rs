@@ -398,11 +398,7 @@ impl<'a, A, F> TranslatorActive<'a, A, F>
     }
 }
 
-pub fn test() {
-    tests::mouse_move();
-}
-
-// #[cfg(test)]
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::mpsc;
@@ -411,27 +407,10 @@ mod tests {
         test_helpers::TestEvent,
     };
 
-    fn assert_events<'a>(rx: mpsc::Receiver<TestEvent>, events: impl IntoIterator<Item=&'a TestEvent>) {
-        let mut iter = events.into_iter();
-        loop {
-            let rx_event = rx.try_recv().ok();
-            let iter_event = iter.next();
-
-            println!("rx event: {:#?}", rx_event);
-
-            assert_eq!(rx_event.as_ref(), iter_event, "rx event mismatched w/ test event: {:#?}", iter_event);
-
-            if let (None, None) = (rx_event, iter_event) {
-                return;
-            }
-        }
-    }
-
-    // #[test]
-    pub fn mouse_move() {
-        let (tx, rx) = mpsc::channel();
+    #[test]
+    fn mouse_move() {
         test_widget_tree!{
-            let sender = tx;
+            let event_list = crate::test_helpers::EventList::new();
             let mut tree = a {
                 rect: (0, 0, 40, 40);
                 b {
@@ -443,6 +422,39 @@ mod tests {
             };
         }
 
+        event_list.set_events(vec![
+            TestEvent {
+                widget: a,
+                source_child: vec![],
+                event: WidgetEvent::MouseMove {
+                    old_pos: Point2::new(-1, 5),
+                    new_pos: Point2::new(1, 5),
+                    in_widget: true,
+                    hover_change: Some(MouseHoverChange::Enter),
+                }
+            },
+            TestEvent {
+                widget: a,
+                source_child: vec![],
+                event: WidgetEvent::MouseMove {
+                    old_pos: Point2::new(1, 5),
+                    new_pos: Point2::new(15, 15),
+                    in_widget: false,
+                    hover_change: Some(MouseHoverChange::EnterChild(WidgetIdent::new_str("b"))),
+                }
+            },
+            TestEvent {
+                widget: b,
+                source_child: vec![],
+                event: WidgetEvent::MouseMove {
+                    old_pos: Point2::new(-9, -4),
+                    new_pos: Point2::new(5, 5),
+                    in_widget: true,
+                    hover_change: Some(MouseHoverChange::Enter),
+                }
+            },
+        ]);
+
         let mut translator = EventTranslator::new(a);
         let mut translator = translator.with_widget(&mut tree);
         let mut input_state = InputState::new();
@@ -451,42 +463,6 @@ mod tests {
         translator.translate_window_event(WindowEvent::MouseMove(Point2::new(1, 5)), &mut input_state);
         translator.translate_window_event(WindowEvent::MouseMove(Point2::new(15, 15)), &mut input_state);
         translator.translate_window_event(WindowEvent::MouseMove(Point2::new(25, 25)), &mut input_state);
-
-        assert_events(
-            rx,
-            &[
-                TestEvent {
-                    widget: a,
-                    source_child: vec![],
-                    event: WidgetEvent::MouseMove {
-                        old_pos: Point2::new(-1, 5),
-                        new_pos: Point2::new(1, 5),
-                        in_widget: true,
-                        hover_change: Some(MouseHoverChange::Enter),
-                    }
-                },
-                TestEvent {
-                    widget: a,
-                    source_child: vec![],
-                    event: WidgetEvent::MouseMove {
-                        old_pos: Point2::new(1, 5),
-                        new_pos: Point2::new(15, 15),
-                        in_widget: false,
-                        hover_change: Some(MouseHoverChange::EnterChild(WidgetIdent::new_str("b"))),
-                    }
-                },
-                TestEvent {
-                    widget: b,
-                    source_child: vec![],
-                    event: WidgetEvent::MouseMove {
-                        old_pos: Point2::new(-9, -4),
-                        new_pos: Point2::new(5, 5),
-                        in_widget: true,
-                        hover_change: Some(MouseHoverChange::Enter),
-                    }
-                },
-            ]
-        );
     }
 
     // #[test]
