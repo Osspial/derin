@@ -20,7 +20,7 @@ extern crate bitflags;
 #[macro_use]
 extern crate derin_common_types;
 
-// #[cfg(test)]
+#[cfg(test)]
 #[macro_use]
 pub mod test_helpers;
 
