@@ -138,6 +138,8 @@ pub enum WidgetEvent {
         /// The position the cursor was moved to.
         new_pos: Point2<i32>,
         /// Whether or not the cursor was moved to a position within the widget.
+        ///
+        /// If the new position is in a child widget, this value is `false`.
         in_widget: bool,
         hover_change: Option<MouseHoverChange>,
     },

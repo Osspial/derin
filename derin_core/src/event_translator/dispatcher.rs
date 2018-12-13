@@ -66,7 +66,7 @@ impl EventDispatcher {
         while let Some((destination, event)) = self.events.pop_front() {
             let widget = match destination.get_widget(widget_stack, widget_tree) {
                 Some(w) => w,
-                None => continue
+                None => continue //TODO: LOG WARNING
             };
             f(self, widget, event);
         }

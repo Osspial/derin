@@ -89,11 +89,13 @@ impl<'a, A, F: RenderFrame> WidgetStack<'a, A, F> {
 
     pub fn move_to_widget_with_tree(&mut self, widget_id: WidgetID, widget_tree: &mut VirtualWidgetTree) -> Option<WidgetPath<A, F>> {
         // TODO: GET RID OF COLLECT ALLOCATION
-        let mut active_ident_rev = widget_tree.ident_chain_reversed(widget_id)?.cloned().collect::<Vec<_>>();
+        let active_ident_rev_opt = widget_tree.ident_chain_reversed(widget_id).map(|c| c.cloned().collect::<Vec<_>>());
 
-        // If the widget is where the tree says it is, return it.
-        if self.move_to_path(active_ident_rev.drain(..).rev()).is_some() {
-            return Some(self.top());
+        if let Some(mut active_ident_rev) = active_ident_rev_opt {
+            // If the widget is where the tree says it is, return it.
+            if self.move_to_path(active_ident_rev.drain(..).rev()).is_some() {
+                return Some(self.top());
+            }
         }
 
         // If the widget wasn't found where the tree said it would be found, update the tree
