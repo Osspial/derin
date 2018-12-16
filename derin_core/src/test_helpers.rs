@@ -16,6 +16,7 @@ use derin_common_types::layout::SizeBounds;
 use indexmap::IndexMap;
 use std::{
     cell::RefCell,
+    ops::Drop,
     rc::Rc,
 };
 
@@ -66,6 +67,14 @@ impl EventList {
 
     fn next(&self) -> Option<TestEvent> {
         self.events.borrow_mut().next()
+    }
+}
+
+impl Drop for EventList {
+    fn drop(&mut self) {
+        if !std::thread::panicking() {
+            assert_eq!(None, self.events.borrow_mut().next());
+        }
     }
 }
 
@@ -337,5 +346,16 @@ mod tests {
         let left_widget_as_parent = left_widget.as_parent().unwrap();
         check_child_widget(left_widget_as_parent, 0, WidgetIdent::new_str("tl"), tl, BoundBox::new2(10, 10, 220, 230));
         check_child_widget(left_widget_as_parent, 1, WidgetIdent::new_str("bl"), bl, BoundBox::new2(10, 250, 220, 470));
+    }
+
+    #[test]
+    #[should_panic]
+    fn event_list_force_clear() {
+        let event_list = EventList::new();
+        event_list.set_events(vec![TestEvent {
+            widget: WidgetID::new(),
+            event: WidgetEvent::Char('♥'),
+            source_child: vec![],
+        }])
     }
 }

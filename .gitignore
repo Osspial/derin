@@ -1,3 +1,4 @@
 target
 Cargo.lock
 derin_atlas/skyline_atlas.bmp
+.vscode/
