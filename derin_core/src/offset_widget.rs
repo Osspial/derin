@@ -141,12 +141,14 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
         let widget_tag = self.widget_tag();
         let offset = self.rect().min().to_vec();
         let mbd_array: ArrayVec<[_; 5]> = mouse_buttons_down.clone().into_iter()
+            .map(|down| down.mouse_down)
             .map(|mut down| {
                 down.down_pos -= offset;
                 down
             }).collect();
         let mbdin_array: ArrayVec<[_; 5]> = widget_tag.mouse_state.get().mouse_button_sequence()
             .into_iter().filter_map(|b| mouse_buttons_down.contains(b))
+            .map(|down| down.mouse_down)
             .map(|mut down| {
                 down.down_pos -= offset;
                 down

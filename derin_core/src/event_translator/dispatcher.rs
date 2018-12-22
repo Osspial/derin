@@ -54,6 +54,16 @@ impl EventDispatcher {
         self.events.push_back((destination, event));
     }
 
+    pub fn queue_direct_event(&mut self, widget_id: WidgetID, event: WidgetEvent) {
+        self.queue_event(
+            EventDestination::Widget(widget_id),
+            DispatchableEvent::Direct {
+                bubble_source: None,
+                event,
+            }
+        )
+    }
+
     pub fn dispatch_events<A, F>(
         &mut self,
         widget_stack: &mut WidgetStack<A, F>,

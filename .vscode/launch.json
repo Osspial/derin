@@ -5,11 +5,26 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Cargo test",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--",
+                    "--nocapture",
+                    "mouse_down"
+                ]
+            },
+            "program": "${cargo:program}",
+            "args": []
+        },
+        {
             "name": "(Windows) Launch",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "D:/programming/cargo_shared_target/debug/derin_core.exe",
-            "args": [],
+            "program": "D:/programming/cargo_shared_target/debug/derin_core-9e904ced83d2be61.exe",
+            "args": ["--nocapture", "mouse_move_enter_child"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

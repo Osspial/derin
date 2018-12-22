@@ -93,7 +93,7 @@ impl<'a, A, F: RenderFrame> WidgetStack<'a, A, F> {
 
         if let Some(mut active_ident_rev) = active_ident_rev_opt {
             // If the widget is where the tree says it is, return it.
-            if self.move_to_path(active_ident_rev.drain(..).rev()).is_some() {
+            if self.move_to_path(active_ident_rev.drain(..).rev()).is_some() && self.top().widget_id == widget_id {
                 return Some(self.top());
             }
         }
@@ -117,6 +117,7 @@ impl<'a, A, F: RenderFrame> WidgetStack<'a, A, F> {
             widget_tree.insert(parent.widget_tag().widget_id, widget_id, widget_index, widget_ident).ok();
         }
 
+        assert_eq!(self.top().widget_id, widget_id);
         Some(self.top())
     }
 
