@@ -78,12 +78,11 @@ pub(crate) trait OffsetWidgetTrait<A, F>
     // fn subtrait(&self) -> WidgetSubtrait<A, F>;
     // fn subtrait_mut(&mut self) -> WidgetSubtraitMut<A, F>;
 
+    fn update_layout(&mut self);
     fn size_bounds(&self) -> SizeBounds;
     fn register_timers(&self, register: &mut TimerRegister);
 
     fn num_children(&self) -> usize
-        where Self::Widget: ParentDyn<A, F>;
-    fn update_child_layout(&mut self)
         where Self::Widget: ParentDyn<A, F>;
     fn children<'b, G>(&'b self, for_each: G)
         where A: 'b,
@@ -190,10 +189,9 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
     {
         self.widget.num_children()
     }
-    fn update_child_layout(&mut self)
-        where W: ParentDyn<A, F>
+    fn update_layout(&mut self)
     {
-        self.widget.update_child_layout();
+        self.widget.update_layout();
     }
 
     fn children<'b, G>(&'b self, mut for_each: G)

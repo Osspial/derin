@@ -36,8 +36,6 @@ pub trait ParentDyn<A, F: RenderFrame>: Widget<A, F> {
 
     fn children<'a>(&'a self, for_each: ForEachSummary<&'a Widget<A, F>>);
     fn children_mut<'a>(&'a mut self, for_each: ForEachSummary<&'a mut Widget<A, F>>);
-
-    fn update_child_layout(&mut self);
 }
 
 impl<A, F, P> ParentDyn<A, F> for P
@@ -110,10 +108,6 @@ impl<A, F, P> ParentDyn<A, F> for P
         if child_avec.len() != 0 {
             let _ = for_each(child_avec);
         }
-    }
-
-    fn update_child_layout(&mut self) {
-        <Self as Parent<A, F>>::update_child_layout(self)
     }
 }
 
