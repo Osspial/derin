@@ -119,7 +119,6 @@ impl<'a, A, F> TranslatorActive<'a, A, F>
 
         let mouse_down_widget_iter = input_state.mouse_buttons_down.clone().into_iter().map(|d| d.widget_id);
 
-        println!("\n{:?}", window_event);
         let _: Option<()> =
         match window_event {
             MouseMove(new_pos) => try {
