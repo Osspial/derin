@@ -71,6 +71,7 @@ impl VirtualWidgetTree {
         if let Some((parent_data, children)) = self.get_widget_node_mut(parent_id) {
             let parent_depth = parent_data.depth();
 
+            // TODO: HANDLE DUPLICATE INSERTS
             children.insert(child_index, widget_id);
 
             match self.tree_data.entry(widget_id) {
