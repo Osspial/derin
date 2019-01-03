@@ -1,8 +1,5 @@
 use crate::{
-    LoopFlow,
     tree::WidgetID,
-    render::RenderFrame,
-    offset_widget::{OffsetWidgetTrait, OffsetWidgetTraitAs},
 };
 use fnv::FnvHashSet;
 use std::{
@@ -10,61 +7,47 @@ use std::{
     cell::RefCell,
 };
 
+/// `UpdateState` handle that gets stored in a `WidgetTag`. Used to access and modify global update
+/// state.
 #[derive(Debug, Clone)]
-pub(crate) enum UpdateStateShared<R = Weak<UpdateStateBuffered>> {
+pub(crate) enum UpdateStateShared<R = Weak<UpdateStateCell>> {
     Occupied(R),
-    Vacant
+    Vacant,
 }
 
-#[derive(Debug)]
-pub(crate) struct UpdateStateBuffered {
-    pub update_state: RefCell<UpdateState>,
-    /// This exists so we can call `set_owning_update_state` inside the child_update loop of
-    /// `update_virtual_tree`. See, `set_owning_update_state` needs to modify `update_state` to
-    /// insert the new redraw/relayout/child update stuff. However, it can't since `update_state`
-    /// was borrowed to get the widget IDs for the loop! The solution is to, when `update_state` is
-    /// borrowed, push to this back buffer than process any new events pushed to the back buffer.
-    back_buffer: RefCell<Vec<BufferedUpdate>>
-}
-
-#[derive(Debug, Clone)]
-enum BufferedUpdate {
-    Redraw(WidgetID),
-    Relayout(WidgetID),
-    ChildUpdated(WidgetID),
-    Remove(WidgetID)
-}
+pub(crate) type UpdateStateCell = RefCell<UpdateState>;
 
 #[derive(Debug)]
 pub(crate) struct UpdateState {
     pub redraw: FnvHashSet<WidgetID>,
     pub relayout: FnvHashSet<WidgetID>,
-    pub child_updated: FnvHashSet<WidgetID>,
+    pub remove_from_tree: FnvHashSet<WidgetID>,
+    pub global_update: bool,
 }
 
-impl UpdateStateBuffered {
-    pub fn new() -> Rc<UpdateStateBuffered> {
-        Rc::new(UpdateStateBuffered {
-            update_state: RefCell::new(UpdateState {
+impl UpdateState {
+    pub fn new() -> Rc<UpdateStateCell> {
+        Rc::new(
+            RefCell::new(UpdateState {
                 redraw: FnvHashSet::default(),
                 relayout: FnvHashSet::default(),
-                child_updated: FnvHashSet::default(),
-            }),
-            back_buffer: RefCell::new(vec![])
-        })
+                remove_from_tree: FnvHashSet::default(),
+                global_update: true,
+            })
+        )
     }
 
-    fn queue_insert_id(&self, id: WidgetID) {
-        if let Ok(mut parent_state) = self.update_state.try_borrow_mut() {
-            parent_state.redraw.insert(id);
-            parent_state.relayout.insert(id);
-            parent_state.child_updated.insert(id);
-        } else {
-            let mut buffer = self.back_buffer.borrow_mut();
-            buffer.push(BufferedUpdate::Redraw(id));
-            buffer.push(BufferedUpdate::Relayout(id));
-            buffer.push(BufferedUpdate::ChildUpdated(id));
-        }
+    fn queue_insert_id(&mut self, id: WidgetID) {
+        self.redraw.insert(id);
+        self.relayout.insert(id);
+    }
+
+    pub fn queue_global_update(&mut self) {
+        self.global_update = true;
+    }
+
+    pub fn reset_global_update(&mut self) {
+        self.global_update = false;
     }
 }
 
@@ -76,7 +59,7 @@ impl UpdateStateShared {
     /// Try to upgrade the `Weak` reference to a full `Rc`. If the `Weak` points to something that
     /// no longer exists (because the primary `UpdateState` was dropped), change self to `Vacant`
     /// and return `Vacant`.
-    fn upgrade(&mut self) -> UpdateStateShared<Rc<UpdateStateBuffered>> {
+    fn upgrade(&mut self) -> UpdateStateShared<Rc<UpdateStateCell>> {
         match self {
             UpdateStateShared::Vacant => UpdateStateShared::Vacant,
             UpdateStateShared::Occupied(weak) => match weak.upgrade() {
@@ -89,23 +72,20 @@ impl UpdateStateShared {
         }
     }
 
-    pub fn set_owning_update_state(&mut self, id: WidgetID, parent_state: &Rc<UpdateStateBuffered>) {
+    pub fn set_owning_update_state(&mut self, id: WidgetID, parent_state: &Rc<UpdateStateCell>) {
         match self.upgrade() {
             UpdateStateShared::Vacant => {
-                parent_state.queue_insert_id(id);
+                parent_state.borrow_mut().queue_insert_id(id);
                 *self = UpdateStateShared::Occupied(Rc::downgrade(parent_state))
             },
             UpdateStateShared::Occupied(old_state) => {
                 if !Rc::ptr_eq(&old_state, &parent_state) {
-                    if let Ok(mut old_state) = old_state.update_state.try_borrow_mut() {
-                        old_state.redraw.remove(&id);
-                        old_state.relayout.remove(&id);
-                        old_state.child_updated.remove(&id);
-                    } else {
-                        old_state.back_buffer.borrow_mut().push(BufferedUpdate::Remove(id));
-                    }
+                    let mut old_state = old_state.borrow_mut();
+                    old_state.redraw.remove(&id);
+                    old_state.relayout.remove(&id);
+                    old_state.remove_from_tree.insert(id);
 
-                    parent_state.queue_insert_id(id);
+                    parent_state.borrow_mut().queue_insert_id(id);
                     *self = UpdateStateShared::Occupied(Rc::downgrade(parent_state));
                 }
             }
@@ -114,12 +94,9 @@ impl UpdateStateShared {
 
     pub fn request_redraw(&mut self, id: WidgetID) {
         match self.upgrade() {
-            UpdateStateShared::Occupied(parent_state) => {
-                if let Ok(mut parent_state) = parent_state.update_state.try_borrow_mut() {
-                    parent_state.redraw.insert(id);
-                } else {
-                    parent_state.back_buffer.borrow_mut().push(BufferedUpdate::Redraw(id));
-                }
+            UpdateStateShared::Occupied(update_state) => {
+                let mut update_state = update_state.borrow_mut();
+                update_state.redraw.insert(id);
             },
             // All updates are automatically performed on a fresh insert so we don't need to log that
             // an update was requested.
@@ -129,28 +106,23 @@ impl UpdateStateShared {
 
     pub fn request_relayout(&mut self, id: WidgetID) {
         match self.upgrade() {
-            UpdateStateShared::Occupied(parent_state) => {
-                if let Ok(mut parent_state) = parent_state.update_state.try_borrow_mut() {
-                    parent_state.relayout.insert(id);
-                } else {
-                    parent_state.back_buffer.borrow_mut().push(BufferedUpdate::Relayout(id));
-                }
+            UpdateStateShared::Occupied(update_state) => {
+                let mut update_state = update_state.borrow_mut();
+                update_state.relayout.insert(id);
             },
             // Ditto.
             UpdateStateShared::Vacant => ()
         }
     }
 
-    pub fn mark_child_updated(&mut self, id: WidgetID) {
+    pub fn remove_from_tree(&mut self, id: WidgetID) {
         match self.upgrade() {
-            UpdateStateShared::Occupied(parent_state) => {
-                if let Ok(mut parent_state) = parent_state.update_state.try_borrow_mut() {
-                    parent_state.child_updated.insert(id);
-                } else {
-                    parent_state.back_buffer.borrow_mut().push(BufferedUpdate::ChildUpdated(id));
-                }
+            UpdateStateShared::Occupied(update_state) => {
+                let mut update_state = update_state.borrow_mut();
+                update_state.redraw.remove(&id);
+                update_state.relayout.remove(&id);
+                update_state.remove_from_tree.insert(id);
             },
-            // Ditto.
             UpdateStateShared::Vacant => ()
         }
     }

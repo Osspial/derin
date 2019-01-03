@@ -22,7 +22,7 @@ use crate::{
     render::{RenderFrame, FrameRectStack},
     timer::TimerRegister,
     popup::ChildPopupsMut,
-    update_state::{UpdateStateShared, UpdateStateBuffered}
+    update_state::{UpdateStateShared, UpdateStateCell}
 };
 use derin_common_types::{
     buttons::MouseButton,
@@ -31,6 +31,7 @@ use derin_common_types::{
 use std::{
     cell::{Cell, RefCell},
     fmt,
+    ops::Drop,
     rc::Rc,
     sync::Arc,
 };
@@ -115,6 +116,10 @@ macro_rules! id {
                 let id = ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32;
 
                 $Name(id as u32)
+            }
+
+            pub fn to_u32(self) -> u32 {
+                self.0
             }
 
             #[allow(dead_code)]
@@ -370,7 +375,7 @@ impl WidgetTag {
     }
 
     #[inline]
-    pub(crate) fn set_owning_update_state(&self, state: &Rc<UpdateStateBuffered>) {
+    pub(crate) fn set_owning_update_state(&self, state: &Rc<UpdateStateCell>) {
         self.update_state.borrow_mut().set_owning_update_state(self.widget_id, state);
     }
 }
@@ -386,5 +391,11 @@ impl Update {
         } = self;
 
         render_self || update_child || update_layout || update_layout_post
+    }
+}
+
+impl Drop for WidgetTag {
+    fn drop(&mut self) {
+        self.update_state.get_mut().remove_from_tree(self.widget_id)
     }
 }

@@ -1,9 +1,9 @@
 use crate::{
     cgmath::Point2,
-    event::{WidgetEvent, FocusChange},
+    event::{WidgetEvent},
     tree::{WidgetID, WidgetIdent},
     render::RenderFrame,
-    widget_traverser::{Relation, WidgetTraverser, WidgetPath},
+    widget_traverser::{Relation, WidgetTraverser, OffsetWidgetPath},
 };
 use std::collections::VecDeque;
 
@@ -54,7 +54,7 @@ impl EventDispatcher {
     pub fn dispatch_events<A, F>(
         &mut self,
         widget_traverser: &mut WidgetTraverser<A, F>,
-        mut f: impl FnMut(&mut Self, WidgetPath<A, F>, DispatchableEvent)
+        mut f: impl FnMut(&mut Self, OffsetWidgetPath<A, F>, DispatchableEvent)
     )
         where A: 'static,
               F: RenderFrame
