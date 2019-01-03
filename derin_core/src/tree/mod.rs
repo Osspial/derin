@@ -72,8 +72,6 @@ pub struct WidgetTag {
     update_state: RefCell<UpdateStateShared>,
     pub(crate) widget_id: WidgetID,
     pub(crate) mouse_state: Cell<MouseState>,
-    pub(crate) has_keyboard_focus: Cell<bool>,
-    pub(crate) child_event_recv: Cell<ChildEventRecv>
 }
 
 impl fmt::Debug for WidgetTag {
@@ -103,57 +101,6 @@ impl MouseState {
     }
 }
 
-bitflags! {
-    pub(crate) struct ChildEventRecv: u8 {
-        const MOUSE_L        = 1 << 0;
-        const MOUSE_R        = 1 << 1;
-        const MOUSE_M        = 1 << 2;
-        const MOUSE_X1       = 1 << 3;
-        const MOUSE_X2       = 1 << 4;
-        const MOUSE_HOVER    = 1 << 5;
-        const KEYBOARD       = 1 << 6;
-
-        const MOUSE_BUTTONS =
-            Self::MOUSE_L.bits  |
-            Self::MOUSE_R.bits  |
-            Self::MOUSE_M.bits  |
-            Self::MOUSE_X1.bits |
-            Self::MOUSE_X2.bits;
-    }
-}
-
-impl ChildEventRecv {
-    #[inline]
-    pub(crate) fn mouse_button_mask(button: MouseButton) -> ChildEventRecv {
-        ChildEventRecv::from_bits_truncate(1 << (u8::from(button) - 1))
-    }
-}
-
-impl From<MouseButtonSequence> for ChildEventRecv {
-    #[inline]
-    fn from(mbseq: MouseButtonSequence) -> ChildEventRecv {
-        mbseq.into_iter().fold(ChildEventRecv::empty(), |child_event_recv, mb| child_event_recv | ChildEventRecv::mouse_button_mask(mb))
-    }
-}
-
-impl<'a> From<&'a WidgetTag> for ChildEventRecv {
-    #[inline]
-    fn from(widget_tag: &'a WidgetTag) -> ChildEventRecv {
-        let widget_mb_flags = ChildEventRecv::from(widget_tag.mouse_state.get().mouse_button_sequence());
-
-        widget_mb_flags |
-        match widget_tag.mouse_state.get() {
-            MouseState::Hovering(_, _) => ChildEventRecv::MOUSE_HOVER,
-            MouseState::Tracking(_, _)  |
-            MouseState::Untracked   => ChildEventRecv::empty()
-        } |
-        match widget_tag.has_keyboard_focus.get() {
-            true => ChildEventRecv::KEYBOARD,
-            false => ChildEventRecv::empty()
-        }
-    }
-}
-
 macro_rules! id {
     (pub$(($vis:tt))* $Name:ident) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -178,8 +125,7 @@ macro_rules! id {
     }
 }
 
-id!(pub(crate) RootID);
-id!(pub(crate) WidgetID);
+id!(pub WidgetID);
 
 
 pub trait Widget<A, F: RenderFrame> {
@@ -399,8 +345,6 @@ impl WidgetTag {
             update_state: RefCell::new(UpdateStateShared::new()),
             widget_id: WidgetID::new(),
             mouse_state: Cell::new(MouseState::Untracked),
-            has_keyboard_focus: Cell::new(false),
-            child_event_recv: Cell::new(ChildEventRecv::empty())
         }
     }
 
@@ -422,7 +366,7 @@ impl WidgetTag {
 
     #[inline]
     pub fn has_keyboard_focus(&self) -> bool {
-        self.has_keyboard_focus.get()
+        unimplemented!()
     }
 
     #[inline]

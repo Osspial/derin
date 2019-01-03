@@ -33,12 +33,11 @@ pub mod render;
 
 // TODO: UNPUBLICIZE
 pub mod mbseq;
-pub mod widget_stack;
 pub mod offset_widget;
 pub mod event_loop_ops;
-pub mod virtual_widget_tree;
 pub mod event_translator;
 pub mod update_state;
+pub mod widget_traverser;
 
 use crate::cgmath::{Point2, Vector2, Bounded};
 use cgmath_geometry::{D2, rect::DimsBox};
@@ -71,7 +70,7 @@ pub struct Root<A, N, F>
           F: RenderFrame + 'static
 {
     // Event handing and dispatch
-    event_translator: EventTranslator<A, F>,
+    event_translator: EventTranslator<A>,
 
     // Input State
     input_state: InputState,
