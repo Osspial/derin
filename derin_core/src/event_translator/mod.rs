@@ -7,10 +7,9 @@ use crate::{
     tree::*,
     timer::TimerList,
     render::RenderFrame,
-    widget_stack::{WidgetStack, WidgetStackBase, WidgetPath},
+    widget_traverser::{Relation, WidgetTraverser, WidgetPath},
     update_state::{UpdateStateBuffered},
     offset_widget::{OffsetWidget, OffsetWidgetTrait, OffsetWidgetTraitAs},
-    virtual_widget_tree::VirtualWidgetTree
 };
 use self::dispatcher::{EventDispatcher, EventDestination, DispatchableEvent};
 use cgmath_geometry::rect::GeoBox;
@@ -19,11 +18,9 @@ use std::{
     iter::{ExactSizeIterator, DoubleEndedIterator}
 };
 
-pub(crate) struct EventTranslator<A, F>
+pub(crate) struct EventTranslator<A>
     where A: 'static,
-          F: RenderFrame + 'static
 {
-    widget_stack_base: WidgetStackBase<A, F>,
     inner: TranslatorInner<A>
 }
 
@@ -31,7 +28,7 @@ pub(crate) struct TranslatorActive<'a, A, F>
     where A: 'static,
           F: RenderFrame + 'static
 {
-    widget_stack: WidgetStack<'a, A, F>,
+    widget_traverser: &'a mut WidgetTraverser<'a, A, F>,
     inner: &'a mut TranslatorInner<A>
 }
 
@@ -39,30 +36,26 @@ struct TranslatorInner<A: 'static> {
     actions: Vec<A>,
     timer_list: TimerList,
     event_dispatcher: EventDispatcher,
-    virtual_widget_tree: VirtualWidgetTree,
     update_state: Rc<UpdateStateBuffered>,
 }
 
-impl<A, F> EventTranslator<A, F>
+impl<A> EventTranslator<A>
     where A: 'static,
-          F: RenderFrame + 'static
 {
-    pub fn new(root_id: WidgetID) -> EventTranslator<A, F> {
+    pub fn new(root_id: WidgetID) -> EventTranslator<A> {
         EventTranslator {
-            widget_stack_base: WidgetStackBase::new(),
             inner: TranslatorInner {
                 actions: Vec::new(),
                 timer_list: TimerList::new(None),
                 event_dispatcher: EventDispatcher::new(),
-                virtual_widget_tree: VirtualWidgetTree::new(root_id),
                 update_state: UpdateStateBuffered::new(),
             },
         }
     }
 
-    pub fn with_widget<'a>(&'a mut self, root: &'a mut Widget<A, F>) -> TranslatorActive<'a, A, F> {
+    pub fn with_traverser<'a, F: RenderFrame>(&'a mut self, widget_traverser: &'a mut WidgetTraverser<'a, A, F>) -> TranslatorActive<'a, A, F> {
         TranslatorActive {
-            widget_stack: self.widget_stack_base.use_stack_dyn(root),
+            widget_traverser,
             inner: &mut self.inner
         }
     }
@@ -80,18 +73,20 @@ impl<'a, A, F> TranslatorActive<'a, A, F>
         use self::WindowEvent::*;
 
         let TranslatorActive {
-            ref mut widget_stack,
+            ref mut widget_traverser,
             ref mut inner
         } = self;
         let TranslatorInner {
             ref mut actions,
             ref mut timer_list,
             ref mut event_dispatcher,
-            ref mut virtual_widget_tree,
             update_state: _
         } = inner;
 
-        let mut root_widget_rect = || widget_stack.move_to_path(Some(ROOT_IDENT)).unwrap().widget.rect();
+        let mut root_widget_rect = || {
+            let root_id = widget_traverser.root_id();
+            widget_traverser.get_widget(root_id).unwrap().widget.rect()
+        };
         let mut project_to_outside_root = |point| {
             let root_rect = root_widget_rect();
             let border_point = root_rect.nearest_points(point).next().unwrap();
@@ -127,7 +122,7 @@ impl<'a, A, F> TranslatorActive<'a, A, F>
                 input_state.mouse_pos = Some(new_pos);
 
                 let hover_widget_id = input_state.mouse_hover_widget
-                    .unwrap_or(virtual_widget_tree.root_id());
+                    .unwrap_or(widget_traverser.root_id());
 
                 event_dispatcher.queue_event(
                     EventDestination::Widget(hover_widget_id),
@@ -191,7 +186,7 @@ impl<'a, A, F> TranslatorActive<'a, A, F>
                 let mouse_pos = input_state.mouse_pos?;
                 let mouse_down = input_state.mouse_buttons_down.contains(mouse_button)?;
                 let hover_widget_id = input_state.mouse_hover_widget
-                    .unwrap_or(virtual_widget_tree.root_id());
+                    .unwrap_or(widget_traverser.root_id());
 
                 event_dispatcher.queue_direct_event(
                     hover_widget_id,
@@ -270,8 +265,7 @@ impl<'a, A, F> TranslatorActive<'a, A, F>
         };
 
         event_dispatcher.dispatch_events(
-            widget_stack,
-            virtual_widget_tree,
+            widget_traverser,
             |event_dispatcher, WidgetPath{mut widget, path, widget_id, index}, event| {
                 let widget_ident = path.last().unwrap();
 
@@ -296,23 +290,23 @@ impl<'a, A, F> TranslatorActive<'a, A, F>
                         let destination_source_opt = {
                             match focus.clone() {
                                 FocusChange::Next => Some((
-                                    EventDestination::Sibling{of, delta: 1},
+                                    EventDestination::Relation(of, Relation::Sibling(1)),
                                     FocusSource::Sibling{ident, delta: -1}
                                 )),
                                 FocusChange::Prev => Some((
-                                    EventDestination::Sibling{of, delta: -1},
+                                    EventDestination::Relation(of, Relation::Sibling(-1)),
                                     FocusSource::Sibling{ident, delta: 1}
                                 )),
                                 FocusChange::Parent => Some((
-                                    EventDestination::Parent{of},
+                                    EventDestination::Relation(of, Relation::Parent),
                                     FocusSource::Child{ident, index}
                                 )),
                                 FocusChange::ChildIdent(ident) => Some((
-                                    EventDestination::ChildIdent{of, ident},
+                                    EventDestination::Relation(of, Relation::ChildIdent(ident)),
                                     FocusSource::Parent
                                 )),
                                 FocusChange::ChildIndex(index) => Some((
-                                    EventDestination::ChildIndex{of, index},
+                                    EventDestination::Relation(of, Relation::ChildIndex(index)),
                                     FocusSource::Parent
                                 )),
                                 FocusChange::Take => Some((
@@ -450,7 +444,7 @@ impl<'a, A, F> TranslatorActive<'a, A, F>
                                     &[]
                                 ));
                                 event_dispatcher.queue_event(
-                                    EventDestination::Parent{of: widget_id},
+                                    EventDestination::Relation(widget_id, Relation::Parent),
                                     DispatchableEvent::MouseMove {
                                         old_pos, new_pos,
                                         exiting_from_child: Some(path.last().cloned().unwrap()),

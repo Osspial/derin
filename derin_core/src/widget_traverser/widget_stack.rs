@@ -36,12 +36,12 @@ struct ElementRects {
     bounds_clipped: Option<BoundBox<D2, i32>>
 }
 
-pub(crate) struct NRAllocCache<A, F: RenderFrame> {
+pub(crate) struct WidgetStackCache<A, F: RenderFrame> {
     vec: Vec<StackElement<A, F>>,
     ident_vec: Vec<WidgetIdent>
 }
 
-pub(crate) struct NRVec<'a, A: 'static, F: 'a + RenderFrame> {
+pub(crate) struct WidgetStack<'a, A: 'static, F: 'a + RenderFrame> {
     vec: &'a mut Vec<StackElement<A, F>>,
     ident_vec: &'a mut Vec<WidgetIdent>,
     clip_rect: Option<BoundBox<D2, i32>>,
@@ -55,15 +55,15 @@ pub(crate) struct WidgetPath<'a, A: 'static, F: 'a + RenderFrame> {
     pub widget_id: WidgetID
 }
 
-impl<A, F: RenderFrame> NRAllocCache<A, F> {
-    pub fn new() -> NRAllocCache<A, F> {
-        NRAllocCache {
+impl<A, F: RenderFrame> WidgetStackCache<A, F> {
+    pub fn new() -> WidgetStackCache<A, F> {
+        WidgetStackCache {
             vec: Vec::new(),
             ident_vec: Vec::new(),
         }
     }
 
-    pub fn use_cache<'a>(&'a mut self, widget: &mut (Widget<A, F> + 'a)) -> NRVec<'a, A, F> {
+    pub fn use_cache<'a>(&'a mut self, widget: &mut (Widget<A, F> + 'a)) -> WidgetStack<'a, A, F> {
         let mut cache_swap = Vec::new();
         mem::swap(&mut cache_swap, &mut self.vec);
 
@@ -78,7 +78,7 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
         });
         self.ident_vec.push(ROOT_IDENT);
 
-        NRVec {
+        WidgetStack {
             vec: &mut self.vec,
             ident_vec: &mut self.ident_vec,
             clip_rect: Some(BoundBox::new(Point2::new(0, 0), Point2::max_value())),
@@ -87,7 +87,7 @@ impl<A, F: RenderFrame> NRAllocCache<A, F> {
     }
 }
 
-impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
+impl<'a, A: 'static, F: RenderFrame> WidgetStack<'a, A, F> {
     #[inline]
     pub fn top(&mut self) -> WidgetPath<A, F> {
         let (widget, widget_id) = self.vec.last_mut().map(|n| unsafe{ (&mut *n.widget, n.widget_id) }).unwrap();
@@ -193,7 +193,7 @@ impl<'a, A: 'static, F: RenderFrame> NRVec<'a, A, F> {
     }
 
     #[inline]
-    pub fn pop(&mut self) -> Option<&'a mut Widget<A, F>> {
+    pub fn pop(&mut self) -> Option<&mut Widget<A, F>> {
         // Ensure the base is never popped
         if self.vec.len() == 1 {
             return None;

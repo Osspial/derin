@@ -3,8 +3,7 @@ use crate::{
     event::{WidgetEvent, FocusChange},
     tree::{WidgetID, WidgetIdent},
     render::RenderFrame,
-    widget_stack::{WidgetStack, WidgetPath},
-    virtual_widget_tree::VirtualWidgetTree
+    widget_traverser::{Relation, WidgetTraverser, WidgetPath},
 };
 use std::collections::VecDeque;
 
@@ -14,20 +13,8 @@ pub(crate) struct EventDispatcher {
 
 #[derive(Debug, Clone)]
 pub(crate) enum EventDestination {
-    Parent{of: WidgetID},
-    Sibling {
-        of: WidgetID,
-        delta: isize
-    },
-    ChildIdent {
-        of: WidgetID,
-        ident: WidgetIdent
-    },
-    ChildIndex {
-        of: WidgetID,
-        index: usize
-    },
     Widget(WidgetID),
+    Relation(WidgetID, Relation)
 }
 
 #[derive(Debug, Clone)]
@@ -66,37 +53,26 @@ impl EventDispatcher {
 
     pub fn dispatch_events<A, F>(
         &mut self,
-        widget_stack: &mut WidgetStack<A, F>,
-        widget_tree: &mut VirtualWidgetTree,
+        widget_traverser: &mut WidgetTraverser<A, F>,
         mut f: impl FnMut(&mut Self, WidgetPath<A, F>, DispatchableEvent)
     )
         where A: 'static,
               F: RenderFrame
     {
         while let Some((destination, event)) = self.events.pop_front() {
-            let widget = match destination.get_widget(widget_stack, widget_tree) {
+            let widget_opt = {
+                use self::EventDestination::*;
+                match destination {
+                    Relation(id, relation) => widget_traverser.get_widget_relation(id, relation),
+                    Widget(id) => widget_traverser.get_widget(id)
+                }
+            };
+
+            let widget = match widget_opt {
                 Some(w) => w,
                 None => continue //TODO: LOG WARNING
             };
             f(self, widget, event);
         }
-    }
-}
-
-impl EventDestination {
-    pub fn get_widget<'a, A, F>(&self, widget_stack: &'a mut WidgetStack<A, F>, widget_tree: &mut VirtualWidgetTree) -> Option<WidgetPath<'a, A, F>>
-        where A: 'static,
-              F: RenderFrame
-    {
-        use self::EventDestination::*;
-        let target_id = match self {
-            Parent{of} => widget_tree.parent(*of).ok()?,
-            Sibling{of, delta} => widget_tree.sibling(*of, *delta).ok()?,
-            ChildIdent{of, ident} => widget_tree.children(*of)?.find(|&(_, data)| ident == &data.ident)?.0,
-            ChildIndex{of, index} => widget_tree.child_from_start(*of, *index).ok()?,
-            Widget(id) => *id
-        };
-
-        widget_stack.move_to_widget_with_tree(target_id, widget_tree)
     }
 }

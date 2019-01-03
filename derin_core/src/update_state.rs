@@ -2,8 +2,6 @@ use crate::{
     LoopFlow,
     tree::WidgetID,
     render::RenderFrame,
-    virtual_widget_tree::VirtualWidgetTree,
-    widget_stack::WidgetStack,
     offset_widget::{OffsetWidgetTrait, OffsetWidgetTraitAs},
 };
 use fnv::FnvHashSet;
@@ -66,58 +64,6 @@ impl UpdateStateBuffered {
             buffer.push(BufferedUpdate::Redraw(id));
             buffer.push(BufferedUpdate::Relayout(id));
             buffer.push(BufferedUpdate::ChildUpdated(id));
-        }
-    }
-
-    /// Iterate over widgets marked `child_updated`, update the virtual tree to match the actual
-    /// representation, and set the widgets' update state to this.
-    pub fn update_tree<A, F: RenderFrame>(this: &Rc<Self>, stack: &mut WidgetStack<A, F>, widget_tree: &mut VirtualWidgetTree) {
-        let mut update_state_refcell = this.update_state.borrow_mut();
-        let UpdateState {
-            ref mut redraw,
-            ref mut relayout,
-            ref mut child_updated,
-        } = *update_state_refcell;
-
-        for _ in 0..crate::MAX_FRAME_UPDATE_ITERATIONS {
-            for parent_id in child_updated.drain() {
-                let mut parent_widget = stack.move_to_widget_with_tree(parent_id, widget_tree);
-                let parent_opt = parent_widget.as_mut().and_then(|w| w.widget.as_parent_mut());
-
-                let parent = match parent_opt {
-                    Some(parent) => parent,
-                    None => continue
-                };
-                parent.children(|summary| {
-                    let widget_tag = summary.widget.widget_tag();
-                    // TODO: CHANGE TO RETAIN
-                    widget_tree.insert(parent_id, widget_tag.widget_id, summary.index, summary.ident).unwrap();
-
-                    // This doesn't panic with a "RefCell already borrowed" error because any new events
-                    // get pushed to the `back_buffer` field, which isn't borrowed.
-                    widget_tag.set_owning_update_state(this);
-
-                    LoopFlow::Continue
-                });
-            }
-
-            let mut back_buffer = this.back_buffer.borrow_mut();
-            if back_buffer.len() == 0 {
-                break;
-            }
-
-            for update in back_buffer.drain(..) {
-                match update {
-                    BufferedUpdate::Redraw(id) => {redraw.insert(id);},
-                    BufferedUpdate::Relayout(id) => {relayout.insert(id);},
-                    BufferedUpdate::ChildUpdated(id) => {child_updated.insert(id);},
-                    BufferedUpdate::Remove(id) => {
-                        redraw.remove(&id);
-                        relayout.remove(&id);
-                        child_updated.remove(&id);
-                    }
-                }
-            }
         }
     }
 }
