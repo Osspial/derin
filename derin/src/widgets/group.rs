@@ -15,7 +15,7 @@
 use crate::core::LoopFlow;
 use crate::core::event::{EventOps, WidgetEvent, InputState};
 use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
-use crate::core::render::FrameRectStack;
+use crate::core::render::RenderFrameClipped;
 use crate::core::popup::ChildPopupsMut;
 
 use crate::cgmath::Point2;
@@ -98,7 +98,7 @@ impl<A, F, C, L> Widget<A, F> for Group<C, L>
         self.layout_engine.actual_size_bounds()
     }
 
-    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         frame.upload_primitives(ArrayVec::from([
             ThemedPrim {
                 theme_path: "Group",

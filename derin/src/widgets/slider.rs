@@ -15,7 +15,7 @@
 use crate::widgets::assistants::SliderAssist;
 use crate::event::{EventOps, WidgetEvent, InputState, MouseButton};
 use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
-use crate::core::render::{FrameRectStack, Theme};
+use crate::core::render::{RenderFrameClipped, Theme};
 use crate::core::popup::ChildPopupsMut;
 use crate::theme::RescaleRules;
 
@@ -138,7 +138,7 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
         &mut self.bounds
     }
 
-    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         self.assist.round_to_step();
         let bar_margins = match frame.theme().widget_theme("Slider::Bar").image.map(|b| b.rescale) {
             Some(RescaleRules::Slice(margins)) => margins,

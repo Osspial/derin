@@ -15,7 +15,7 @@
 use crate::widgets::{Contents, ContentsInner};
 use crate::core::event::{EventOps, WidgetEvent, InputState};
 use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
-use crate::core::render::FrameRectStack;
+use crate::core::render::RenderFrameClipped;
 use crate::core::popup::ChildPopupsMut;
 
 use crate::cgmath::Point2;
@@ -83,7 +83,7 @@ impl<A, F> Widget<A, F> for Label
         SizeBounds::new_min(self.min_size)
     }
 
-    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         frame.upload_primitives(Some(self.contents.to_prim("Label", None)).into_iter());
         self.min_size = self.contents.min_size(frame.theme());
     }

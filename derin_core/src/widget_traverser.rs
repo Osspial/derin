@@ -139,6 +139,32 @@ impl<A, F> WidgetTraverser<'_, A, F>
         &mut widgets[..valid_widgets]
     }
 
+    pub fn crawl_widgets(&mut self, mut for_each: impl FnMut(OffsetWidgetPath<'_, A, F>)) {
+        self.stack.truncate(1);
+        let mut child_index = 0;
+        loop {
+            for_each(self.stack.top_mut());
+            let valid_child = self.stack.try_push(|top_widget| {
+                if let Some(top_widget_as_parent) = top_widget.as_parent_mut() {
+                    return top_widget_as_parent.child_by_index_mut(child_index);
+                }
+
+                None
+            }).is_some();
+
+
+            match valid_child {
+                true => child_index = 0,
+                false => {
+                    child_index = self.stack.top_index() + 1;
+                    if self.stack.pop().is_none() {
+                        break
+                    }
+                }
+            }
+        }
+    }
+
     pub fn root_id(&self) -> WidgetID {
         self.virtual_widget_tree.root_id()
     }

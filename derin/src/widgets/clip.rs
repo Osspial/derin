@@ -15,7 +15,7 @@
 use crate::core::LoopFlow;
 use crate::core::event::{EventOps, WidgetEvent, InputState};
 use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
-use crate::core::render::FrameRectStack;
+use crate::core::render::RenderFrameClipped;
 use crate::core::popup::ChildPopupsMut;
 
 use crate::cgmath::{EuclideanSpace, Point2};
@@ -75,7 +75,7 @@ impl<A, F, W> Widget<A, F> for Clip<W>
         &mut self.rect
     }
 
-    fn render(&mut self, _: &mut FrameRectStack<F>) {}
+    fn render(&mut self, _: &mut RenderFrameClipped<F>) {}
 
     #[inline]
     fn on_widget_event(&mut self, _: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {

@@ -46,7 +46,7 @@ use crate::{
     timer::TimerList,
     tree::*,
     popup::PopupMap,
-    render::{Renderer, RenderFrame},
+    render::{Renderer, RenderFrame, RenderFrameClipped},
     mbseq::MouseButtonSequenceTrackPos,
     offset_widget::OffsetWidgetTrait,
     update_state::{UpdateState, UpdateStateCell},
@@ -234,10 +234,47 @@ impl<A, N, F> Root<A, N, F>
         }
     }
 
-    pub fn redraw<R>(&mut self, _with_renderer: impl FnMut(&mut FnMut(&mut R)))
+    pub fn redraw<R>(&mut self, renderer: &mut R)
         where R: Renderer<Frame=F>
     {
-        unimplemented!()
+        let root_rect = self.root_widget.rect();
+        let new_dims = root_rect.dims().cast::<u32>().unwrap_or(DimsBox::new2(0, 0));
+        if new_dims != renderer.dims() {
+            renderer.resized(new_dims);
+        }
+
+        let Root {
+            ref update_state,
+            ref mut widget_traverser_base,
+            ref mut root_widget,
+            ref theme,
+            ..
+        } = *self;
+
+        let mut update_state = update_state.borrow_mut();
+        if update_state.redraw.len() > 0 {
+            // We should probably support incremental redraw at some point but not doing that is
+            // soooo much easier.
+            update_state.redraw.clear();
+            drop(update_state);
+
+            let (mut frame, window_rect) = renderer.make_frame();
+
+            let mut widget_traverser = widget_traverser_base.with_root_ref(root_widget);
+            widget_traverser.crawl_widgets(|mut path| {
+                let widget_rect = path.widget.rect();
+                let mut render_frame_clipped = RenderFrameClipped {
+                    frame: frame,
+                    transform: path.widget.rect(),
+                    clip: path.widget.clip().unwrap_or(window_rect),
+                    theme: theme
+                };
+
+                path.widget.render(&mut render_frame_clipped);
+            });
+
+            renderer.finish_frame(theme);
+        }
     }
 }
 

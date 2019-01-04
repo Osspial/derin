@@ -16,7 +16,7 @@ use crate::widgets::assistants::ButtonState;
 use crate::widgets::{Contents, ContentsInner};
 use crate::core::event::{EventOps, WidgetEvent, InputState};
 use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
-use crate::core::render::{FrameRectStack, Theme};
+use crate::core::render::{RenderFrameClipped, Theme};
 use crate::core::popup::ChildPopupsMut;
 
 use crate::cgmath::Point2;
@@ -118,7 +118,7 @@ impl<A, F, H> Widget<A, F> for Button<H>
         self.size_bounds
     }
 
-    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         let image_str = match self.state {
             ButtonState::Normal    => "Button::Normal",
             ButtonState::Hover     => "Button::Hover",

@@ -15,7 +15,7 @@
 use crate::widgets::assistants::text_edit::{TextEditAssist, TextEditOps, LineCharFilter};
 use crate::core::event::{EventOps, WidgetEvent, InputState};
 use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
-use crate::core::render::{FrameRectStack, Theme};
+use crate::core::render::{RenderFrameClipped, Theme};
 use crate::core::popup::ChildPopupsMut;
 use crate::core::timer::TimerRegister;
 
@@ -107,7 +107,7 @@ impl LineBox {
 
 macro_rules! render_and_event {
     ($ty:ty) => {
-            fn render(&mut self, frame: &mut FrameRectStack<F>) {
+            fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
                 frame.upload_primitives(ArrayVec::from([
                     ThemedPrim {
                         theme_path: stringify!($ty),

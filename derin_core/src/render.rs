@@ -26,7 +26,7 @@ pub trait Renderer {
     fn set_size_bounds(&mut self, size_bounds: SizeBounds);
     fn resized(&mut self, new_size: DimsBox<D2, u32>);
     fn dims(&self) -> DimsBox<D2, u32>;
-    fn make_frame(&mut self, draw_output: bool) -> (&mut Self::Frame, BoundBox<D2, i32>);
+    fn make_frame(&mut self) -> (&mut Self::Frame, BoundBox<D2, i32>);
     fn finish_frame(&mut self, theme: &<Self::Frame as RenderFrame>::Theme);
 }
 
@@ -50,35 +50,15 @@ pub trait Theme {
     fn widget_theme(&self, key: &Self::Key) -> Self::ThemeValue;
 }
 
-pub struct FrameRectStack<'a, F: 'a + RenderFrame> {
-    frame: &'a mut F,
-    transform: BoundBox<D2, i32>,
-    clip_rect: BoundBox<D2, i32>,
+pub struct RenderFrameClipped<'a, F: 'a + RenderFrame> {
+    pub(crate) frame: &'a mut F,
+    pub(crate) transform: BoundBox<D2, i32>,
+    pub(crate) clip: BoundBox<D2, i32>,
 
-    theme: &'a F::Theme,
-
-    pop_widget_ident: bool,
+    pub(crate) theme: &'a F::Theme,
 }
 
-impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
-    #[inline]
-    pub(crate) fn new(
-        frame: &'a mut F,
-        base_transform: BoundBox<D2, i32>,
-        theme: &'a F::Theme,
-    ) -> FrameRectStack<'a, F>
-    {
-        FrameRectStack {
-            frame,
-            transform: base_transform,
-            clip_rect: base_transform,
-
-            theme,
-
-            pop_widget_ident: false,
-        }
-    }
-
+impl<'a, F: RenderFrame> RenderFrameClipped<'a, F> {
     #[inline(always)]
     pub fn theme(&self) -> &F::Theme {
         self.theme
@@ -88,19 +68,6 @@ impl<'a, F: RenderFrame> FrameRectStack<'a, F> {
     pub fn upload_primitives<I>(&mut self, prim_iter: I)
         where I: IntoIterator<Item=F::Primitive>
     {
-        self.frame.upload_primitives(self.theme, self.transform, self.clip_rect, prim_iter.into_iter())
-    }
-
-    #[inline]
-    pub fn enter_child_rect<'b>(&'b mut self, child_rect: BoundBox<D2, i32>) -> Option<FrameRectStack<'b, F>> {
-        let child_transform = child_rect + self.transform.min().to_vec();
-        Some(FrameRectStack {
-            frame: self.frame,
-            transform: child_transform,
-            clip_rect: self.clip_rect.intersect_rect(child_transform)?,
-
-            theme: self.theme,
-            pop_widget_ident: false,
-        })
+        self.frame.upload_primitives(self.theme, self.transform, self.clip, prim_iter.into_iter())
     }
 }

@@ -2,7 +2,7 @@ use crate::{
     LoopFlow,
     event::{EventOps, InputState, WidgetEvent},
     popup::ChildPopupsMut,
-    render::{FrameRectStack, RenderFrame, Theme},
+    render::{RenderFrameClipped, RenderFrame, Theme},
     tree::{
         *,
         dynamic::ParentDyn,
@@ -106,7 +106,7 @@ impl Widget<TestAction, TestRenderFrame> for TestWidget {
         &mut self.rect
     }
 
-    fn render(&mut self, _frame: &mut FrameRectStack<TestRenderFrame>) {}
+    fn render(&mut self, _frame: &mut RenderFrameClipped<TestRenderFrame>) {}
     fn on_widget_event(
         &mut self,
         event: WidgetEvent,

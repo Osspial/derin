@@ -21,7 +21,7 @@ use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use crate::core::LoopFlow;
 use crate::core::event::{EventOps, WidgetEvent, InputState};
 use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
-use crate::core::render::FrameRectStack;
+use crate::core::render::RenderFrameClipped;
 use crate::core::popup::ChildPopupsMut;
 use crate::core::render::Theme as CoreTheme;
 use derin_common_types::layout::{SizeBounds, WidgetPos};
@@ -158,7 +158,7 @@ impl<A, F> Widget<A, F> for RadioButton
         SizeBounds::new_min(self.min_size)
     }
 
-    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         let image_str = match (self.selected, self.button_state) {
             (true, ButtonState::Normal) => "RadioButton::Selected",
             (true, ButtonState::Hover) => "RadioButton::Selected::Hover",
@@ -303,7 +303,7 @@ impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
         self.layout_engine.actual_size_bounds()
     }
 
-    fn render(&mut self, _: &mut FrameRectStack<F>) {}
+    fn render(&mut self, _: &mut RenderFrameClipped<F>) {}
 
     #[inline]
     fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, bubble_source: &[WidgetIdent]) -> EventOps<A, F> {
