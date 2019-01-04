@@ -19,7 +19,7 @@ use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 use crate::core::LoopFlow;
 use crate::core::event::{EventOps, WidgetEvent, InputState};
 use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
-use crate::core::render::FrameRectStack;
+use crate::core::render::RenderFrameClipped;
 use crate::core::popup::ChildPopupsMut;
 use derin_common_types::layout::{SizeBounds, WidgetPos, GridSize, WidgetSpan, TrackHints};
 
@@ -135,7 +135,7 @@ impl<A, F, W> Widget<A, F> for TabList<W>
         self.layout_engine.actual_size_bounds()
     }
 
-    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         for tab in &mut self.tabs {
             let theme_path = match tab.button_state {
                 ButtonState::Normal => "Tab::Normal",

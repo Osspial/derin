@@ -19,7 +19,7 @@ use crate::{
     LoopFlow,
     mbseq::MouseButtonSequence,
     event::{WidgetEvent, EventOps, InputState},
-    render::{RenderFrame, FrameRectStack},
+    render::{RenderFrame, RenderFrameClipped},
     timer::TimerRegister,
     popup::ChildPopupsMut,
     update_state::{UpdateStateShared, UpdateStateCell}
@@ -137,7 +137,7 @@ pub trait Widget<A, F: RenderFrame> {
     fn widget_tag(&self) -> &WidgetTag;
     fn rect(&self) -> BoundBox<D2, i32>;
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32>;
-    fn render(&mut self, frame: &mut FrameRectStack<F>);
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>);
     fn on_widget_event(
         &mut self,
         event: WidgetEvent,
@@ -177,7 +177,7 @@ impl<'a, A, F, W> Widget<A, F> for &'a mut W
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         W::rect_mut(self)
     }
-    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         W::render(self, frame)
     }
     fn on_widget_event(
@@ -226,7 +226,7 @@ impl<A, F, W> Widget<A, F> for Box<W>
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         W::rect_mut(self)
     }
-    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         W::render(self, frame)
     }
     fn on_widget_event(

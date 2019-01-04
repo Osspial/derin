@@ -20,7 +20,7 @@ use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 use crate::core::event::{EventOps, InputState, WidgetEvent};
 use crate::core::popup::ChildPopupsMut;
 use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
-use crate::core::render::FrameRectStack;
+use crate::core::render::RenderFrameClipped;
 use derin_common_types::layout::SizeBounds;
 
 use crate::gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame};
@@ -112,7 +112,7 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
         SizeBounds::new_min(self.check_rect.dims())
     }
 
-    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         let image_str = match (self.checked, self.button_state) {
             (true, ButtonState::Normal) => "CheckBox::Checked",
             (true, ButtonState::Hover) => "CheckBox::Checked::Hover",

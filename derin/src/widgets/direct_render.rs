@@ -14,7 +14,7 @@
 
 use crate::core::event::{EventOps, WidgetEvent, InputState};
 use crate::core::tree::{WidgetIdent, WidgetTag, Widget, };
-use crate::core::render::FrameRectStack;
+use crate::core::render::RenderFrameClipped;
 use crate::core::popup::ChildPopupsMut;
 use crate::core::timer::TimerRegister;
 
@@ -106,7 +106,7 @@ impl<A, F, R> Widget<A, F> for DirectRender<R>
         &mut self.bounds
     }
 
-    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         let mut draw_fn = |render_type: &mut R::RenderType| self.render_state.render(render_type);
         frame.upload_primitives(Some(ThemedPrim {
             theme_path: "DirectRender",

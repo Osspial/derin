@@ -15,7 +15,7 @@
 use crate::core::LoopFlow;
 use crate::core::event::{EventOps, WidgetEvent, InputState};
 use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
-use crate::core::render::FrameRectStack;
+use crate::core::render::RenderFrameClipped;
 use crate::core::popup::ChildPopupsMut;
 
 use crate::cgmath::{Point2, Vector2};
@@ -108,7 +108,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
         SizeBounds::default()
     }
 
-    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         let mut primitives: ArrayVec<[_; 4]> = ArrayVec::new();
 
         if let Some(slider_x) = self.slider_x.clone() {

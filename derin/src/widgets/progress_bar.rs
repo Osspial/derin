@@ -14,7 +14,7 @@
 
 use crate::event::{EventOps, WidgetEvent, InputState};
 use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
-use crate::core::render::FrameRectStack;
+use crate::core::render::RenderFrameClipped;
 use crate::core::popup::ChildPopupsMut;
 
 use crate::cgmath::Point2;
@@ -97,7 +97,7 @@ impl<A, F> Widget<A, F> for ProgressBar
         &mut self.bounds
     }
 
-    fn render(&mut self, frame: &mut FrameRectStack<F>) {
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         self.value = self.value.min(self.max).max(self.min);
         frame.upload_primitives(ArrayVec::from([
             ThemedPrim {

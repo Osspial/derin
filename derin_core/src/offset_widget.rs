@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::{LoopFlow, InputState};
-use crate::popup::ChildPopupsMut;
-use crate::tree::{Widget, WidgetIdent, WidgetTag, WidgetSummary};
-use crate::tree::dynamic::ParentDyn;
-use crate::event::{InputState as EventInputState, WidgetEvent, EventOps};
-use crate::render::RenderFrame;
-use crate::timer::TimerRegister;
+use crate::{
+    {LoopFlow, InputState},
+    popup::ChildPopupsMut,
+    tree::{Widget, WidgetIdent, WidgetTag, WidgetSummary},
+    tree::dynamic::ParentDyn,
+    event::{InputState as EventInputState, WidgetEvent, EventOps},
+    render::{RenderFrame, RenderFrameClipped},
+    timer::TimerRegister,
+};
 
 use derin_common_types::layout::SizeBounds;
 
@@ -53,6 +55,10 @@ impl<'a, W: ?Sized> OffsetWidget<'a, W> {
     pub fn inner_mut(&mut self) -> &mut W {
         self.widget
     }
+
+    pub fn clip(&self) -> Option<BoundBox<D2, i32>> {
+        self.clip
+    }
 }
 
 pub(crate) trait OffsetWidgetTrait<A, F>
@@ -64,9 +70,7 @@ pub(crate) trait OffsetWidgetTrait<A, F>
     fn rect(&self) -> BoundBox<D2, i32>;
     fn rect_clipped(&self) -> Option<BoundBox<D2, i32>>;
     fn set_rect(&mut self, rect: BoundBox<D2, i32>);
-    // fn render(&mut self, frame: &mut FrameRectStack<F>) {
-    //     self.widget.render(frame);
-    // }
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>);
     fn on_widget_event(
         &mut self,
         event: WidgetEvent,
@@ -119,9 +123,9 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
     fn set_rect(&mut self, rect: BoundBox<D2, i32>) {
         *self.widget.rect_mut() = rect - self.offset;
     }
-    // fn render(&mut self, frame: &mut FrameRectStack<F>) {
-    //     self.widget.render(frame);
-    // }
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
+        self.widget.render(frame);
+    }
     fn on_widget_event(
         &mut self,
         event: WidgetEvent,
