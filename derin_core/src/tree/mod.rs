@@ -146,7 +146,7 @@ pub trait Widget<A, F: RenderFrame> {
         source_child: &[WidgetIdent]
     ) -> EventOps<A, F>;
 
-    fn update_layout(&mut self) {}
+    fn update_layout(&mut self, _theme: &F::Theme) {}
     fn size_bounds(&self) -> SizeBounds {
         SizeBounds::default()
     }
@@ -190,8 +190,8 @@ impl<'a, A, F, W> Widget<A, F> for &'a mut W
         W::on_widget_event(self, event, input_state, popups, source_child)
     }
 
-    fn update_layout(&mut self) {
-        W::update_layout(self)
+    fn update_layout(&mut self, theme: &F::Theme) {
+        W::update_layout(self, theme)
     }
     fn size_bounds(&self) -> SizeBounds {
         W::size_bounds(self)
@@ -239,8 +239,8 @@ impl<A, F, W> Widget<A, F> for Box<W>
         W::on_widget_event(self, event, input_state, popups, source_child)
     }
 
-    fn update_layout(&mut self) {
-        W::update_layout(self)
+    fn update_layout(&mut self, theme: &F::Theme) {
+        W::update_layout(self, theme)
     }
     fn size_bounds(&self) -> SizeBounds {
         W::size_bounds(self)
@@ -276,12 +276,12 @@ pub trait Parent<A, F: RenderFrame>: Widget<A, F> {
     fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>>;
     fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>>;
 
-    fn children<'a, G, R>(&'a self, for_each: G) -> Option<R>
+    fn children<'a, G>(&'a self, for_each: G)
         where A: 'a,
-              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow<R>;
-    fn children_mut<'a, G, R>(&'a mut self, for_each: G) -> Option<R>
+              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow;
+    fn children_mut<'a, G>(&'a mut self, for_each: G)
         where A: 'a,
-              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow<R>;
+              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow;
 }
 
 impl<'a, W: ?Sized> WidgetSummary<&'a W> {
