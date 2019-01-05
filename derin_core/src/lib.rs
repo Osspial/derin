@@ -122,11 +122,11 @@ pub enum WindowEvent {
 /// Whether to continue or abort a loop.
 #[must_use]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum LoopFlow<R> {
+pub enum LoopFlow {
     /// Continue the loop.
     Continue,
-    /// Abort the loop, returning the contained value.
-    Break(R)
+    /// Abort the loop.
+    Break
 }
 
 #[must_use]
@@ -220,7 +220,7 @@ impl<A, N, F> Root<A, N, F>
                     Some(path) => path,
                     None => continue
                 };
-                widget.update_layout();
+                widget.update_layout(&self.theme);
                 let size_bounds = widget.size_bounds();
                 let widget_dims = widget.rect().dims();
                 if size_bounds.bound_rect(widget_dims) != widget_dims {
@@ -318,16 +318,6 @@ impl<A, F> FrameEventProcessor<'_, A, F>
 
         EventLoopResult {
             wait_until_call_timer: None
-        }
-    }
-}
-
-impl<T> Into<Option<T>> for LoopFlow<T> {
-    #[inline]
-    fn into(self) -> Option<T> {
-        match self {
-            LoopFlow::Continue => None,
-            LoopFlow::Break(t) => Some(t)
         }
     }
 }

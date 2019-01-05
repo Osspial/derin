@@ -382,7 +382,7 @@ impl<A, F> TranslatorActive<'_, '_, A, F>
                                     widget_as_parent.children_mut(|child_summary| {
                                         if child_summary.widget.rect().contains(new_pos) {
                                             enter_child_opt = Some((child_summary.widget.widget_tag().widget_id, child_summary.ident));
-                                            LoopFlow::Break(())
+                                            LoopFlow::Break
                                         } else {
                                             LoopFlow::Continue
                                         }

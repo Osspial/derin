@@ -23,7 +23,7 @@ use std::mem;
 
 const CHILD_BATCH_SIZE: usize = 24;
 
-pub type ForEachSummary<'a, W> = &'a mut FnMut(ArrayVec<[WidgetSummary<W>; CHILD_BATCH_SIZE]>) -> LoopFlow<()>;
+pub type ForEachSummary<'a, W> = &'a mut FnMut(ArrayVec<[WidgetSummary<W>; CHILD_BATCH_SIZE]>) -> LoopFlow;
 pub trait ParentDyn<A, F: RenderFrame>: Widget<A, F> {
     fn as_widget(&mut self) -> &mut Widget<A, F>;
     fn num_children(&self) -> usize;
@@ -66,13 +66,13 @@ impl<A, F, P> ParentDyn<A, F> for P
     fn children<'a>(&'a self, for_each: ForEachSummary<&'a Widget<A, F>>) {
         let mut child_avec: ArrayVec<[_; CHILD_BATCH_SIZE]> = ArrayVec::new();
 
-        <Self as Parent<A, F>>::children::<_, ()>(self, |summary| {
+        <Self as Parent<A, F>>::children::<_>(self, |summary| {
             match child_avec.try_push(summary) {
                 Ok(()) => (),
                 Err(caperr) => {
                     let full_avec = mem::replace(&mut child_avec, ArrayVec::new());
                     match for_each(full_avec) {
-                        LoopFlow::Break(_) => return LoopFlow::Break(()),
+                        LoopFlow::Break => return LoopFlow::Break,
                         LoopFlow::Continue => ()
                     }
                     child_avec.push(caperr.element());
@@ -89,13 +89,13 @@ impl<A, F, P> ParentDyn<A, F> for P
     fn children_mut<'a>(&'a mut self, for_each: ForEachSummary<&'a mut Widget<A, F>>) {
         let mut child_avec: ArrayVec<[_; CHILD_BATCH_SIZE]> = ArrayVec::new();
 
-        <Self as Parent<A, F>>::children_mut::<_, ()>(self, |summary| {
+        <Self as Parent<A, F>>::children_mut::<_>(self, |summary| {
             match child_avec.try_push(summary) {
                 Ok(()) => (),
                 Err(caperr) => {
                     let full_avec = mem::replace(&mut child_avec, ArrayVec::new());
                     match for_each(full_avec) {
-                        LoopFlow::Break(_) => return LoopFlow::Break(()),
+                        LoopFlow::Break => return LoopFlow::Break,
                         LoopFlow::Continue => ()
                     }
                     child_avec.push(caperr.element());
