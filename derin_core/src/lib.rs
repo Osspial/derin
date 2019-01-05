@@ -27,15 +27,13 @@ pub mod timer;
 #[macro_use]
 pub mod tree;
 pub mod event;
-pub mod popup;
 pub mod render;
 
-// TODO: UNPUBLICIZE
-pub mod mbseq;
-pub mod offset_widget;
-pub mod event_translator;
-pub mod update_state;
-pub mod widget_traverser;
+mod mbseq;
+mod offset_widget;
+mod event_translator;
+mod update_state;
+mod widget_traverser;
 
 use crate::cgmath::{Point2, Vector2, Bounded};
 use cgmath_geometry::{D2, rect::{DimsBox, GeoBox}};
@@ -45,7 +43,6 @@ use crate::{
     event_translator::EventTranslator,
     timer::TimerList,
     tree::*,
-    popup::PopupMap,
     render::{Renderer, RenderFrame, RenderFrameClipped},
     mbseq::MouseButtonSequenceTrackPos,
     offset_widget::OffsetWidgetTrait,
@@ -90,7 +87,6 @@ pub struct Root<A, N, F>
     // User data
     pub root_widget: N,
     pub theme: F::Theme,
-    popup_widgets: PopupMap<A, F>,
 }
 
 struct InputState {
@@ -179,7 +175,6 @@ impl<A, N, F> Root<A, N, F>
             update_state: UpdateState::new(),
 
             root_widget, theme,
-            popup_widgets: PopupMap::new(),
         }
     }
 
