@@ -18,10 +18,9 @@ use self::dynamic::ParentDyn;
 use crate::{
     LoopFlow,
     mbseq::MouseButtonSequence,
-    event::{WidgetEvent, EventOps, InputState},
+    event::{WidgetEventSourced, EventOps, InputState},
     render::{RenderFrame, RenderFrameClipped},
     timer::TimerRegister,
-    popup::ChildPopupsMut,
     update_state::{UpdateStateShared, UpdateStateCell}
 };
 use derin_common_types::{
@@ -140,11 +139,9 @@ pub trait Widget<A, F: RenderFrame> {
     fn render(&mut self, frame: &mut RenderFrameClipped<F>);
     fn on_widget_event(
         &mut self,
-        event: WidgetEvent,
+        event: WidgetEventSourced<'_>,
         input_state: InputState,
-        popups: Option<ChildPopupsMut<A, F>>,
-        source_child: &[WidgetIdent]
-    ) -> EventOps<A, F>;
+    ) -> EventOps<A>;
 
     fn update_layout(&mut self, _theme: &F::Theme) {}
     fn size_bounds(&self) -> SizeBounds {
@@ -182,12 +179,10 @@ impl<'a, A, F, W> Widget<A, F> for &'a mut W
     }
     fn on_widget_event(
         &mut self,
-        event: WidgetEvent,
+        event: WidgetEventSourced<'_>,
         input_state: InputState,
-        popups: Option<ChildPopupsMut<A, F>>,
-        source_child: &[WidgetIdent]
-    ) -> EventOps<A, F> {
-        W::on_widget_event(self, event, input_state, popups, source_child)
+    ) -> EventOps<A> {
+        W::on_widget_event(self, event, input_state)
     }
 
     fn update_layout(&mut self, theme: &F::Theme) {
@@ -231,12 +226,10 @@ impl<A, F, W> Widget<A, F> for Box<W>
     }
     fn on_widget_event(
         &mut self,
-        event: WidgetEvent,
+        event: WidgetEventSourced<'_>,
         input_state: InputState,
-        popups: Option<ChildPopupsMut<A, F>>,
-        source_child: &[WidgetIdent]
-    ) -> EventOps<A, F> {
-        W::on_widget_event(self, event, input_state, popups, source_child)
+    ) -> EventOps<A> {
+        W::on_widget_event(self, event, input_state)
     }
 
     fn update_layout(&mut self, theme: &F::Theme) {

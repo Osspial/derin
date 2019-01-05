@@ -3,7 +3,7 @@ mod dispatcher;
 use crate::{
     WindowEvent, InputState, LoopFlow,
     cgmath::Vector2,
-    event::{FocusSource, MouseHoverChange, WidgetEvent},
+    event::{FocusSource, MouseHoverChange, WidgetEvent, WidgetEventSourced},
     tree::*,
     timer::TimerList,
     render::RenderFrame,
@@ -290,7 +290,6 @@ impl<A, F> TranslatorActive<'_, '_, A, F>
                         bubble,
                         cursor_pos,
                         cursor_icon,
-                        popup
                     } = ops;
                     if let Some(action) = action {
                         actions.push(action);
@@ -363,14 +362,12 @@ impl<A, F> TranslatorActive<'_, '_, A, F>
                         let mut send_exiting_from_child = |widget: &mut OffsetWidget<'_, dyn Widget<A, F>>, in_widget| {
                             if let Some(child_ident) = exiting_from_child.clone() {
                                 perform_event_ops(widget.on_widget_event(
-                                    WidgetEvent::MouseMove {
+                                    WidgetEventSourced::This(WidgetEvent::MouseMove {
                                         old_pos, new_pos,
                                         in_widget,
                                         hover_change: Some(MouseHoverChange::ExitChild(child_ident)),
-                                    },
+                                    }),
                                     input_state,
-                                    None, // TODO: POPUPS
-                                    &[]
                                 ));
                             }
                         };
@@ -393,28 +390,24 @@ impl<A, F> TranslatorActive<'_, '_, A, F>
 
                                 if !contains_old {
                                     perform_event_ops(widget.on_widget_event(
-                                        WidgetEvent::MouseMove {
+                                        WidgetEventSourced::This(WidgetEvent::MouseMove {
                                             old_pos, new_pos,
                                             in_widget: enter_child_opt.is_none(),
                                             hover_change: Some(MouseHoverChange::Enter)
-                                        },
+                                        }),
                                         input_state,
-                                        None, // TODO: POPUPS
-                                        &[]
                                     ));
                                 }
 
                                 match enter_child_opt {
                                     Some((enter_child_id, enter_child_ident)) => {
                                         perform_event_ops(widget.on_widget_event(
-                                            WidgetEvent::MouseMove {
+                                            WidgetEventSourced::This(WidgetEvent::MouseMove {
                                                 old_pos, new_pos,
                                                 in_widget: false,
                                                 hover_change: Some(MouseHoverChange::EnterChild(enter_child_ident))
-                                            },
+                                            }),
                                             input_state,
-                                            None, // TODO: POPUPS
-                                            &[]
                                         ));
                                         event_dispatcher.queue_event(
                                             EventDestination::Widget(enter_child_id),
@@ -427,14 +420,12 @@ impl<A, F> TranslatorActive<'_, '_, A, F>
                                     None => {
                                         if contains_old && exiting_from_child.is_none() {
                                             perform_event_ops(widget.on_widget_event(
-                                                WidgetEvent::MouseMove {
+                                                WidgetEventSourced::This(WidgetEvent::MouseMove {
                                                     old_pos, new_pos,
                                                     in_widget: enter_child_opt.is_none(),
                                                     hover_change: None
-                                                },
+                                                }),
                                                 input_state,
-                                                None, // TODO: POPUPS
-                                                &[]
                                             ));
                                         }
                                         input_state.mouse_hover_widget = Some(widget_id);
@@ -445,14 +436,12 @@ impl<A, F> TranslatorActive<'_, '_, A, F>
                                 send_exiting_from_child(&mut widget, contains_new);
 
                                 perform_event_ops(widget.on_widget_event(
-                                    WidgetEvent::MouseMove {
+                                    WidgetEventSourced::This(WidgetEvent::MouseMove {
                                         old_pos, new_pos,
                                         in_widget: false,
                                         hover_change: Some(MouseHoverChange::Exit),
-                                    },
+                                    }),
                                     input_state,
-                                    None,
-                                    &[]
                                 ));
                                 event_dispatcher.queue_event(
                                     EventDestination::Relation(widget_id, Relation::Parent),
@@ -469,10 +458,8 @@ impl<A, F> TranslatorActive<'_, '_, A, F>
                             unimplemented!()
                         }
                         perform_event_ops(widget.on_widget_event(
-                            event,
+                            WidgetEventSourced::This(event),
                             input_state,
-                            None,
-                            &[]
                         ))
                     }
                 }

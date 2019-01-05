@@ -14,10 +14,9 @@
 
 use crate::{
     {LoopFlow, InputState},
-    popup::ChildPopupsMut,
     tree::{Widget, WidgetIdent, WidgetTag, WidgetSummary},
     tree::dynamic::ParentDyn,
-    event::{InputState as EventInputState, WidgetEvent, EventOps},
+    event::{InputState as EventInputState, WidgetEventSourced, EventOps},
     render::{RenderFrame, RenderFrameClipped},
     timer::TimerRegister,
 };
@@ -73,11 +72,9 @@ pub(crate) trait OffsetWidgetTrait<A, F>
     fn render(&mut self, frame: &mut RenderFrameClipped<F>);
     fn on_widget_event(
         &mut self,
-        event: WidgetEvent,
+        event: WidgetEventSourced,
         input_state: &InputState,
-        popups: Option<ChildPopupsMut<A, F>>,
-        source_child: &[WidgetIdent]
-    ) -> EventOps<A, F>;
+    ) -> EventOps<A>;
 
     // fn subtrait(&self) -> WidgetSubtrait<A, F>;
     // fn subtrait_mut(&mut self) -> WidgetSubtraitMut<A, F>;
@@ -128,11 +125,9 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
     }
     fn on_widget_event(
         &mut self,
-        event: WidgetEvent,
+        event: WidgetEventSourced,
         input_state: &InputState,
-        popups: Option<ChildPopupsMut<A, F>>,
-        source_child: &[WidgetIdent]
-    ) -> EventOps<A, F>
+    ) -> EventOps<A>
     {
         let InputState {
             mouse_pos,
@@ -165,14 +160,9 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
             keys_down
         };
         let mut ops = self.widget.on_widget_event(
-            event.translate(-offset),
+            event.map(|e| e.translate(-offset)),
             input_state,
-            popups,
-            source_child
         );
-        if let Some((_, ref mut popup_attributes)) = ops.popup {
-            popup_attributes.rect = popup_attributes.rect + offset;
-        }
         if let Some(ref mut cursor_pos) = ops.cursor_pos {
             *cursor_pos += offset;
         }

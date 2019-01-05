@@ -17,13 +17,12 @@ use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
 use crate::cgmath::{Point2, Vector2};
 use crate::tree::{Widget, WidgetIdent};
 use crate::render::RenderFrame;
-use crate::popup::PopupAttributes;
 
 use std::time::{Instant, Duration};
 
 /// The set of operations to be performed after an event is processed by a widget.
 #[derive(Default)]
-pub struct EventOps<A, F: RenderFrame> {
+pub struct EventOps<A> {
     /// Deliver the given action to the Derin action loop.
     pub action: Option<A>,
     /// Change the keyboard focus to the given widget.
@@ -41,11 +40,6 @@ pub struct EventOps<A, F: RenderFrame> {
     /// Note that this change is permanent, and isn't reset to the default cursor until another
     /// `cursor_icon` operation is recieved.
     pub cursor_icon: Option<CursorIcon>,
-    /// Create a popup window with the given attributes.
-    ///
-    /// This *does not count as a child widget*, and events bubbled from the popup will not be
-    /// delivered to the current widget.
-    pub popup: Option<(Box<Widget<A, F>>, PopupAttributes)>
 }
 
 /// Changes the keyboard focus, removing the focus from another widget if necessary.
@@ -115,6 +109,14 @@ pub enum MouseHoverChange {
     EnterChild(WidgetIdent),
     /// The mouse cursor has exited a child.
     ExitChild(WidgetIdent),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WidgetEventSourced<'a> {
+    /// The event was dispatched directly to this widget.
+    This(WidgetEvent),
+    /// The event was dispatched to the specified child widget, and got bubbled up to this widget.
+    Bubble(WidgetEvent, &'a [WidgetIdent])
 }
 
 /// Direct user input and timers, which are recieved and handled by widgets through the
@@ -200,6 +202,22 @@ pub enum WidgetEvent {
         /// The number of times this timer has been triggered, not including this trigger.
         times_triggered: u64
     },
+}
+
+impl WidgetEventSourced<'_> {
+    pub fn unwrap(self) -> WidgetEvent {
+        match self {
+            WidgetEventSourced::This(event) |
+            WidgetEventSourced::Bubble(event, _) => event
+        }
+    }
+
+    pub fn map(self, f: impl FnOnce(WidgetEvent) -> WidgetEvent) -> Self {
+        match self {
+            WidgetEventSourced::This(event) => WidgetEventSourced::This(f(event)),
+            WidgetEventSourced::Bubble(event, bubble) => WidgetEventSourced::Bubble(f(event), bubble),
+        }
+    }
 }
 
 impl WidgetEvent {

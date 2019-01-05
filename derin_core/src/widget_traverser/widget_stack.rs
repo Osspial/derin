@@ -48,7 +48,7 @@ pub(crate) struct WidgetStack<'a, A: 'static, F: 'a + RenderFrame> {
     top_parent_offset: Vector2<i32>,
 }
 
-pub(crate) type OffsetWidgetPath<'a, A: 'static, F: 'a + RenderFrame> = WidgetPath<'a, OffsetWidget<'a, dyn Widget<A, F>>>;
+pub(crate) type OffsetWidgetPath<'a, A, F> = WidgetPath<'a, OffsetWidget<'a, dyn Widget<A, F>>>;
 
 pub(crate) struct WidgetPath<'a, W> {
     pub widget: W,
