@@ -71,7 +71,7 @@ pub use crate::core::LoopFlow;
 
 /// `WidgetEvent` type and associated helpers.
 pub mod event {
-    pub use crate::core::event::{EventOps, InputState, MouseDown, FocusChange, WidgetEvent};
+    pub use crate::core::event::{EventOps, InputState, MouseDown, FocusChange, WidgetEvent, WidgetEventSourced, MouseHoverChange};
     pub use derin_common_types::buttons::{ModifierKeys, Key, MouseButton};
 }
 

@@ -92,7 +92,7 @@ pub struct Root<A, N, F>
 struct InputState {
     mouse_pos: Option<Point2<i32>>,
     mouse_buttons_down: MouseButtonSequenceTrackPos,
-    pub modifiers: ModifierKeys,
+    modifiers: ModifierKeys,
     keys_down: Vec<Key>,
     mouse_hover_widget: Option<WidgetID>,
     focused_widget: Option<WidgetID>
@@ -188,17 +188,24 @@ impl<A, N, F> Root<A, N, F>
             input_state: &mut self.input_state,
             event_translator: &mut self.event_translator,
             update_state: self.update_state.clone(),
-            widget_traverser: self.widget_traverser_base.with_root_ref(&mut self.root_widget)
+            widget_traverser: self.widget_traverser_base.with_root_ref(&mut self.root_widget, self.update_state.clone())
         }
     }
 
     pub fn relayout(&mut self) {
-        let mut widget_traverser = self.widget_traverser_base.with_root_ref(&mut self.root_widget);
+        let mut widget_traverser = self.widget_traverser_base.with_root_ref(&mut self.root_widget, self.update_state.clone());
 
         let mut relayout_widgets = Vec::new();
 
-        while self.update_state.borrow().relayout.len() > 0 {
-            relayout_widgets.extend(self.update_state.borrow_mut().relayout.drain());
+        let global_update = self.update_state.borrow().global_update;
+        while global_update || self.update_state.borrow().relayout.len() > 0 {
+            match global_update {
+                false => relayout_widgets.extend(self.update_state.borrow_mut().relayout.drain()),
+                true => {
+                    self.update_state.borrow_mut().relayout.clear();
+                    relayout_widgets.extend(widget_traverser.all_widgets());
+                }
+            }
 
             let valid_len = widget_traverser.sort_widgets_by_depth(&mut relayout_widgets).len();
             relayout_widgets.truncate(valid_len);
@@ -215,16 +222,36 @@ impl<A, N, F> Root<A, N, F>
                     Some(path) => path,
                     None => continue
                 };
+
+                let old_widget_rect = widget.rect();
                 widget.update_layout(&self.theme);
                 let size_bounds = widget.size_bounds();
-                let widget_dims = widget.rect().dims();
-                if size_bounds.bound_rect(widget_dims) != widget_dims {
+                let new_widget_rect = widget.rect();
+                let widget_dims = new_widget_rect.dims();
+                drop(widget);
+
+                // If we're doing a global update, all widgets are in the relayout list so we don't
+                // need to queue the part for relayout. Otherwise, queue the parent for relayout if
+                // the widget's rect has changed or the widget's dimensions no longer fall in its size
+                // bounds.
+                let parent_needs_relayout =
+                    size_bounds.bound_rect(widget_dims) != widget_dims ||
+                    old_widget_rect != new_widget_rect;
+
+                if !global_update && parent_needs_relayout {
                     if let Some(WidgetPath{widget_id: parent_id, ..}) = widget_traverser.get_widget_relation(widget_id, Relation::Parent) {
                         // This can push duplicate relayout requests to the `relayout_widgets` queue
                         // if multiple children aren't in their size bounds. We handle that above.
                         relayout_widgets.push(parent_id);
                     }
                 }
+            }
+
+            // Remove all re-layed-out widgets from the list.
+            relayout_widgets.drain(..valid_len);
+
+            if global_update {
+                break;
             }
         }
     }
@@ -247,15 +274,16 @@ impl<A, N, F> Root<A, N, F>
         } = *self;
 
         let mut update_state = update_state.borrow_mut();
-        if update_state.redraw.len() > 0 {
+        if update_state.global_update || update_state.redraw.len() > 0 {
             // We should probably support incremental redraw at some point but not doing that is
             // soooo much easier.
             update_state.redraw.clear();
+            update_state.reset_global_update();
             drop(update_state);
 
             let (mut frame, window_rect) = renderer.make_frame();
 
-            let mut widget_traverser = widget_traverser_base.with_root_ref(root_widget);
+            let mut widget_traverser = widget_traverser_base.with_root_ref(root_widget, self.update_state.clone());
             widget_traverser.crawl_widgets(|mut path| {
                 let widget_rect = path.widget.rect();
                 let mut render_frame_clipped = RenderFrameClipped {
@@ -270,6 +298,7 @@ impl<A, N, F> Root<A, N, F>
 
             renderer.finish_frame(theme);
         }
+
     }
 }
 
@@ -297,6 +326,10 @@ impl<A, F> FrameEventProcessor<'_, A, F>
                 update_state.clone(),
             )
             .translate_window_event(event);
+    }
+
+    pub fn set_modifiers(&mut self, modifiers: ModifierKeys) {
+        self.input_state.modifiers = modifiers;
     }
 
     pub fn finish(mut self) -> EventLoopResult {

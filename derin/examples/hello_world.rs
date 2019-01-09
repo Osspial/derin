@@ -36,7 +36,7 @@ fn main() {
         derin::theme::Theme::default()
     ).unwrap() };
 
-    let _: Option<()> = window.run_forever(
+    window.run_forever(
         // Whenever an action is recieved from a widget, this function is called.
         |print_string, _, _| {
             // Print out strings passed to the action function.

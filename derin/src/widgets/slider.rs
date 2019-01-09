@@ -13,10 +13,9 @@
 // limitations under the License.
 
 use crate::widgets::assistants::SliderAssist;
-use crate::event::{EventOps, WidgetEvent, InputState, MouseButton};
+use crate::event::{EventOps, WidgetEvent, InputState, MouseButton, WidgetEventSourced};
 use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
 use crate::core::render::{RenderFrameClipped, Theme};
-use crate::core::popup::ChildPopupsMut;
 use crate::theme::RescaleRules;
 
 use crate::cgmath::Point2;
@@ -190,13 +189,13 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
     }
 
     #[inline]
-    fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<H::Action, F>>, bubble_source: &[WidgetIdent]) -> EventOps<H::Action, F> {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps<H::Action> {
         let mut action = None;
-        if bubble_source.len() == 0 {
+        if let WidgetEventSourced::This(ref event) = event {
             let start_value = self.assist.value;
             match event {
                 WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left} => {
-                    self.assist.click_head(pos);
+                    self.assist.click_head(*pos);
                     self.widget_tag.request_redraw();
                 },
                 WidgetEvent::MouseMove{new_pos, ..} => {
@@ -219,7 +218,6 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
             bubble: event.default_bubble(),
             cursor_pos: None,
             cursor_icon: None,
-            popup: None
         }
     }
 }

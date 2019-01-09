@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::core::event::{EventOps, WidgetEvent, InputState};
+use crate::core::event::{EventOps, WidgetEvent, WidgetEventSourced, InputState};
 use crate::core::tree::{WidgetIdent, WidgetTag, Widget, };
 use crate::core::render::RenderFrameClipped;
-use crate::core::popup::ChildPopupsMut;
 use crate::core::timer::TimerRegister;
 
 use crate::cgmath::Point2;
@@ -37,23 +36,17 @@ pub trait DirectRenderState<A> {
     type RenderType;
 
     fn render(&mut self, _: &mut Self::RenderType);
-    fn on_widget_event<F>(
+    fn on_widget_event(
         &mut self,
         _event: WidgetEvent,
         _input_state: InputState,
-        _popups: Option<ChildPopupsMut<A, F>>,
-        _source_child: &[WidgetIdent],
-        _refresh_rate: &mut Option<Duration>
-    ) -> EventOps<A, F>
-        where F: PrimFrame<DirectRender = Self::RenderType>
-    {
+    ) -> EventOps<A> {
         EventOps {
             action: None,
             focus: None,
             bubble: true,
             cursor_pos: None,
             cursor_icon: None,
-            popup: None
         }
     }
 }
@@ -82,7 +75,7 @@ impl<R> DirectRender<R> {
     }
 
     pub fn set_refresh_rate(&mut self, refresh_rate: Option<Duration>) {
-        self.widget_tag.mark_update_timer();
+        // self.widget_tag.mark_update_timer();
         self.refresh_rate = refresh_rate;
     }
 }
@@ -124,15 +117,17 @@ impl<A, F, R> Widget<A, F> for DirectRender<R>
     }
 
     #[inline]
-    fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, popups: Option<ChildPopupsMut<A, F>>, source_child: &[WidgetIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps<A> {
+        let event = event.unwrap();
+
         if let WidgetEvent::Timer{name: "render_refresh", ..} = event {
             self.widget_tag.request_redraw();
         }
         let old_refresh_rate = self.refresh_rate;
-        let ops = self.render_state.on_widget_event(event, input_state, popups, source_child, &mut self.refresh_rate);
-        if old_refresh_rate != self.refresh_rate {
-            self.widget_tag.mark_update_timer();
-        }
+        let ops = self.render_state.on_widget_event(event, input_state);
+        // if old_refresh_rate != self.refresh_rate {
+        //     self.widget_tag.mark_update_timer();
+        // }
 
         ops
     }

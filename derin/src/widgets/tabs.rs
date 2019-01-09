@@ -17,10 +17,9 @@ use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 use crate::core::LoopFlow;
-use crate::core::event::{EventOps, WidgetEvent, InputState};
-use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
+use crate::core::event::{EventOps, WidgetEvent, WidgetEventSourced, InputState};
+use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent};
 use crate::core::render::RenderFrameClipped;
-use crate::core::popup::ChildPopupsMut;
 use derin_common_types::layout::{SizeBounds, WidgetPos, GridSize, WidgetSpan, TrackHints};
 
 use std::cell::RefCell;
@@ -104,7 +103,7 @@ impl<W> TabList<W> {
     /// Calling this function forces the tab list to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn tabs_mut(&mut self) -> &mut Vec<TabPage<W>> {
-        self.widget_tag.mark_update_child().request_relayout().request_redraw();
+        self.widget_tag.request_relayout().request_redraw();
         &mut self.tabs
     }
 }
@@ -174,13 +173,14 @@ impl<A, F, W> Widget<A, F> for TabList<W>
     }
 
     #[inline]
-    fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, bubble_source: &[WidgetIdent]) -> EventOps<A, F> {
-        if bubble_source.len() == 0 {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps<A> {
+        // TODO: PASS FOCUS TO CHILD
+        if let WidgetEventSourced::This(ref event) = event {
             match event {
                 WidgetEvent::MouseMove{new_pos, in_widget: true, ..} => {
                     let mut state_changed = false;
                     for tab in self.tabs.iter_mut() {
-                        let new_state = match (tab.button_state, tab.rect.contains(new_pos)) {
+                        let new_state = match (tab.button_state, tab.rect.contains(*new_pos)) {
                             (ButtonState::Pressed, _) => ButtonState::Pressed,
                             (_, true) => ButtonState::Hover,
                             (_, false) => ButtonState::Normal,
@@ -192,24 +192,24 @@ impl<A, F, W> Widget<A, F> for TabList<W>
                         self.widget_tag.request_redraw();
                     }
                 },
-                WidgetEvent::MouseEnterChild{..} => {
-                    let mut state_changed = false;
-                    for tab in self.tabs.iter_mut() {
-                        let new_state = match tab.button_state {
-                            ButtonState::Pressed => ButtonState::Pressed,
-                            _ => ButtonState::Normal,
-                        };
-                        state_changed |= new_state != tab.button_state;
-                        tab.button_state = new_state;
-                    }
-                    if state_changed {
-                        self.widget_tag.request_redraw();
-                    }
-                }
+                // WidgetEvent::MouseEnterChild{..} => {
+                //     let mut state_changed = false;
+                //     for tab in self.tabs.iter_mut() {
+                //         let new_state = match tab.button_state {
+                //             ButtonState::Pressed => ButtonState::Pressed,
+                //             _ => ButtonState::Normal,
+                //         };
+                //         state_changed |= new_state != tab.button_state;
+                //         tab.button_state = new_state;
+                //     }
+                //     if state_changed {
+                //         self.widget_tag.request_redraw();
+                //     }
+                // }
                 WidgetEvent::MouseDown{pos, in_widget: true, ..} => {
                     let mut state_changed = false;
                     for tab in self.tabs.iter_mut() {
-                        let new_state = match tab.rect.contains(pos) {
+                        let new_state = match tab.rect.contains(*pos) {
                             true => ButtonState::Pressed,
                             false => tab.button_state
                         };
@@ -225,8 +225,8 @@ impl<A, F, W> Widget<A, F> for TabList<W>
                     let mut state_changed = false;
                     let (mut old_open, mut new_open) = (None, None);
                     for (index, tab) in self.tabs.iter_mut().enumerate() {
-                        let tab_contains = tab.rect.contains(pos);
-                        let is_open = tab_contains && tab.rect.contains(down_pos);
+                        let tab_contains = tab.rect.contains(*pos);
+                        let is_open = tab_contains && tab.rect.contains(*down_pos);
                         let new_state = match tab_contains {
                             true => ButtonState::Hover,
                             false => ButtonState::Normal
@@ -268,78 +268,13 @@ impl<A, F, W> Widget<A, F> for TabList<W>
         EventOps {
             action: None,
             focus: None,
-            bubble: event.default_bubble() || bubble_source.len() != 0,
+            bubble: event.default_bubble() || event.is_bubble(),
             cursor_pos: None,
             cursor_icon: None,
-            popup: None
         }
     }
 
-    fn accepts_focus(&self) -> OnFocus {
-        OnFocus::FocusChild
-    }
-}
-
-impl<A, F, W> Parent<A, F> for TabList<W>
-    where A: 'static,
-          F: PrimFrame,
-          W: Widget<A, F>
-{
-    fn num_children(&self) -> usize {
-        self.tabs.len()
-    }
-
-    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>> {
-        if let WidgetIdent::Num(index) = widget_ident {
-            self.tabs.get(index as usize).map(|t| WidgetSummary::new(widget_ident, index as usize, &t.page).to_dyn())
-        } else {
-            None
-        }
-    }
-    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>> {
-        if let WidgetIdent::Num(index) = widget_ident {
-            self.tabs.get_mut(index as usize).map(|t| WidgetSummary::new_mut(widget_ident, index as usize, &mut t.page).to_dyn_mut())
-        } else {
-            None
-        }
-    }
-
-    fn children<'a, G, R>(&'a self, mut for_each: G) -> Option<R>
-        where A: 'a,
-              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow<R>
-    {
-        for (index, tab) in self.tabs.iter().enumerate() {
-            match for_each(WidgetSummary::new(WidgetIdent::Num(index as u32), index, &tab.page)) {
-                LoopFlow::Continue => (),
-                LoopFlow::Break(r) => return Some(r)
-            }
-        }
-
-        None
-    }
-
-    fn children_mut<'a, G, R>(&'a mut self, mut for_each: G) -> Option<R>
-        where A: 'a,
-              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow<R>
-    {
-        for (index, tab) in self.tabs.iter_mut().enumerate() {
-            match for_each(WidgetSummary::new_mut(WidgetIdent::Num(index as u32), index, &mut tab.page)) {
-                LoopFlow::Continue => (),
-                LoopFlow::Break(r) => return Some(r)
-            }
-        }
-
-        None
-    }
-
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>> {
-        self.tabs.get(index).map(|t| WidgetSummary::new(WidgetIdent::Num(index as u32), index, &t.page).to_dyn())
-    }
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
-        self.tabs.get_mut(index).map(|t| WidgetSummary::new_mut(WidgetIdent::Num(index as u32), index, &mut t.page).to_dyn_mut())
-    }
-
-    fn update_child_layout(&mut self) {
+    fn update_layout(&mut self, _: &F::Theme) {
         #[derive(Default)]
         struct HeapCache {
             update_heap_cache: UpdateHeapCache,
@@ -442,5 +377,61 @@ impl<A, F, W> Parent<A, F> for TabList<W>
 
             hints_vec.clear();
         })
+    }
+}
+
+impl<A, F, W> Parent<A, F> for TabList<W>
+    where A: 'static,
+          F: PrimFrame,
+          W: Widget<A, F>
+{
+    fn num_children(&self) -> usize {
+        self.tabs.len()
+    }
+
+    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>> {
+        if let WidgetIdent::Num(index) = widget_ident {
+            self.tabs.get(index as usize).map(|t| WidgetSummary::new(widget_ident, index as usize, &t.page).to_dyn())
+        } else {
+            None
+        }
+    }
+    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>> {
+        if let WidgetIdent::Num(index) = widget_ident {
+            self.tabs.get_mut(index as usize).map(|t| WidgetSummary::new_mut(widget_ident, index as usize, &mut t.page).to_dyn_mut())
+        } else {
+            None
+        }
+    }
+
+    fn children<'a, G>(&'a self, mut for_each: G)
+        where A: 'a,
+              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow
+    {
+        for (index, tab) in self.tabs.iter().enumerate() {
+            match for_each(WidgetSummary::new(WidgetIdent::Num(index as u32), index, &tab.page)) {
+                LoopFlow::Continue => (),
+                LoopFlow::Break => return
+            }
+        }
+    }
+
+    fn children_mut<'a, G>(&'a mut self, mut for_each: G)
+        where A: 'a,
+              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow
+    {
+        for (index, tab) in self.tabs.iter_mut().enumerate() {
+            match for_each(WidgetSummary::new_mut(WidgetIdent::Num(index as u32), index, &mut tab.page)) {
+                LoopFlow::Continue => (),
+                LoopFlow::Break => return
+            }
+        }
+    }
+
+    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>> {
+        self.tabs.get(index).map(|t| WidgetSummary::new(WidgetIdent::Num(index as u32), index, &t.page).to_dyn())
+    }
+    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
+        self.tabs.get_mut(index).map(|t| WidgetSummary::new_mut(WidgetIdent::Num(index as u32), index, &mut t.page).to_dyn_mut())
     }
 }

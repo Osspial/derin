@@ -13,10 +13,9 @@
 // limitations under the License.
 
 use crate::core::LoopFlow;
-use crate::core::event::{EventOps, WidgetEvent, InputState};
-use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
+use crate::core::event::{EventOps, WidgetEventSourced, InputState};
+use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent};
 use crate::core::render::RenderFrameClipped;
-use crate::core::popup::ChildPopupsMut;
 
 use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
@@ -67,7 +66,6 @@ impl<C, L> Group<C, L>
 
     /// Retrieve the widgets contained within the group, for mutation.
     pub fn container_mut(&mut self) -> &mut C {
-        self.widget_tag.mark_update_child().request_relayout();
         &mut self.container
     }
 }
@@ -116,20 +114,67 @@ impl<A, F, C, L> Widget<A, F> for Group<C, L>
         ]).into_iter());
     }
 
+    fn update_layout(&mut self, _: &F::Theme) {
+        #[derive(Default)]
+        struct HeapCache {
+            update_heap_cache: UpdateHeapCache,
+            hints_vec: Vec<WidgetPos>,
+            rects_vec: Vec<Result<BoundBox<D2, i32>, SolveError>>
+        }
+        thread_local! {
+            static HEAP_CACHE: RefCell<HeapCache> = RefCell::new(HeapCache::default());
+        }
+
+        HEAP_CACHE.with(|hc| {
+            let mut hc = hc.borrow_mut();
+
+            let HeapCache {
+                ref mut update_heap_cache,
+                ref mut hints_vec,
+                ref mut rects_vec
+            } = *hc;
+
+            let num_children = self.num_children();
+            self.container.children::<_>(|summary| {
+                let mut layout_hints = self.layout.positions(summary.ident, summary.index, num_children).unwrap_or(WidgetPos::default());
+                let widget_size_bounds = summary.widget.size_bounds();
+
+                layout_hints.size_bounds = SizeBounds {
+                    min: layout_hints.size_bounds.bound_rect(widget_size_bounds.min),
+                    max: layout_hints.size_bounds.bound_rect(widget_size_bounds.max),
+                };
+                hints_vec.push(layout_hints);
+                rects_vec.push(Ok(BoundBox::new2(0, 0, 0, 0)));
+                LoopFlow::Continue
+            });
+
+            self.layout_engine.desired_size = DimsBox::new2(self.bounds.width(), self.bounds.height());
+            self.layout_engine.set_grid_size(self.layout.grid_size(num_children));
+            self.layout_engine.update_engine(hints_vec, rects_vec, update_heap_cache);
+
+            let mut rects_iter = rects_vec.drain(..);
+            self.container.children_mut::<_>(|summary| {
+                match rects_iter.next() {
+                    Some(rect) => *summary.widget.rect_mut() = rect.unwrap_or(BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF)),
+                    None => return LoopFlow::Break
+                }
+                LoopFlow::Continue
+            });
+
+            hints_vec.clear();
+        })
+    }
+
     #[inline]
-    fn on_widget_event(&mut self, _: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps<A> {
+        // TODO: PASS FOCUS THROUGH SELF
         EventOps {
             action: None,
             focus: None,
             bubble: true,
             cursor_pos: None,
             cursor_icon: None,
-            popup: None
         }
-    }
-
-    fn accepts_focus(&self) -> OnFocus {
-        OnFocus::FocusChild
     }
 }
 
@@ -151,16 +196,16 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
         self.container.child_mut(widget_ident).map(WidgetSummary::to_dyn_mut)
     }
 
-    fn children<'a, G, R>(&'a self, mut for_each: G) -> Option<R>
+    fn children<'a, G>(&'a self, mut for_each: G)
         where A: 'a,
-              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow<R>
+              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow
     {
         self.container.children(|summary| for_each(WidgetSummary::to_dyn(summary)))
     }
 
-    fn children_mut<'a, G, R>(&'a mut self, mut for_each: G) -> Option<R>
+    fn children_mut<'a, G>(&'a mut self, mut for_each: G)
         where A: 'a,
-              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow<R>
+              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow
     {
         self.container.children_mut(|summary| for_each(WidgetSummary::to_dyn_mut(summary)))
     }
@@ -170,56 +215,5 @@ impl<A, F, C, L> Parent<A, F> for Group<C, L>
     }
     fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
         self.container.child_by_index_mut(index).map(WidgetSummary::to_dyn_mut)
-    }
-
-    fn update_child_layout(&mut self) {
-        #[derive(Default)]
-        struct HeapCache {
-            update_heap_cache: UpdateHeapCache,
-            hints_vec: Vec<WidgetPos>,
-            rects_vec: Vec<Result<BoundBox<D2, i32>, SolveError>>
-        }
-        thread_local! {
-            static HEAP_CACHE: RefCell<HeapCache> = RefCell::new(HeapCache::default());
-        }
-
-        HEAP_CACHE.with(|hc| {
-            let mut hc = hc.borrow_mut();
-
-            let HeapCache {
-                ref mut update_heap_cache,
-                ref mut hints_vec,
-                ref mut rects_vec
-            } = *hc;
-
-            let num_children = self.num_children();
-            self.container.children::<_, ()>(|summary| {
-                let mut layout_hints = self.layout.positions(summary.ident, summary.index, num_children).unwrap_or(WidgetPos::default());
-                let widget_size_bounds = summary.widget.size_bounds();
-
-                layout_hints.size_bounds = SizeBounds {
-                    min: layout_hints.size_bounds.bound_rect(widget_size_bounds.min),
-                    max: layout_hints.size_bounds.bound_rect(widget_size_bounds.max),
-                };
-                hints_vec.push(layout_hints);
-                rects_vec.push(Ok(BoundBox::new2(0, 0, 0, 0)));
-                LoopFlow::Continue
-            });
-
-            self.layout_engine.desired_size = DimsBox::new2(self.bounds.width(), self.bounds.height());
-            self.layout_engine.set_grid_size(self.layout.grid_size(num_children));
-            self.layout_engine.update_engine(hints_vec, rects_vec, update_heap_cache);
-
-            let mut rects_iter = rects_vec.drain(..);
-            self.container.children_mut::<_, ()>(|summary| {
-                match rects_iter.next() {
-                    Some(rect) => *summary.widget.rect_mut() = rect.unwrap_or(BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF)),
-                    None => return LoopFlow::Break(())
-                }
-                LoopFlow::Continue
-            });
-
-            hints_vec.clear();
-        })
     }
 }

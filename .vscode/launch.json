@@ -23,10 +23,10 @@
             "name": "(Windows) Launch",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "D:/programming/cargo_shared_target/debug/derin_core-9e904ced83d2be61.exe",
-            "args": ["--nocapture", "mouse_move_enter_child"],
+            "program": "D:/programming/cargo_shared_target/debug/examples/hello_world.exe",
+            // "args": ["run", "--example", "hello_world"],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}",
+            "cwd": "${workspaceFolder}/derin",
             "environment": [],
             "externalConsole": true
         }

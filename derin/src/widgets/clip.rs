@@ -13,10 +13,9 @@
 // limitations under the License.
 
 use crate::core::LoopFlow;
-use crate::core::event::{EventOps, WidgetEvent, InputState};
-use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
+use crate::core::event::{EventOps, WidgetEventSourced, InputState};
+use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent};
 use crate::core::render::RenderFrameClipped;
-use crate::core::popup::ChildPopupsMut;
 
 use crate::cgmath::{EuclideanSpace, Point2};
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
@@ -50,7 +49,6 @@ impl<W> Clip<W> {
 
     /// Retrieves the clipped widget for mutation.
     pub fn widget_mut(&mut self) -> &mut W {
-        self.widget_tag.mark_update_child().request_relayout();
         &mut self.widget
     }
 }
@@ -77,20 +75,26 @@ impl<A, F, W> Widget<A, F> for Clip<W>
 
     fn render(&mut self, _: &mut RenderFrameClipped<F>) {}
 
+    fn update_layout(&mut self, _: &F::Theme) {
+        let widget_rect = self.widget.rect();
+        let size_bounds = self.widget.size_bounds();
+
+        let dims_clipped = size_bounds.bound_rect(widget_rect.dims());
+        if dims_clipped.dims() != widget_rect.dims() {
+            *self.widget.rect_mut() = BoundBox::from(dims_clipped) + widget_rect.min().to_vec();
+        }
+    }
+
     #[inline]
-    fn on_widget_event(&mut self, _: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps<A> {
+        // TODO: PASS FOCUS THROUGH SELF
         EventOps {
             action: None,
             focus: None,
             bubble: true,
             cursor_pos: None,
             cursor_icon: None,
-            popup: None
         }
-    }
-
-    fn accepts_focus(&self) -> OnFocus {
-        OnFocus::FocusChild
     }
 }
 
@@ -115,28 +119,18 @@ impl<A, F, W> Parent<A, F> for Clip<W>
         }
     }
 
-    fn children<'a, G, R>(&'a self, mut for_each: G) -> Option<R>
+    fn children<'a, G>(&'a self, mut for_each: G)
         where A: 'a,
-              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow<R>
+              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow
     {
-        let flow = for_each(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget));
-
-        match flow {
-            LoopFlow::Continue => None,
-            LoopFlow::Break(r) => Some(r)
-        }
+        for_each(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget));
     }
 
-    fn children_mut<'a, G, R>(&'a mut self, mut for_each: G) -> Option<R>
+    fn children_mut<'a, G>(&'a mut self, mut for_each: G)
         where A: 'a,
-              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow<R>
+              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow
     {
-        let flow = for_each(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget));
-
-        match flow {
-            LoopFlow::Continue => None,
-            LoopFlow::Break(r) => Some(r)
-        }
+        for_each(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget));
     }
 
     fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>> {
@@ -149,16 +143,6 @@ impl<A, F, W> Parent<A, F> for Clip<W>
         match index {
             0 => Some(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget)),
             _ => None
-        }
-    }
-
-    fn update_child_layout(&mut self) {
-        let widget_rect = self.widget.rect();
-        let size_bounds = self.widget.size_bounds();
-
-        let dims_clipped = size_bounds.bound_rect(widget_rect.dims());
-        if dims_clipped.dims() != widget_rect.dims() {
-            *self.widget.rect_mut() = BoundBox::from(dims_clipped) + widget_rect.min().to_vec();
         }
     }
 }

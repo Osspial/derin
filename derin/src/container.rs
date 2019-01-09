@@ -53,38 +53,44 @@ pub trait WidgetContainer<A: 'static, F: RenderFrame>: 'static {
 
     /// Perform internal, immutable iteration over each child widget stored within the container,
     /// calling `for_each_child` on each child.
-    fn children<'a, G, R>(&'a self, for_each_child: G) -> Option<R>
-        where G: FnMut(WidgetSummary<&'a Self::Widget>) -> LoopFlow<R>,
+    fn children<'a, G>(&'a self, for_each_child: G)
+        where G: FnMut(WidgetSummary<&'a Self::Widget>) -> LoopFlow,
               A: 'a,
               F: 'a;
 
     /// Perform internal, mutable iteration over each child widget stored within the container,
     /// calling `for_each_child` on each child.
-    fn children_mut<'a, G, R>(&'a mut self, for_each_child: G) -> Option<R>
-        where G: FnMut(WidgetSummary<&'a mut Self::Widget>) -> LoopFlow<R>,
+    fn children_mut<'a, G>(&'a mut self, for_each_child: G)
+        where G: FnMut(WidgetSummary<&'a mut Self::Widget>) -> LoopFlow,
               A: 'a,
               F: 'a;
 
     /// Get the child with the specified name.
     fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Self::Widget>> {
+        let mut summary_opt = None;
         self.children(|summary| {
             if summary.ident == widget_ident {
-                LoopFlow::Break(summary)
+                summary_opt = Some(summary);
+                LoopFlow::Break
             } else {
                 LoopFlow::Continue
             }
-        })
+        });
+        summary_opt
     }
 
     /// Mutably get the child with the specified name.
     fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Self::Widget>> {
+        let mut summary_opt = None;
         self.children_mut(|summary| {
             if summary.ident == widget_ident {
-                LoopFlow::Break(summary)
+                summary_opt = Some(summary);
+                LoopFlow::Break
             } else {
                 LoopFlow::Continue
             }
-        })
+        });
+        summary_opt
     }
 
     /// Get the child at the specified index.
@@ -92,28 +98,34 @@ pub trait WidgetContainer<A: 'static, F: RenderFrame>: 'static {
     /// The index of a child is generally assumed to correspond with the order in which the children
     /// are defined within the container.
     fn child_by_index(&self, mut index: usize) -> Option<WidgetSummary<&Self::Widget>> {
+        let mut summary_opt = None;
         self.children(|summary| {
             if index == 0 {
-                LoopFlow::Break(summary)
+                summary_opt = Some(summary);
+                LoopFlow::Break
             } else {
                 index -= 1;
                 LoopFlow::Continue
             }
-        })
+        });
+        summary_opt
     }
     /// Mutably get the child at the specified index.
     ///
     /// The index of a child is generally assumed to correspond with the order in which the children
     /// are defined within the container.
     fn child_by_index_mut(&mut self, mut index: usize) -> Option<WidgetSummary<&mut Self::Widget>> {
+        let mut summary_opt = None;
         self.children_mut(|summary| {
             if index == 0 {
-                LoopFlow::Break(summary)
+                summary_opt = Some(summary);
+                LoopFlow::Break
             } else {
                 index -= 1;
                 LoopFlow::Continue
             }
-        })
+        });
+        summary_opt
     }
 }
 
@@ -143,26 +155,20 @@ impl<A, F, N> WidgetContainer<A, F> for SingleContainer<A, F, N>
     #[inline(always)]
     fn num_children(&self) -> usize {1}
 
-    fn children<'a, G, R>(&'a self, mut for_each_child: G) -> Option<R>
-        where G: FnMut(WidgetSummary<&'a N>) -> LoopFlow<R>,
+    fn children<'a, G>(&'a self, mut for_each_child: G)
+        where G: FnMut(WidgetSummary<&'a N>) -> LoopFlow,
               A: 'a,
               F: 'a
     {
-        match for_each_child(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget)) {
-            LoopFlow::Continue => None,
-            LoopFlow::Break(r) => Some(r)
-        }
+        for_each_child(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget));
     }
 
-    fn children_mut<'a, G, R>(&'a mut self, mut for_each_child: G) -> Option<R>
-        where G: FnMut(WidgetSummary<&'a mut N>) -> LoopFlow<R>,
+    fn children_mut<'a, G>(&'a mut self, mut for_each_child: G)
+        where G: FnMut(WidgetSummary<&'a mut N>) -> LoopFlow,
               A: 'a,
               F: 'a
     {
-        match for_each_child(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget)) {
-            LoopFlow::Continue => None,
-            LoopFlow::Break(r) => Some(r)
-        }
+        for_each_child(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget));
     }
 }
 
@@ -178,33 +184,29 @@ impl<A, F, W> WidgetContainer<A, F> for Vec<W>
         self.len()
     }
 
-    fn children<'a, G, R>(&'a self, mut for_each_child: G) -> Option<R>
-        where G: FnMut(WidgetSummary<&'a W>) -> LoopFlow<R>,
+    fn children<'a, G>(&'a self, mut for_each_child: G)
+        where G: FnMut(WidgetSummary<&'a W>) -> LoopFlow,
               A: 'a,
               F: 'a
     {
         for (index, widget) in self.iter().enumerate() {
             match for_each_child(WidgetSummary::new(WidgetIdent::Num(index as u32), index, widget)) {
                 LoopFlow::Continue => (),
-                LoopFlow::Break(r) => return Some(r)
+                LoopFlow::Break => return
             }
         }
-
-        None
     }
 
-    fn children_mut<'a, G, R>(&'a mut self, mut for_each_child: G) -> Option<R>
-        where G: FnMut(WidgetSummary<&'a mut W>) -> LoopFlow<R>,
+    fn children_mut<'a, G>(&'a mut self, mut for_each_child: G)
+        where G: FnMut(WidgetSummary<&'a mut W>) -> LoopFlow,
               A: 'a,
               F: 'a
     {
         for (index, widget) in self.iter_mut().enumerate() {
             match for_each_child(WidgetSummary::new_mut(WidgetIdent::Num(index as u32), index, widget)) {
                 LoopFlow::Continue => (),
-                LoopFlow::Break(r) => return Some(r)
+                LoopFlow::Break => return
             }
         }
-
-        None
     }
 }

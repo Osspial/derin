@@ -236,3 +236,14 @@ impl<'a, A: 'static, F: RenderFrame> WidgetStack<'a, A, F> {
         Some(popped)
     }
 }
+
+impl<'a, W> WidgetPath<'a, W> {
+    pub fn map<X>(self, f: impl FnOnce(W) -> X) -> WidgetPath<'a, X> {
+        WidgetPath {
+            widget: f(self.widget),
+            path: self.path,
+            index: self.index,
+            widget_id: self.widget_id,
+        }
+    }
+}

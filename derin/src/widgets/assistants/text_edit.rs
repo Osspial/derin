@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::gl_render::EditString;
-use crate::event::{Key, ModifierKeys, WidgetEvent, FocusChange, InputState};
+use crate::event::{Key, ModifierKeys, WidgetEvent, FocusChange, InputState, MouseHoverChange};
 use crate::theme::CursorIcon;
 use clipboard::{ClipboardContext, ClipboardProvider};
 use cgmath_geometry::line::Segment;
@@ -55,13 +55,13 @@ pub enum CursorFlashOp {
     End
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TextEditOps {
     pub allow_bubble: bool,
     pub redraw: bool,
+    pub focus: Option<FocusChange>,
     pub cursor_flash: Option<CursorFlashOp>,
     pub cursor_icon: Option<CursorIcon>,
-    pub focus: Option<FocusChange>
 }
 
 #[derive(Default, Debug, Clone)]
@@ -152,15 +152,18 @@ impl<C> TextEditAssist<C>
                 redraw = true;
                 cursor_flash = Some(CursorFlashOp::Start);
             },
-            MouseMove{new_pos, ..} => {
+            MouseMove{new_pos, ref hover_change, ..} => {
+                match hover_change {
+                    Some(MouseHoverChange::Enter) => cursor_icon = Some(CursorIcon::Text),
+                    Some(MouseHoverChange::Exit) => cursor_icon = Some(CursorIcon::default()),
+                    _ => ()
+                }
                 if let Some(down) = input_state.mouse_buttons_down_in_widget.iter().find(|d| d.button == MouseButton::Left) {
                     self.string.select_on_line(Segment::new(down.down_pos, new_pos));
                     redraw = true;
                 }
             },
-            MouseEnter{..} => cursor_icon = Some(CursorIcon::Text),
-            MouseExit{..} => cursor_icon = Some(CursorIcon::default()),
-            GainFocus => {
+            GainFocus(_) => {
                 redraw = true;
                 cursor_flash = Some(CursorFlashOp::Start);
             }

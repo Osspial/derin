@@ -23,20 +23,20 @@ pub(crate) enum WidgetRelationError {
     RelationNotFound
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct WidgetTreeNode {
     parent_id: WidgetID,
     children: Vec<WidgetID>,
     data: WidgetData
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WidgetData {
     pub ident: WidgetIdent,
     depth: Cell<u32>
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct VirtualWidgetTree {
     root: WidgetID,
     root_data: WidgetData,
@@ -71,7 +71,6 @@ impl VirtualWidgetTree {
         if let Some((parent_data, children)) = self.get_widget_node_mut(parent_id) {
             let parent_depth = parent_data.depth();
 
-            // TODO: HANDLE DUPLICATE INSERTS
             children.insert(child_index, widget_id);
 
             match self.tree_data.entry(widget_id) {
@@ -105,6 +104,16 @@ impl VirtualWidgetTree {
     }
 
     pub(crate) fn remove(&mut self, widget_id: WidgetID) -> Option<WidgetData> {
+        if let Entry::Occupied(occ) = self.tree_data.entry(widget_id) {
+            let node = occ.remove();
+            crate::vec_remove_element(&mut self.get_widget_node_mut(node.parent_id).unwrap().1, &widget_id).unwrap();
+            Some(node.data)
+        } else {
+            None
+        }
+    }
+
+    pub(crate) fn remove_recursive(&mut self, widget_id: WidgetID) -> Option<WidgetData> {
         if let Entry::Occupied(occ) = self.tree_data.entry(widget_id) {
             let node = occ.remove();
             crate::vec_remove_element(&mut self.get_widget_node_mut(node.parent_id).unwrap().1, &widget_id).unwrap();
@@ -207,7 +216,7 @@ impl VirtualWidgetTree {
         Some(children.iter().map(move |c| (*c, self.tree_data.get(c).expect("Bad tree state"))))
     }
 
-    fn all_nodes(&self) -> impl Iterator<Item=(WidgetID, &'_ WidgetData)> {
+    pub fn all_nodes(&self) -> impl Iterator<Item=(WidgetID, &'_ WidgetData)> {
         Some((self.root, &self.root_data)).into_iter().chain(self.tree_data.iter().map(|(&k, v)| (k, &v.data)))
     }
 
@@ -300,6 +309,7 @@ impl WidgetData {
 mod tests {
     use super::*;
     use std::sync::Arc;
+    use derin_common_types::if_tokens;
 
     macro_rules! extract_virtual_tree_idents {
         ($(
@@ -417,7 +427,7 @@ mod tests {
     }
 
     #[test]
-    fn test_remove() {
+    fn test_remove_recursive() {
         virtual_widget_tree!{
             let mut tree = root {
                 child_0 {
@@ -435,7 +445,7 @@ mod tests {
             }
         };
 
-        assert!(tree.remove(child_1).is_some());
+        assert!(tree.remove_recursive(child_1).is_some());
         virtual_widget_tree!(
             let tree_removed_0 = root in old {
                 child_0 in old {
@@ -450,7 +460,7 @@ mod tests {
         );
         assert_eq!(tree, tree_removed_0);
 
-        assert!(tree.remove(child_0).is_some());
+        assert!(tree.remove_recursive(child_0).is_some());
         virtual_widget_tree!(
             let tree_removed_1 = root in old {
                 child_2 in old
@@ -458,7 +468,7 @@ mod tests {
         );
         assert_eq!(tree, tree_removed_1);
 
-        assert!(tree.remove(child_2).is_some());
+        assert!(tree.remove_recursive(child_2).is_some());
         virtual_widget_tree!(
             let tree_removed_2 = root in old
         );
@@ -696,5 +706,22 @@ mod tests {
         assert_eq!(Some(4), tree.get_widget(child_1_0).map(|w| w.depth()));
         assert_eq!(Some(4), tree.get_widget(child_1_1).map(|w| w.depth()));
         assert_eq!(Some(3), tree.get_widget(child_0_2_0).map(|w| w.depth()));
+    }
+
+    #[test]
+    fn test_duplicate_insert() {
+        virtual_widget_tree!{
+            let mut macro_tree = root {
+                child_0
+            }
+        };
+        let reference_tree = macro_tree.clone();
+        println!("tree created");
+
+        macro_tree.insert(root, child_0, 0, WidgetIdent::new_str("child_0")).unwrap();
+        macro_tree.insert(root, child_0, 0, WidgetIdent::new_str("child_0")).unwrap();
+        macro_tree.insert(root, child_0, 0, WidgetIdent::new_str("child_0")).unwrap();
+
+        assert_eq!(macro_tree, reference_tree);
     }
 }

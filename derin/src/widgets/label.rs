@@ -13,10 +13,9 @@
 // limitations under the License.
 
 use crate::widgets::{Contents, ContentsInner};
-use crate::core::event::{EventOps, WidgetEvent, InputState};
+use crate::core::event::{EventOps, WidgetEventSourced, InputState};
 use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
 use crate::core::render::RenderFrameClipped;
-use crate::core::popup::ChildPopupsMut;
 
 use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox}};
@@ -89,14 +88,13 @@ impl<A, F> Widget<A, F> for Label
     }
 
     #[inline]
-    fn on_widget_event(&mut self, _: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps<A> {
         EventOps {
             action: None,
             focus: None,
             bubble: true,
             cursor_pos: None,
             cursor_icon: None,
-            popup: None
         }
     }
 }

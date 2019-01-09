@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::event::{EventOps, WidgetEvent, InputState};
+use crate::event::{EventOps, WidgetEventSourced, InputState};
 use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
 use crate::core::render::RenderFrameClipped;
-use crate::core::popup::ChildPopupsMut;
 
 use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::BoundBox};
@@ -130,14 +129,13 @@ impl<A, F> Widget<A, F> for ProgressBar
     }
 
     #[inline]
-    fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps<A> {
         EventOps {
             action: None,
             focus: None,
-            bubble: event.default_bubble(),
+            bubble: true,
             cursor_pos: None,
             cursor_icon: None,
-            popup: None
         }
     }
 }

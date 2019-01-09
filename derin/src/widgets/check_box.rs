@@ -17,8 +17,7 @@ use crate::widgets::{Contents, ContentsInner, ToggleHandler};
 use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
-use crate::core::event::{EventOps, InputState, WidgetEvent};
-use crate::core::popup::ChildPopupsMut;
+use crate::core::event::{EventOps, InputState, WidgetEvent, WidgetEventSourced, MouseHoverChange};
 use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
 use crate::core::render::RenderFrameClipped;
 use derin_common_types::layout::SizeBounds;
@@ -157,22 +156,17 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
         ));
     }
 
-    fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps<A> {
         use self::WidgetEvent::*;
+        let event = event.unwrap();
 
         let mut action = None;
         let (mut new_checked, mut new_state) = (self.checked, self.button_state);
         match event {
-            MouseEnter{..} |
-            MouseExit{..} => {
-                self.widget_tag.mark_update_timer();
-
-                new_state = match (input_state.mouse_buttons_down_in_widget.is_empty(), event.clone()) {
-                    (true, MouseEnter{..}) => ButtonState::Hover,
-                    (true, MouseExit{..}) => ButtonState::Normal,
-                    (false, _) => self.button_state,
-                    _ => unreachable!()
-                };
+            MouseMove{hover_change: Some(ref change), ..} => match change {
+                MouseHoverChange::Enter => new_state = ButtonState::Hover,
+                MouseHoverChange::Exit => new_state = ButtonState::Normal,
+                _ => ()
             },
             MouseDown{..} => new_state = ButtonState::Pressed,
             MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
@@ -183,7 +177,7 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
                 new_state = ButtonState::Hover;
             },
             MouseUp{in_widget: false, ..} => new_state = ButtonState::Normal,
-            GainFocus => new_state = ButtonState::Hover,
+            GainFocus(_) => new_state = ButtonState::Hover,
             LoseFocus => new_state = ButtonState::Normal,
             _ => ()
         };
@@ -201,7 +195,6 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
             bubble: event.default_bubble(),
             cursor_pos: None,
             cursor_icon: None,
-            popup: None
         }
     }
 }
