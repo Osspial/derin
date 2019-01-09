@@ -16,17 +16,16 @@ use glutin::*;
 use glutin::{MouseButton as GMouseButton, WindowEvent as GWindowEvent, MouseScrollDelta};
 use crate::gl_render::{GLRenderer, GLFrame};
 use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
-use crate::core::{Root, LoopFlow, WindowEvent, PopupDelta};
+use crate::core::{Root, LoopFlow, WindowEvent};
 use crate::core::tree::{Widget, WidgetIdent};
 use crate::core::event::WidgetEvent;
-use crate::core::popup::PopupID;
 use crate::core::render::Renderer;
 use crate::theme::Theme;
 use gullery::ContextState;
 
 use std::thread::{self, JoinHandle};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::Instant;
 use std::collections::HashMap;
 use std::rc::Rc;
 use crate::cgmath::{Point2, Vector2};
@@ -59,9 +58,6 @@ impl Default for WindowConfig {
 /// A window displayed on the desktop, which contains a set of drawable widgets.
 pub struct GlutinWindow<A: 'static, N: 'static + Widget<A, GLFrame>> {
     primary_renderer: GLRenderer,
-    window_popup_map: HashMap<WindowId, PopupID>,
-    popup_renderers: HashMap<PopupID, GLRenderer>,
-    active_renderer: Option<PopupID>,
     events_loop: EventsLoop,
     timer_sync: Arc<Mutex<TimerPark>>,
     timer_thread_handle: JoinHandle<()>,
@@ -71,7 +67,7 @@ pub struct GlutinWindow<A: 'static, N: 'static + Widget<A, GLFrame>> {
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum TimerPark {
     Indefinite,
-    Timeout(Duration),
+    Timeout(Instant),
     Abort
 }
 
@@ -112,9 +108,9 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                 let park_type = *timer_sync.lock();
 
                 match park_type {
-                    TimerPark::Timeout(park_duration) => {
-                        thread::park_timeout(park_duration);
-                        if *timer_sync.lock() == TimerPark::Timeout(park_duration) {
+                    TimerPark::Timeout(park_until) => {
+                        thread::park_timeout(park_until - Instant::now());
+                        if *timer_sync.lock() == TimerPark::Timeout(park_until) {
                             if events_loop_proxy.wakeup().is_err() {
                                 return;
                             }
@@ -129,9 +125,6 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
         Ok(GlutinWindow {
             root: Root::new(root, theme, renderer.dims()),
             primary_renderer: renderer,
-            active_renderer: None,
-            window_popup_map: HashMap::new(),
-            popup_renderers: HashMap::new(),
             events_loop,
             timer_sync,
             timer_thread_handle,
@@ -154,22 +147,18 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
     /// `on_fallthrough` is called whenever a raw event bubbles through the root widget.
     ///
     /// TODO: DOCUMENT HOW EVENT BUBBLING WORKS
-    pub fn run_forever<F, FF, R>(&mut self, mut on_action: F, mut on_fallthrough: FF) -> Option<R>
-        where F: FnMut(A, &mut N, &mut Theme) -> LoopFlow<R>,
+    pub fn run_forever<F, FF>(&mut self, mut on_action: F, mut on_fallthrough: FF)
+        where F: FnMut(A, &mut N, &mut Theme) -> LoopFlow,
               FF: FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
     {
         let GlutinWindow {
             ref mut primary_renderer,
-            ref mut popup_renderers,
-            ref mut active_renderer,
-            ref mut window_popup_map,
             ref mut events_loop,
             ref mut timer_sync,
             ref mut timer_thread_handle,
             ref mut root,
         } = *self;
 
-        let mut ret: Option<R> = None;
         let map_modifiers = |g_modifiers: ModifiersState| {
             let mut modifiers = ModifierKeys::empty();
             modifiers.set(ModifierKeys::SHIFT, g_modifiers.shift);
@@ -180,30 +169,25 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
         };
 
         loop {
-            let mut popup_deltas = Vec::new();
             let mut break_loop = false;
+
+            let mut frame = root.start_frame();
             let mut process_glutin_event = |glutin_event| {
-                let mut popup_id = None;
                 let derin_event: WindowEvent = match glutin_event {
                     Event::WindowEvent{window_id, event} => {
-                        popup_id = window_popup_map.get(&window_id).cloned();
-                        let scale_factor = match popup_id {
-                            None if window_id == primary_renderer.window().id() => primary_renderer.window().hidpi_factor(),
-                            None => return,
-                            Some(id) => popup_renderers.get(&id).unwrap().window().hidpi_factor()
-                        };
+                        let scale_factor = primary_renderer.window().hidpi_factor();
                         macro_rules! scale {
                             ($val:expr) => {{($val as f32 / scale_factor) as _}}
                         }
                         match event {
                             GWindowEvent::CursorMoved{position, modifiers, ..} => {
-                                root.modifiers = map_modifiers(modifiers);
+                                frame.set_modifiers(map_modifiers(modifiers));
                                 WindowEvent::MouseMove(Point2::new(scale!(position.0), scale!(position.1)))
                             },
-                            GWindowEvent::CursorEntered{..} => WindowEvent::MouseEnter(Point2::new(0, 0)),
-                            GWindowEvent::CursorLeft{..} => WindowEvent::MouseExit(Point2::new(0, 0)),
+                            GWindowEvent::CursorEntered{..} => WindowEvent::MouseEnter,
+                            GWindowEvent::CursorLeft{..} => WindowEvent::MouseExit,
                             GWindowEvent::MouseInput{state, button: g_button, modifiers, ..} => {
-                                root.modifiers = map_modifiers(modifiers);
+                                frame.set_modifiers(map_modifiers(modifiers));
                                 let button = match g_button {
                                     GMouseButton::Left => MouseButton::Left,
                                     GMouseButton::Right => MouseButton::Right,
@@ -218,7 +202,7 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                                 }
                             }
                             GWindowEvent::MouseWheel{delta, modifiers, ..} => {
-                                root.modifiers = map_modifiers(modifiers);
+                                frame.set_modifiers(map_modifiers(modifiers));
                                 match delta {
                                     MouseScrollDelta::LineDelta(x, y) => WindowEvent::MouseScrollLines(Vector2::new(x as i32, y as i32)),
                                     MouseScrollDelta::PixelDelta(x, y) => WindowEvent::MouseScrollPx(Vector2::new(x as i32, y as i32)),
@@ -228,7 +212,7 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                             GWindowEvent::ReceivedCharacter(c) => WindowEvent::Char(c),
                             GWindowEvent::KeyboardInput{ input, .. } => {
                                 if let Some(key) = input.virtual_keycode.and_then(map_key) {
-                                    root.modifiers = map_modifiers(input.modifiers);
+                                    frame.set_modifiers(map_modifiers(input.modifiers));
                                     match input.state {
                                         ElementState::Pressed => WindowEvent::KeyDown(key),
                                         ElementState::Released => WindowEvent::KeyUp(key)
@@ -237,22 +221,9 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                                     return;
                                 }
                             }
-                            GWindowEvent::Closed => match popup_id {
-                                Some(popup_id) => {
-                                    root.remove_popup(popup_id);
-
-                                    let removed_renderer = popup_renderers.remove(&popup_id).unwrap();
-                                    window_popup_map.remove(&removed_renderer.window().id());
-                                    // The popup's context has to be bound when destroying the context.
-                                    unsafe{ removed_renderer.window().make_current().ok() };
-                                    drop(removed_renderer);
-
-                                    return
-                                },
-                                None => {
-                                    break_loop = true;
-                                    return
-                                }
+                            GWindowEvent::Closed => {
+                                break_loop = true;
+                                return
                             },
                             GWindowEvent::Refresh => WindowEvent::Redraw,
                             _ => return
@@ -263,86 +234,33 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                     Event::DeviceEvent{..} => return
                 };
 
-                let event_result = match popup_id {
-                    Some(popup_id) => root.process_popup_event(popup_id, derin_event, &mut on_fallthrough),
-                    None => root.process_event(derin_event, &mut on_fallthrough)
-                };
-
-                match event_result.wait_until_call_timer {
-                    None => *timer_sync.lock() = TimerPark::Indefinite,
-                    Some(park_duration) => *timer_sync.lock() = TimerPark::Timeout(park_duration)
-                }
-                timer_thread_handle.thread().unpark();
-
-                for action in root.actions.drain(..) {
-                    match on_action(action, &mut root.root_widget, &mut root.theme) {
-                        LoopFlow::Break(b) => {
-                            ret = Some(b);
-                            return;
-                        },
-                        LoopFlow::Continue => ()
-                    }
-                }
-                if event_result.popup_deltas.len() > 0 {
-                    popup_deltas = event_result.popup_deltas;
-                }
+                frame.process_event(derin_event, &mut on_fallthrough);
             };
+
             events_loop.run_forever(|e| {process_glutin_event(e); ControlFlow::Break});
             events_loop.poll_events(process_glutin_event);
+
+            let frame_result = frame.finish();
+
+            match frame_result.wait_until_call_timer {
+                None => *timer_sync.lock() = TimerPark::Indefinite,
+                Some(park_duration) => *timer_sync.lock() = TimerPark::Timeout(park_duration)
+            }
+            timer_thread_handle.thread().unpark();
+
+            let actions = root.drain_actions().collect::<Vec<_>>();
+            for action in actions {
+                match on_action(action, &mut root.root_widget, &mut root.theme) {
+                    LoopFlow::Break => return,
+                    LoopFlow::Continue => ()
+                }
+            }
             if break_loop {
                 break;
             }
 
-            for popup_delta in popup_deltas.drain(..) {
-                match popup_delta {
-                    PopupDelta::Create(popup_summary) => {
-                        let popup_attrs = popup_summary.attributes;
-                        let popup_id = popup_summary.id;
-
-                        let builder = WindowBuilder::new()
-                            .with_dimensions(popup_attrs.rect.width() as u32, popup_attrs.rect.height() as u32)
-                            .with_visibility(false)
-                            // .with_focusability(popup_attrs.focusable)
-                            .with_title(popup_attrs.title)
-                            // .is_popup(popup_attrs.tool_window)
-                            .with_decorations(popup_attrs.decorations);
-                        let popup_renderer = unsafe{ GLRenderer::new(events_loop, builder, || ContextBuilder::new()).unwrap() };
-                        let window_pos = primary_renderer.window().get_inner_position().unwrap();
-                        popup_renderer.window().set_position(popup_attrs.rect.min().x + window_pos.0, popup_attrs.rect.min().y + window_pos.1);
-                        popup_renderer.window().show();
-
-                        window_popup_map.insert(popup_renderer.window().id(), popup_id);
-                        popup_renderers.insert(popup_id, popup_renderer);
-                        *active_renderer = Some(popup_id);
-                    },
-                    PopupDelta::Remove(popup_id) => {
-                        let removed_renderer = popup_renderers.remove(&popup_id).unwrap();
-                        window_popup_map.remove(&removed_renderer.window().id());
-                        // The popup's context has to be bound when destroying the context.
-                        unsafe{ removed_renderer.window().make_current().ok() };
-                        drop(removed_renderer);
-
-                        // Reset the context to the primary window.
-                        unsafe{ primary_renderer.window().make_current().ok() };
-                        *active_renderer = None;
-                    }
-                }
-            }
-
-            root.redraw(|popup_id_opt, with_renderer| {
-                let renderer_ref = match popup_id_opt {
-                    Some(popup_id) => popup_renderers.get_mut(&popup_id).unwrap(),
-                    None => primary_renderer
-                };
-                if popup_id_opt != *active_renderer {
-                    unsafe{ renderer_ref.window().make_current().unwrap() };
-                    *active_renderer = popup_id_opt;
-                }
-                with_renderer(renderer_ref)
-            });
+            root.redraw(primary_renderer);
         }
-
-        ret
     }
 
     /// Retrieves the `gullery` context state.

@@ -85,8 +85,6 @@ impl Translator {
         theme: &Theme,
         dpi: DPI,
         prims: impl IntoIterator<Item=ThemedPrim<<GLFrame as PrimFrame>::DirectRender>>,
-
-        output_vertices: bool,
         draw: &mut FrameDraw
     ) {
         let prim_rect_iter = prims.into_iter().map(move |p| {
@@ -111,10 +109,7 @@ impl Translator {
             if let Some(parent_clipped) = clip_rect.intersect_rect(parent_rect) {
                 match (prim.prim, widget_theme.image, widget_theme.text) {
                     (Prim::Image, Some(image), _) => {
-                        let atlas_rect = match output_vertices {
-                            true => draw.atlas.image_rect(theme_path, || (&image.pixels, image.dims)).cast::<u16>().unwrap(),
-                            false => OffsetBox::new2(0, 0, 0, 0)
-                        };
+                        let atlas_rect = draw.atlas.image_rect(theme_path, || (&image.pixels, image.dims)).cast::<u16>().unwrap();
 
                         let abs_rect_dims = abs_rect.dims();
                         let abs_rect_dims_bounded = image.size_bounds.bound_rect(abs_rect_dims);
@@ -133,9 +128,7 @@ impl Translator {
                             unsafe{ *rect_px_out = image_rect - parent_rect.min().to_vec() };
                         }
 
-                        if output_vertices {
-                            draw.vertices.extend(image_translate);
-                        }
+                        draw.vertices.extend(image_translate);
                     },
                     (Prim::String(render_string), _, Some(theme_text)) => {
                         match draw.font_cache.face(theme_text.face.clone()) {
@@ -161,9 +154,7 @@ impl Translator {
                                     },
                                     render_string
                                 );
-                                if output_vertices {
-                                    draw.vertices.extend(vertex_iter);
-                                }
+                                draw.vertices.extend(vertex_iter);
                                 if let (Some(rect_px_out), Some(text_rect)) = (prim.rect_px_out, render_string.text_rect()) {
                                     unsafe{ *rect_px_out = text_rect + abs_rect.min().to_vec() - parent_rect.min().to_vec() };
                                 }
@@ -197,9 +188,7 @@ impl Translator {
                                     },
                                     edit_string
                                 );
-                                if output_vertices {
-                                    draw.vertices.extend(vertex_iter);
-                                }
+                                draw.vertices.extend(vertex_iter);
                                 if let (Some(rect_px_out), Some(text_rect)) = (prim.rect_px_out, edit_string.render_string.text_rect()) {
                                     unsafe{ *rect_px_out = text_rect + abs_rect.min().to_vec() - parent_rect.min().to_vec() };
                                 }
@@ -209,7 +198,7 @@ impl Translator {
                             }
                         }
                     },
-                    (Prim::DirectRender(render_fn), _, _) if output_vertices => {
+                    (Prim::DirectRender(render_fn), _, _) => {
                         draw.draw_contents();
                         let render_fn = unsafe{ &mut *render_fn };
                         let mut framebuffer = unsafe{ mem::uninitialized() };

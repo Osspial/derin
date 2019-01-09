@@ -218,6 +218,20 @@ impl WidgetEventSourced<'_> {
             WidgetEventSourced::Bubble(event, bubble) => WidgetEventSourced::Bubble(f(event), bubble),
         }
     }
+
+    pub fn is_bubble(&self) -> bool {
+        match self {
+            WidgetEventSourced::This(..) => false,
+            WidgetEventSourced::Bubble(..) => true,
+        }
+    }
+
+    pub fn default_bubble(&self) -> bool {
+        match self {
+            WidgetEventSourced::This(event) => event.default_bubble(),
+            WidgetEventSourced::Bubble(..) => true
+        }
+    }
 }
 
 impl WidgetEvent {

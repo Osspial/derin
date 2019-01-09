@@ -19,10 +19,9 @@ use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 
 use crate::core::LoopFlow;
-use crate::core::event::{EventOps, WidgetEvent, InputState};
-use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
+use crate::core::event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange};
+use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent};
 use crate::core::render::RenderFrameClipped;
-use crate::core::popup::ChildPopupsMut;
 use crate::core::render::Theme as CoreTheme;
 use derin_common_types::layout::{SizeBounds, WidgetPos};
 
@@ -88,7 +87,6 @@ impl<C, L> RadioButtonList<C, L>
 
     /// Retrieves the collection of radio buttons stored within this list, for mutation.
     pub fn buttons_mut(&mut self) -> &mut C {
-        self.widget_tag.mark_update_child().request_relayout();
         &mut self.buttons
     }
 }
@@ -218,29 +216,27 @@ impl<A, F> Widget<A, F> for RadioButton
             }
         ));
 
+        // TODO: MOVE TO update_layout
         self.min_size = DimsBox::new2(
             content_rect.width() + icon_rect.width(),
             icon_min_size.height().max(self.contents.min_size(frame.theme()).height())
         );
     }
 
-    fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps<A> {
         use self::WidgetEvent::*;
+        let event = event.unwrap();
 
         let mut force_bubble = false;
         let action = None;
         let (mut new_selected, mut new_state) = (self.selected, self.button_state);
         match event {
-            MouseEnter{..} |
-            MouseExit{..} => {
-                self.widget_tag.mark_update_timer();
-
-                new_state = match (input_state.mouse_buttons_down_in_widget.is_empty(), event.clone()) {
-                    (true, MouseEnter{..}) => ButtonState::Hover,
-                    (true, MouseExit{..}) => ButtonState::Normal,
-                    (false, _) => self.button_state,
-                    _ => unreachable!()
-                };
+            MouseMove{hover_change: Some(ref change), ..} if input_state.mouse_buttons_down_in_widget.is_empty() => {
+                match change {
+                    MouseHoverChange::Enter => new_state = ButtonState::Hover,
+                    MouseHoverChange::Exit => new_state = ButtonState::Normal,
+                    _ => ()
+                }
             },
             MouseDown{..} => new_state = ButtonState::Pressed,
             MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
@@ -252,7 +248,7 @@ impl<A, F> Widget<A, F> for RadioButton
                 new_state = ButtonState::Hover;
             },
             MouseUp{in_widget: false, ..} => new_state = ButtonState::Normal,
-            GainFocus => new_state = ButtonState::Hover,
+            GainFocus(_) => new_state = ButtonState::Hover,
             LoseFocus => new_state = ButtonState::Normal,
             _ => ()
         };
@@ -271,7 +267,6 @@ impl<A, F> Widget<A, F> for RadioButton
             bubble: force_bubble || event.default_bubble(),
             cursor_pos: None,
             cursor_icon: None,
-            popup: None
         }
     }
 }
@@ -305,14 +300,67 @@ impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
 
     fn render(&mut self, _: &mut RenderFrameClipped<F>) {}
 
+    fn update_layout(&mut self, _: &F::Theme) {
+        #[derive(Default)]
+        struct HeapCache {
+            update_heap_cache: UpdateHeapCache,
+            hints_vec: Vec<WidgetPos>,
+            rects_vec: Vec<Result<BoundBox<D2, i32>, SolveError>>
+        }
+        thread_local! {
+            static HEAP_CACHE: RefCell<HeapCache> = RefCell::new(HeapCache::default());
+        }
+
+        HEAP_CACHE.with(|hc| {
+            let mut hc = hc.borrow_mut();
+
+            let HeapCache {
+                ref mut update_heap_cache,
+                ref mut hints_vec,
+                ref mut rects_vec
+            } = *hc;
+
+            let num_children = self.num_children();
+            self.buttons.children::<_>(|summary| {
+                let mut layout_hints = self.layout.positions(summary.ident, summary.index, num_children).unwrap_or(WidgetPos::default());
+                let widget_size_bounds = summary.widget.size_bounds();
+                layout_hints.size_bounds = SizeBounds {
+                    min: layout_hints.size_bounds.bound_rect(widget_size_bounds.min),
+                    max: layout_hints.size_bounds.bound_rect(widget_size_bounds.max),
+                };
+                hints_vec.push(layout_hints);
+                rects_vec.push(Ok(BoundBox::new2(0, 0, 0, 0)));
+                LoopFlow::Continue
+            });
+
+            self.layout_engine.desired_size = self.rect.dims();
+            self.layout_engine.set_grid_size(self.layout.grid_size(num_children));
+            self.layout_engine.update_engine(hints_vec, rects_vec, update_heap_cache);
+
+            let mut rects_iter = rects_vec.drain(..);
+            self.buttons.children_mut::<_>(|summary| {
+                match rects_iter.next() {
+                    Some(rect) => *summary.widget.rect_mut() = rect.unwrap_or(BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF)),
+                    None => return LoopFlow::Break
+                }
+
+                LoopFlow::Continue
+            });
+
+            hints_vec.clear();
+        })
+    }
+
     #[inline]
-    fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, bubble_source: &[WidgetIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps<A> {
+        // TODO: PASS FOCUS TO CHILD
+
         let mut bubble = true;
         // Un-select any child radio buttons after a new button was selected.
-        if let (Some(child_ident), WidgetEvent::MouseUp{in_widget: true, pressed_in_widget: true, ..}) = (bubble_source.get(0), event) {
+        if let WidgetEventSourced::Bubble(WidgetEvent::MouseUp{in_widget: true, pressed_in_widget: true, ..}, [child_ident]) = event {
             bubble = false;
             let mut state_changed = false;
-            self.buttons.children_mut::<_, ()>(|summary| {
+            self.buttons.children_mut::<_>(|summary| {
                 if summary.ident != *child_ident {
                     if summary.widget.selected {
                         summary.widget.widget_tag.request_redraw();
@@ -322,7 +370,6 @@ impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
                 }
                 LoopFlow::Continue
             });
-            self.widget_tag.mark_update_child();
         }
 
         EventOps {
@@ -331,12 +378,7 @@ impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
             bubble,
             cursor_pos: None,
             cursor_icon: None,
-            popup: None
         }
-    }
-
-    fn accepts_focus(&self) -> OnFocus {
-        OnFocus::FocusChild
     }
 }
 
@@ -358,16 +400,16 @@ impl<A, F, C, L> Parent<A, F> for RadioButtonList<C, L>
         self.buttons.child_mut(widget_ident).map(WidgetSummary::to_dyn_mut)
     }
 
-    fn children<'a, G, R>(&'a self, mut for_each: G) -> Option<R>
+    fn children<'a, G>(&'a self, mut for_each: G)
         where A: 'a,
-              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow<R>
+              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow
     {
         self.buttons.children(|summary| for_each(WidgetSummary::to_dyn(summary)))
     }
 
-    fn children_mut<'a, G, R>(&'a mut self, mut for_each: G) -> Option<R>
+    fn children_mut<'a, G>(&'a mut self, mut for_each: G)
         where A: 'a,
-              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow<R>
+              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow
     {
         self.buttons.children_mut(|summary| for_each(WidgetSummary::to_dyn_mut(summary)))
     }
@@ -377,56 +419,5 @@ impl<A, F, C, L> Parent<A, F> for RadioButtonList<C, L>
     }
     fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
         self.buttons.child_by_index_mut(index).map(WidgetSummary::to_dyn_mut)
-    }
-
-    fn update_child_layout(&mut self) {
-        #[derive(Default)]
-        struct HeapCache {
-            update_heap_cache: UpdateHeapCache,
-            hints_vec: Vec<WidgetPos>,
-            rects_vec: Vec<Result<BoundBox<D2, i32>, SolveError>>
-        }
-        thread_local! {
-            static HEAP_CACHE: RefCell<HeapCache> = RefCell::new(HeapCache::default());
-        }
-
-        HEAP_CACHE.with(|hc| {
-            let mut hc = hc.borrow_mut();
-
-            let HeapCache {
-                ref mut update_heap_cache,
-                ref mut hints_vec,
-                ref mut rects_vec
-            } = *hc;
-
-            let num_children = self.num_children();
-            self.buttons.children::<_, ()>(|summary| {
-                let mut layout_hints = self.layout.positions(summary.ident, summary.index, num_children).unwrap_or(WidgetPos::default());
-                let widget_size_bounds = summary.widget.size_bounds();
-                layout_hints.size_bounds = SizeBounds {
-                    min: layout_hints.size_bounds.bound_rect(widget_size_bounds.min),
-                    max: layout_hints.size_bounds.bound_rect(widget_size_bounds.max),
-                };
-                hints_vec.push(layout_hints);
-                rects_vec.push(Ok(BoundBox::new2(0, 0, 0, 0)));
-                LoopFlow::Continue
-            });
-
-            self.layout_engine.desired_size = self.rect.dims();
-            self.layout_engine.set_grid_size(self.layout.grid_size(num_children));
-            self.layout_engine.update_engine(hints_vec, rects_vec, update_heap_cache);
-
-            let mut rects_iter = rects_vec.drain(..);
-            self.buttons.children_mut::<_, ()>(|summary| {
-                match rects_iter.next() {
-                    Some(rect) => *summary.widget.rect_mut() = rect.unwrap_or(BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF)),
-                    None => return LoopFlow::Break(())
-                }
-
-                LoopFlow::Continue
-            });
-
-            hints_vec.clear();
-        })
     }
 }

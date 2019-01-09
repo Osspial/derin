@@ -14,10 +14,9 @@
 
 use crate::widgets::assistants::ButtonState;
 use crate::widgets::{Contents, ContentsInner};
-use crate::core::event::{EventOps, WidgetEvent, InputState};
+use crate::core::event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange};
 use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
 use crate::core::render::{RenderFrameClipped, Theme};
-use crate::core::popup::ChildPopupsMut;
 
 use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
@@ -150,22 +149,17 @@ impl<A, F, H> Widget<A, F> for Button<H>
         self.size_bounds.min.dims.y += render_string_min.height();
     }
 
-    fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps<A> {
         use self::WidgetEvent::*;
+        let event = event.unwrap();
 
         let mut action = None;
 
         let new_state = match event {
-            MouseEnter{..} |
-            MouseExit{..} => {
-                self.widget_tag.mark_update_timer();
-
-                match (input_state.mouse_buttons_down_in_widget.is_empty(), event.clone()) {
-                    (true, MouseEnter{..}) => ButtonState::Hover,
-                    (true, MouseExit{..}) => ButtonState::Normal,
-                    (false, _) => self.state,
-                    _ => unreachable!()
-                }
+            MouseMove{hover_change: Some(ref change), ..} => match change {
+                MouseHoverChange::Enter => ButtonState::Hover,
+                MouseHoverChange::Exit => ButtonState::Normal,
+                _ => self.state
             },
             MouseDown{..} => ButtonState::Pressed,
             MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
@@ -173,7 +167,7 @@ impl<A, F, H> Widget<A, F> for Button<H>
                 ButtonState::Hover
             },
             MouseUp{in_widget: false, ..} => ButtonState::Normal,
-            GainFocus => ButtonState::Hover,
+            GainFocus(_) => ButtonState::Hover,
             LoseFocus => ButtonState::Normal,
             _ => self.state
         };
@@ -190,7 +184,6 @@ impl<A, F, H> Widget<A, F> for Button<H>
             bubble: event.default_bubble(),
             cursor_pos: None,
             cursor_icon: None,
-            popup: None
         }
     }
 }

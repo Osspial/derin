@@ -28,11 +28,12 @@ use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 use arrayvec::ArrayVec;
 
-#[derive(Debug)]
+use std::ops::Drop;
+
 pub(crate) struct OffsetWidget<'a, W: 'a + ?Sized> {
     widget: &'a mut W,
     offset: Vector2<i32>,
-    clip: Option<BoundBox<D2, i32>>
+    clip: Option<BoundBox<D2, i32>>,
 }
 
 impl<'a, W: ?Sized> OffsetWidget<'a, W> {
@@ -41,7 +42,7 @@ impl<'a, W: ?Sized> OffsetWidget<'a, W> {
         OffsetWidget {
             widget,
             offset,
-            clip
+            clip,
         }
     }
 
@@ -242,7 +243,7 @@ impl<'a, 'b, A, F, W> OffsetWidgetTraitAs<'b, A, F> for &'b mut OffsetWidget<'a,
             Some(self_as_parent) => Some(OffsetWidget {
                 widget: self_as_parent,
                 offset: self.offset,
-                clip: self.clip
+                clip: self.clip,
             }),
             None => None
         }

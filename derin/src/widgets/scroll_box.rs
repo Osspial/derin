@@ -13,10 +13,9 @@
 // limitations under the License.
 
 use crate::core::LoopFlow;
-use crate::core::event::{EventOps, WidgetEvent, InputState};
-use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent, OnFocus};
+use crate::core::event::{EventOps, WidgetEvent, InputState, WidgetEventSourced};
+use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent};
 use crate::core::render::RenderFrameClipped;
-use crate::core::popup::ChildPopupsMut;
 
 use crate::cgmath::{Point2, Vector2};
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
@@ -66,7 +65,6 @@ impl<W> ScrollBox<W> {
 
     /// Retrieves the scrollable widget, for mutation.
     pub fn widget_mut(&mut self) -> &mut W {
-        self.widget_tag.mark_update_child().request_relayout_post();
         self.clip.widget_mut()
     }
 
@@ -101,7 +99,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
-        self.widget_tag.request_relayout_post();
+        self.widget_tag.request_relayout();
         &mut self.rect
     }
     fn size_bounds(&self) -> SizeBounds {
@@ -177,144 +175,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
         frame.upload_primitives(primitives.into_iter());
     }
 
-    #[inline]
-    fn on_widget_event(&mut self, event: WidgetEvent, _: InputState, _: Option<ChildPopupsMut<A, F>>, bubble_source: &[WidgetIdent]) -> EventOps<A, F> {
-        let values = |slider_x: &Option<SliderAssist>, slider_y: &Option<SliderAssist>|
-            (slider_x.as_ref().map(|s| s.value), slider_y.as_ref().map(|s| s.value));
-        let start_values = values(&self.slider_x, &self.slider_y);
-        let mut allow_bubble = true;
-        match (bubble_source.len(), event.clone()) {
-            (0, WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left}) => {
-                if let Some(ref mut slider_x) = self.slider_x {
-                    slider_x.click_head(pos);
-                }
-                if let Some(ref mut slider_y) = self.slider_y {
-                    slider_y.click_head(pos);
-                }
-                self.widget_tag.request_redraw();
-            },
-            (0, WidgetEvent::MouseMove{new_pos, ..}) => {
-                if let Some(ref mut slider_x) = self.slider_x {
-                    slider_x.move_head(new_pos.x);
-                }
-                if let Some(ref mut slider_y) = self.slider_y {
-                    slider_y.move_head(new_pos.y);
-                }
-            },
-            (0, WidgetEvent::MouseUp{button: MouseButton::Left, ..}) => {
-                if let Some(ref mut slider_x) = self.slider_x {
-                    slider_x.head_click_pos = None;
-                }
-                if let Some(ref mut slider_y) = self.slider_y {
-                    slider_y.head_click_pos = None;
-                }
-                self.widget_tag.request_redraw();
-            },
-            (_, WidgetEvent::MouseScrollLines(dir)) => {
-                allow_bubble = false;
-                if let Some(ref mut slider_x) = self.slider_x {
-                    slider_x.value -= (24 * dir.x) as f32;
-                    slider_x.round_to_step();
-                }
-                if let Some(ref mut slider_y) = self.slider_y {
-                    slider_y.value -= (24 * dir.y) as f32;
-                    slider_y.round_to_step();
-                }
-            },
-            (_, WidgetEvent::MouseScrollPx(dir)) => {
-                allow_bubble = false;
-                if let Some(ref mut slider_x) = self.slider_x {
-                    slider_x.value -= dir.x as f32;
-                    slider_x.round_to_step();
-                }
-                if let Some(ref mut slider_y) = self.slider_y {
-                    slider_y.value -= dir.y as f32;
-                    slider_y.round_to_step();
-                }
-            },
-            _ => ()
-        }
-        if values(&self.slider_x, &self.slider_y) != start_values {
-            self.widget_tag.request_redraw().request_relayout_post();
-        }
-        EventOps {
-            action: None,
-            focus: None,
-            bubble: allow_bubble && event.default_bubble(),
-            cursor_pos: None,
-            cursor_icon: None,
-            popup: None
-        }
-    }
-
-    fn accepts_focus(&self) -> OnFocus {
-        OnFocus::FocusChild
-    }
-}
-
-lazy_static!{
-    static ref CLIP_IDENT: WidgetIdent = WidgetIdent::Str(Arc::from("clip"));
-}
-
-impl<A, F, W> Parent<A, F> for ScrollBox<W>
-    where F: PrimFrame,
-          W: Widget<A, F>
-{
-    fn num_children(&self) -> usize {
-        1
-    }
-
-    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>> {
-        match widget_ident {
-            _ if widget_ident == *CLIP_IDENT => Some(self.child_summary()),
-            _ => None
-        }
-    }
-    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>> {
-        match widget_ident {
-            _ if widget_ident == *CLIP_IDENT => Some(self.child_summary_mut()),
-            _ => None
-        }
-    }
-
-    fn children<'a, G, R>(&'a self, mut for_each: G) -> Option<R>
-        where A: 'a,
-              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow<R>
-    {
-        let flow = for_each(self.child_summary());
-
-        match flow {
-            LoopFlow::Continue => None,
-            LoopFlow::Break(r) => Some(r)
-        }
-    }
-
-    fn children_mut<'a, G, R>(&'a mut self, mut for_each: G) -> Option<R>
-        where A: 'a,
-              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow<R>
-    {
-        let flow = for_each(self.child_summary_mut());
-
-        match flow {
-            LoopFlow::Continue => None,
-            LoopFlow::Break(r) => Some(r)
-        }
-    }
-
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>> {
-        match index {
-            0 => Some(self.child_summary()),
-            _ => None
-        }
-    }
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
-        match index {
-            0 => Some(self.child_summary_mut()),
-            _ => None
-        }
-    }
-
-    fn update_child_layout(&mut self) {
+    fn update_layout(&mut self, _: &F::Theme) {
         let child_size_bounds = self.clip.widget().size_bounds();
         let mut child_dims: DimsBox<D2, _> = self.rect.dims();
         let mut offset = Vector2 {
@@ -379,5 +240,134 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
 
         *self.clip.rect_mut() = BoundBox::from(clip_dims);
         *self.clip.widget_mut().rect_mut() = BoundBox::from(child_dims) - offset;
+    }
+    #[inline]
+    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps<A> {
+        // TODO: PASS FOCUS TO CHILD
+        let values = |slider_x: &Option<SliderAssist>, slider_y: &Option<SliderAssist>|
+            (slider_x.as_ref().map(|s| s.value), slider_y.as_ref().map(|s| s.value));
+        let start_values = values(&self.slider_x, &self.slider_y);
+        let mut allow_bubble = true;
+
+        match event {
+            WidgetEventSourced::This(ref event) => match event {
+                WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left} => {
+                    if let Some(ref mut slider_x) = self.slider_x {
+                        slider_x.click_head(*pos);
+                    }
+                    if let Some(ref mut slider_y) = self.slider_y {
+                        slider_y.click_head(*pos);
+                    }
+                    self.widget_tag.request_redraw();
+                },
+                WidgetEvent::MouseMove{new_pos, ..} => {
+                    if let Some(ref mut slider_x) = self.slider_x {
+                        slider_x.move_head(new_pos.x);
+                    }
+                    if let Some(ref mut slider_y) = self.slider_y {
+                        slider_y.move_head(new_pos.y);
+                    }
+                },
+                WidgetEvent::MouseUp{button: MouseButton::Left, ..} => {
+                    if let Some(ref mut slider_x) = self.slider_x {
+                        slider_x.head_click_pos = None;
+                    }
+                    if let Some(ref mut slider_y) = self.slider_y {
+                        slider_y.head_click_pos = None;
+                    }
+                    self.widget_tag.request_redraw();
+                },
+                _ => ()
+            },
+            WidgetEventSourced::Bubble(ref event, _) => match event {
+                WidgetEvent::MouseScrollLines(dir) => {
+                    allow_bubble = false;
+                    if let Some(ref mut slider_x) = self.slider_x {
+                        slider_x.value -= (24 * dir.x) as f32;
+                        slider_x.round_to_step();
+                    }
+                    if let Some(ref mut slider_y) = self.slider_y {
+                        slider_y.value -= (24 * dir.y) as f32;
+                        slider_y.round_to_step();
+                    }
+                },
+                WidgetEvent::MouseScrollPx(dir) => {
+                    allow_bubble = false;
+                    if let Some(ref mut slider_x) = self.slider_x {
+                        slider_x.value -= dir.x as f32;
+                        slider_x.round_to_step();
+                    }
+                    if let Some(ref mut slider_y) = self.slider_y {
+                        slider_y.value -= dir.y as f32;
+                        slider_y.round_to_step();
+                    }
+                },
+                _ => ()
+            }
+        }
+
+        if values(&self.slider_x, &self.slider_y) != start_values {
+            self.widget_tag.request_redraw().request_relayout();
+        }
+        EventOps {
+            action: None,
+            focus: None,
+            bubble: allow_bubble && event.default_bubble(),
+            cursor_pos: None,
+            cursor_icon: None,
+        }
+    }
+}
+
+lazy_static!{
+    static ref CLIP_IDENT: WidgetIdent = WidgetIdent::Str(Arc::from("clip"));
+}
+
+impl<A, F, W> Parent<A, F> for ScrollBox<W>
+    where F: PrimFrame,
+          W: Widget<A, F>
+{
+    fn num_children(&self) -> usize {
+        1
+    }
+
+    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>> {
+        match widget_ident {
+            _ if widget_ident == *CLIP_IDENT => Some(self.child_summary()),
+            _ => None
+        }
+    }
+    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>> {
+        match widget_ident {
+            _ if widget_ident == *CLIP_IDENT => Some(self.child_summary_mut()),
+            _ => None
+        }
+    }
+
+    fn children<'a, G>(&'a self, mut for_each: G)
+        where A: 'a,
+              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow
+    {
+        for_each(self.child_summary());
+    }
+
+    fn children_mut<'a, G>(&'a mut self, mut for_each: G)
+        where A: 'a,
+              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow
+    {
+        for_each(self.child_summary_mut());
+    }
+
+    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>> {
+        match index {
+            0 => Some(self.child_summary()),
+            _ => None
+        }
+    }
+    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
+        match index {
+            0 => Some(self.child_summary_mut()),
+            _ => None
+        }
     }
 }

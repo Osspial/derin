@@ -1,16 +1,24 @@
 mod widget_stack;
 mod virtual_widget_tree;
+mod offset_widget_scan;
 
-pub(crate) use self::widget_stack::{WidgetPath, OffsetWidgetPath};
+pub(crate) use self::{
+    offset_widget_scan::OffsetWidgetScan,
+    widget_stack::{WidgetPath, OffsetWidgetPath},
+};
 use crate::{
     offset_widget::OffsetWidget,
     render::RenderFrame,
     tree::{Widget, WidgetID, WidgetIdent},
+    update_state::UpdateStateCell,
 };
+use std::rc::Rc;
 use self::{
     widget_stack::{WidgetStack, WidgetStackCache},
     virtual_widget_tree::VirtualWidgetTree
 };
+
+pub(crate) type OffsetWidgetScanPath<'a, A, F> = WidgetPath<'a, OffsetWidgetScan<'a, A, F>>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Relation {
@@ -29,6 +37,7 @@ pub(crate) struct WidgetTraverserBase<A: 'static, F: RenderFrame> {
 pub(crate) struct WidgetTraverser<'a, A: 'static, F: RenderFrame> {
     stack: WidgetStack<'a, A, F>,
     virtual_widget_tree: &'a mut VirtualWidgetTree,
+    update_state: Rc<UpdateStateCell>,
 }
 
 impl<A, F> WidgetTraverserBase<A, F>
@@ -37,18 +46,19 @@ impl<A, F> WidgetTraverserBase<A, F>
     pub fn new(root_id: WidgetID) -> Self {
         WidgetTraverserBase {
             stack_cache: WidgetStackCache::new(),
-            virtual_widget_tree: VirtualWidgetTree::new(root_id)
+            virtual_widget_tree: VirtualWidgetTree::new(root_id),
         }
     }
 
-    pub fn with_root_ref<'a>(&'a mut self, root: &'a mut dyn Widget<A, F>) -> WidgetTraverser<'a, A, F> {
+    pub fn with_root_ref<'a>(&'a mut self, root: &'a mut dyn Widget<A, F>, update_state: Rc<UpdateStateCell>) -> WidgetTraverser<'a, A, F> {
         // This isn't a necessary limitation with the code, but the current code assumes this assertion
         // holds.
         assert_eq!(root.widget_tag().widget_id, self.virtual_widget_tree.root_id());
 
         WidgetTraverser {
             stack: self.stack_cache.use_cache(root),
-            virtual_widget_tree: &mut self.virtual_widget_tree
+            virtual_widget_tree: &mut self.virtual_widget_tree,
+            update_state
         }
     }
 }
@@ -56,27 +66,25 @@ impl<A, F> WidgetTraverserBase<A, F>
 impl<A, F> WidgetTraverser<'_, A, F>
     where F: RenderFrame
 {
-    pub fn get_widget(&mut self, id: WidgetID) -> Option<OffsetWidgetPath<'_, A, F>> {
+    pub fn get_widget(&mut self, id: WidgetID) -> Option<OffsetWidgetScanPath<'_, A, F>> {
         // TODO: OPTIMIZE
         self.scan_for_widget(id)?;
+        self.add_stack_top_to_widget_tree();
 
-        if let Some(parent) = self.stack.widgets().rev().skip(1).next() {
-            let WidgetPath {
-                path,
-                index,
-                ..
-            } = self.stack.top();
-            self.virtual_widget_tree.insert(parent.widget_id, id, index, path.last().unwrap().clone());
-            // TODO: SCAN CHILDREN FOR CHANGES ON `OffsetWidgetPath` DROP
-        }
+        let WidgetTraverser {
+            ref mut stack,
+            ref mut virtual_widget_tree,
+            ref update_state,
+        } = self;
 
-        Some(self.stack.top_mut())
+        Some(stack.top_mut().map(move |w| OffsetWidgetScan::new(w, virtual_widget_tree, update_state)))
     }
-    pub fn get_widget_relation(&mut self, id: WidgetID, relation: Relation) -> Option<OffsetWidgetPath<'_, A, F>> {
+
+    pub fn get_widget_relation(&mut self, id: WidgetID, relation: Relation) -> Option<OffsetWidgetScanPath<'_, A, F>> {
         // TODO: OPTIMIZE
         self.scan_for_widget(id)?;
 
-        match relation {
+        let widget_opt = match relation {
             Relation::Parent => {
                 self.stack.pop()?;
                 Some(self.stack.top_mut())
@@ -101,6 +109,19 @@ impl<A, F> WidgetTraverser<'_, A, F>
                     widget_as_parent.child_by_index_mut(index)
                 })
             },
+        };
+        match widget_opt {
+            Some(_) => {
+                self.add_stack_top_to_widget_tree();
+                let WidgetTraverser {
+                    ref mut stack,
+                    ref mut virtual_widget_tree,
+                    ref update_state,
+                } = self;
+
+                Some(stack.top_mut().map(move |w| OffsetWidgetScan::new(w, virtual_widget_tree, update_state)))
+            },
+            None => None
         }
     }
 
@@ -139,12 +160,20 @@ impl<A, F> WidgetTraverser<'_, A, F>
         &mut widgets[..valid_widgets]
     }
 
+    /// Crawl over all widgets in the tree. Any operations performed on the widget *should not*
+    /// modify the structure of the child widgets.
     pub fn crawl_widgets(&mut self, mut for_each: impl FnMut(OffsetWidgetPath<'_, A, F>)) {
-        self.stack.truncate(1);
+        let WidgetTraverser {
+            ref mut stack,
+            ref mut virtual_widget_tree,
+            ref update_state,
+        } = self;
+
+        stack.truncate(1);
         let mut child_index = 0;
         loop {
-            for_each(self.stack.top_mut());
-            let valid_child = self.stack.try_push(|top_widget| {
+            for_each(stack.top_mut());
+            let valid_child = stack.try_push(|top_widget| {
                 if let Some(top_widget_as_parent) = top_widget.as_parent_mut() {
                     return top_widget_as_parent.child_by_index_mut(child_index);
                 }
@@ -156,8 +185,8 @@ impl<A, F> WidgetTraverser<'_, A, F>
             match valid_child {
                 true => child_index = 0,
                 false => {
-                    child_index = self.stack.top_index() + 1;
-                    if self.stack.pop().is_none() {
+                    child_index = stack.top_index() + 1;
+                    if stack.pop().is_none() {
                         break
                     }
                 }
@@ -168,17 +197,27 @@ impl<A, F> WidgetTraverser<'_, A, F>
     pub fn root_id(&self) -> WidgetID {
         self.virtual_widget_tree.root_id()
     }
+
+    pub fn all_widgets(&self) -> impl '_ + Iterator<Item=WidgetID> {
+        self.virtual_widget_tree.all_nodes().map(|(id, _)| id)
+    }
 }
 
 impl<A, F> WidgetTraverser<'_, A, F>
     where F: RenderFrame
 {
     fn scan_for_widget(&mut self, widget_id: WidgetID) -> Option<OffsetWidgetPath<A, F>> {
-        self.stack.truncate(1);
+        let WidgetTraverser {
+            ref mut stack,
+            ref mut virtual_widget_tree,
+            ref update_state,
+        } = self;
+
+        stack.truncate(1);
         let mut widget_found = false;
         let mut child_index = 0;
         loop {
-            let valid_child = self.stack.try_push(|top_widget| {
+            let valid_child = stack.try_push(|top_widget| {
                 let top_id = top_widget.widget_tag().widget_id;
 
                 if widget_id == top_id {
@@ -194,18 +233,30 @@ impl<A, F> WidgetTraverser<'_, A, F>
             }).is_some();
 
             if widget_found {
-                break Some(self.stack.top_mut());
+                break Some(stack.top_mut());
             }
 
             match valid_child {
                 true => child_index = 0,
                 false => {
-                    child_index = self.stack.top_index() + 1;
-                    if self.stack.pop().is_none() {
+                    child_index = stack.top_index() + 1;
+                    if stack.pop().is_none() {
                         break None
                     }
                 }
             }
+        }
+    }
+
+    fn add_stack_top_to_widget_tree(&mut self) {
+        if let Some(parent) = self.stack.widgets().rev().skip(1).next() {
+            let WidgetPath {
+                path,
+                index,
+                widget_id,
+                ..
+            } = self.stack.top();
+            self.virtual_widget_tree.insert(parent.widget_id, widget_id, index, path.last().unwrap().clone());
         }
     }
 }

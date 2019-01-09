@@ -13,10 +13,9 @@
 // limitations under the License.
 
 use crate::widgets::assistants::text_edit::{TextEditAssist, TextEditOps, LineCharFilter};
-use crate::core::event::{EventOps, WidgetEvent, InputState};
+use crate::core::event::{EventOps, WidgetEvent, WidgetEventSourced, InputState};
 use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
 use crate::core::render::{RenderFrameClipped, Theme};
-use crate::core::popup::ChildPopupsMut;
 use crate::core::timer::TimerRegister;
 
 use crate::cgmath::Point2;
@@ -142,8 +141,9 @@ macro_rules! render_and_event {
                 self.min_size.dims.y += render_string_min.height();
             }
 
-            fn on_widget_event(&mut self, event: WidgetEvent, input_state: InputState, _: Option<ChildPopupsMut<A, F>>, _: &[WidgetIdent]) -> EventOps<A, F> {
+            fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps<A> {
                 use self::WidgetEvent::*;
+                let event = event.unwrap();
 
                 let TextEditOps {
                     allow_bubble,
@@ -153,7 +153,7 @@ macro_rules! render_and_event {
                     focus,
                 } = self.edit.adapt_event(&event, input_state);
                 if cursor_flash.is_some() {
-                    self.widget_tag.mark_update_timer();
+                    // self.widget_tag.mark_update_timer();
                 }
                 if redraw {
                     self.widget_tag.request_redraw();
@@ -172,7 +172,6 @@ macro_rules! render_and_event {
                     bubble: allow_bubble && event.default_bubble(),
                     cursor_pos: None,
                     cursor_icon,
-                    popup: None
                 }
             }
 

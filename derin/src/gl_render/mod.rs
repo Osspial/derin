@@ -30,7 +30,7 @@ use gullery::ContextState;
 use gullery::framebuffer::render_state::{RenderState, BlendFunc, BlendFuncs};
 use gullery::program::{Shader, Program};
 use gullery::texture::Texture;
-use gullery::framebuffer::{DrawMode, Framebuffer, DefaultFramebuffer};
+use gullery::framebuffer::{DrawMode, Framebuffer, FramebufferDefault};
 use gullery::buffer::{Buffer, BufferUsage};
 use gullery::vertex::VertexArrayObject;
 use gullery::image_format::Rgba;
@@ -57,7 +57,6 @@ pub struct GLRenderer {
 }
 
 pub struct GLFrame {
-    output_vertices: bool,
     poly_translator: Translator,
     draw: FrameDraw
 }
@@ -71,7 +70,7 @@ struct FrameDraw {
     context_state: Rc<ContextState>,
     gl_tex_atlas: Texture<D2, Rgba<u8>>,
     render_state: RenderState,
-    fb: DefaultFramebuffer,
+    fb: FramebufferDefault,
     program: Program<GLVertex, GLUniforms<'static>>,
     vao: VertexArrayObject<GLVertex, !>,
     window_dims: DimsBox<D2, u32>,
@@ -162,21 +161,20 @@ impl GLRenderer {
 
         Ok(GLRenderer {
             frame: GLFrame {
-                output_vertices: true,
                 poly_translator: Translator::new(),
                 draw: FrameDraw {
                     vertices,
                     atlas: Atlas::new(),
                     font_cache: FontCache::new(),
-                    fb: DefaultFramebuffer::new(context_state.clone()),
+                    fb: FramebufferDefault::new(context_state.clone()).expect("Could not access default framebuffer"),
                     vao,
                     render_state: RenderState {
-                        blend: Some(BlendFuncs {
+                        blend: BlendFuncs {
                             src_rgb: BlendFunc::SrcAlpha,
                             dst_rgb: BlendFunc::OneMinusSrcAlpha,
                             src_alpha: BlendFunc::SrcAlpha,
                             dst_alpha: BlendFunc::OneMinusSrcAlpha
-                        }),
+                        },
                         ..RenderState::default()
                     },
                     program,
@@ -260,7 +258,7 @@ impl Renderer for GLRenderer {
         }
     }
 
-    fn make_frame(&mut self, draw_output: bool) -> (&mut GLFrame, BoundBox<D2, i32>) {
+    fn make_frame(&mut self) -> (&mut GLFrame, BoundBox<D2, i32>) {
         let (width, height) = self.window.get_inner_size().unwrap();
         let scale_factor = self.window.hidpi_factor();
         self.frame.draw.window_dims = DimsBox::new2(width, height);
@@ -268,10 +266,9 @@ impl Renderer for GLRenderer {
         let width_scaled = (width as f32 * scale_factor) as u32;
         let height_scaled = (height as f32 * scale_factor) as u32;
         self.frame.draw.render_state.viewport = DimsBox::new2(width_scaled, height_scaled).into();
-        self.frame.draw.fb.clear_color(Rgba::new(1., 1., 1., 1.));
+        self.frame.draw.fb.clear_color_all(Rgba::new(1., 1., 1., 1.));
         self.frame.draw.fb.clear_depth(1.0);
         self.frame.draw.fb.clear_stencil(0);
-        self.frame.output_vertices = draw_output;
 
         (&mut self.frame, BoundBox::new2(0, 0, width as i32, height as i32))
     }
@@ -297,7 +294,7 @@ impl FrameDraw {
             tex_atlas: &self.gl_tex_atlas
         };
 
-        for verts in self.vertices.chunks(self.vao.vertex_buffer().size()) {
+        for verts in self.vertices.chunks(self.vao.vertex_buffer().len()) {
             self.vao.vertex_buffer_mut().sub_data(0, verts);
             self.fb.draw(DrawMode::Triangles, 0..verts.len(), &self.vao, &self.program, uniform, self.render_state);
         }
@@ -306,7 +303,7 @@ impl FrameDraw {
 }
 
 impl PrimFrame for GLFrame {
-    type DirectRender = (DefaultFramebuffer, OffsetBox<D2, u32>, Rc<ContextState>);
+    type DirectRender = (FramebufferDefault, OffsetBox<D2, u32>, Rc<ContextState>);
 }
 
 impl RenderFrame for GLFrame {
@@ -323,7 +320,6 @@ impl RenderFrame for GLFrame {
             theme,
             DPI::new(dpi_axis, dpi_axis), // TODO: REPLACE HARDCODED VALUE
             prim_iter,
-            self.output_vertices,
             &mut self.draw
         );
     }

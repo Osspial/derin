@@ -1,7 +1,6 @@
 use crate::{
     LoopFlow,
-    event::{EventOps, InputState, WidgetEvent},
-    popup::ChildPopupsMut,
+    event::{EventOps, InputState, WidgetEvent, WidgetEventSourced},
     render::{RenderFrameClipped, RenderFrame, Theme},
     tree::{
         *,
@@ -109,11 +108,13 @@ impl Widget<TestAction, TestRenderFrame> for TestWidget {
     fn render(&mut self, _frame: &mut RenderFrameClipped<TestRenderFrame>) {}
     fn on_widget_event(
         &mut self,
-        event: WidgetEvent,
+        event: WidgetEventSourced,
         input_state: InputState,
-        popups: Option<ChildPopupsMut<TestAction, TestRenderFrame>>,
-        source_child: &[WidgetIdent]
-    ) -> EventOps<TestAction, TestRenderFrame> {
+    ) -> EventOps<TestAction> {
+        let (event, source_child) = match event {
+            WidgetEventSourced::This(event) => (event, &[][..]),
+            WidgetEventSourced::Bubble(event, child) => (event, child)
+        };
         let ref_event = self.event_list.next();
 
         let real_event = TestEvent {
@@ -171,34 +172,28 @@ impl Parent<TestAction, TestRenderFrame> for TestWidget {
             .map(|(ident, widget)| WidgetSummary { ident: ident.clone(), index, widget: widget as _ })
     }
 
-    fn children<'a, G, R>(&'a self, mut for_each: G) -> Option<R>
+    fn children<'a, G>(&'a self, mut for_each: G)
         where TestAction: 'a,
-              G: FnMut(WidgetSummary<&'a Widget<TestAction, TestRenderFrame>>) -> LoopFlow<R>
+              G: FnMut(WidgetSummary<&'a Widget<TestAction, TestRenderFrame>>) -> LoopFlow
     {
         for (index, (ident, widget)) in self.children.as_ref().unwrap().iter().enumerate() {
             let flow = for_each(WidgetSummary { ident: ident.clone(), index, widget: widget as _ });
-            if let LoopFlow::Break(r) = flow {
-                return Some(r);
+            if let LoopFlow::Break = flow {
+                return;
             }
         }
-
-        None
     }
-    fn children_mut<'a, G, R>(&'a mut self, mut for_each: G) -> Option<R>
+    fn children_mut<'a, G>(&'a mut self, mut for_each: G)
         where TestAction: 'a,
-              G: FnMut(WidgetSummary<&'a mut Widget<TestAction, TestRenderFrame>>) -> LoopFlow<R>
+              G: FnMut(WidgetSummary<&'a mut Widget<TestAction, TestRenderFrame>>) -> LoopFlow
     {
         for (index, (ident, widget)) in self.children.as_mut().unwrap().iter_mut().enumerate() {
             let flow = for_each(WidgetSummary { ident: ident.clone(), index, widget: widget as _ });
-            if let LoopFlow::Break(r) = flow {
-                return Some(r);
+            if let LoopFlow::Break = flow {
+                return;
             }
         }
-
-        None
     }
-
-    fn update_child_layout(&mut self) {}
 }
 
 macro_rules! extract_widget_tree_idents {

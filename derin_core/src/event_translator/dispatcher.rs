@@ -3,7 +3,7 @@ use crate::{
     event::{WidgetEvent},
     tree::{WidgetID, WidgetIdent},
     render::RenderFrame,
-    widget_traverser::{Relation, WidgetTraverser, OffsetWidgetPath},
+    widget_traverser::{Relation, WidgetTraverser, OffsetWidgetScanPath},
 };
 use std::collections::VecDeque;
 
@@ -54,7 +54,7 @@ impl EventDispatcher {
     pub fn dispatch_events<A, F>(
         &mut self,
         widget_traverser: &mut WidgetTraverser<A, F>,
-        mut f: impl FnMut(&mut Self, OffsetWidgetPath<A, F>, DispatchableEvent)
+        mut f: impl FnMut(&mut Self, OffsetWidgetScanPath<A, F>, DispatchableEvent)
     )
         where A: 'static,
               F: RenderFrame
