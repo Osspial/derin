@@ -267,7 +267,7 @@ macro_rules! test_widget_tree {
             $($($children)*)*
         );
 
-        let mut widget_tag = WidgetTag::new();
+        let mut widget_tag = crate::tree::WidgetTag::new();
         widget_tag.widget_id = $child;
 
         let widget = crate::test_helpers::TestWidget {

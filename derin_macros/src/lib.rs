@@ -166,25 +166,23 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
                 }
 
                 #[allow(unused_assignments, unused_variables, unused_mut)]
-                fn children<'a, __G, __R>(&'a self, mut for_each_child: __G) -> Option<__R>
-                    where __G: FnMut(WidgetSummary<&'a Self::Widget>) -> LoopFlow<__R>,
+                fn children<'a, __G>(&'a self, mut for_each_child: __G)
+                    where __G: FnMut(WidgetSummary<&'a Self::Widget>) -> LoopFlow,
                           #action_ty: 'a,
                           __F: 'a
                 {
                     let mut index = 0;
                     #(#call_child_iter)*
-                    None
                 }
 
                 #[allow(unused_assignments, unused_variables, unused_mut)]
-                fn children_mut<'a, __G, __R>(&'a mut self, mut for_each_child: __G) -> Option<__R>
-                    where __G: FnMut(WidgetSummary<&'a mut Self::Widget>) -> LoopFlow<__R>,
+                fn children_mut<'a, __G>(&'a mut self, mut for_each_child: __G)
+                    where __G: FnMut(WidgetSummary<&'a mut Self::Widget>) -> LoopFlow,
                           #action_ty: 'a,
                           __F: 'a
                 {
                     let mut index = 0;
                     #(#call_child_mut_iter)*
-                    None
                 }
             }
         }};
@@ -234,8 +232,8 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
 
                     output = quote!{{
                         let flow = for_each_child(#new_summary (#child_id, index, #widget_expr));
-                        if let LoopFlow::Break(b) = flow {
-                            return Some(b);
+                        if let LoopFlow::Break = flow {
+                            return;
                         }
                         index += 1;
                     }};
@@ -250,8 +248,8 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
                         for (child_index, child) in (#widget_expr).into_iter().enumerate() {
                             let flow = for_each_child(#new_summary (#child_id, index, child));
 
-                            if let LoopFlow::Break(b) = flow {
-                                return Some(b);
+                            if let LoopFlow::Break = flow {
+                                return;
                             }
                             index += 1;
                         }

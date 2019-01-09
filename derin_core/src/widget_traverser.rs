@@ -170,21 +170,25 @@ impl<A, F> WidgetTraverser<'_, A, F>
         } = self;
 
         stack.truncate(1);
+        for_each(stack.top_mut());
+
         let mut child_index = 0;
         loop {
-            for_each(stack.top_mut());
-            let valid_child = stack.try_push(|top_widget| {
+            let child_opt = stack.try_push(|top_widget| {
                 if let Some(top_widget_as_parent) = top_widget.as_parent_mut() {
                     return top_widget_as_parent.child_by_index_mut(child_index);
                 }
 
                 None
-            }).is_some();
+            });
 
 
-            match valid_child {
-                true => child_index = 0,
-                false => {
+            match child_opt {
+                Some(child) => {
+                    for_each(child);
+                    child_index = 0;
+                },
+                None => {
                     child_index = stack.top_index() + 1;
                     if stack.pop().is_none() {
                         break
@@ -258,5 +262,47 @@ impl<A, F> WidgetTraverser<'_, A, F>
             } = self.stack.top();
             self.virtual_widget_tree.insert(parent.widget_id, widget_id, index, path.last().unwrap().clone());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::update_state::UpdateState;
+
+    #[test]
+    fn test_crawl_widgets() {
+        test_widget_tree!{
+            let event_list = crate::test_helpers::EventList::new();
+            let mut tree = root {
+                rect: (0, 0, 0, 0);
+                a {
+                    rect: (0, 0, 0, 0);
+                    aa { rect: (0, 0, 0, 0) },
+                    ab { rect: (0, 0, 0, 0) }
+                },
+                b { rect: (0, 0, 0, 0) },
+                c { rect: (0, 0, 0, 0) }
+            };
+        }
+
+        let mut traverser_base = WidgetTraverserBase::new(root);
+        let update_state = UpdateState::new();
+        let mut traverser = traverser_base.with_root_ref(&mut tree, update_state.clone());
+
+        let mut expected_id_iter = vec![
+            root,
+            a,
+            aa,
+            ab,
+            b,
+            c
+        ].into_iter();
+
+        traverser.crawl_widgets(|path| {
+            println!("crawl {:?}", path.path);
+            assert_eq!(Some(path.widget_id), expected_id_iter.next());
+        });
+        assert_eq!(None, expected_id_iter.next());
     }
 }
