@@ -285,6 +285,7 @@ impl<A, N, F> Root<A, N, F>
 
             let mut widget_traverser = widget_traverser_base.with_root_ref(root_widget, self.update_state.clone());
             widget_traverser.crawl_widgets(|mut path| {
+                println!("render {:?}", path.path);
                 let widget_rect = path.widget.rect();
                 let mut render_frame_clipped = RenderFrameClipped {
                     frame: frame,
@@ -296,9 +297,11 @@ impl<A, N, F> Root<A, N, F>
                 path.widget.render(&mut render_frame_clipped);
             });
 
+            println!();
+            // YOU WERE DOING: GET COUNTER EXAMPLE WORKING
+
             renderer.finish_frame(theme);
         }
-
     }
 }
 

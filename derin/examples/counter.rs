@@ -48,10 +48,11 @@ fn main() {
     };
 
     let mut window = unsafe{ Window::new(window_config, counter_ui, theme).unwrap() };
-    let _: Option<()> = window.run_forever(
+    window.run_forever(
         |value_delta, counter_ui, _| {
             value += value_delta;
             *counter_ui.container_mut().label.contents_mut().as_text().unwrap() = value.to_string();
+            println!("{}", value);
             LoopFlow::Continue
         },
         |_, _| None
