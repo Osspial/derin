@@ -23,7 +23,7 @@
             "name": "(Windows) Launch",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "D:/programming/cargo_shared_target/debug/examples/hello_world.exe",
+            "program": "D:/programming/cargo_shared_target/debug/examples/control_gallery.exe",
             // "args": ["run", "--example", "hello_world"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}/derin",

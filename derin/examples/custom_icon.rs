@@ -58,7 +58,7 @@ fn main() {
     };
 
     let mut window = unsafe{ Window::new(window_config, group, theme).unwrap() };
-    let _: Option<()> = window.run_forever(
+    window.run_forever(
         |_: (), _, _| {
             LoopFlow::Continue
         },
