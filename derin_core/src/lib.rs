@@ -51,6 +51,7 @@ use crate::{
 };
 use derin_common_types::{
     buttons::{MouseButton, Key, ModifierKeys},
+    layout::SizeBounds,
 };
 use std::{
     rc::Rc,
@@ -192,12 +193,14 @@ impl<A, N, F> Root<A, N, F>
         }
     }
 
-    pub fn relayout(&mut self) {
+    pub fn relayout(&mut self) -> SizeBounds {
         let mut widget_traverser = self.widget_traverser_base.with_root_ref(&mut self.root_widget, self.update_state.clone());
 
         let mut relayout_widgets = Vec::new();
 
+        let mut iter_num = 0;
         let global_update = self.update_state.borrow().global_update;
+
         while global_update || self.update_state.borrow().relayout.len() > 0 {
             match global_update {
                 false => relayout_widgets.extend(self.update_state.borrow_mut().relayout.drain()),
@@ -213,12 +216,7 @@ impl<A, N, F> Root<A, N, F>
             for i in 0..valid_len {
                 let widget_id = relayout_widgets[i];
 
-                // Ignore any duplicate Widget IDs.
-                if Some(widget_id) == relayout_widgets.get(i.wrapping_sub(1)).cloned() {
-                    continue;
-                }
-
-                let WidgetPath{mut widget, ..} = match widget_traverser.get_widget(widget_id) {
+                let WidgetPath{mut widget, path, ..} = match widget_traverser.get_widget(widget_id) {
                     Some(path) => path,
                     None => continue
                 };
@@ -228,21 +226,31 @@ impl<A, N, F> Root<A, N, F>
                 let size_bounds = widget.size_bounds();
                 let new_widget_rect = widget.rect();
                 let widget_dims = new_widget_rect.dims();
-                drop(widget);
+                widget.cancel_scan();
+
+                let dims_bounded = size_bounds.bound_rect(widget_dims);
 
                 // If we're doing a global update, all widgets are in the relayout list so we don't
                 // need to queue the part for relayout. Otherwise, queue the parent for relayout if
                 // the widget's rect has changed or the widget's dimensions no longer fall in its size
                 // bounds.
                 let parent_needs_relayout =
-                    size_bounds.bound_rect(widget_dims) != widget_dims ||
+                    dims_bounded != widget_dims ||
                     old_widget_rect != new_widget_rect;
 
                 if !global_update && parent_needs_relayout {
+                    drop(widget);
                     if let Some(WidgetPath{widget_id: parent_id, ..}) = widget_traverser.get_widget_relation(widget_id, Relation::Parent) {
-                        // This can push duplicate relayout requests to the `relayout_widgets` queue
-                        // if multiple children aren't in their size bounds. We handle that above.
-                        relayout_widgets.push(parent_id);
+                        if !relayout_widgets.contains(&parent_id) {
+                            relayout_widgets.push(parent_id);
+                        }
+                        continue;
+                    } /*else*/ { // Ideally this would be an else block but lifetimes.
+                        // If there's no parent, we must be on the root widget. So, just resize the
+                        // widget to what it expects.
+                        let mut widget = widget_traverser.get_widget(widget_id).unwrap().widget;
+                        widget.set_rect(dims_bounded.into());
+                        widget.cancel_scan();
                     }
                 }
             }
@@ -253,7 +261,18 @@ impl<A, N, F> Root<A, N, F>
             if global_update {
                 break;
             }
+
+            iter_num += 1;
+            if iter_num > MAX_FRAME_UPDATE_ITERATIONS {
+                // TODO: CHANGE TO LOG WARN
+                println!("WARNING: layout iterations happened unreasonable number of times");
+                break;
+            }
         }
+
+        let root_id = widget_traverser.root_id();
+        let root_widget = widget_traverser.get_widget(root_id).unwrap().widget;
+        root_widget.size_bounds()
     }
 
     pub fn redraw<R>(&mut self, renderer: &mut R)

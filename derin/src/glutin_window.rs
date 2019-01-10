@@ -259,7 +259,8 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                 break;
             }
 
-            root.relayout();
+            let size_bounds = root.relayout();
+            primary_renderer.set_size_bounds(size_bounds);
             root.redraw(primary_renderer);
         }
     }
