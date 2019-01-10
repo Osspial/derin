@@ -259,6 +259,7 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                 break;
             }
 
+            root.relayout();
             root.redraw(primary_renderer);
         }
     }
