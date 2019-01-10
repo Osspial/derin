@@ -199,6 +199,7 @@ impl<A, N, F> Root<A, N, F>
 
         let global_update = self.update_state.borrow().global_update;
         while global_update || self.update_state.borrow().relayout.len() > 0 {
+            println!("{} || {} > 0", global_update, self.update_state.borrow().relayout.len());
             match global_update {
                 false => relayout_widgets.extend(self.update_state.borrow_mut().relayout.drain()),
                 true => {
@@ -206,6 +207,7 @@ impl<A, N, F> Root<A, N, F>
                     relayout_widgets.extend(widget_traverser.all_widgets());
                 }
             }
+            println!("{} > 0", self.update_state.borrow().relayout.len());
 
             let valid_len = widget_traverser.sort_widgets_by_depth(&mut relayout_widgets).len();
             relayout_widgets.truncate(valid_len);
@@ -218,16 +220,19 @@ impl<A, N, F> Root<A, N, F>
                     continue;
                 }
 
-                let WidgetPath{mut widget, ..} = match widget_traverser.get_widget(widget_id) {
+
+                let WidgetPath{mut widget, path, ..} = match widget_traverser.get_widget(widget_id) {
                     Some(path) => path,
                     None => continue
                 };
+                println!("relayout widget {:?}", path);
 
                 let old_widget_rect = widget.rect();
                 widget.update_layout(&self.theme);
                 let size_bounds = widget.size_bounds();
                 let new_widget_rect = widget.rect();
                 let widget_dims = new_widget_rect.dims();
+                widget.cancel_scan();
                 drop(widget);
 
                 // If we're doing a global update, all widgets are in the relayout list so we don't
@@ -240,6 +245,14 @@ impl<A, N, F> Root<A, N, F>
 
                 if !global_update && parent_needs_relayout {
                     if let Some(WidgetPath{widget_id: parent_id, ..}) = widget_traverser.get_widget_relation(widget_id, Relation::Parent) {
+                        println!("parent needs relayout");
+                        if size_bounds.bound_rect(widget_dims) != widget_dims {
+                            println!("\tsize_bounds {:?}", size_bounds);
+                            println!("\t{:?} != {:?}", size_bounds.bound_rect(widget_dims), widget_dims);
+                        }
+                        if old_widget_rect != new_widget_rect {
+                            println!("\t{:?} != {:?}", old_widget_rect, new_widget_rect);
+                        }
                         // This can push duplicate relayout requests to the `relayout_widgets` queue
                         // if multiple children aren't in their size bounds. We handle that above.
                         relayout_widgets.push(parent_id);
@@ -249,11 +262,13 @@ impl<A, N, F> Root<A, N, F>
 
             // Remove all re-layed-out widgets from the list.
             relayout_widgets.drain(..valid_len);
+            println!("drain {}; remaining {}", valid_len, relayout_widgets.len());
 
             if global_update {
                 break;
             }
         }
+        println!("relayout done");
     }
 
     pub fn redraw<R>(&mut self, renderer: &mut R)

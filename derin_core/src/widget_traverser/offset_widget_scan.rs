@@ -52,6 +52,10 @@ impl<A, F: RenderFrame> OffsetWidgetScan<'_, A, F> {
             scan: false,
         }
     }
+
+    pub fn cancel_scan(&mut self) {
+        self.scan = false;
+    }
 }
 
 fn update_recursive<A, F: RenderFrame>(widget: &dyn Widget<A, F>, tree: &mut VirtualWidgetTree, update_state: &Rc<UpdateStateCell>) {
