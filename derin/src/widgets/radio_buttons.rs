@@ -265,8 +265,6 @@ impl<A, F> Widget<A, F> for RadioButton
             action,
             focus: None,
             bubble: force_bubble || event.default_bubble(),
-            cursor_pos: None,
-            cursor_icon: None,
         }
     }
 }
@@ -376,8 +374,6 @@ impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
             action: None,
             focus: None,
             bubble,
-            cursor_pos: None,
-            cursor_icon: None,
         }
     }
 }

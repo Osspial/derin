@@ -17,14 +17,15 @@ pub(crate) mod dynamic;
 use self::dynamic::ParentDyn;
 use crate::{
     LoopFlow,
-    mbseq::MouseButtonSequence,
     event::{WidgetEventSourced, EventOps, InputState},
+    mbseq::MouseButtonSequence,
     render::{RenderFrame, RenderFrameClipped},
-    timer::TimerRegister,
+    timer::{TimerID, Timer},
     update_state::{UpdateStateShared, UpdateStateCell}
 };
 use derin_common_types::{
-    layout::SizeBounds
+    cursor::CursorIcon,
+    layout::SizeBounds,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -37,6 +38,7 @@ use cgmath_geometry::{
     D2, rect::BoundBox,
     cgmath::Point2,
 };
+use fnv::FnvHashMap;
 
 
 pub(crate) const ROOT_IDENT: WidgetIdent = WidgetIdent::Num(0);
@@ -61,6 +63,7 @@ pub(crate) enum MouseState {
 pub struct WidgetTag {
     update_state: RefCell<UpdateStateShared>,
     pub(crate) widget_id: WidgetID,
+    pub(crate) timers: FnvHashMap<TimerID, Timer>,
     pub(crate) mouse_state: Cell<MouseState>,
 }
 
@@ -91,29 +94,8 @@ impl MouseState {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct WidgetID(u32);
+id!(pub WidgetID);
 
-impl WidgetID {
-    #[inline]
-    pub(crate) fn new() -> WidgetID {
-        use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
-
-        static ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
-        let id = ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32;
-
-        WidgetID(id as u32)
-    }
-
-    pub fn to_u32(self) -> u32 {
-        self.0
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn dummy() -> WidgetID {
-        WidgetID(!0)
-    }
-}
 
 pub trait Widget<A, F: RenderFrame> {
     fn widget_tag(&self) -> &WidgetTag;
@@ -130,7 +112,6 @@ pub trait Widget<A, F: RenderFrame> {
     fn size_bounds(&self) -> SizeBounds {
         SizeBounds::default()
     }
-    fn register_timers(&self, _register: &mut TimerRegister) {}
 
     #[doc(hidden)]
     fn as_parent(&self) -> Option<&ParentDyn<A, F>> {
@@ -173,9 +154,6 @@ impl<'a, A, F, W> Widget<A, F> for &'a mut W
     }
     fn size_bounds(&self) -> SizeBounds {
         W::size_bounds(self)
-    }
-    fn register_timers(&self, register: &mut TimerRegister) {
-        W::register_timers(self, register)
     }
 
     #[doc(hidden)]
@@ -220,9 +198,6 @@ impl<A, F, W> Widget<A, F> for Box<W>
     }
     fn size_bounds(&self) -> SizeBounds {
         W::size_bounds(self)
-    }
-    fn register_timers(&self, register: &mut TimerRegister) {
-        W::register_timers(self, register)
     }
 
     #[doc(hidden)]
@@ -325,6 +300,7 @@ impl WidgetTag {
         WidgetTag {
             update_state: RefCell::new(UpdateStateShared::new()),
             widget_id: WidgetID::new(),
+            timers: FnvHashMap::default(),
             mouse_state: Cell::new(MouseState::Untracked),
         }
     }
@@ -341,7 +317,20 @@ impl WidgetTag {
         self
     }
 
-    pub fn timers(&mut self) -> TimerRegister<'_> {
+    pub fn timers(&self) -> &FnvHashMap<TimerID, Timer> {
+        &self.timers
+    }
+
+    pub fn timers_mut(&mut self) -> &mut FnvHashMap<TimerID, Timer> {
+        self.update_state.get_mut().request_update_timers(self.widget_id);
+        &mut self.timers
+    }
+
+    pub fn set_cursor_pos(&mut self, cursor_pos: Point2<i32>) {
+        unimplemented!()
+    }
+
+    pub fn set_cursor_icon(&mut self, cursor_icon: CursorIcon) {
         unimplemented!()
     }
 

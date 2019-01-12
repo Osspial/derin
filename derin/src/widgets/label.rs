@@ -93,8 +93,6 @@ impl<A, F> Widget<A, F> for Label
             action: None,
             focus: None,
             bubble: true,
-            cursor_pos: None,
-            cursor_icon: None,
         }
     }
 }

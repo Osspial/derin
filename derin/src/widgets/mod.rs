@@ -49,7 +49,6 @@ use crate::core::render::Theme as CoreTheme;
 
 /// The `Widget` trait, as well as associated types used to create custom widgets.
 pub mod custom {
-    pub use crate::core::timer::TimerRegister;
     pub use crate::core::tree::{WidgetTag, Widget, WidgetSummary, WidgetIdent};
 }
 

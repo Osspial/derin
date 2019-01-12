@@ -172,8 +172,6 @@ impl<A, F, C, L> Widget<A, F> for Group<C, L>
             action: None,
             focus: None,
             bubble: true,
-            cursor_pos: None,
-            cursor_icon: None,
         }
     }
 }

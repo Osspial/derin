@@ -313,8 +313,6 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
             action: None,
             focus: None,
             bubble: allow_bubble && event.default_bubble(),
-            cursor_pos: None,
-            cursor_icon: None,
         }
     }
 }

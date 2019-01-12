@@ -242,9 +242,9 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
 
             let frame_result = frame.finish();
 
-            match frame_result.wait_until_call_timer {
+            match frame_result.next_timer {
                 None => *timer_sync.lock() = TimerPark::Indefinite,
-                Some(park_duration) => *timer_sync.lock() = TimerPark::Timeout(park_duration)
+                Some(park_until) => *timer_sync.lock() = TimerPark::Timeout(park_until)
             }
             timer_thread_handle.thread().unpark();
 

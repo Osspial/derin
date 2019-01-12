@@ -193,8 +193,6 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
             action,
             focus: None,
             bubble: event.default_bubble(),
-            cursor_pos: None,
-            cursor_icon: None,
         }
     }
 }
