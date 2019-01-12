@@ -15,8 +15,6 @@
 #![feature(range_contains, nll, specialization, try_blocks)]
 
 use cgmath_geometry::cgmath;
-#[macro_use]
-extern crate bitflags;
 extern crate derin_common_types;
 
 #[cfg(test)]
@@ -131,7 +129,6 @@ pub struct FrameEventProcessor<'a, A, F>
     where A: 'static,
           F: RenderFrame + 'static
 {
-    timer_list: &'a mut TimerList,
     input_state: &'a mut InputState,
     event_translator: &'a mut EventTranslator<A>,
     update_state: Rc<UpdateStateCell>,
@@ -185,7 +182,6 @@ impl<A, N, F> Root<A, N, F>
 
     pub fn start_frame(&mut self) -> FrameEventProcessor<'_, A, F> {
         FrameEventProcessor {
-            timer_list: &mut self.timer_list,
             input_state: &mut self.input_state,
             event_translator: &mut self.event_translator,
             update_state: self.update_state.clone(),
@@ -216,8 +212,8 @@ impl<A, N, F> Root<A, N, F>
             for i in 0..valid_len {
                 let widget_id = relayout_widgets[i];
 
-                let WidgetPath{mut widget, path, ..} = match widget_traverser.get_widget(widget_id) {
-                    Some(path) => path,
+                let WidgetPath{mut widget, ..} = match widget_traverser.get_widget(widget_id) {
+                    Some(widget) => widget,
                     None => continue
                 };
 
@@ -300,13 +296,12 @@ impl<A, N, F> Root<A, N, F>
             update_state.reset_global_update();
             drop(update_state);
 
-            let (mut frame, window_rect) = renderer.make_frame();
+            let (frame, window_rect) = renderer.make_frame();
 
             let mut widget_traverser = widget_traverser_base.with_root_ref(root_widget, self.update_state.clone());
             widget_traverser.crawl_widgets(|mut path| {
-                let widget_rect = path.widget.rect();
                 let mut render_frame_clipped = RenderFrameClipped {
-                    frame: frame,
+                    frame,
                     transform: path.widget.rect(),
                     clip: path.widget.clip().unwrap_or(window_rect),
                     theme: theme
@@ -329,7 +324,6 @@ impl<A, F> FrameEventProcessor<'_, A, F>
         mut bubble_fallthrough: impl FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
     ) {
         let FrameEventProcessor {
-            ref mut timer_list,
             ref mut input_state,
             ref mut event_translator,
             ref update_state,
@@ -338,7 +332,6 @@ impl<A, F> FrameEventProcessor<'_, A, F>
 
         event_translator
             .with_data(
-                timer_list,
                 widget_traverser,
                 input_state,
                 update_state.clone(),

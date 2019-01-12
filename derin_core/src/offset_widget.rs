@@ -14,7 +14,7 @@
 
 use crate::{
     {LoopFlow, InputState},
-    tree::{Widget, WidgetIdent, WidgetTag, WidgetSummary},
+    tree::{Widget, WidgetTag, WidgetSummary},
     tree::dynamic::ParentDyn,
     event::{InputState as EventInputState, WidgetEventSourced, EventOps},
     render::{RenderFrame, RenderFrameClipped},
@@ -27,8 +27,6 @@ use crate::cgmath::{Vector2, EuclideanSpace};
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 use arrayvec::ArrayVec;
-
-use std::ops::Drop;
 
 pub(crate) struct OffsetWidget<'a, W: 'a + ?Sized> {
     widget: &'a mut W,
@@ -160,13 +158,10 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
             mouse_buttons_down_in_widget: &mbdin_array,
             keys_down
         };
-        let mut ops = self.widget.on_widget_event(
+        let ops = self.widget.on_widget_event(
             event.map(|e| e.translate(-offset)),
             input_state,
         );
-        if let Some(ref mut cursor_pos) = ops.cursor_pos {
-            *cursor_pos += offset;
-        }
         ops
     }
     // fn subtrait(&self) -> WidgetSubtrait<A, F>;

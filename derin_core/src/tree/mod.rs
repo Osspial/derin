@@ -24,7 +24,6 @@ use crate::{
     update_state::{UpdateStateShared, UpdateStateCell}
 };
 use derin_common_types::{
-    buttons::MouseButton,
     layout::SizeBounds
 };
 use std::{
@@ -47,15 +46,6 @@ pub enum WidgetIdent {
     Num(u32),
     StrCollection(Arc<str>, u32),
     NumCollection(u32, u32)
-}
-
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) struct Update {
-    pub render_self: bool,
-    pub update_child: bool,
-    pub update_timer: bool,
-    pub update_layout: bool,
-    pub update_layout_post: bool
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -101,36 +91,29 @@ impl MouseState {
     }
 }
 
-macro_rules! id {
-    (pub$(($vis:tt))* $Name:ident) => {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-        pub$(($vis))* struct $Name(u32);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WidgetID(u32);
 
-        impl $Name {
-            #[inline]
-            pub(crate) fn new() -> $Name {
-                use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
+impl WidgetID {
+    #[inline]
+    pub(crate) fn new() -> WidgetID {
+        use std::sync::atomic::{AtomicUsize, Ordering, ATOMIC_USIZE_INIT};
 
-                static ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
-                let id = ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32;
+        static ID_COUNTER: AtomicUsize = ATOMIC_USIZE_INIT;
+        let id = ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32;
 
-                $Name(id as u32)
-            }
+        WidgetID(id as u32)
+    }
 
-            pub fn to_u32(self) -> u32 {
-                self.0
-            }
+    pub fn to_u32(self) -> u32 {
+        self.0
+    }
 
-            #[allow(dead_code)]
-            pub(crate) fn dummy() -> $Name {
-                $Name(!0)
-            }
-        }
+    #[allow(dead_code)]
+    pub(crate) fn dummy() -> WidgetID {
+        WidgetID(!0)
     }
 }
-
-id!(pub WidgetID);
-
 
 pub trait Widget<A, F: RenderFrame> {
     fn widget_tag(&self) -> &WidgetTag;
@@ -370,20 +353,6 @@ impl WidgetTag {
     #[inline]
     pub(crate) fn set_owning_update_state(&self, state: &Rc<UpdateStateCell>) {
         self.update_state.borrow_mut().set_owning_update_state(self.widget_id, state);
-    }
-}
-
-impl Update {
-    pub fn needs_redraw(self) -> bool {
-        let Update {
-            render_self,
-            update_child,
-            update_timer: _,
-            update_layout,
-            update_layout_post
-        } = self;
-
-        render_self || update_child || update_layout || update_layout_post
     }
 }
 
