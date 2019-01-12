@@ -7,7 +7,6 @@ pub(crate) use self::{
     widget_stack::{WidgetPath, OffsetWidgetPath},
 };
 use crate::{
-    offset_widget::OffsetWidget,
     render::RenderFrame,
     tree::{Widget, WidgetID, WidgetIdent},
     update_state::UpdateStateCell,
@@ -163,11 +162,7 @@ impl<A, F> WidgetTraverser<'_, A, F>
     /// Crawl over all widgets in the tree. Any operations performed on the widget *should not*
     /// modify the structure of the child widgets.
     pub fn crawl_widgets(&mut self, mut for_each: impl FnMut(OffsetWidgetPath<'_, A, F>)) {
-        let WidgetTraverser {
-            ref mut stack,
-            ref mut virtual_widget_tree,
-            ref update_state,
-        } = self;
+        let stack = &mut self.stack;
 
         stack.truncate(1);
         for_each(stack.top_mut());
@@ -211,11 +206,7 @@ impl<A, F> WidgetTraverser<'_, A, F>
     where F: RenderFrame
 {
     fn scan_for_widget(&mut self, widget_id: WidgetID) -> Option<OffsetWidgetPath<A, F>> {
-        let WidgetTraverser {
-            ref mut stack,
-            ref mut virtual_widget_tree,
-            ref update_state,
-        } = self;
+        let stack = &mut self.stack;
 
         stack.truncate(1);
         let mut widget_found = false;
@@ -260,7 +251,7 @@ impl<A, F> WidgetTraverser<'_, A, F>
                 widget_id,
                 ..
             } = self.stack.top();
-            self.virtual_widget_tree.insert(parent.widget_id, widget_id, index, path.last().unwrap().clone());
+            self.virtual_widget_tree.insert(parent.widget_id, widget_id, index, path.last().unwrap().clone()).unwrap();
         }
     }
 }

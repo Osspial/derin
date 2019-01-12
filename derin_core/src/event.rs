@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use derin_common_types::cursor::CursorIcon;
 use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
 use crate::cgmath::{Point2, Vector2};
-use crate::tree::{Widget, WidgetIdent};
-use crate::render::RenderFrame;
+use crate::tree::{WidgetIdent};
 
 use std::time::{Instant, Duration};
 
@@ -33,13 +31,6 @@ pub struct EventOps<A> {
     pub focus: Option<FocusChange>,
     /// Bubble the event to the parent widget.
     pub bubble: bool,
-    /// Set the mouse cursor to the given position in the widget.
-    pub cursor_pos: Option<Point2<i32>>,
-    /// Set the mouse cursor's icon to the given icon.
-    ///
-    /// Note that this change is permanent, and isn't reset to the default cursor until another
-    /// `cursor_icon` operation is recieved.
-    pub cursor_icon: Option<CursorIcon>,
 }
 
 /// Changes the keyboard focus, removing the focus from another widget if necessary.

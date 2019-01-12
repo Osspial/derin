@@ -2,10 +2,9 @@ mod dispatcher;
 
 use crate::{
     WindowEvent, InputState, LoopFlow,
-    cgmath::{Point2, Vector2},
+    cgmath::{Vector2},
     event::{FocusSource, MouseHoverChange, WidgetEvent, WidgetEventSourced},
     tree::*,
-    timer::TimerList,
     render::RenderFrame,
     widget_traverser::{Relation, WidgetTraverser, OffsetWidgetScanPath},
     update_state::{UpdateStateCell},
@@ -30,7 +29,6 @@ pub(crate) struct TranslatorActive<'a, 'b, A, F>
 {
     widget_traverser: &'a mut WidgetTraverser<'b, A, F>,
     inner: &'a mut TranslatorInner<A>,
-    timer_list: &'a mut TimerList,
     input_state: &'a mut InputState,
     update_state: Rc<UpdateStateCell>,
 }
@@ -54,7 +52,6 @@ impl<A> EventTranslator<A>
 
     pub fn with_data<'a, 'b, F: RenderFrame>(
         &'a mut self,
-        timer_list: &'a mut TimerList,
         widget_traverser: &'a mut WidgetTraverser<'b, A, F>,
         input_state: &'a mut InputState,
         update_state: Rc<UpdateStateCell>,
@@ -62,7 +59,6 @@ impl<A> EventTranslator<A>
         TranslatorActive {
             widget_traverser,
             inner: &mut self.inner,
-            timer_list,
             input_state,
             update_state,
         }
@@ -83,7 +79,6 @@ impl<A, F> TranslatorActive<'_, '_, A, F>
         let TranslatorActive {
             ref mut widget_traverser,
             ref mut inner,
-            timer_list,
             input_state,
             ref update_state,
         } = self;
@@ -153,16 +148,19 @@ impl<A, F> TranslatorActive<'_, '_, A, F>
             MouseEnter => None,
             // We convert `MouseExit` events to `MouseMove` events so that we don't have to duplicate
             // code.
-            MouseExit => try {
-                let old_pos = input_state.mouse_pos?;
-                let new_pos = project_to_outside_root(old_pos);
+            MouseExit => {
+                if let Some(old_pos) = input_state.mouse_pos {
+                    let new_pos = project_to_outside_root(old_pos);
 
-                self.translate_window_event(WindowEvent::MouseMove(new_pos));
-                if self.input_state.mouse_buttons_down.len() == 0 {
-                    self.input_state.mouse_pos = None;
+                    self.translate_window_event(WindowEvent::MouseMove(new_pos));
+                    if self.input_state.mouse_buttons_down.len() == 0 {
+                        self.input_state.mouse_pos = None;
+                    }
+
+                    return;
                 }
 
-                return;
+                None
             }
             MouseDown(mouse_button) => try {
                 let mouse_pos = input_state.mouse_pos?;
@@ -289,8 +287,6 @@ impl<A, F> TranslatorActive<'_, '_, A, F>
                         action,
                         focus,
                         bubble,
-                        cursor_pos,
-                        cursor_icon,
                     } = ops;
                     if let Some(action) = action {
                         actions.push(action);

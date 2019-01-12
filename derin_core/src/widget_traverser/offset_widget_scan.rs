@@ -66,7 +66,7 @@ fn update_recursive<A, F: RenderFrame>(widget: &dyn Widget<A, F>, tree: &mut Vir
     if let Some(widget) = widget.as_parent() {
         widget.children(&mut |children| {
             for child in children {
-                tree.insert(widget_id, child.widget.widget_tag().widget_id, child.index, child.ident);
+                tree.insert(widget_id, child.widget.widget_tag().widget_id, child.index, child.ident).expect("Widget insert error");
                 update_recursive(child.widget, tree, update_state);
             }
             LoopFlow::Continue
