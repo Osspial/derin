@@ -269,8 +269,6 @@ impl<A, F, W> Widget<A, F> for TabList<W>
             action: None,
             focus: None,
             bubble: event.default_bubble() || event.is_bubble(),
-            cursor_pos: None,
-            cursor_icon: None,
         }
     }
 

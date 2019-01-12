@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use crate::widgets::assistants::text_edit::{TextEditAssist, TextEditOps, LineCharFilter};
-use crate::core::event::{EventOps, WidgetEvent, WidgetEventSourced, InputState};
-use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
-use crate::core::render::{RenderFrameClipped, Theme};
-use crate::core::timer::TimerRegister;
+use crate::core::{
+    event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
+    timer::{Timer, TimerID},
+    tree::{WidgetIdent, WidgetTag, Widget},
+    render::{RenderFrameClipped, Theme},
+};
 
 use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
@@ -34,7 +36,8 @@ pub struct EditBox {
     widget_tag: WidgetTag,
     bounds: BoundBox<D2, i32>,
     edit: TextEditAssist,
-    min_size: DimsBox<D2, i32>
+    min_size: DimsBox<D2, i32>,
+    flash_timer: Option<TimerID>,
 }
 
 /// Single-line editable text widget.
@@ -43,7 +46,8 @@ pub struct LineBox {
     widget_tag: WidgetTag,
     bounds: BoundBox<D2, i32>,
     edit: TextEditAssist<LineCharFilter>,
-    min_size: DimsBox<D2, i32>
+    min_size: DimsBox<D2, i32>,
+    flash_timer: Option<TimerID>,
 }
 
 impl EditBox {
@@ -56,7 +60,8 @@ impl EditBox {
                 string: EditString::new(RenderString::new(string)),
                 ..TextEditAssist::default()
             },
-            min_size: DimsBox::new2(0, 0)
+            min_size: DimsBox::new2(0, 0),
+            flash_timer: None,
         }
     }
 
@@ -85,7 +90,8 @@ impl LineBox {
                 string: EditString::new(RenderString::new(string)),
                 ..TextEditAssist::default()
             },
-            min_size: DimsBox::new2(0, 0)
+            min_size: DimsBox::new2(0, 0),
+            flash_timer: None,
         }
     }
 
@@ -106,80 +112,82 @@ impl LineBox {
 
 macro_rules! render_and_event {
     ($ty:ty) => {
-            fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
-                frame.upload_primitives(ArrayVec::from([
-                    ThemedPrim {
-                        theme_path: stringify!($ty),
-                        min: Point2::new(
-                            RelPoint::new(-1.0, 0),
-                            RelPoint::new(-1.0, 0),
-                        ),
-                        max: Point2::new(
-                            RelPoint::new( 1.0, 0),
-                            RelPoint::new( 1.0, 0)
-                        ),
-                        prim: Prim::Image,
-                        rect_px_out: None
-                    },
-                    ThemedPrim {
-                        theme_path: stringify!($ty),
-                        min: Point2::new(
-                            RelPoint::new(-1.0, 0),
-                            RelPoint::new(-1.0, 0),
-                        ),
-                        max: Point2::new(
-                            RelPoint::new( 1.0, 0),
-                            RelPoint::new( 1.0, 0)
-                        ),
-                        prim: Prim::EditString(&mut self.edit.string),
-                        rect_px_out: None
-                    }
-                ]).into_iter());
+        fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
+            frame.upload_primitives(ArrayVec::from([
+                ThemedPrim {
+                    theme_path: stringify!($ty),
+                    min: Point2::new(
+                        RelPoint::new(-1.0, 0),
+                        RelPoint::new(-1.0, 0),
+                    ),
+                    max: Point2::new(
+                        RelPoint::new( 1.0, 0),
+                        RelPoint::new( 1.0, 0)
+                    ),
+                    prim: Prim::Image,
+                    rect_px_out: None
+                },
+                ThemedPrim {
+                    theme_path: stringify!($ty),
+                    min: Point2::new(
+                        RelPoint::new(-1.0, 0),
+                        RelPoint::new(-1.0, 0),
+                    ),
+                    max: Point2::new(
+                        RelPoint::new( 1.0, 0),
+                        RelPoint::new( 1.0, 0)
+                    ),
+                    prim: Prim::EditString(&mut self.edit.string),
+                    rect_px_out: None
+                }
+            ]).into_iter());
 
-                self.min_size = frame.theme().widget_theme(stringify!($ty)).image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
-                let render_string_min = self.edit.string.render_string.min_size();
-                self.min_size.dims.y += render_string_min.height();
+            self.min_size = frame.theme().widget_theme(stringify!($ty)).image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
+            let render_string_min = self.edit.string.render_string.min_size();
+            self.min_size.dims.y += render_string_min.height();
+        }
+
+        fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps<A> {
+            let event = event.unwrap();
+
+            let TextEditOps {
+                allow_bubble,
+                redraw,
+                cursor_flash,
+                cursor_icon,
+                focus,
+            } = self.edit.adapt_event(&event, input_state);
+
+            if cursor_flash.is_some() {
+                let timer_id = TimerID::new();
+                self.widget_tag.timers_mut().insert(timer_id, Timer::new(Duration::new(1, 0)/2));
+            } else if let Some(timer_id) = self.flash_timer {
+                self.widget_tag.timers_mut().remove(&timer_id);
+                self.flash_timer = None;
             }
 
-            fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps<A> {
-                use self::WidgetEvent::*;
-                let event = event.unwrap();
+            if redraw {
+                self.widget_tag.request_redraw();
+            }
 
-                let TextEditOps {
-                    allow_bubble,
-                    redraw,
-                    cursor_flash,
-                    cursor_icon,
-                    focus,
-                } = self.edit.adapt_event(&event, input_state);
-                if cursor_flash.is_some() {
-                    // self.widget_tag.mark_update_timer();
-                }
-                if redraw {
+            match event {
+                WidgetEvent::Timer{timer_id, times_triggered, ..} if Some(timer_id) == self.flash_timer => {
+                    self.edit.string.draw_cursor = times_triggered % 2 == 0;
                     self.widget_tag.request_redraw();
-                }
+                },
+                _ => ()
+            };
 
-                match event {
-                    Timer{name: "cursor_flash", times_triggered, ..} => {
-                        self.edit.string.draw_cursor = times_triggered % 2 == 0;
-                        self.widget_tag.request_redraw();
-                    },
-                    _ => ()
-                };
-                EventOps {
-                    action: None,
-                    focus,
-                    bubble: allow_bubble && event.default_bubble(),
-                    cursor_pos: None,
-                    cursor_icon,
-                }
+            if let Some(cursor_icon) = cursor_icon {
+                self.widget_tag.set_cursor_icon(cursor_icon);
             }
 
-            fn register_timers(&self, register: &mut TimerRegister) {
-                if self.widget_tag.has_keyboard_focus() {
-                    register.add_timer("cursor_flash", Duration::new(1, 0)/2, true);
-                }
+            EventOps {
+                action: None,
+                focus,
+                bubble: allow_bubble && event.default_bubble(),
             }
+        }
     }
 }
 

@@ -17,6 +17,9 @@
 use cgmath_geometry::cgmath;
 extern crate derin_common_types;
 
+#[macro_use]
+mod macros;
+
 #[cfg(test)]
 #[macro_use]
 pub mod test_helpers;
@@ -37,9 +40,9 @@ use crate::cgmath::{Point2, Vector2, Bounded};
 use cgmath_geometry::{D2, rect::{DimsBox, GeoBox}};
 
 use crate::{
-    event::WidgetEvent,
+    event::{WidgetEvent, WidgetEventSourced},
     event_translator::EventTranslator,
-    timer::TimerList,
+    timer::{TimerTrigger, TimerTriggerTracker},
     tree::*,
     render::{Renderer, RenderFrame, RenderFrameClipped},
     mbseq::MouseButtonSequenceTrackPos,
@@ -80,7 +83,7 @@ pub struct Root<A, N, F>
 
     widget_traverser_base: WidgetTraverserBase<A, F>,
 
-    timer_list: TimerList,
+    timer_tracker: TimerTriggerTracker,
     update_state: Rc<UpdateStateCell>,
 
     // User data
@@ -131,6 +134,7 @@ pub struct FrameEventProcessor<'a, A, F>
 {
     input_state: &'a mut InputState,
     event_translator: &'a mut EventTranslator<A>,
+    timer_tracker: &'a mut TimerTriggerTracker,
     update_state: Rc<UpdateStateCell>,
     widget_traverser: WidgetTraverser<'a, A, F>,
 }
@@ -138,7 +142,7 @@ pub struct FrameEventProcessor<'a, A, F>
 #[must_use]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EventLoopResult {
-    pub wait_until_call_timer: Option<Instant>,
+    pub next_timer: Option<Instant>,
 }
 
 impl InputState {
@@ -169,7 +173,7 @@ impl<A, N, F> Root<A, N, F>
 
             widget_traverser_base: WidgetTraverserBase::new(root_widget.widget_tag().widget_id),
 
-            timer_list: TimerList::new(None),
+            timer_tracker: TimerTriggerTracker::new(),
             update_state: UpdateState::new(),
 
             root_widget, theme,
@@ -184,6 +188,7 @@ impl<A, N, F> Root<A, N, F>
         FrameEventProcessor {
             input_state: &mut self.input_state,
             event_translator: &mut self.event_translator,
+            timer_tracker: &mut self.timer_tracker,
             update_state: self.update_state.clone(),
             widget_traverser: self.widget_traverser_base.with_root_ref(&mut self.root_widget, self.update_state.clone())
         }
@@ -328,6 +333,7 @@ impl<A, F> FrameEventProcessor<'_, A, F>
             ref mut event_translator,
             ref update_state,
             ref mut widget_traverser,
+            timer_tracker: _,
         } = *self;
 
         event_translator
@@ -344,19 +350,59 @@ impl<A, F> FrameEventProcessor<'_, A, F>
     }
 
     pub fn finish(mut self) -> EventLoopResult {
-        let mut update_state = self.update_state.borrow_mut();
+        {
+            let mut update_state = self.update_state.borrow_mut();
 
-        for remove_id in update_state.remove_from_tree.drain() {
-            // Because this removes the widget and all child widgets, this could cause some issues
-            // if a widget removal causes the removal of child widgets that haven't actually been
-            // destroyed.
-            //
-            // TODO: INVESTIGATE FURTHER FOR POTENTIAL BUGS
-            self.widget_traverser.remove_widget(remove_id);
+            for remove_id in update_state.remove_from_tree.drain() {
+                self.widget_traverser.remove_widget(remove_id);
+            }
+
+            for widget_id in update_state.update_timers.drain() {
+                let widget = match self.widget_traverser.get_widget(widget_id) {
+                    Some(wpath) => wpath.widget,
+                    None => continue
+                };
+
+                for (&timer_id, timer) in &widget.widget_tag().timers {
+                    let trigger_time = timer.next_trigger();
+                    let trigger = TimerTrigger::new(trigger_time, timer_id, widget_id);
+                    self.timer_tracker.queue_trigger(trigger);
+                }
+            }
         }
 
+        let timers_triggered = self.timer_tracker.timers_triggered().collect::<Vec<_>>();
+        for timer_trigger in timers_triggered {let _: Option<_> = try {
+            let mut widget = self.widget_traverser.get_widget(timer_trigger.widget_id)?.widget;
+
+            // Dispatch the widget event.
+            let timer = widget.widget_tag().timers.get(&timer_trigger.timer_id)?;
+            let event = WidgetEvent::Timer {
+                timer_id: timer_trigger.timer_id,
+                start_time: timer.start_time(),
+                last_triggered: timer.last_triggered(),
+                frequency: timer.frequency,
+                times_triggered: timer.times_triggered(),
+            };
+            let trigger_time = Instant::now();
+            // TODO: HANDLE OPS
+            widget.on_widget_event(WidgetEventSourced::This(event), self.input_state);
+
+
+            // Update the timer's internal info values.
+            let timer = widget.widget_tag().timers.get(&timer_trigger.timer_id)?;
+            timer.times_triggered.set(timer.times_triggered.get() + 1);
+            timer.last_triggered.set(Some(trigger_time));
+
+            // Queue the next timer trigger.
+            self.timer_tracker.queue_trigger(TimerTrigger {
+                instant: timer.next_trigger(),
+                ..timer_trigger
+            });
+        };}
+
         EventLoopResult {
-            wait_until_call_timer: None
+            next_timer: self.timer_tracker.next_trigger(),
         }
     }
 }

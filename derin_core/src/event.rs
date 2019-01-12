@@ -14,12 +14,16 @@
 
 use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
 use crate::cgmath::{Point2, Vector2};
-use crate::tree::{WidgetIdent};
+use crate::{
+    timer::TimerID,
+    tree::{WidgetIdent},
+};
 
 use std::time::{Instant, Duration};
 
 /// The set of operations to be performed after an event is processed by a widget.
 #[derive(Default)]
+#[must_use]
 pub struct EventOps<A> {
     /// Deliver the given action to the Derin action loop.
     pub action: Option<A>,
@@ -179,19 +183,19 @@ pub enum WidgetEvent {
     KeyUp(Key, ModifierKeys),
     /// Enough time has elapsed for a registered timer to be triggered.
     Timer {
-        /// The name of the timer.
-        name: &'static str,
+        /// The timer's ID.
+        timer_id: TimerID,
         /// The time at which the timer was registered.
         start_time: Instant,
         /// The time at which the timer was last triggered.
-        last_trigger: Instant,
+        last_triggered: Option<Instant>,
         /// The minimum duration which must pass between timer triggers.
         ///
         /// This isn't necessarily the actual time which has passed between triggers; a longer time
         /// may have elapsed since the last trigger.
         frequency: Duration,
         /// The number of times this timer has been triggered, not including this trigger.
-        times_triggered: u64
+        times_triggered: u32
     },
 }
 

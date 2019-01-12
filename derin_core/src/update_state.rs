@@ -21,6 +21,7 @@ pub(crate) type UpdateStateCell = RefCell<UpdateState>;
 pub(crate) struct UpdateState {
     pub redraw: FnvHashSet<WidgetID>,
     pub relayout: FnvHashSet<WidgetID>,
+    pub update_timers: FnvHashSet<WidgetID>,
     pub remove_from_tree: FnvHashSet<WidgetID>,
     pub global_update: bool,
 }
@@ -31,6 +32,7 @@ impl UpdateState {
             RefCell::new(UpdateState {
                 redraw: FnvHashSet::default(),
                 relayout: FnvHashSet::default(),
+                update_timers: FnvHashSet::default(),
                 remove_from_tree: FnvHashSet::default(),
                 global_update: true,
             })
@@ -40,6 +42,7 @@ impl UpdateState {
     fn queue_insert_id(&mut self, id: WidgetID) {
         self.redraw.insert(id);
         self.relayout.insert(id);
+        self.update_timers.insert(id);
     }
 
     pub fn queue_global_update(&mut self) {
@@ -109,6 +112,17 @@ impl UpdateStateShared {
             UpdateStateShared::Occupied(update_state) => {
                 let mut update_state = update_state.borrow_mut();
                 update_state.relayout.insert(id);
+            },
+            // Ditto.
+            UpdateStateShared::Vacant => ()
+        }
+    }
+
+    pub fn request_update_timers(&mut self, id: WidgetID) {
+        match self.upgrade() {
+            UpdateStateShared::Occupied(update_state) => {
+                let mut update_state = update_state.borrow_mut();
+                update_state.update_timers.insert(id);
             },
             // Ditto.
             UpdateStateShared::Vacant => ()

@@ -18,7 +18,6 @@ use crate::{
     tree::dynamic::ParentDyn,
     event::{InputState as EventInputState, WidgetEventSourced, EventOps},
     render::{RenderFrame, RenderFrameClipped},
-    timer::TimerRegister,
 };
 
 use derin_common_types::layout::SizeBounds;
@@ -80,7 +79,6 @@ pub(crate) trait OffsetWidgetTrait<A, F>
 
     fn update_layout(&mut self, theme: &F::Theme);
     fn size_bounds(&self) -> SizeBounds;
-    fn register_timers(&self, register: &mut TimerRegister);
 
     fn num_children(&self) -> usize
         where Self::Widget: ParentDyn<A, F>;
@@ -169,9 +167,6 @@ impl<'a, A, F, W> OffsetWidgetTrait<A, F> for OffsetWidget<'a, W>
 
     fn size_bounds(&self) -> SizeBounds {
         self.widget.size_bounds()
-    }
-    fn register_timers(&self, register: &mut TimerRegister) {
-        self.widget.register_timers(register)
     }
 
     fn num_children(&self) -> usize

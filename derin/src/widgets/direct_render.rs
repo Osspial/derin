@@ -15,7 +15,6 @@
 use crate::core::event::{EventOps, WidgetEvent, WidgetEventSourced, InputState};
 use crate::core::tree::{WidgetIdent, WidgetTag, Widget, };
 use crate::core::render::RenderFrameClipped;
-use crate::core::timer::TimerRegister;
 
 use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::BoundBox};
@@ -29,7 +28,6 @@ pub struct DirectRender<R> {
     widget_tag: WidgetTag,
     bounds: BoundBox<D2, i32>,
     render_state: R,
-    refresh_rate: Option<Duration>
 }
 
 pub trait DirectRenderState<A> {
@@ -45,19 +43,16 @@ pub trait DirectRenderState<A> {
             action: None,
             focus: None,
             bubble: true,
-            cursor_pos: None,
-            cursor_icon: None,
         }
     }
 }
 
 impl<R> DirectRender<R> {
-    pub fn new(render_state: R, refresh_rate: Option<Duration>) -> DirectRender<R> {
+    pub fn new(render_state: R) -> DirectRender<R> {
         DirectRender {
             widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             render_state,
-            refresh_rate
         }
     }
 
@@ -72,11 +67,6 @@ impl<R> DirectRender<R> {
 
     pub fn mark_redraw(&mut self) {
         self.widget_tag.request_redraw();
-    }
-
-    pub fn set_refresh_rate(&mut self, refresh_rate: Option<Duration>) {
-        // self.widget_tag.mark_update_timer();
-        self.refresh_rate = refresh_rate;
     }
 }
 
@@ -120,21 +110,8 @@ impl<A, F, R> Widget<A, F> for DirectRender<R>
     fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps<A> {
         let event = event.unwrap();
 
-        if let WidgetEvent::Timer{name: "render_refresh", ..} = event {
-            self.widget_tag.request_redraw();
-        }
-        let old_refresh_rate = self.refresh_rate;
         let ops = self.render_state.on_widget_event(event, input_state);
-        // if old_refresh_rate != self.refresh_rate {
-        //     self.widget_tag.mark_update_timer();
-        // }
 
         ops
-    }
-
-    fn register_timers(&self, register: &mut TimerRegister) {
-        if let Some(duration) = self.refresh_rate {
-            register.add_timer("render_refresh", duration, false);
-        }
     }
 }

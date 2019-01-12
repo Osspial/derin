@@ -92,8 +92,6 @@ impl<A, F, W> Widget<A, F> for Clip<W>
             action: None,
             focus: None,
             bubble: true,
-            cursor_pos: None,
-            cursor_icon: None,
         }
     }
 }

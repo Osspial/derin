@@ -216,8 +216,6 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
             action,
             focus: None,
             bubble: event.default_bubble(),
-            cursor_pos: None,
-            cursor_icon: None,
         }
     }
 }

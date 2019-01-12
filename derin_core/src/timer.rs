@@ -1,231 +1,105 @@
-// Copyright 2018 Osspial
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-use std::time::{Duration, Instant};
 use crate::tree::WidgetID;
-use std::cmp;
-use std::ops::Range;
+use std::{
+    cell::Cell,
+    time::{Instant, Duration},
+};
 
-pub(crate) struct TimerList {
-    last_trigger: Instant,
-    timers_by_dist: Vec<Timer>,
-    pub rate_limiter: Option<Duration>
-}
+id!(pub TimerID);
 
-pub(crate) struct TriggeredTimers<'a> {
-    trigger_time: Instant,
-    triggered_range: Range<usize>,
-    timers_by_dist: &'a mut Vec<Timer>
-}
-
-pub struct TimerRegister<'a> {
-    widget_id: WidgetID,
-    new_timers: Vec<TimerProto>,
-    timer_list: &'a mut TimerList
-}
-
-struct TimerProto {
-    name: &'static str,
-    frequency: Duration,
-    reset_timer: bool,
-    extra_proto: Option<ExtraProto>
-}
-
-#[derive(Clone, Copy)]
-struct ExtraProto {
-    start_time: Instant,
-    last_trigger: Instant,
-    times_triggered: u64
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Timer {
-    pub name: &'static str,
-    pub widget_id: WidgetID,
-    pub start_time: Instant,
-    pub last_trigger: Instant,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Timer {
     pub frequency: Duration,
-    pub times_triggered: u64
+    start_time: Instant,
+    pub(crate) last_triggered: Cell<Option<Instant>>,
+    pub(crate) times_triggered: Cell<u32>
 }
 
-impl TimerList {
-    pub fn new(rate_limiter: Option<Duration>) -> TimerList {
-        TimerList {
-            last_trigger: Instant::now(),
-            timers_by_dist: Vec::new(),
-            rate_limiter
-        }
-    }
-
-    pub fn new_timer_register(&mut self, widget_id: WidgetID) -> TimerRegister {
-        TimerRegister {
-            widget_id,
-            new_timers: Vec::new(),
-            timer_list: self
-        }
-    }
-
-    pub(crate) fn trigger_timers(&mut self) -> TriggeredTimers {
-        let trigger_time = Instant::now();
-        if (trigger_time - self.last_trigger) < self.rate_limiter.unwrap_or(Duration::new(0, 0)) {
-            return TriggeredTimers {
-                triggered_range: 0..0,
-                trigger_time,
-                timers_by_dist: &mut self.timers_by_dist
-            };
-        }
-        let triggered_index = self.timers_by_dist.iter_mut()
-            .take_while(|timer| timer.time_until_trigger(trigger_time) == Duration::new(0, 0))
-            .enumerate().map(|(i, timer)| {timer.trigger(trigger_time); i + 1})
-            .last().unwrap_or(0);
-
-        self.last_trigger = trigger_time;
-        TriggeredTimers {
-            triggered_range: 0..triggered_index,
-            trigger_time,
-            timers_by_dist: &mut self.timers_by_dist
-        }
-    }
-
-    pub fn time_until_trigger(&self) -> Option<Duration> {
-        let now = Instant::now();
-        self.timers_by_dist.get(0).map(|t|
-            cmp::max(
-                t.time_until_trigger(now),
-                self.rate_limiter.map(|limit| limit - (now - self.last_trigger))
-                    .unwrap_or(Duration::new(0, 0))
-            )
-        )
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct TimerTrigger {
+    pub instant: Instant,
+    pub timer_id: TimerID,
+    pub widget_id: WidgetID,
 }
 
-impl<'a> TimerRegister<'a> {
-    pub fn add_timer(&mut self, name: &'static str, frequency: Duration, reset_timer: bool) {
-        let insert_index = match self.new_timers.binary_search_by_key(&frequency, |t| t.frequency) {
-            Ok(i) | Err(i) => i
-        };
-        self.new_timers.insert(insert_index, TimerProto{ name, frequency, reset_timer, extra_proto: None });
-    }
-}
-
-impl<'a> Drop for TimerRegister<'a> {
-    fn drop(&mut self) {
-        let TimerRegister {
-            ref mut new_timers,
-            widget_id,
-            ref mut timer_list
-        } = *self;
-
-        // Update any timers that are already in the register.
-        timer_list.timers_by_dist.retain(|timer| {
-            if timer.widget_id != widget_id {
-                return true;
-            }
-
-            for new_timer in new_timers.iter_mut() {
-                if new_timer.name == timer.name {
-                    if !new_timer.reset_timer {
-                        new_timer.extra_proto = Some(ExtraProto {
-                            start_time: timer.start_time,
-                            last_trigger: timer.last_trigger,
-                            times_triggered: timer.times_triggered
-                        });
-                    }
-                    break;
-                }
-            }
-
-            false
-        });
-
-        // Add the previously-unregistered timers to the timer register
-        let cur_time = Instant::now();
-        let mut new_timers = new_timers.drain(..).map(|p| Timer {
-            name: p.name,
-            widget_id: widget_id,
-            start_time: p.extra_proto.map(|p| p.start_time).unwrap_or(cur_time),
-            last_trigger: p.extra_proto.map(|p| p.last_trigger).unwrap_or(cur_time - p.frequency),
-            frequency: p.frequency,
-            times_triggered: p.extra_proto.map(|p| p.times_triggered).unwrap_or(!0) // We default to max value so the addition wraps around to zero
-        });
-        let mut next_timer: Option<Timer> = new_timers.next();
-
-        let mut index_iter = 0..;
-        loop {
-            let i = index_iter.next().unwrap();
-
-            let next_timer_ref = match next_timer.as_ref() {
-                Some(t) => t,
-                None => break
-            };
-
-            let timer = match timer_list.timers_by_dist.get(i) {
-                Some(timer) => *timer,
-                None => Timer::max_frequency(cur_time)
-            };
-
-            if next_timer_ref.time_until_trigger(cur_time) < timer.time_until_trigger(cur_time) {
-                timer_list.timers_by_dist.insert(i, next_timer.take().unwrap());
-                next_timer = new_timers.next();
-                index_iter.start += 1;
-            }
-        }
-
-        debug_assert_eq!(
-            timer_list.timers_by_dist,
-            {
-                let mut sorted = timer_list.timers_by_dist.clone();
-                sorted.sort_unstable_by_key(|t| t.time_until_trigger(cur_time));
-                sorted
-            }
-        );
-    }
-}
-
-impl<'a> TriggeredTimers<'a> {
-    pub fn triggered_timers(&self) -> &[Timer] {
-        &self.timers_by_dist[self.triggered_range.clone()]
-    }
-}
-
-impl<'a> Drop for TriggeredTimers<'a> {
-    fn drop(&mut self) {
-        if self.triggered_range.len() > 0 {
-            let trigger_time = self.trigger_time;
-            self.timers_by_dist.sort_unstable_by_key(|t| t.time_until_trigger(trigger_time));
-        }
-    }
+pub(crate) struct TimerTriggerTracker {
+    timers_by_next_trigger: Vec<TimerTrigger>,
 }
 
 impl Timer {
-    fn max_frequency(cur_time: Instant) -> Timer {
+    pub fn new(frequency: Duration) -> Timer {
         Timer {
-            name: "",
-            widget_id: WidgetID::dummy(),
-            start_time: cur_time,
-            last_trigger: cur_time,
-            frequency: Duration::new(!0, 0),
-            times_triggered: !0
+            frequency,
+            start_time: Instant::now(),
+            last_triggered: Cell::new(None),
+            times_triggered: Cell::new(0),
         }
     }
 
-    fn time_until_trigger(&self, cur_time: Instant) -> Duration {
-        self.frequency.checked_sub(cur_time - self.last_trigger).unwrap_or(Duration::new(0, 0))
+    pub fn new_delayed(frequency: Duration, start_time: Instant) -> Timer {
+        Timer {
+            frequency, start_time,
+            last_triggered: Cell::new(None),
+            times_triggered: Cell::new(0),
+        }
     }
 
-    fn trigger(&mut self, trigger_time: Instant) {
-        self.times_triggered = self.times_triggered.wrapping_add(1);
-        self.last_trigger = trigger_time;
+    #[inline(always)]
+    pub fn start_time(&self) -> Instant {
+        self.start_time
+    }
+    #[inline(always)]
+    pub fn last_triggered(&self) -> Option<Instant> {
+        self.last_triggered.get()
+    }
+    #[inline(always)]
+    pub fn times_triggered(&self) -> u32 {
+        self.times_triggered.get()
+    }
+
+    pub fn next_trigger(&self) -> Instant {
+        self.start_time + self.frequency * self.times_triggered()
+    }
+}
+
+impl TimerTrigger {
+    pub fn new(instant: Instant, timer_id: TimerID, widget_id: WidgetID) -> TimerTrigger {
+        TimerTrigger{ instant, timer_id, widget_id }
+    }
+}
+
+impl TimerTriggerTracker {
+    pub fn new() -> TimerTriggerTracker {
+        TimerTriggerTracker {
+            timers_by_next_trigger: Vec::new(),
+        }
+    }
+
+    pub fn next_trigger(&self) -> Option<Instant> {
+        self.timers_by_next_trigger.get(0).map(|t| t.instant)
+    }
+
+    pub fn timers_triggered(&mut self) -> impl '_ + Iterator<Item=TimerTrigger> {
+        let now = Instant::now();
+        let split_location_result = self.timers_by_next_trigger.binary_search_by_key(&now, |t| t.instant);
+        let split_location = match split_location_result {
+            Ok(i) => {
+                // If there are multiple timers triggered at now, find the last timer in that set.
+                i + self.timers_by_next_trigger[i..].iter().take_while(|t| t.instant == now).count()
+            }
+            Err(i) => i
+        };
+
+        self.timers_by_next_trigger[..split_location].sort_unstable_by_key(|t| t.widget_id);
+        self.timers_by_next_trigger.drain(..split_location)
+    }
+
+    pub fn queue_trigger(&mut self, timer_trigger: TimerTrigger) {
+        let insert_location_result = self.timers_by_next_trigger.binary_search(&timer_trigger);
+        let insert_location = match insert_location_result {
+            Ok(i) => return,
+            Err(i) => i
+        };
+
+        self.timers_by_next_trigger.insert(insert_location, timer_trigger);
     }
 }
