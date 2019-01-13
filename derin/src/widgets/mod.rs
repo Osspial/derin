@@ -53,30 +53,23 @@ pub mod custom {
 }
 
 /// Determines which action, if any, should be taken in response to a button toggle.
-pub trait ToggleHandler<A: 'static>: 'static {
-    /// Called when the button's state is changed. If `Some` is returned, the given action is pumped into
-    /// the action queue and passed to [`run_forever`'s `on_action`][on_action].
-    ///
-    /// [on_action]: ../struct.Window.html#method.run_forever
-    fn change_state(&mut self, enabled: bool) -> Option<A>;
+pub trait ToggleHandler: 'static {
+    fn change_state(&mut self, enabled: bool);
 }
 
-impl<A: 'static + Clone> ToggleHandler<A> for Option<A> {
+impl<A: 'static + Clone> ToggleHandler for Option<A> {
     /// Returns the stored action when the toggle is enabled. Otherwise, returns `None`.
     #[inline]
-    fn change_state(&mut self, enabled: bool) -> Option<A> {
-        match enabled {
-            true => self.clone(),
-            false => None
-        }
+    fn change_state(&mut self, enabled: bool) {
+        unimplemented!()
     }
 }
 
-impl<A: 'static> ToggleHandler<A> for () {
+impl ToggleHandler for () {
     /// Always returns `None`.
     #[inline]
-    fn change_state(&mut self, _: bool) -> Option<A> {
-        None
+    fn change_state(&mut self, _: bool) {
+        unimplemented!()
     }
 }
 

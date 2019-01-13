@@ -108,10 +108,9 @@ impl<W> TabList<W> {
     }
 }
 
-impl<A, F, W> Widget<A, F> for TabList<W>
-    where A: 'static,
-          F: PrimFrame,
-          W: Widget<A, F>
+impl<F, W> Widget<F> for TabList<W>
+    where F: PrimFrame,
+          W: Widget<F>
 {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
@@ -173,7 +172,7 @@ impl<A, F, W> Widget<A, F> for TabList<W>
     }
 
     #[inline]
-    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps<A> {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
         // TODO: PASS FOCUS TO CHILD
         if let WidgetEventSourced::This(ref event) = event {
             match event {
@@ -266,7 +265,6 @@ impl<A, F, W> Widget<A, F> for TabList<W>
         }
 
         EventOps {
-            action: None,
             focus: None,
             bubble: event.default_bubble() || event.is_bubble(),
         }
@@ -378,23 +376,22 @@ impl<A, F, W> Widget<A, F> for TabList<W>
     }
 }
 
-impl<A, F, W> Parent<A, F> for TabList<W>
-    where A: 'static,
-          F: PrimFrame,
-          W: Widget<A, F>
+impl<F, W> Parent<F> for TabList<W>
+    where F: PrimFrame,
+          W: Widget<F>
 {
     fn num_children(&self) -> usize {
         self.tabs.len()
     }
 
-    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>> {
+    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<F>>> {
         if let WidgetIdent::Num(index) = widget_ident {
             self.tabs.get(index as usize).map(|t| WidgetSummary::new(widget_ident, index as usize, &t.page).to_dyn())
         } else {
             None
         }
     }
-    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>> {
+    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<F>>> {
         if let WidgetIdent::Num(index) = widget_ident {
             self.tabs.get_mut(index as usize).map(|t| WidgetSummary::new_mut(widget_ident, index as usize, &mut t.page).to_dyn_mut())
         } else {
@@ -403,8 +400,7 @@ impl<A, F, W> Parent<A, F> for TabList<W>
     }
 
     fn children<'a, G>(&'a self, mut for_each: G)
-        where A: 'a,
-              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow
+        where G: FnMut(WidgetSummary<&'a Widget<F>>) -> LoopFlow
     {
         for (index, tab) in self.tabs.iter().enumerate() {
             match for_each(WidgetSummary::new(WidgetIdent::Num(index as u32), index, &tab.page)) {
@@ -415,8 +411,7 @@ impl<A, F, W> Parent<A, F> for TabList<W>
     }
 
     fn children_mut<'a, G>(&'a mut self, mut for_each: G)
-        where A: 'a,
-              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow
+        where G: FnMut(WidgetSummary<&'a mut Widget<F>>) -> LoopFlow
     {
         for (index, tab) in self.tabs.iter_mut().enumerate() {
             match for_each(WidgetSummary::new_mut(WidgetIdent::Num(index as u32), index, &mut tab.page)) {
@@ -426,10 +421,10 @@ impl<A, F, W> Parent<A, F> for TabList<W>
         }
     }
 
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>> {
+    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<F>>> {
         self.tabs.get(index).map(|t| WidgetSummary::new(WidgetIdent::Num(index as u32), index, &t.page).to_dyn())
     }
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
+    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<F>>> {
         self.tabs.get_mut(index).map(|t| WidgetSummary::new_mut(WidgetIdent::Num(index as u32), index, &mut t.page).to_dyn_mut())
     }
 }

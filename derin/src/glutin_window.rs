@@ -56,12 +56,12 @@ impl Default for WindowConfig {
 }
 
 /// A window displayed on the desktop, which contains a set of drawable widgets.
-pub struct GlutinWindow<A: 'static, N: 'static + Widget<A, GLFrame>> {
+pub struct GlutinWindow<N: 'static + Widget<GLFrame>> {
     primary_renderer: GLRenderer,
     events_loop: EventsLoop,
     timer_sync: Arc<Mutex<TimerPark>>,
     timer_thread_handle: JoinHandle<()>,
-    root: Root<A, N, GLFrame>
+    root: Root<N, GLFrame>
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -71,13 +71,13 @@ enum TimerPark {
     Abort
 }
 
-impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
+impl<N: Widget<GLFrame>> GlutinWindow<N> {
     /// Creates a new window, with the given window configuration, root widget, and theme.
     ///
     /// This is unsafe, because it creates at least one OpenGL context. By calling this function,
     /// you hand all control over the thread's OpenGL context management to this window. In most
     /// cases this shouldn't be an issue, though.
-    pub unsafe fn new(config: WindowConfig, root: N, theme: Theme) -> Result<GlutinWindow<A, N>, CreationError> {
+    pub unsafe fn new(config: WindowConfig, root: N, theme: Theme) -> Result<GlutinWindow<N>, CreationError> {
         let mut window_builder = WindowBuilder::new();
         window_builder.window.dimensions = config.dimensions.map(|d| (d.width(), d.height()));
         window_builder.window.title = config.title.clone();
@@ -147,9 +147,8 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
     /// `on_fallthrough` is called whenever a raw event bubbles through the root widget.
     ///
     /// TODO: DOCUMENT HOW EVENT BUBBLING WORKS
-    pub fn run_forever<F, FF>(&mut self, mut on_action: F, mut on_fallthrough: FF)
-        where F: FnMut(A, &mut N, &mut Theme) -> LoopFlow,
-              FF: FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
+    pub fn run_forever<F>(&mut self, mut on_action: F)
+        where F: FnMut(&mut N, &mut Theme) -> LoopFlow,
     {
         let GlutinWindow {
             ref mut primary_renderer,
@@ -234,7 +233,7 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
                     Event::DeviceEvent{..} => return
                 };
 
-                frame.process_event(derin_event, &mut on_fallthrough);
+                frame.process_event(derin_event);
             };
 
             events_loop.run_forever(|e| {process_glutin_event(e); ControlFlow::Break});
@@ -248,13 +247,6 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
             }
             timer_thread_handle.thread().unpark();
 
-            let actions = root.drain_actions().collect::<Vec<_>>();
-            for action in actions {
-                match on_action(action, &mut root.root_widget, &mut root.theme) {
-                    LoopFlow::Break => return,
-                    LoopFlow::Continue => ()
-                }
-            }
             if break_loop {
                 break;
             }
@@ -271,7 +263,7 @@ impl<A, N: Widget<A, GLFrame>> GlutinWindow<A, N> {
     }
 }
 
-impl<A, N: Widget<A, GLFrame>> Drop for GlutinWindow<A, N> {
+impl<N: Widget<GLFrame>> Drop for GlutinWindow<N> {
     fn drop(&mut self) {
         *self.timer_sync.lock() = TimerPark::Abort;
         self.timer_thread_handle.thread().unpark();

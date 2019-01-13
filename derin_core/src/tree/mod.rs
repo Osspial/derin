@@ -97,7 +97,7 @@ impl MouseState {
 id!(pub WidgetID);
 
 
-pub trait Widget<A, F: RenderFrame> {
+pub trait Widget<F: RenderFrame> {
     fn widget_tag(&self) -> &WidgetTag;
     fn rect(&self) -> BoundBox<D2, i32>;
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32>;
@@ -106,7 +106,7 @@ pub trait Widget<A, F: RenderFrame> {
         &mut self,
         event: WidgetEventSourced<'_>,
         input_state: InputState,
-    ) -> EventOps<A>;
+    ) -> EventOps;
 
     fn update_layout(&mut self, _theme: &F::Theme) {}
     fn size_bounds(&self) -> SizeBounds {
@@ -114,18 +114,18 @@ pub trait Widget<A, F: RenderFrame> {
     }
 
     #[doc(hidden)]
-    fn as_parent(&self) -> Option<&ParentDyn<A, F>> {
+    fn as_parent(&self) -> Option<&ParentDyn<F>> {
         ParentDyn::from_widget(self)
     }
 
     #[doc(hidden)]
-    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<A, F>> {
+    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<F>> {
         ParentDyn::from_widget_mut(self)
     }
 }
 
-impl<'a, A, F, W> Widget<A, F> for &'a mut W
-    where W: Widget<A, F> + ?Sized,
+impl<'a, F, W> Widget<F> for &'a mut W
+    where W: Widget<F> + ?Sized,
           F: RenderFrame
 {
     #[inline]
@@ -145,7 +145,7 @@ impl<'a, A, F, W> Widget<A, F> for &'a mut W
         &mut self,
         event: WidgetEventSourced<'_>,
         input_state: InputState,
-    ) -> EventOps<A> {
+    ) -> EventOps {
         W::on_widget_event(self, event, input_state)
     }
 
@@ -157,19 +157,19 @@ impl<'a, A, F, W> Widget<A, F> for &'a mut W
     }
 
     #[doc(hidden)]
-    fn as_parent(&self) -> Option<&ParentDyn<A, F>> {
+    fn as_parent(&self) -> Option<&ParentDyn<F>> {
         W::as_parent(self)
     }
 
     #[doc(hidden)]
-    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<A, F>> {
+    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<F>> {
         W::as_parent_mut(self)
     }
 }
 
 
-impl<A, F, W> Widget<A, F> for Box<W>
-    where W: Widget<A, F> + ?Sized,
+impl<F, W> Widget<F> for Box<W>
+    where W: Widget<F> + ?Sized,
           F: RenderFrame
 {
     #[inline]
@@ -189,7 +189,7 @@ impl<A, F, W> Widget<A, F> for Box<W>
         &mut self,
         event: WidgetEventSourced<'_>,
         input_state: InputState,
-    ) -> EventOps<A> {
+    ) -> EventOps {
         W::on_widget_event(self, event, input_state)
     }
 
@@ -201,12 +201,12 @@ impl<A, F, W> Widget<A, F> for Box<W>
     }
 
     #[doc(hidden)]
-    fn as_parent(&self) -> Option<&ParentDyn<A, F>> {
+    fn as_parent(&self) -> Option<&ParentDyn<F>> {
         W::as_parent(self)
     }
 
     #[doc(hidden)]
-    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<A, F>> {
+    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<F>> {
         W::as_parent_mut(self)
     }
 }
@@ -218,26 +218,24 @@ pub struct WidgetSummary<W: ?Sized> {
     pub widget: W,
 }
 
-pub trait Parent<A, F: RenderFrame>: Widget<A, F> {
+pub trait Parent<F: RenderFrame>: Widget<F> {
     fn num_children(&self) -> usize;
 
-    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>>;
-    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>>;
+    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<F>>>;
+    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<F>>>;
 
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>>;
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>>;
+    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<F>>>;
+    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<F>>>;
 
     fn children<'a, G>(&'a self, for_each: G)
-        where A: 'a,
-              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow;
+        where G: FnMut(WidgetSummary<&'a Widget<F>>) -> LoopFlow;
     fn children_mut<'a, G>(&'a mut self, for_each: G)
-        where A: 'a,
-              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow;
+        where G: FnMut(WidgetSummary<&'a mut Widget<F>>) -> LoopFlow;
 }
 
 impl<'a, W: ?Sized> WidgetSummary<&'a W> {
-    pub fn new<A, F>(ident: WidgetIdent, index: usize, widget: &'a W) -> WidgetSummary<&'a W>
-        where W: Widget<A, F>,
+    pub fn new<F>(ident: WidgetIdent, index: usize, widget: &'a W) -> WidgetSummary<&'a W>
+        where W: Widget<F>,
               F: RenderFrame
     {
         WidgetSummary {
@@ -247,8 +245,8 @@ impl<'a, W: ?Sized> WidgetSummary<&'a W> {
         }
     }
 
-    pub fn to_dyn<A, F>(self) -> WidgetSummary<&'a Widget<A, F>>
-        where W: Widget<A, F>,
+    pub fn to_dyn<F>(self) -> WidgetSummary<&'a Widget<F>>
+        where W: Widget<F>,
               F: RenderFrame
     {
         WidgetSummary {
@@ -260,8 +258,8 @@ impl<'a, W: ?Sized> WidgetSummary<&'a W> {
 }
 
 impl<'a, W: ?Sized> WidgetSummary<&'a mut W> {
-    pub fn new_mut<A, F>(ident: WidgetIdent, index: usize, widget: &'a mut W) -> WidgetSummary<&'a mut W>
-        where W: Widget<A, F>,
+    pub fn new_mut<F>(ident: WidgetIdent, index: usize, widget: &'a mut W) -> WidgetSummary<&'a mut W>
+        where W: Widget<F>,
               F: RenderFrame
     {
         WidgetSummary {
@@ -271,8 +269,8 @@ impl<'a, W: ?Sized> WidgetSummary<&'a mut W> {
         }
     }
 
-    pub fn to_dyn_mut<A, F>(self) -> WidgetSummary<&'a mut Widget<A, F>>
-        where W: Widget<A, F>,
+    pub fn to_dyn_mut<F>(self) -> WidgetSummary<&'a mut Widget<F>>
+        where W: Widget<F>,
               F: RenderFrame
     {
         WidgetSummary {

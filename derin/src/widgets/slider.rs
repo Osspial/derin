@@ -118,7 +118,7 @@ impl<H: SliderHandler> Slider<H> {
     }
 }
 
-impl<F, H> Widget<H::Action, F> for Slider<H>
+impl<F, H> Widget<F> for Slider<H>
     where F: PrimFrame,
           H: SliderHandler
 {
@@ -189,7 +189,7 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
     }
 
     #[inline]
-    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps<H::Action> {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
         let mut action = None;
         if let WidgetEventSourced::This(ref event) = event {
             let start_value = self.assist.value;
@@ -213,7 +213,6 @@ impl<F, H> Widget<H::Action, F> for Slider<H>
             }
         }
         EventOps {
-            action,
             focus: None,
             bubble: event.default_bubble(),
         }

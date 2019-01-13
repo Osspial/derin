@@ -78,7 +78,7 @@ impl ProgressBar {
     }
 }
 
-impl<A, F> Widget<A, F> for ProgressBar
+impl<F> Widget<F> for ProgressBar
     where F: PrimFrame
 {
     #[inline]
@@ -129,9 +129,8 @@ impl<A, F> Widget<A, F> for ProgressBar
     }
 
     #[inline]
-    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps<A> {
+    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps {
         EventOps {
-            action: None,
             focus: None,
             bubble: true,
         }

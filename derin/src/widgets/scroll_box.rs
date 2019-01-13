@@ -68,24 +68,24 @@ impl<W> ScrollBox<W> {
         self.clip.widget_mut()
     }
 
-    fn child_summary<A, F>(&self) -> WidgetSummary<&Widget<A, F>>
-        where W: Widget<A, F>,
+    fn child_summary<F>(&self) -> WidgetSummary<&Widget<F>>
+        where W: Widget<F>,
               F: PrimFrame
     {
-        WidgetSummary::new(CLIP_IDENT.clone(), 0, &self.clip as &Widget<A, F>)
+        WidgetSummary::new(CLIP_IDENT.clone(), 0, &self.clip as &Widget<F>)
     }
 
-    fn child_summary_mut<A, F>(&mut self) -> WidgetSummary<&mut Widget<A, F>>
-        where W: Widget<A, F>,
+    fn child_summary_mut<F>(&mut self) -> WidgetSummary<&mut Widget<F>>
+        where W: Widget<F>,
               F: PrimFrame
     {
-        WidgetSummary::new_mut(CLIP_IDENT.clone(), 0, &mut self.clip as &mut Widget<A, F>)
+        WidgetSummary::new_mut(CLIP_IDENT.clone(), 0, &mut self.clip as &mut Widget<F>)
     }
 }
 
-impl<A, F, W> Widget<A, F> for ScrollBox<W>
+impl<F, W> Widget<F> for ScrollBox<W>
     where F: PrimFrame,
-          W: Widget<A, F>
+          W: Widget<F>
 {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
@@ -242,7 +242,7 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
         *self.clip.widget_mut().rect_mut() = BoundBox::from(child_dims) - offset;
     }
     #[inline]
-    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps<A> {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
         // TODO: PASS FOCUS TO CHILD
         let values = |slider_x: &Option<SliderAssist>, slider_y: &Option<SliderAssist>|
             (slider_x.as_ref().map(|s| s.value), slider_y.as_ref().map(|s| s.value));
@@ -310,7 +310,6 @@ impl<A, F, W> Widget<A, F> for ScrollBox<W>
             self.widget_tag.request_redraw().request_relayout();
         }
         EventOps {
-            action: None,
             focus: None,
             bubble: allow_bubble && event.default_bubble(),
         }
@@ -321,21 +320,21 @@ lazy_static!{
     static ref CLIP_IDENT: WidgetIdent = WidgetIdent::Str(Arc::from("clip"));
 }
 
-impl<A, F, W> Parent<A, F> for ScrollBox<W>
+impl<F, W> Parent<F> for ScrollBox<W>
     where F: PrimFrame,
-          W: Widget<A, F>
+          W: Widget<F>
 {
     fn num_children(&self) -> usize {
         1
     }
 
-    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>> {
+    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<F>>> {
         match widget_ident {
             _ if widget_ident == *CLIP_IDENT => Some(self.child_summary()),
             _ => None
         }
     }
-    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>> {
+    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<F>>> {
         match widget_ident {
             _ if widget_ident == *CLIP_IDENT => Some(self.child_summary_mut()),
             _ => None
@@ -343,26 +342,24 @@ impl<A, F, W> Parent<A, F> for ScrollBox<W>
     }
 
     fn children<'a, G>(&'a self, mut for_each: G)
-        where A: 'a,
-              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow
+        where G: FnMut(WidgetSummary<&'a Widget<F>>) -> LoopFlow
     {
         for_each(self.child_summary());
     }
 
     fn children_mut<'a, G>(&'a mut self, mut for_each: G)
-        where A: 'a,
-              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow
+        where G: FnMut(WidgetSummary<&'a mut Widget<F>>) -> LoopFlow
     {
         for_each(self.child_summary_mut());
     }
 
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>> {
+    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<F>>> {
         match index {
             0 => Some(self.child_summary()),
             _ => None
         }
     }
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
+    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<F>>> {
         match index {
             0 => Some(self.child_summary_mut()),
             _ => None

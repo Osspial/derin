@@ -51,13 +51,12 @@ impl EventDispatcher {
         )
     }
 
-    pub fn dispatch_events<A, F>(
+    pub fn dispatch_events<F>(
         &mut self,
-        widget_traverser: &mut WidgetTraverser<A, F>,
-        mut f: impl FnMut(&mut Self, OffsetWidgetScanPath<A, F>, DispatchableEvent)
+        widget_traverser: &mut WidgetTraverser<F>,
+        mut f: impl FnMut(&mut Self, OffsetWidgetScanPath<F>, DispatchableEvent)
     )
-        where A: 'static,
-              F: RenderFrame
+        where F: RenderFrame
     {
         while let Some((destination, event)) = self.events.pop_front() {
             let widget_opt = {

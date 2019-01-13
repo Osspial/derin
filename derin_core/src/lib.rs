@@ -70,18 +70,17 @@ fn vec_remove_element<T: PartialEq>(v: &mut Vec<T>, element: &T) -> Option<T> {
     find_index(v, element).map(|i| v.remove(i))
 }
 
-pub struct Root<A, N, F>
-    where N: Widget<A, F> + 'static,
-          A: 'static,
+pub struct Root<N, F>
+    where N: Widget<F> + 'static,
           F: RenderFrame + 'static
 {
     // Event handing and dispatch
-    event_translator: EventTranslator<A>,
+    event_translator: EventTranslator,
 
     // Input State
     input_state: InputState,
 
-    widget_traverser_base: WidgetTraverserBase<A, F>,
+    widget_traverser_base: WidgetTraverserBase<F>,
 
     timer_tracker: TimerTriggerTracker,
     update_state: Rc<UpdateStateCell>,
@@ -128,15 +127,14 @@ pub enum LoopFlow {
 }
 
 #[must_use]
-pub struct FrameEventProcessor<'a, A, F>
-    where A: 'static,
-          F: RenderFrame + 'static
+pub struct FrameEventProcessor<'a, F>
+    where F: RenderFrame + 'static
 {
     input_state: &'a mut InputState,
-    event_translator: &'a mut EventTranslator<A>,
+    event_translator: &'a mut EventTranslator,
     timer_tracker: &'a mut TimerTriggerTracker,
     update_state: Rc<UpdateStateCell>,
-    widget_traverser: WidgetTraverser<'a, A, F>,
+    widget_traverser: WidgetTraverser<'a, F>,
 }
 
 #[must_use]
@@ -158,12 +156,12 @@ impl InputState {
     }
 }
 
-impl<A, N, F> Root<A, N, F>
-    where N: Widget<A, F>,
+impl<N, F> Root<N, F>
+    where N: Widget<F>,
           F: RenderFrame
 {
     #[inline]
-    pub fn new(mut root_widget: N, theme: F::Theme, dims: DimsBox<D2, u32>) -> Root<A, N, F> {
+    pub fn new(mut root_widget: N, theme: F::Theme, dims: DimsBox<D2, u32>) -> Root<N, F> {
         // TODO: DRAW ROOT AND DO INITIAL LAYOUT
         *root_widget.rect_mut() = dims.cast().unwrap_or(DimsBox::max_value()).into();
         Root {
@@ -180,11 +178,7 @@ impl<A, N, F> Root<A, N, F>
         }
     }
 
-    pub fn drain_actions(&mut self) -> impl '_ + Iterator<Item=A> + ExactSizeIterator + DoubleEndedIterator {
-        self.event_translator.drain_actions()
-    }
-
-    pub fn start_frame(&mut self) -> FrameEventProcessor<'_, A, F> {
+    pub fn start_frame(&mut self) -> FrameEventProcessor<'_, F> {
         FrameEventProcessor {
             input_state: &mut self.input_state,
             event_translator: &mut self.event_translator,
@@ -320,13 +314,12 @@ impl<A, N, F> Root<A, N, F>
     }
 }
 
-impl<A, F> FrameEventProcessor<'_, A, F>
+impl<F> FrameEventProcessor<'_, F>
     where F: RenderFrame
 {
     pub fn process_event(
         &mut self,
         event: WindowEvent,
-        mut bubble_fallthrough: impl FnMut(WidgetEvent, &[WidgetIdent]) -> Option<A>
     ) {
         let FrameEventProcessor {
             ref mut input_state,

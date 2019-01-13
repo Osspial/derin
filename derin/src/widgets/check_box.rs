@@ -87,10 +87,9 @@ impl<H> CheckBox<H> {
     }
 }
 
-impl<A, F, H> Widget<A, F> for CheckBox<H>
-    where A: 'static,
-          F: PrimFrame,
-          H: ToggleHandler<A>
+impl<F, H> Widget<F> for CheckBox<H>
+    where F: PrimFrame,
+          H: ToggleHandler
 {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
@@ -156,11 +155,10 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
         ));
     }
 
-    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps<A> {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps {
         use self::WidgetEvent::*;
         let event = event.unwrap();
 
-        let mut action = None;
         let (mut new_checked, mut new_state) = (self.checked, self.button_state);
         match event {
             MouseMove{hover_change: Some(ref change), ..} => match change {
@@ -171,7 +169,7 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
             MouseDown{..} => new_state = ButtonState::Pressed,
             MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
                 if !self.checked {
-                    action = self.handler.change_state(!self.checked);
+                    self.handler.change_state(!self.checked);
                 }
                 new_checked = !self.checked;
                 new_state = ButtonState::Hover;
@@ -190,7 +188,6 @@ impl<A, F, H> Widget<A, F> for CheckBox<H>
 
 
         EventOps {
-            action,
             focus: None,
             bubble: event.default_bubble(),
         }

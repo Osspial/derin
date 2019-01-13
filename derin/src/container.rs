@@ -45,8 +45,8 @@ use crate::core::tree::{WidgetIdent, WidgetSummary, Widget};
 ///     buttons: Vec<Button<Option<GalleryEvent>>>
 /// }
 /// ```
-pub trait WidgetContainer<A: 'static, F: RenderFrame>: 'static {
-    type Widget: ?Sized + Widget<A, F>;
+pub trait WidgetContainer<F: RenderFrame>: 'static {
+    type Widget: ?Sized + Widget<F>;
 
     /// Get the number of children stored within the container.
     fn num_children(&self) -> usize;
@@ -55,14 +55,12 @@ pub trait WidgetContainer<A: 'static, F: RenderFrame>: 'static {
     /// calling `for_each_child` on each child.
     fn children<'a, G>(&'a self, for_each_child: G)
         where G: FnMut(WidgetSummary<&'a Self::Widget>) -> LoopFlow,
-              A: 'a,
               F: 'a;
 
     /// Perform internal, mutable iteration over each child widget stored within the container,
     /// calling `for_each_child` on each child.
     fn children_mut<'a, G>(&'a mut self, for_each_child: G)
         where G: FnMut(WidgetSummary<&'a mut Self::Widget>) -> LoopFlow,
-              A: 'a,
               F: 'a;
 
     /// Get the child with the specified name.
@@ -131,24 +129,23 @@ pub trait WidgetContainer<A: 'static, F: RenderFrame>: 'static {
 
 /// A container that contains a single widget.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct SingleContainer<A, F: RenderFrame, N: Widget<A, F>> {
+pub struct SingleContainer<F: RenderFrame, N: Widget<F>> {
     /// A widget.
     pub widget: N,
-    _marker: PhantomData<(A, F)>
+    _marker: PhantomData<(F)>
 }
 
-impl<A, F: RenderFrame, N: Widget<A, F>> SingleContainer<A, F, N> {
+impl<F: RenderFrame, N: Widget<F>> SingleContainer<F, N> {
     /// Creates a new container containing the given widget.
     #[inline(always)]
-    pub fn new(widget: N) -> SingleContainer<A, F, N> {
+    pub fn new(widget: N) -> SingleContainer<F, N> {
         SingleContainer{ widget, _marker: PhantomData }
     }
 }
 
-impl<A, F, N> WidgetContainer<A, F> for SingleContainer<A, F, N>
-    where A: 'static,
-          F: RenderFrame,
-          N: 'static + Widget<A, F>
+impl<F, N> WidgetContainer<F> for SingleContainer<F, N>
+    where F: RenderFrame,
+          N: 'static + Widget<F>
 {
     type Widget = N;
 
@@ -157,7 +154,6 @@ impl<A, F, N> WidgetContainer<A, F> for SingleContainer<A, F, N>
 
     fn children<'a, G>(&'a self, mut for_each_child: G)
         where G: FnMut(WidgetSummary<&'a N>) -> LoopFlow,
-              A: 'a,
               F: 'a
     {
         for_each_child(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget));
@@ -165,17 +161,15 @@ impl<A, F, N> WidgetContainer<A, F> for SingleContainer<A, F, N>
 
     fn children_mut<'a, G>(&'a mut self, mut for_each_child: G)
         where G: FnMut(WidgetSummary<&'a mut N>) -> LoopFlow,
-              A: 'a,
               F: 'a
     {
         for_each_child(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget));
     }
 }
 
-impl<A, F, W> WidgetContainer<A, F> for Vec<W>
-    where A: 'static,
-          F: RenderFrame,
-          W: 'static + Widget<A, F>
+impl<F, W> WidgetContainer<F> for Vec<W>
+    where F: RenderFrame,
+          W: 'static + Widget<F>
 {
     type Widget = W;
 
@@ -186,7 +180,6 @@ impl<A, F, W> WidgetContainer<A, F> for Vec<W>
 
     fn children<'a, G>(&'a self, mut for_each_child: G)
         where G: FnMut(WidgetSummary<&'a W>) -> LoopFlow,
-              A: 'a,
               F: 'a
     {
         for (index, widget) in self.iter().enumerate() {
@@ -199,7 +192,6 @@ impl<A, F, W> WidgetContainer<A, F> for Vec<W>
 
     fn children_mut<'a, G>(&'a mut self, mut for_each_child: G)
         where G: FnMut(WidgetSummary<&'a mut W>) -> LoopFlow,
-              A: 'a,
               F: 'a
     {
         for (index, widget) in self.iter_mut().enumerate() {
