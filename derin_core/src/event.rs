@@ -24,9 +24,7 @@ use std::time::{Instant, Duration};
 /// The set of operations to be performed after an event is processed by a widget.
 #[derive(Default)]
 #[must_use]
-pub struct EventOps<A> {
-    /// Deliver the given action to the Derin action loop.
-    pub action: Option<A>,
+pub struct EventOps {
     /// Change the keyboard focus to the given widget.
     ///
     /// Sending this results in the currently focused widget recieving a `LoseFocus` event and the

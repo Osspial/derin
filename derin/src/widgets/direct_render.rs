@@ -30,7 +30,7 @@ pub struct DirectRender<R> {
     render_state: R,
 }
 
-pub trait DirectRenderState<A> {
+pub trait DirectRenderState {
     type RenderType;
 
     fn render(&mut self, _: &mut Self::RenderType);
@@ -38,9 +38,8 @@ pub trait DirectRenderState<A> {
         &mut self,
         _event: WidgetEvent,
         _input_state: InputState,
-    ) -> EventOps<A> {
+    ) -> EventOps {
         EventOps {
-            action: None,
             focus: None,
             bubble: true,
         }
@@ -70,8 +69,8 @@ impl<R> DirectRender<R> {
     }
 }
 
-impl<A, F, R> Widget<A, F> for DirectRender<R>
-    where R: DirectRenderState<A> + 'static,
+impl<F, R> Widget<F> for DirectRender<R>
+    where R: DirectRenderState + 'static,
           F: PrimFrame<DirectRender = R::RenderType>
 {
     #[inline]
@@ -107,7 +106,7 @@ impl<A, F, R> Widget<A, F> for DirectRender<R>
     }
 
     #[inline]
-    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps<A> {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps {
         let event = event.unwrap();
 
         let ops = self.render_state.on_widget_event(event, input_state);

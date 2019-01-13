@@ -60,7 +60,7 @@ impl Label {
     }
 }
 
-impl<A, F> Widget<A, F> for Label
+impl<F> Widget<F> for Label
     where F: PrimFrame
 {
     #[inline]
@@ -88,9 +88,8 @@ impl<A, F> Widget<A, F> for Label
     }
 
     #[inline]
-    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps<A> {
+    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps {
         EventOps {
-            action: None,
             focus: None,
             bubble: true,
         }

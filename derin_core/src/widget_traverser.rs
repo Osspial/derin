@@ -17,7 +17,7 @@ use self::{
     virtual_widget_tree::VirtualWidgetTree
 };
 
-pub(crate) type OffsetWidgetScanPath<'a, A, F> = WidgetPath<'a, OffsetWidgetScan<'a, A, F>>;
+pub(crate) type OffsetWidgetScanPath<'a, F> = WidgetPath<'a, OffsetWidgetScan<'a, F>>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Relation {
@@ -28,18 +28,18 @@ pub enum Relation {
     ChildIndex(usize)
 }
 
-pub(crate) struct WidgetTraverserBase<A: 'static, F: RenderFrame> {
-    stack_cache: WidgetStackCache<A, F>,
+pub(crate) struct WidgetTraverserBase<F: RenderFrame> {
+    stack_cache: WidgetStackCache<F>,
     virtual_widget_tree: VirtualWidgetTree,
 }
 
-pub(crate) struct WidgetTraverser<'a, A: 'static, F: RenderFrame> {
-    stack: WidgetStack<'a, A, F>,
+pub(crate) struct WidgetTraverser<'a, F: RenderFrame> {
+    stack: WidgetStack<'a, F>,
     virtual_widget_tree: &'a mut VirtualWidgetTree,
     update_state: Rc<UpdateStateCell>,
 }
 
-impl<A, F> WidgetTraverserBase<A, F>
+impl<F> WidgetTraverserBase<F>
     where F: RenderFrame
 {
     pub fn new(root_id: WidgetID) -> Self {
@@ -49,7 +49,7 @@ impl<A, F> WidgetTraverserBase<A, F>
         }
     }
 
-    pub fn with_root_ref<'a>(&'a mut self, root: &'a mut dyn Widget<A, F>, update_state: Rc<UpdateStateCell>) -> WidgetTraverser<'a, A, F> {
+    pub fn with_root_ref<'a>(&'a mut self, root: &'a mut dyn Widget<F>, update_state: Rc<UpdateStateCell>) -> WidgetTraverser<'a, F> {
         // This isn't a necessary limitation with the code, but the current code assumes this assertion
         // holds.
         assert_eq!(root.widget_tag().widget_id, self.virtual_widget_tree.root_id());
@@ -62,10 +62,10 @@ impl<A, F> WidgetTraverserBase<A, F>
     }
 }
 
-impl<A, F> WidgetTraverser<'_, A, F>
+impl<F> WidgetTraverser<'_, F>
     where F: RenderFrame
 {
-    pub fn get_widget(&mut self, id: WidgetID) -> Option<OffsetWidgetScanPath<'_, A, F>> {
+    pub fn get_widget(&mut self, id: WidgetID) -> Option<OffsetWidgetScanPath<'_, F>> {
         // TODO: OPTIMIZE
         self.scan_for_widget(id)?;
         self.add_stack_top_to_widget_tree();
@@ -79,7 +79,7 @@ impl<A, F> WidgetTraverser<'_, A, F>
         Some(stack.top_mut().map(move |w| OffsetWidgetScan::new(w, virtual_widget_tree, update_state)))
     }
 
-    pub fn get_widget_relation(&mut self, id: WidgetID, relation: Relation) -> Option<OffsetWidgetScanPath<'_, A, F>> {
+    pub fn get_widget_relation(&mut self, id: WidgetID, relation: Relation) -> Option<OffsetWidgetScanPath<'_, F>> {
         // TODO: OPTIMIZE
         self.scan_for_widget(id)?;
 
@@ -161,7 +161,7 @@ impl<A, F> WidgetTraverser<'_, A, F>
 
     /// Crawl over all widgets in the tree. Any operations performed on the widget *should not*
     /// modify the structure of the child widgets.
-    pub fn crawl_widgets(&mut self, mut for_each: impl FnMut(OffsetWidgetPath<'_, A, F>)) {
+    pub fn crawl_widgets(&mut self, mut for_each: impl FnMut(OffsetWidgetPath<'_, F>)) {
         let stack = &mut self.stack;
 
         stack.truncate(1);
@@ -202,10 +202,10 @@ impl<A, F> WidgetTraverser<'_, A, F>
     }
 }
 
-impl<A, F> WidgetTraverser<'_, A, F>
+impl<F> WidgetTraverser<'_, F>
     where F: RenderFrame
 {
-    fn scan_for_widget(&mut self, widget_id: WidgetID) -> Option<OffsetWidgetPath<A, F>> {
+    fn scan_for_widget(&mut self, widget_id: WidgetID) -> Option<OffsetWidgetPath<F>> {
         let stack = &mut self.stack;
 
         stack.truncate(1);

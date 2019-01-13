@@ -53,9 +53,9 @@ impl<W> Clip<W> {
     }
 }
 
-impl<A, F, W> Widget<A, F> for Clip<W>
+impl<F, W> Widget<F> for Clip<W>
     where F: PrimFrame,
-          W: Widget<A, F>
+          W: Widget<F>
 {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
@@ -86,31 +86,30 @@ impl<A, F, W> Widget<A, F> for Clip<W>
     }
 
     #[inline]
-    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps<A> {
+    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps {
         // TODO: PASS FOCUS THROUGH SELF
         EventOps {
-            action: None,
             focus: None,
             bubble: true,
         }
     }
 }
 
-impl<A, F, W> Parent<A, F> for Clip<W>
+impl<F, W> Parent<F> for Clip<W>
     where F: PrimFrame,
-          W: Widget<A, F>
+          W: Widget<F>
 {
     fn num_children(&self) -> usize {
         1
     }
 
-    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>> {
+    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<F>>> {
         match widget_ident {
             WidgetIdent::Num(0) => Some(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget)),
             _ => None
         }
     }
-    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>> {
+    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<F>>> {
         match widget_ident {
             WidgetIdent::Num(0) => Some(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget)),
             _ => None
@@ -118,26 +117,24 @@ impl<A, F, W> Parent<A, F> for Clip<W>
     }
 
     fn children<'a, G>(&'a self, mut for_each: G)
-        where A: 'a,
-              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow
+        where G: FnMut(WidgetSummary<&'a Widget<F>>) -> LoopFlow
     {
         for_each(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget));
     }
 
     fn children_mut<'a, G>(&'a mut self, mut for_each: G)
-        where A: 'a,
-              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow
+        where G: FnMut(WidgetSummary<&'a mut Widget<F>>) -> LoopFlow
     {
         for_each(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget));
     }
 
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>> {
+    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<F>>> {
         match index {
             0 => Some(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget)),
             _ => None
         }
     }
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
+    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<F>>> {
         match index {
             0 => Some(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget)),
             _ => None

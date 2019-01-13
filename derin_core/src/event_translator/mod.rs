@@ -17,34 +17,29 @@ use std::{
     iter::{ExactSizeIterator, DoubleEndedIterator}
 };
 
-pub(crate) struct EventTranslator<A>
-    where A: 'static,
+pub(crate) struct EventTranslator
 {
-    inner: TranslatorInner<A>
+    inner: TranslatorInner
 }
 
-pub(crate) struct TranslatorActive<'a, 'b, A, F>
-    where A: 'static,
-          F: RenderFrame + 'static
+pub(crate) struct TranslatorActive<'a, 'b, F>
+    where F: RenderFrame + 'static
 {
-    widget_traverser: &'a mut WidgetTraverser<'b, A, F>,
-    inner: &'a mut TranslatorInner<A>,
+    widget_traverser: &'a mut WidgetTraverser<'b, F>,
+    inner: &'a mut TranslatorInner,
     input_state: &'a mut InputState,
     update_state: Rc<UpdateStateCell>,
 }
 
-struct TranslatorInner<A: 'static> {
-    actions: Vec<A>,
+struct TranslatorInner {
     event_dispatcher: EventDispatcher,
 }
 
-impl<A> EventTranslator<A>
-    where A: 'static,
+impl EventTranslator
 {
-    pub fn new() -> EventTranslator<A> {
+    pub fn new() -> EventTranslator {
         EventTranslator {
             inner: TranslatorInner {
-                actions: Vec::new(),
                 event_dispatcher: EventDispatcher::new(),
             },
         }
@@ -52,10 +47,10 @@ impl<A> EventTranslator<A>
 
     pub fn with_data<'a, 'b, F: RenderFrame>(
         &'a mut self,
-        widget_traverser: &'a mut WidgetTraverser<'b, A, F>,
+        widget_traverser: &'a mut WidgetTraverser<'b, F>,
         input_state: &'a mut InputState,
         update_state: Rc<UpdateStateCell>,
-    ) -> TranslatorActive<'a, 'b, A, F> {
+    ) -> TranslatorActive<'a, 'b, F> {
         TranslatorActive {
             widget_traverser,
             inner: &mut self.inner,
@@ -63,15 +58,10 @@ impl<A> EventTranslator<A>
             update_state,
         }
     }
-
-    pub fn drain_actions(&mut self) -> impl '_ + Iterator<Item=A> + ExactSizeIterator + DoubleEndedIterator {
-        self.inner.actions.drain(..)
-    }
 }
 
-impl<A, F> TranslatorActive<'_, '_, A, F>
-    where A: 'static,
-          F: RenderFrame + 'static
+impl<F> TranslatorActive<'_, '_, F>
+    where F: RenderFrame + 'static
 {
     pub fn translate_window_event(&mut self, window_event: WindowEvent) {
         use self::WindowEvent::*;
@@ -83,7 +73,6 @@ impl<A, F> TranslatorActive<'_, '_, A, F>
             ref update_state,
         } = self;
         let TranslatorInner {
-            ref mut actions,
             ref mut event_dispatcher,
         } = inner;
 
@@ -284,13 +273,9 @@ impl<A, F> TranslatorActive<'_, '_, A, F>
                 let mut perform_event_ops = |ops| {
                     use crate::event::{EventOps, FocusChange};
                     let EventOps {
-                        action,
                         focus,
                         bubble,
                     } = ops;
-                    if let Some(action) = action {
-                        actions.push(action);
-                    }
                     if let Some(focus) = focus {
                         let of = widget_id;
                         let ident = widget_ident.clone();
@@ -356,7 +341,7 @@ impl<A, F> TranslatorActive<'_, '_, A, F>
                         let widget_rect = widget.rect();
                         let (contains_new, contains_old) = (widget_rect.contains(new_pos), widget_rect.contains(old_pos));
 
-                        let mut send_exiting_from_child = |widget: &mut OffsetWidget<'_, dyn Widget<A, F>>, in_widget| {
+                        let mut send_exiting_from_child = |widget: &mut OffsetWidget<'_, dyn Widget<F>>, in_widget| {
                             if let Some(child_ident) = exiting_from_child.clone() {
                                 perform_event_ops(widget.on_widget_event(
                                     WidgetEventSourced::This(WidgetEvent::MouseMove {

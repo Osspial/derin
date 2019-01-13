@@ -24,49 +24,49 @@ use std::mem;
 const CHILD_BATCH_SIZE: usize = 24;
 
 pub type ForEachSummary<'a, W> = &'a mut FnMut(ArrayVec<[WidgetSummary<W>; CHILD_BATCH_SIZE]>) -> LoopFlow;
-pub trait ParentDyn<A, F: RenderFrame>: Widget<A, F> {
-    fn as_widget(&mut self) -> &mut Widget<A, F>;
+pub trait ParentDyn<F: RenderFrame>: Widget<F> {
+    fn as_widget(&mut self) -> &mut Widget<F>;
     fn num_children(&self) -> usize;
 
-    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>>;
-    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>>;
+    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<F>>>;
+    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<F>>>;
 
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>>;
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>>;
+    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<F>>>;
+    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<F>>>;
 
-    fn children<'a>(&'a self, for_each: ForEachSummary<&'a Widget<A, F>>);
-    fn children_mut<'a>(&'a mut self, for_each: ForEachSummary<&'a mut Widget<A, F>>);
+    fn children<'a>(&'a self, for_each: ForEachSummary<&'a Widget<F>>);
+    fn children_mut<'a>(&'a mut self, for_each: ForEachSummary<&'a mut Widget<F>>);
 }
 
-impl<A, F, P> ParentDyn<A, F> for P
+impl<F, P> ParentDyn<F> for P
     where F: RenderFrame,
-          P: Parent<A, F>
+          P: Parent<F>
 {
-    fn as_widget(&mut self) -> &mut Widget<A, F> {
-        self as &mut Widget<A, F>
+    fn as_widget(&mut self) -> &mut Widget<F> {
+        self as &mut Widget<F>
     }
     fn num_children(&self) -> usize {
-        <Self as Parent<A, F>>::num_children(self)
+        <Self as Parent<F>>::num_children(self)
     }
 
-    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>> {
-        <Self as Parent<A, F>>::child(self, widget_ident)
+    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<F>>> {
+        <Self as Parent<F>>::child(self, widget_ident)
     }
-    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>> {
-        <Self as Parent<A, F>>::child_mut(self, widget_ident)
-    }
-
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>> {
-        <Self as Parent<A, F>>::child_by_index(self, index)
-    }
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
-        <Self as Parent<A, F>>::child_by_index_mut(self, index)
+    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<F>>> {
+        <Self as Parent<F>>::child_mut(self, widget_ident)
     }
 
-    fn children<'a>(&'a self, for_each: ForEachSummary<&'a Widget<A, F>>) {
+    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<F>>> {
+        <Self as Parent<F>>::child_by_index(self, index)
+    }
+    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<F>>> {
+        <Self as Parent<F>>::child_by_index_mut(self, index)
+    }
+
+    fn children<'a>(&'a self, for_each: ForEachSummary<&'a Widget<F>>) {
         let mut child_avec: ArrayVec<[_; CHILD_BATCH_SIZE]> = ArrayVec::new();
 
-        <Self as Parent<A, F>>::children::<_>(self, |summary| {
+        <Self as Parent<F>>::children::<_>(self, |summary| {
             match child_avec.try_push(summary) {
                 Ok(()) => (),
                 Err(caperr) => {
@@ -86,10 +86,10 @@ impl<A, F, P> ParentDyn<A, F> for P
             let _ = for_each(child_avec);
         }
     }
-    fn children_mut<'a>(&'a mut self, for_each: ForEachSummary<&'a mut Widget<A, F>>) {
+    fn children_mut<'a>(&'a mut self, for_each: ForEachSummary<&'a mut Widget<F>>) {
         let mut child_avec: ArrayVec<[_; CHILD_BATCH_SIZE]> = ArrayVec::new();
 
-        <Self as Parent<A, F>>::children_mut::<_>(self, |summary| {
+        <Self as Parent<F>>::children_mut::<_>(self, |summary| {
             match child_avec.try_push(summary) {
                 Ok(()) => (),
                 Err(caperr) => {
@@ -111,31 +111,31 @@ impl<A, F, P> ParentDyn<A, F> for P
     }
 }
 
-impl<A, F: RenderFrame> ParentDyn<A, F> {
+impl<F: RenderFrame> ParentDyn<F> {
     #[inline]
-    pub fn from_widget<W>(widget: &W) -> Option<&ParentDyn<A, F>>
-        where W: Widget<A, F> + ?Sized
+    pub fn from_widget<W>(widget: &W) -> Option<&ParentDyn<F>>
+        where W: Widget<F> + ?Sized
     {
-        trait AsParent<A, F>
+        trait AsParent<F>
             where F: RenderFrame
         {
-            fn as_parent_dyn(&self) -> Option<&ParentDyn<A, F>>;
+            fn as_parent_dyn(&self) -> Option<&ParentDyn<F>>;
         }
-        impl<A, F, W> AsParent<A, F> for W
+        impl<F, W> AsParent<F> for W
             where F: RenderFrame,
-                  W: Widget<A, F> + ?Sized
+                  W: Widget<F> + ?Sized
         {
             #[inline(always)]
-            default fn as_parent_dyn(&self) -> Option<&ParentDyn<A, F>> {
+            default fn as_parent_dyn(&self) -> Option<&ParentDyn<F>> {
                 None
             }
         }
-        impl<A, F, W> AsParent<A, F> for W
+        impl<F, W> AsParent<F> for W
             where F: RenderFrame,
-                  W: ParentDyn<A, F>
+                  W: ParentDyn<F>
         {
             #[inline(always)]
-            fn as_parent_dyn(&self) -> Option<&ParentDyn<A, F>> {
+            fn as_parent_dyn(&self) -> Option<&ParentDyn<F>> {
                 Some(self)
             }
         }
@@ -144,29 +144,29 @@ impl<A, F: RenderFrame> ParentDyn<A, F> {
     }
 
     #[inline]
-    pub fn from_widget_mut<W>(widget: &mut W) -> Option<&mut ParentDyn<A, F>>
-        where W: Widget<A, F> + ?Sized
+    pub fn from_widget_mut<W>(widget: &mut W) -> Option<&mut ParentDyn<F>>
+        where W: Widget<F> + ?Sized
     {
-        trait AsParent<A, F>
+        trait AsParent<F>
             where F: RenderFrame
         {
-            fn as_parent_dyn(&mut self) -> Option<&mut ParentDyn<A, F>>;
+            fn as_parent_dyn(&mut self) -> Option<&mut ParentDyn<F>>;
         }
-        impl<A, F, W> AsParent<A, F> for W
+        impl<F, W> AsParent<F> for W
             where F: RenderFrame,
-                  W: Widget<A, F> + ?Sized
+                  W: Widget<F> + ?Sized
         {
             #[inline(always)]
-            default fn as_parent_dyn(&mut self) -> Option<&mut ParentDyn<A, F>> {
+            default fn as_parent_dyn(&mut self) -> Option<&mut ParentDyn<F>> {
                 None
             }
         }
-        impl<A, F, W> AsParent<A, F> for W
+        impl<F, W> AsParent<F> for W
             where F: RenderFrame,
-                  W: ParentDyn<A, F>
+                  W: ParentDyn<F>
         {
             #[inline(always)]
-            fn as_parent_dyn(&mut self) -> Option<&mut ParentDyn<A, F>> {
+            fn as_parent_dyn(&mut self) -> Option<&mut ParentDyn<F>> {
                 Some(self)
             }
         }
@@ -176,38 +176,38 @@ impl<A, F: RenderFrame> ParentDyn<A, F> {
 }
 
 
-pub fn to_widget_object<A, F, W>(widget: &W) -> &Widget<A, F>
-    where W: Widget<A, F> + ?Sized,
+pub fn to_widget_object<F, W>(widget: &W) -> &Widget<F>
+    where W: Widget<F> + ?Sized,
           F: RenderFrame
 {
-    trait AsWidget<'a, A, F>
+    trait AsWidget<'a, F>
         where F: RenderFrame
     {
-        fn as_widget_dyn(self) -> &'a Widget<A, F>;
+        fn as_widget_dyn(self) -> &'a Widget<F>;
     }
-    impl<'a, A, F, W> AsWidget<'a, A, F> for &'a W
+    impl<'a, F, W> AsWidget<'a, F> for &'a W
         where F: RenderFrame,
-              W: Widget<A, F> + ?Sized
+              W: Widget<F> + ?Sized
     {
         #[inline(always)]
-        default fn as_widget_dyn(self) -> &'a Widget<A, F> {
+        default fn as_widget_dyn(self) -> &'a Widget<F> {
             panic!("Invalid")
         }
     }
-    impl<'a, A, F, W> AsWidget<'a, A, F> for &'a W
+    impl<'a, F, W> AsWidget<'a, F> for &'a W
         where F: RenderFrame,
-              W: Widget<A, F>
+              W: Widget<F>
     {
         #[inline(always)]
-        fn as_widget_dyn(self) -> &'a Widget<A, F> {
+        fn as_widget_dyn(self) -> &'a Widget<F> {
             self
         }
     }
-    impl<'a, A, F> AsWidget<'a, A, F> for &'a Widget<A, F>
+    impl<'a, F> AsWidget<'a, F> for &'a Widget<F>
         where F: RenderFrame
     {
         #[inline(always)]
-        fn as_widget_dyn(self) -> &'a Widget<A, F> {
+        fn as_widget_dyn(self) -> &'a Widget<F> {
             self
         }
     }
@@ -215,38 +215,38 @@ pub fn to_widget_object<A, F, W>(widget: &W) -> &Widget<A, F>
     widget.as_widget_dyn()
 }
 
-pub fn to_widget_object_mut<A, F, W>(widget: &mut W) -> &mut Widget<A, F>
-    where W: Widget<A, F> + ?Sized,
+pub fn to_widget_object_mut<F, W>(widget: &mut W) -> &mut Widget<F>
+    where W: Widget<F> + ?Sized,
           F: RenderFrame
 {
-    trait AsWidget<'a, A, F>
+    trait AsWidget<'a, F>
         where F: RenderFrame
     {
-        fn as_widget_dyn(self) -> &'a mut Widget<A, F>;
+        fn as_widget_dyn(self) -> &'a mut Widget<F>;
     }
-    impl<'a, A, F, W> AsWidget<'a, A, F> for &'a mut W
+    impl<'a, F, W> AsWidget<'a, F> for &'a mut W
         where F: RenderFrame,
-              W: Widget<A, F> + ?Sized
+              W: Widget<F> + ?Sized
     {
         #[inline(always)]
-        default fn as_widget_dyn(self) -> &'a mut Widget<A, F> {
+        default fn as_widget_dyn(self) -> &'a mut Widget<F> {
             panic!("Invalid")
         }
     }
-    impl<'a, A, F, W> AsWidget<'a, A, F> for &'a mut W
+    impl<'a, F, W> AsWidget<'a, F> for &'a mut W
         where F: RenderFrame,
-              W: Widget<A, F>
+              W: Widget<F>
     {
         #[inline(always)]
-        fn as_widget_dyn(self) -> &'a mut Widget<A, F> {
+        fn as_widget_dyn(self) -> &'a mut Widget<F> {
             self
         }
     }
-    impl<'a, A, F> AsWidget<'a, A, F> for &'a mut Widget<A, F>
+    impl<'a, F> AsWidget<'a, F> for &'a mut Widget<F>
         where F: RenderFrame
     {
         #[inline(always)]
-        fn as_widget_dyn(self) -> &'a mut Widget<A, F> {
+        fn as_widget_dyn(self) -> &'a mut Widget<F> {
             self
         }
     }

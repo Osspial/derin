@@ -134,7 +134,7 @@ impl RadioButton {
     }
 }
 
-impl<A, F> Widget<A, F> for RadioButton
+impl<F> Widget<F> for RadioButton
     where F: PrimFrame
 {
     #[inline]
@@ -223,12 +223,11 @@ impl<A, F> Widget<A, F> for RadioButton
         );
     }
 
-    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps<A> {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps {
         use self::WidgetEvent::*;
         let event = event.unwrap();
 
         let mut force_bubble = false;
-        let action = None;
         let (mut new_selected, mut new_state) = (self.selected, self.button_state);
         match event {
             MouseMove{hover_change: Some(ref change), ..} if input_state.mouse_buttons_down_in_widget.is_empty() => {
@@ -262,18 +261,16 @@ impl<A, F> Widget<A, F> for RadioButton
 
 
         EventOps {
-            action,
             focus: None,
             bubble: force_bubble || event.default_bubble(),
         }
     }
 }
 
-impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
-    where A: 'static,
-          F: PrimFrame,
-          C: WidgetContainer<A, F, Widget=RadioButton>,
-          RadioButton: Widget<A, F>,
+impl<F, C, L> Widget<F> for RadioButtonList<C, L>
+    where F: PrimFrame,
+          C: WidgetContainer<F, Widget=RadioButton>,
+          RadioButton: Widget<F>,
           L: GridLayout
 {
     #[inline]
@@ -350,7 +347,7 @@ impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
     }
 
     #[inline]
-    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps<A> {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
         // TODO: PASS FOCUS TO CHILD
 
         let mut bubble = true;
@@ -371,49 +368,45 @@ impl<A, F, C, L> Widget<A, F> for RadioButtonList<C, L>
         }
 
         EventOps {
-            action: None,
             focus: None,
             bubble,
         }
     }
 }
 
-impl<A, F, C, L> Parent<A, F> for RadioButtonList<C, L>
-    where A: 'static,
-          F: PrimFrame,
-          C: WidgetContainer<A, F, Widget=RadioButton>,
-          RadioButton: Widget<A, F>,
+impl<F, C, L> Parent<F> for RadioButtonList<C, L>
+    where F: PrimFrame,
+          C: WidgetContainer<F, Widget=RadioButton>,
+          RadioButton: Widget<F>,
           L: GridLayout
 {
     fn num_children(&self) -> usize {
         self.buttons.num_children()
     }
 
-    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<A, F>>> {
+    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<F>>> {
         self.buttons.child(widget_ident).map(WidgetSummary::to_dyn)
     }
-    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<A, F>>> {
+    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<F>>> {
         self.buttons.child_mut(widget_ident).map(WidgetSummary::to_dyn_mut)
     }
 
     fn children<'a, G>(&'a self, mut for_each: G)
-        where A: 'a,
-              G: FnMut(WidgetSummary<&'a Widget<A, F>>) -> LoopFlow
+        where G: FnMut(WidgetSummary<&'a Widget<F>>) -> LoopFlow
     {
         self.buttons.children(|summary| for_each(WidgetSummary::to_dyn(summary)))
     }
 
     fn children_mut<'a, G>(&'a mut self, mut for_each: G)
-        where A: 'a,
-              G: FnMut(WidgetSummary<&'a mut Widget<A, F>>) -> LoopFlow
+        where G: FnMut(WidgetSummary<&'a mut Widget<F>>) -> LoopFlow
     {
         self.buttons.children_mut(|summary| for_each(WidgetSummary::to_dyn_mut(summary)))
     }
 
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<A, F>>> {
+    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<F>>> {
         self.buttons.child_by_index(index).map(WidgetSummary::to_dyn)
     }
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<A, F>>> {
+    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<F>>> {
         self.buttons.child_by_index_mut(index).map(WidgetSummary::to_dyn_mut)
     }
 }

@@ -27,25 +27,21 @@ use crate::gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 use arrayvec::ArrayVec;
 
 /// Determines which action, if any, should be taken in response to a button press.
-pub trait ButtonHandler<A: 'static>: 'static {
-    /// Called when the button is pressed. If `Some` is returned, the given action is pumped into
-    /// the action queue and passed to [`run_forever`'s `on_action`][on_action].
-    ///
-    /// [on_action]: ../struct.Window.html#method.run_forever
-    fn on_click(&mut self) -> Option<A>;
+pub trait ButtonHandler: 'static {
+    fn on_click(&mut self);
 }
 
-impl<A: 'static + Clone> ButtonHandler<A> for Option<A> {
+impl<A: 'static + Clone> ButtonHandler for Option<A> {
     #[inline]
-    fn on_click(&mut self) -> Option<A> {
-        self.clone()
+    fn on_click(&mut self) {
+        unimplemented!()
     }
 }
 
-impl<A: 'static> ButtonHandler<A> for () {
+impl ButtonHandler for () {
     #[inline]
-    fn on_click(&mut self) -> Option<A> {
-        None
+    fn on_click(&mut self) {
+        unimplemented!()
     }
 }
 
@@ -93,10 +89,9 @@ impl<H> Button<H> {
     }
 }
 
-impl<A, F, H> Widget<A, F> for Button<H>
-    where A: 'static,
-          F: PrimFrame,
-          H: ButtonHandler<A>
+impl<F, H> Widget<F> for Button<H>
+    where F: PrimFrame,
+          H: ButtonHandler
 {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
@@ -149,11 +144,9 @@ impl<A, F, H> Widget<A, F> for Button<H>
         self.size_bounds.min.dims.y += render_string_min.height();
     }
 
-    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps<A> {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps {
         use self::WidgetEvent::*;
         let event = event.unwrap();
-
-        let mut action = None;
 
         let new_state = match event {
             MouseMove{hover_change: Some(ref change), ..} => match change {
@@ -163,7 +156,7 @@ impl<A, F, H> Widget<A, F> for Button<H>
             },
             MouseDown{..} => ButtonState::Pressed,
             MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
-                action = self.handler.on_click();
+                self.handler.on_click();
                 ButtonState::Hover
             },
             MouseUp{in_widget: false, ..} => ButtonState::Normal,
@@ -179,7 +172,6 @@ impl<A, F, H> Widget<A, F> for Button<H>
 
 
         EventOps {
-            action,
             focus: None,
             bubble: event.default_bubble(),
         }

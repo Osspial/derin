@@ -147,7 +147,7 @@ macro_rules! render_and_event {
             self.min_size.dims.y += render_string_min.height();
         }
 
-        fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps<A> {
+        fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps {
             let event = event.unwrap();
 
             let TextEditOps {
@@ -183,7 +183,6 @@ macro_rules! render_and_event {
             }
 
             EventOps {
-                action: None,
                 focus,
                 bubble: allow_bubble && event.default_bubble(),
             }
@@ -191,7 +190,7 @@ macro_rules! render_and_event {
     }
 }
 
-impl<A, F> Widget<A, F> for EditBox
+impl<F> Widget<F> for EditBox
     where F: PrimFrame
 {
     #[inline]
@@ -217,7 +216,7 @@ impl<A, F> Widget<A, F> for EditBox
     render_and_event!(EditBox);
 }
 
-impl<A, F> Widget<A, F> for LineBox
+impl<F> Widget<F> for LineBox
     where F: PrimFrame
 {
     #[inline]
