@@ -14,7 +14,7 @@ use self::dispatcher::{EventDispatcher, EventDestination, DispatchableEvent};
 use cgmath_geometry::rect::{GeoBox, BoundBox};
 use std::{
     rc::Rc,
-    iter::{ExactSizeIterator, DoubleEndedIterator}
+    iter::{ExactSizeIterator}
 };
 
 pub(crate) struct EventTranslator

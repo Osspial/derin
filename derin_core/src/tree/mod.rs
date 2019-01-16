@@ -18,16 +18,19 @@ use self::dynamic::ParentDyn;
 use crate::{
     LoopFlow,
     event::{WidgetEventSourced, EventOps, InputState},
+    action_bus::{WidgetActionKey, WidgetActionFn},
     mbseq::MouseButtonSequence,
     render::{RenderFrame, RenderFrameClipped},
     timer::{TimerID, Timer},
-    update_state::{UpdateStateShared, UpdateStateCell}
+    update_state::{UpdateStateShared, UpdateStateCell},
 };
 use derin_common_types::{
     cursor::CursorIcon,
     layout::SizeBounds,
 };
+use smallvec::SmallVec;
 use std::{
+    any::{Any, TypeId},
     cell::{Cell, RefCell},
     fmt,
     ops::Drop,
@@ -62,6 +65,7 @@ pub(crate) enum MouseState {
 
 pub struct WidgetTag {
     update_state: RefCell<UpdateStateShared>,
+    registered_actions: FnvHashMap<WidgetActionKey, Cell<SmallVec<[WidgetActionFn; 1]>>>,
     pub(crate) widget_id: WidgetID,
     pub(crate) timers: FnvHashMap<TimerID, Timer>,
     pub(crate) mouse_state: Cell<MouseState>,
@@ -97,7 +101,7 @@ impl MouseState {
 id!(pub WidgetID);
 
 
-pub trait Widget<F: RenderFrame> {
+pub trait Widget<F: RenderFrame>: 'static {
     fn widget_tag(&self) -> &WidgetTag;
     fn rect(&self) -> BoundBox<D2, i32>;
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32>;
@@ -122,51 +126,29 @@ pub trait Widget<F: RenderFrame> {
     fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<F>> {
         ParentDyn::from_widget_mut(self)
     }
-}
-
-impl<'a, F, W> Widget<F> for &'a mut W
-    where W: Widget<F> + ?Sized,
-          F: RenderFrame
-{
-    #[inline]
-    fn widget_tag(&self) -> &WidgetTag {
-        W::widget_tag(self)
-    }
-    fn rect(&self) -> BoundBox<D2, i32> {
-        W::rect(self)
-    }
-    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
-        W::rect_mut(self)
-    }
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
-        W::render(self, frame)
-    }
-    fn on_widget_event(
-        &mut self,
-        event: WidgetEventSourced<'_>,
-        input_state: InputState,
-    ) -> EventOps {
-        W::on_widget_event(self, event, input_state)
-    }
-
-    fn update_layout(&mut self, theme: &F::Theme) {
-        W::update_layout(self, theme)
-    }
-    fn size_bounds(&self) -> SizeBounds {
-        W::size_bounds(self)
-    }
 
     #[doc(hidden)]
-    fn as_parent(&self) -> Option<&ParentDyn<F>> {
-        W::as_parent(self)
-    }
+    fn dispatch_action(&mut self, action: &Any) {
+        let action_key = WidgetActionKey::from_dyn_action::<Self>(action);
+        let mut action_fns = {
+            let action_fns_cell = match self.widget_tag().registered_actions.get(&action_key) {
+                Some(afc) => afc,
+                None => return
+            };
+            action_fns_cell.replace(SmallVec::new())
+        };
 
-    #[doc(hidden)]
-    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<F>> {
-        W::as_parent_mut(self)
+        for mut f in &mut action_fns {
+            dynamic::to_any(self, |w| f(w, action));
+        }
+
+        let action_fns_cell = match self.widget_tag().registered_actions.get(&action_key) {
+            Some(afc) => afc,
+            None => return
+        };
+        action_fns_cell.replace(action_fns);
     }
 }
-
 
 impl<F, W> Widget<F> for Box<W>
     where W: Widget<F> + ?Sized,
@@ -298,6 +280,7 @@ impl WidgetTag {
         WidgetTag {
             update_state: RefCell::new(UpdateStateShared::new()),
             widget_id: WidgetID::new(),
+            registered_actions: FnvHashMap::default(),
             timers: FnvHashMap::default(),
             mouse_state: Cell::new(MouseState::Untracked),
         }
@@ -322,6 +305,35 @@ impl WidgetTag {
     pub fn timers_mut(&mut self) -> &mut FnvHashMap<TimerID, Timer> {
         self.update_state.get_mut().request_update_timers(self.widget_id);
         &mut self.timers
+    }
+
+    pub fn register_action<W, A>(&mut self, mut f: impl 'static + FnMut(&mut W, &A))
+        where W: 'static,
+              A: 'static
+    {
+        self.update_state.get_mut().request_update_actions(self.widget_id);
+
+        let action_type_id = TypeId::of::<A>();
+        let widget_type_id = TypeId::of::<W>();
+
+        let f: Box<FnMut(&mut Any, &Any)> = Box::new(move |widget_any, action_any| {
+            let widget = widget_any.downcast_mut::<W>().expect("Passed bad widget type to action fn");
+            let action = action_any.downcast_ref::<A>().expect("Passed bad action type to action fn");
+            f(widget, action);
+        });
+
+        self.registered_actions.entry(WidgetActionKey::new::<W, A>())
+            .or_insert(Cell::new(SmallVec::new()))
+            .get_mut()
+            .push(f);
+    }
+
+    pub fn action_types(&self) -> impl '_ + Iterator<Item=TypeId> {
+        self.registered_actions.keys().map(|k| k.action_type())
+    }
+
+    pub fn broadcast_action<A: 'static>(&mut self, action: A) {
+        self.update_state.get_mut().broadcast_action(action);
     }
 
     pub fn set_cursor_pos(&mut self, cursor_pos: Point2<i32>) {

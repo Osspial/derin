@@ -65,7 +65,7 @@ impl<F: RenderFrame> WidgetStackCache<F> {
         }
     }
 
-    pub fn use_cache<'a>(&'a mut self, widget: &mut (Widget<F> + 'a)) -> WidgetStack<'a, F> {
+    pub fn use_cache<'a>(&'a mut self, widget: &mut Widget<F>) -> WidgetStack<'a, F> {
         let mut cache_swap = Vec::new();
         mem::swap(&mut cache_swap, &mut self.vec);
 
