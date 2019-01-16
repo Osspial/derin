@@ -19,7 +19,10 @@ use crate::render::RenderFrame;
 use crate::tree::{Parent, WidgetIdent, WidgetSummary, Widget};
 
 use arrayvec::ArrayVec;
-use std::mem;
+use std::{
+    mem,
+    any::Any,
+};
 
 const CHILD_BATCH_SIZE: usize = 24;
 
@@ -175,6 +178,35 @@ impl<F: RenderFrame> ParentDyn<F> {
     }
 }
 
+
+pub fn to_any<F, W>(widget: &mut W, f: impl FnOnce(&mut Any))
+    where W: Widget<F> + ?Sized,
+          F: RenderFrame
+{
+    trait AsWidget<F>
+        where F: RenderFrame
+    {
+        fn as_widget_sized<G: FnOnce(&mut Any)>(&mut self, f: G);
+    }
+    impl<W, F> AsWidget<F> for W
+        where F: RenderFrame,
+              W: Widget<F> + ?Sized
+    {
+        default fn as_widget_sized<G: FnOnce(&mut Any)>(&mut self, _f: G) {
+            panic!("Invalid")
+        }
+    }
+    impl<W, F> AsWidget<F> for W
+        where F: RenderFrame,
+              W: Widget<F>
+    {
+        fn as_widget_sized<G: FnOnce(&mut Any)>(&mut self, f: G) {
+            f(self);
+        }
+    }
+
+    widget.as_widget_sized(f);
+}
 
 pub fn to_widget_object<F, W>(widget: &W) -> &Widget<F>
     where W: Widget<F> + ?Sized,

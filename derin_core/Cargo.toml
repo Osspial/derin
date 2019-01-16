@@ -16,6 +16,7 @@ derin_common_types = { path = "../derin_common_types" }
 arrayvec = "0.4"
 itertools = "0.7"
 fnv = "1"
+smallvec = {version = "0.6", features = ["std", "union"]}
 
 [dev-dependencies]
 indexmap = "1"
