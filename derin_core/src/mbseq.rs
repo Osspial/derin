@@ -129,9 +129,9 @@ impl MouseButtonSequence {
         self
     }
 
-    pub fn contains(&self, button: MouseButton) -> bool {
-        self.into_iter().find(|b| *b == button).is_some()
-    }
+    // pub fn contains(&self, button: MouseButton) -> bool {
+    //     self.into_iter().find(|b| *b == button).is_some()
+    // }
 
     // #[inline]
     // pub fn get(&mut self, index: u8) -> Option<MouseButton> {

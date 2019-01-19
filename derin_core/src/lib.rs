@@ -37,7 +37,7 @@ mod event_translator;
 mod update_state;
 mod widget_traverser;
 
-use crate::cgmath::{Point2, Vector2, Bounded};
+use crate::cgmath::{Point2, Vector2, Bounded, EuclideanSpace};
 use cgmath_geometry::{D2, rect::{DimsBox, GeoBox}};
 
 use crate::{
@@ -54,6 +54,7 @@ use crate::{
 };
 use derin_common_types::{
     buttons::{MouseButton, Key, ModifierKeys},
+    cursor::CursorIcon,
     layout::SizeBounds,
 };
 use std::{
@@ -145,6 +146,8 @@ pub struct FrameEventProcessor<'a, F>
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EventLoopResult {
     pub next_timer: Option<Instant>,
+    pub set_cursor_pos: Option<Point2<i32>>,
+    pub set_cursor_icon: Option<CursorIcon>,
 }
 
 impl InputState {
@@ -415,8 +418,23 @@ impl<F> FrameEventProcessor<'_, F>
             });
         };}
 
+        let mut update_state = self.update_state.borrow_mut();
+        let widget_traverser = &mut self.widget_traverser;
+        let set_cursor_icon = update_state.set_cursor_icon.take();
+
+        // The cursor position stored in `UpdateState.set_cursor_pos` is relative to the requesting
+        // widget's origin. This translates it into window-space.
+        let set_cursor_pos = update_state.set_cursor_pos.take()
+            .and_then(|(widget_id, offset_pos)|
+                widget_traverser.get_widget(widget_id)
+                    .map(|wpath| wpath.widget.rect().min + offset_pos.to_vec())
+            );
+
+
         EventLoopResult {
             next_timer: self.timer_tracker.next_trigger(),
+            set_cursor_pos,
+            set_cursor_icon,
         }
     }
 }

@@ -16,10 +16,12 @@ use glutin::*;
 use glutin::{MouseButton as GMouseButton, WindowEvent as GWindowEvent, MouseScrollDelta};
 use crate::gl_render::{GLRenderer, GLFrame};
 use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
-use crate::core::{Root, LoopFlow, WindowEvent};
-use crate::core::tree::{Widget, WidgetIdent};
-use crate::core::event::WidgetEvent;
-use crate::core::render::Renderer;
+use crate::core::{
+    Root, LoopFlow, EventLoopResult, WindowEvent,
+    tree::{Widget, WidgetIdent},
+    event::WidgetEvent,
+    render::Renderer,
+};
 use crate::theme::Theme;
 use gullery::ContextState;
 
@@ -109,7 +111,10 @@ impl<N: Widget<GLFrame>> GlutinWindow<N> {
 
                 match park_type {
                     TimerPark::Timeout(park_until) => {
-                        thread::park_timeout(park_until - Instant::now());
+                        let now = Instant::now();
+                        if park_until > now {
+                            thread::park_timeout(park_until - now);
+                        }
                         if *timer_sync.lock() == TimerPark::Timeout(park_until) {
                             if events_loop_proxy.wakeup().is_err() {
                                 return;
@@ -147,8 +152,7 @@ impl<N: Widget<GLFrame>> GlutinWindow<N> {
     /// `on_fallthrough` is called whenever a raw event bubbles through the root widget.
     ///
     /// TODO: DOCUMENT HOW EVENT BUBBLING WORKS
-    pub fn run_forever<F>(&mut self, mut on_action: F)
-        where F: FnMut(&mut N, &mut Theme) -> LoopFlow,
+    pub fn run_forever(&mut self)
     {
         let GlutinWindow {
             ref mut primary_renderer,
@@ -239,11 +243,21 @@ impl<N: Widget<GLFrame>> GlutinWindow<N> {
             events_loop.run_forever(|e| {process_glutin_event(e); ControlFlow::Break});
             events_loop.poll_events(process_glutin_event);
 
-            let frame_result = frame.finish();
+            let EventLoopResult {
+                next_timer,
+                set_cursor_pos,
+                set_cursor_icon,
+            } = frame.finish();
 
-            match frame_result.next_timer {
+            match next_timer {
                 None => *timer_sync.lock() = TimerPark::Indefinite,
                 Some(park_until) => *timer_sync.lock() = TimerPark::Timeout(park_until)
+            }
+            if let Some(cursor_pos) = set_cursor_pos {
+                primary_renderer.set_cursor_pos(cursor_pos);
+            }
+            if let Some(cursor_icon) = set_cursor_icon {
+                primary_renderer.set_cursor_icon(cursor_icon);
             }
             timer_thread_handle.thread().unpark();
 

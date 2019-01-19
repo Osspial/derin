@@ -45,22 +45,6 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
         ..
     } = *derive_input;
 
-    // Process attributes on the item being derived
-    let mut action_ty_opt = None;
-    derin_attribute_iter(attrs, |attr| {
-        match *attr {
-            MetaItem::NameValue(ref ident, Lit::Str(ref string, _)) if ident == "action" =>
-                if action_ty_opt.is_none() {
-                    action_ty_opt = Some(syn::parse_type(&string).expect("Bad type in child action"));
-                } else {
-                    panic!("Repeated action attribute: {}", quote!(#attr).to_string())
-                },
-            _ => panic!("Bad Derin attribute: {}", quote!(#attr).to_string())
-        }
-    });
-
-    let action_ty = action_ty_opt.expect("Missing #[derin(action = \"...\")] attribute");
-
     // Process attributes on the fields in the item being derived
     let mut widget_fields = Vec::new();
     match *body {
@@ -89,11 +73,11 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
 
     let dummy_const = Ident::new(format!("_IMPL_PARENT_FOR_{}", ident));
 
-    let generics_expanded = expand_generics(generics, &action_ty, &widget_fields);
+    let generics_expanded = expand_generics(generics, &widget_fields);
     let (impl_generics, _, where_clause) = generics_expanded.split_for_impl();
     let (_, ty_generics, _) = generics.split_for_impl();
 
-    let widget_trait_ty = quote!((Widget<#action_ty, __F> + 'static));
+    let widget_trait_ty = quote!((Widget<__F> + 'static));
     let mut widget_ty = None;
     for ty in field_types(widget_fields.iter()) {
         let mut ty_tokens = Tokens::new();
@@ -157,7 +141,7 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
             }
 
             #[automatically_derived]
-            impl #impl_generics WidgetContainer<#action_ty, __F> for #ident #ty_generics #where_clause {
+            impl #impl_generics WidgetContainer<__F> for #ident #ty_generics #where_clause {
                 type Widget = #widget_ty;
 
                 #[inline]
@@ -168,7 +152,6 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
                 #[allow(unused_assignments, unused_variables, unused_mut)]
                 fn children<'a, __G>(&'a self, mut for_each_child: __G)
                     where __G: FnMut(WidgetSummary<&'a Self::Widget>) -> LoopFlow,
-                          #action_ty: 'a,
                           __F: 'a
                 {
                     let mut index = 0;
@@ -178,7 +161,6 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
                 #[allow(unused_assignments, unused_variables, unused_mut)]
                 fn children_mut<'a, __G>(&'a mut self, mut for_each_child: __G)
                     where __G: FnMut(WidgetSummary<&'a mut Self::Widget>) -> LoopFlow,
-                          #action_ty: 'a,
                           __F: 'a
                 {
                     let mut index = 0;
@@ -298,7 +280,7 @@ fn derin_attribute_iter<F>(attrs: &[Attribute], mut for_each: F)
     }
 }
 
-fn expand_generics(generics: &Generics, action_ty: &Ty, widget_fields: &[WidgetField]) -> Generics {
+fn expand_generics(generics: &Generics, widget_fields: &[WidgetField]) -> Generics {
     let mut generics = generics.clone();
     generics.ty_params.insert(0, TyParam {
         attrs: Vec::new(),
@@ -327,7 +309,7 @@ fn expand_generics(generics: &Generics, action_ty: &Ty, widget_fields: &[WidgetF
             bounds: vec![TyParamBound::Trait(
                 PolyTraitRef{
                     bound_lifetimes: Vec::new(),
-                    trait_ref: syn::parse_path(&quote!(_derive_derin::widgets::custom::Widget<#action_ty, __F>).to_string()).unwrap(),
+                    trait_ref: syn::parse_path(&quote!(_derive_derin::widgets::custom::Widget<__F>).to_string()).unwrap(),
                 },
                 TraitBoundModifier::None
             )]

@@ -66,9 +66,14 @@ impl<F> WidgetTraverser<'_, F>
     where F: RenderFrame
 {
     pub fn get_widget(&mut self, id: WidgetID) -> Option<OffsetWidgetScanPath<'_, F>> {
-        // TODO: OPTIMIZE
-        self.scan_for_widget(id)?;
-        self.add_stack_top_to_widget_tree();
+        // Move the stack top to the desired widget.
+        match self.get_widget_with_tree(id) {
+            Some(_) => (),
+            None => {
+                self.scan_for_widget(id)?;
+                self.add_stack_top_to_widget_tree();
+            }
+        };
 
         let WidgetTraverser {
             ref mut stack,
@@ -80,48 +85,27 @@ impl<F> WidgetTraverser<'_, F>
     }
 
     pub fn get_widget_relation(&mut self, id: WidgetID, relation: Relation) -> Option<OffsetWidgetScanPath<'_, F>> {
-        // TODO: OPTIMIZE
-        self.scan_for_widget(id)?;
-
-        let widget_opt = match relation {
+        let relation_id = match relation {
             Relation::Parent => {
-                self.stack.pop()?;
-                Some(self.stack.top_mut())
+                self.virtual_widget_tree.parent(id).ok()?
             },
             Relation::Sibling(delta) => {
-                let index = self.stack.top_index();
-                self.stack.pop()?;
-                self.stack.try_push(|widget| {
-                    let widget_as_parent = widget.as_parent_mut()?;
-                    widget_as_parent.child_by_index_mut((index as isize + delta) as usize)
-                })
+                self.virtual_widget_tree.sibling(id, delta).ok()?
             },
             Relation::ChildIdent(ident) => {
-                self.stack.try_push(|widget| {
-                    let widget_as_parent = widget.as_parent_mut()?;
-                    widget_as_parent.child_mut(ident)
-                })
+                self.virtual_widget_tree.child_ident(id, ident).ok()?
             },
             Relation::ChildIndex(index) => {
-                self.stack.try_push(|widget| {
-                    let widget_as_parent = widget.as_parent_mut()?;
-                    widget_as_parent.child_by_index_mut(index)
-                })
+                self.virtual_widget_tree.child_index(id, index).ok()?
             },
         };
-        match widget_opt {
-            Some(_) => {
-                self.add_stack_top_to_widget_tree();
-                let WidgetTraverser {
-                    ref mut stack,
-                    ref mut virtual_widget_tree,
-                    ref update_state,
-                } = self;
 
-                Some(stack.top_mut().map(move |w| OffsetWidgetScan::new(w, virtual_widget_tree, update_state)))
-            },
-            None => None
-        }
+        self.get_widget(relation_id)
+    }
+
+    fn get_widget_with_tree(&mut self, id: WidgetID) -> Option<OffsetWidgetPath<'_, F>> {
+        let mut widget_path_rev = self.virtual_widget_tree.ident_chain_reversed(id).unwrap().cloned().collect::<Vec<_>>();
+        self.move_to_path(widget_path_rev.drain(..).rev())
     }
 
     pub fn remove_widget(&mut self, id: WidgetID) {
@@ -254,6 +238,50 @@ impl<F> WidgetTraverser<'_, F>
             self.virtual_widget_tree.insert(parent.widget_id, widget_id, index, path.last().unwrap().clone()).unwrap();
         }
     }
+
+    fn move_to_path<I>(&mut self, ident_path: I) -> Option<OffsetWidgetPath<F>>
+        where I: IntoIterator<Item=WidgetIdent>
+    {
+        let mut ident_path_iter = ident_path.into_iter().peekable();
+
+        // Find the depth at which the given path and the current path diverge, and move the stack
+        // to that depth.
+        let mut diverge_depth = 0;
+        {
+            let mut active_path_iter = self.stack.path().iter();
+            // While the next item in the ident path and the active path are equal, increment the
+            // diverge depth.
+            while active_path_iter.next().and_then(|ident| ident_path_iter.peek().map(|i| i == ident)).unwrap_or(false) {
+                diverge_depth += 1;
+                ident_path_iter.next();
+            }
+        }
+        if diverge_depth == 0 {
+            return None;
+        }
+        self.stack.truncate(diverge_depth);
+
+        let mut valid_path = true;
+        for ident in ident_path_iter {
+            valid_path = self.stack.try_push(|widget| {
+                if let Some(widget_as_parent) = widget.as_parent_mut() {
+                    widget_as_parent.child_mut(ident)
+                } else {
+                    None
+                }
+            }).is_some();
+
+            if !valid_path {
+                break;
+            }
+        }
+
+        match valid_path {
+            true => Some(self.stack.top_mut()),
+            false => None
+        }
+    }
+
 }
 
 #[cfg(test)]
