@@ -130,7 +130,6 @@ impl<'a, F, W> OffsetWidgetTrait<F> for OffsetWidget<'a, W>
             modifiers,
             ..
         } = input_state;
-        let widget_tag = self.widget_tag();
         let offset = self.rect().min().to_vec();
         let mbd_array: ArrayVec<[_; 5]> = mouse_buttons_down.clone().into_iter()
             .map(|down| down.mouse_down)
@@ -138,19 +137,13 @@ impl<'a, F, W> OffsetWidgetTrait<F> for OffsetWidget<'a, W>
                 down.down_pos -= offset;
                 down
             }).collect();
-        let mbdin_array: ArrayVec<[_; 5]> = widget_tag.mouse_state.get().mouse_button_sequence()
-            .into_iter().filter_map(|b| mouse_buttons_down.contains(b))
-            .map(|down| down.mouse_down)
-            .map(|mut down| {
-                down.down_pos -= offset;
-                down
-            }).collect();
+        let mbdin_array: ArrayVec<[(); 5]> = ArrayVec::new(); //TODO: GET ACTUAL VALUES
 
         let input_state = EventInputState {
             mouse_pos: mouse_pos.map(|p| p - offset),
             modifiers: *modifiers,
             mouse_buttons_down: &mbd_array[..],
-            mouse_buttons_down_in_widget: &mbdin_array,
+            mouse_buttons_down_in_widget: &mbd_array[..],
             keys_down
         };
         let ops = self.widget.on_widget_event(

@@ -13,13 +13,13 @@
 // limitations under the License.
 
 pub(crate) mod dynamic;
+pub use crate::update_state::UpdateError;
 
 use self::dynamic::ParentDyn;
 use crate::{
     LoopFlow,
     event::{WidgetEventSourced, EventOps, InputState},
     action_bus::{WidgetActionKey, WidgetActionFn},
-    mbseq::MouseButtonSequence,
     render::{RenderFrame, RenderFrameClipped},
     timer::{TimerID, Timer},
     update_state::{UpdateStateShared, UpdateStateCell},
@@ -53,22 +53,11 @@ pub enum WidgetIdent {
     NumCollection(u32, u32)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub(crate) enum MouseState {
-    /// The mouse is hovering over the given widget.
-    Hovering(Point2<i32>, MouseButtonSequence),
-    /// The mouse isn't hovering over the widget, but the widget is still receiving mouse events.
-    Tracking(Point2<i32>, MouseButtonSequence),
-    /// The widget is not aware of the current mouse position and is receiving no events.
-    Untracked
-}
-
 pub struct WidgetTag {
     update_state: RefCell<UpdateStateShared>,
     registered_actions: FnvHashMap<WidgetActionKey, Cell<SmallVec<[WidgetActionFn; 1]>>>,
     pub(crate) widget_id: WidgetID,
     pub(crate) timers: FnvHashMap<TimerID, Timer>,
-    pub(crate) mouse_state: Cell<MouseState>,
 }
 
 impl fmt::Debug for WidgetTag {
@@ -84,17 +73,6 @@ impl Clone for WidgetTag {
     /// function is provided primarily to allow widgets to cleanly derive `Clone`.
     fn clone(&self) -> WidgetTag {
         WidgetTag::new()
-    }
-}
-
-impl MouseState {
-    #[inline]
-    pub fn mouse_button_sequence(&self) -> MouseButtonSequence {
-        match *self {
-            MouseState::Untracked => MouseButtonSequence::new(),
-            MouseState::Hovering(_, mbseq) |
-            MouseState::Tracking(_, mbseq) => mbseq
-        }
     }
 }
 
@@ -138,7 +116,7 @@ pub trait Widget<F: RenderFrame>: 'static {
             action_fns_cell.replace(SmallVec::new())
         };
 
-        for mut f in &mut action_fns {
+        for f in &mut action_fns {
             dynamic::to_any(self, |w| f(w, action));
         }
 
@@ -282,7 +260,6 @@ impl WidgetTag {
             widget_id: WidgetID::new(),
             registered_actions: FnvHashMap::default(),
             timers: FnvHashMap::default(),
-            mouse_state: Cell::new(MouseState::Untracked),
         }
     }
 
@@ -313,9 +290,6 @@ impl WidgetTag {
     {
         self.update_state.get_mut().request_update_actions(self.widget_id);
 
-        let action_type_id = TypeId::of::<A>();
-        let widget_type_id = TypeId::of::<W>();
-
         let f: Box<FnMut(&mut Any, &Any)> = Box::new(move |widget_any, action_any| {
             let widget = widget_any.downcast_mut::<W>().expect("Passed bad widget type to action fn");
             let action = action_any.downcast_ref::<A>().expect("Passed bad action type to action fn");
@@ -336,12 +310,12 @@ impl WidgetTag {
         self.update_state.get_mut().broadcast_action(action);
     }
 
-    pub fn set_cursor_pos(&mut self, cursor_pos: Point2<i32>) {
-        unimplemented!()
+    pub fn set_cursor_pos(&mut self, cursor_pos: Point2<i32>) -> Result<(), UpdateError> {
+        self.update_state.get_mut().request_set_cursor_pos(self.widget_id, cursor_pos)
     }
 
-    pub fn set_cursor_icon(&mut self, cursor_icon: CursorIcon) {
-        unimplemented!()
+    pub fn set_cursor_icon(&mut self, cursor_icon: CursorIcon) -> Result<(), UpdateError> {
+        self.update_state.get_mut().request_set_cursor_icon(cursor_icon)
     }
 
     #[inline]

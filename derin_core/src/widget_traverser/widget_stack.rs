@@ -112,28 +112,28 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
         }
     }
 
-    #[inline]
-    pub fn top_ident(&self) -> WidgetIdent {
-        self.ident_vec.last().cloned().unwrap()
-    }
+    // #[inline]
+    // pub fn top_ident(&self) -> WidgetIdent {
+    //     self.ident_vec.last().cloned().unwrap()
+    // }
 
     #[inline]
     pub fn top_index(&self) -> usize {
         self.vec.last().unwrap().index
     }
 
-    pub fn top_parent_offset(&self) -> Vector2<i32> {
-        self.top_parent_offset
-    }
+    // pub fn top_parent_offset(&self) -> Vector2<i32> {
+    //     self.top_parent_offset
+    // }
 
-    pub fn clip_rect(&self) -> Option<BoundBox<D2, i32>> {
-        self.clip_rect
-    }
+    // pub fn clip_rect(&self) -> Option<BoundBox<D2, i32>> {
+    //     self.clip_rect
+    // }
 
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.vec.len()
-    }
+    // #[inline]
+    // pub fn len(&self) -> usize {
+    //     self.vec.len()
+    // }
 
     #[inline]
     pub fn truncate(&mut self, len: usize) {

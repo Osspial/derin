@@ -1,7 +1,9 @@
 use crate::{
     action_bus::ActionBus,
+    cgmath::Point2,
     tree::WidgetID,
 };
+use derin_common_types::cursor::CursorIcon;
 use fnv::FnvHashSet;
 use std::{
     any::Any,
@@ -33,8 +35,15 @@ pub(crate) struct UpdateState {
     pub update_timers: FnvHashSet<WidgetID>,
     pub update_actions: FnvHashSet<WidgetID>,
     pub remove_from_tree: FnvHashSet<WidgetID>,
+    pub set_cursor_icon: Option<CursorIcon>,
+    pub set_cursor_pos: Option<(WidgetID, Point2<i32>)>,
     pub action_sender: Sender<Box<Any>>,
     pub global_update: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdateError {
+    NoRootWidget,
 }
 
 impl UpdateState {
@@ -46,6 +55,8 @@ impl UpdateState {
                 update_timers: FnvHashSet::default(),
                 update_actions: FnvHashSet::default(),
                 remove_from_tree: FnvHashSet::default(),
+                set_cursor_icon: None,
+                set_cursor_pos: None,
                 action_sender: action_bus.sender(),
                 global_update: true,
             })
@@ -78,13 +89,15 @@ impl UpdateStateShared {
     /// Try to upgrade the `Weak` reference to a full `Rc`. If the `Weak` points to something that
     /// no longer exists (because the primary `UpdateState` was dropped), change self to `Vacant`
     /// and return `Vacant`.
-    fn upgrade(&mut self, f: impl FnOnce(&mut UpdateStateShared<Rc<UpdateStateCell>>)) {
+    fn upgrade<R>(&mut self, f: impl FnOnce(&mut UpdateStateShared<Rc<UpdateStateCell>>) -> R) -> R {
+        let ret: R;
+
         match self {
             UpdateStateShared::Vacant(ref mut v) => {
                 let mut swap_vacant = UpdateStateVacant::default();
                 mem::swap(v, &mut swap_vacant);
                 let mut uss = UpdateStateShared::Vacant(swap_vacant);
-                f(&mut uss);
+                ret = f(&mut uss);
 
                 *self = match uss {
                     UpdateStateShared::Occupied(state) => UpdateStateShared::Occupied(Rc::downgrade(&state)),
@@ -92,13 +105,15 @@ impl UpdateStateShared {
                 };
             },
             UpdateStateShared::Occupied(weak) => match weak.upgrade() {
-                Some(rc) => f(&mut UpdateStateShared::Occupied(rc)),
+                Some(rc) => ret = f(&mut UpdateStateShared::Occupied(rc)),
                 None => {
                     *self = UpdateStateShared::new();
-                    self.upgrade(f);
+                    ret = self.upgrade(f);
                 }
             }
         }
+
+        ret
     }
 
     pub fn set_owning_update_state(&mut self, id: WidgetID, parent_state: &Rc<UpdateStateCell>) {
@@ -186,6 +201,28 @@ impl UpdateStateShared {
                 vacant.buffered_actions.push(action);
             }
         });
+    }
+
+    pub fn request_set_cursor_pos(&mut self, id: WidgetID, pos: Point2<i32>) -> Result<(), UpdateError> {
+        self.upgrade(|this| match this {
+            UpdateStateShared::Occupied(update_state) => {
+                let mut update_state = update_state.borrow_mut();
+                update_state.set_cursor_pos = Some((id, pos));
+                Ok(())
+            },
+            UpdateStateShared::Vacant(_) => Err(UpdateError::NoRootWidget)
+        })
+    }
+
+    pub fn request_set_cursor_icon(&mut self, icon: CursorIcon) -> Result<(), UpdateError> {
+        self.upgrade(|this| match this {
+            UpdateStateShared::Occupied(update_state) => {
+                let mut update_state = update_state.borrow_mut();
+                update_state.set_cursor_icon = Some(icon);
+                Ok(())
+            },
+            UpdateStateShared::Vacant(_) => Err(UpdateError::NoRootWidget)
+        })
     }
 
     pub fn remove_from_tree(&mut self, id: WidgetID) {

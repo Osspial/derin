@@ -2,7 +2,6 @@ use crate::tree::{WidgetID, WidgetIdent, ROOT_IDENT};
 use std::{
     cell::Cell,
     collections::{
-        VecDeque,
         hash_map::{HashMap, Entry}
     }
 };
@@ -113,26 +112,8 @@ impl VirtualWidgetTree {
         }
     }
 
-    pub(crate) fn remove_recursive(&mut self, widget_id: WidgetID) -> Option<WidgetData> {
-        if let Entry::Occupied(occ) = self.tree_data.entry(widget_id) {
-            let node = occ.remove();
-            crate::vec_remove_element(&mut self.get_widget_node_mut(node.parent_id).unwrap().1, &widget_id).unwrap();
-
-            // Remove all the child widgets.
-            let mut widgets_to_remove = VecDeque::from(node.children);
-            while let Some(remove_id) = widgets_to_remove.pop_front() {
-                let removed_node = match self.tree_data.entry(remove_id) {
-                    Entry::Occupied(occ) => occ.remove(),
-                    Entry::Vacant(_) => panic!("Bad tree state")
-                };
-                widgets_to_remove.extend(removed_node.children);
-            }
-
-            Some(node.data)
-        } else {
-            None
-        }
-    }
+    // A recursive remove function existed at one point, but has been removed from the source tree.
+    // Check commits from early January 2019 to find it.
 
     pub(crate) fn parent(&self, widget_id: WidgetID) -> Result<WidgetID, WidgetRelationError> {
         if widget_id == self.root {
@@ -199,10 +180,18 @@ impl VirtualWidgetTree {
         Some(siblings[mod_euc(sibling_index, siblings.len() as isize) as usize])
     }
 
-    pub(crate) fn child_from_start(&self, widget_id: WidgetID, child_index: usize) -> Result<WidgetID, WidgetRelationError> {
+    pub(crate) fn child_index(&self, widget_id: WidgetID, child_index: usize) -> Result<WidgetID, WidgetRelationError> {
         let children = self.get_widget_node(widget_id).ok_or(WidgetRelationError::WidgetNotFound)?.1;
 
         children.get(child_index).cloned().ok_or(WidgetRelationError::RelationNotFound)
+    }
+
+    pub(crate) fn child_ident(&self, widget_id: WidgetID, child_ident: WidgetIdent) -> Result<WidgetID, WidgetRelationError> {
+        let mut children = self.children(widget_id).ok_or(WidgetRelationError::WidgetNotFound)?;
+
+        children.find(|(_, data)| data.ident == child_ident)
+            .map(|(id, _)| id)
+            .ok_or(WidgetRelationError::RelationNotFound)
     }
 
     // pub(crate) fn child_from_end(&self, widget_id: WidgetID, offset: usize) -> Option<WidgetID> {unimplemented!()}
@@ -427,55 +416,6 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_recursive() {
-        virtual_widget_tree!{
-            let mut tree = root {
-                child_0 {
-                    child_0_1,
-                    child_0_3,
-                    child_0_2 {
-                        child_0_2_0
-                    }
-                },
-                child_1 {
-                    child_1_0,
-                    child_1_1
-                },
-                child_2
-            }
-        };
-
-        assert!(tree.remove_recursive(child_1).is_some());
-        virtual_widget_tree!(
-            let tree_removed_0 = root in old {
-                child_0 in old {
-                    child_0_1 in old,
-                    child_0_3 in old,
-                    child_0_2 in old {
-                        child_0_2_0 in old
-                    }
-                },
-                child_2 in old
-            }
-        );
-        assert_eq!(tree, tree_removed_0);
-
-        assert!(tree.remove_recursive(child_0).is_some());
-        virtual_widget_tree!(
-            let tree_removed_1 = root in old {
-                child_2 in old
-            }
-        );
-        assert_eq!(tree, tree_removed_1);
-
-        assert!(tree.remove_recursive(child_2).is_some());
-        virtual_widget_tree!(
-            let tree_removed_2 = root in old
-        );
-        assert_eq!(tree, tree_removed_2);
-    }
-
-    #[test]
     fn test_move() {
         virtual_widget_tree!{
             let mut tree = root {
@@ -593,18 +533,18 @@ mod tests {
         }
 
         for i in 0..16 {
-            assert_eq!(Err(WidgetRelationError::WidgetNotFound), tree.child_from_start(WidgetID::new(), i));
+            assert_eq!(Err(WidgetRelationError::WidgetNotFound), tree.child_index(WidgetID::new(), i));
         }
-        assert_eq!(Ok(child_0), tree.child_from_start(root, 0));
-        assert_eq!(Ok(child_1), tree.child_from_start(root, 1));
-        assert_eq!(Ok(child_2), tree.child_from_start(root, 2));
-        assert_eq!(Ok(child_0_1), tree.child_from_start(child_0, 0));
-        assert_eq!(Ok(child_0_2), tree.child_from_start(child_0, 1));
-        assert_eq!(Ok(child_0_3), tree.child_from_start(child_0, 2));
-        assert_eq!(Ok(child_0_2_0), tree.child_from_start(child_0_2, 0));
-        assert_eq!(Ok(child_1_0), tree.child_from_start(child_1, 0));
-        assert_eq!(Ok(child_1_1), tree.child_from_start(child_1, 1));
-        assert_eq!(Err(WidgetRelationError::RelationNotFound), tree.child_from_start(root, 3));
+        assert_eq!(Ok(child_0), tree.child_index(root, 0));
+        assert_eq!(Ok(child_1), tree.child_index(root, 1));
+        assert_eq!(Ok(child_2), tree.child_index(root, 2));
+        assert_eq!(Ok(child_0_1), tree.child_index(child_0, 0));
+        assert_eq!(Ok(child_0_2), tree.child_index(child_0, 1));
+        assert_eq!(Ok(child_0_3), tree.child_index(child_0, 2));
+        assert_eq!(Ok(child_0_2_0), tree.child_index(child_0_2, 0));
+        assert_eq!(Ok(child_1_0), tree.child_index(child_1, 0));
+        assert_eq!(Ok(child_1_1), tree.child_index(child_1, 1));
+        assert_eq!(Err(WidgetRelationError::RelationNotFound), tree.child_index(root, 3));
     }
 
     #[test]

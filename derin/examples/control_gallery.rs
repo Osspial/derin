@@ -95,18 +95,5 @@ fn main() {
     };
 
     let mut window = unsafe{ Window::new(window_config, group, theme).unwrap() };
-    window.run_forever(
-        |event, root, _| {
-            match event {
-                GalleryEvent::NewButton =>
-                    root.container_mut().nested.widget_mut().container_mut().buttons.push(Button::new(Contents::Text("An added button".to_string()), None)),
-                GalleryEvent::SliderMove(move_to) =>
-                    *root.container_mut().nested.widget_mut().container_mut().progress_bar.value_mut() = move_to,
-                _ => ()
-            }
-            println!("{:?}", event);
-            LoopFlow::Continue
-        },
-        |_, _| None
-    );
+    window.run_forever();
 }

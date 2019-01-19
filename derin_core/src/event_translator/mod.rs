@@ -12,10 +12,7 @@ use crate::{
 };
 use self::dispatcher::{EventDispatcher, EventDestination, DispatchableEvent};
 use cgmath_geometry::rect::{GeoBox, BoundBox};
-use std::{
-    rc::Rc,
-    iter::{ExactSizeIterator}
-};
+use std::rc::Rc;
 
 pub(crate) struct EventTranslator
 {
@@ -228,12 +225,12 @@ impl<F> TranslatorActive<'_, '_, F>
             KeyDown(key) => try {
                 if !input_state.keys_down.contains(&key) {
                     input_state.keys_down.push(key);
-                    match input_state.focused_widget {
+                    match dbg!(input_state.focused_widget) {
                         Some(widget) => event_dispatcher.queue_direct_event(
                             widget,
                             WidgetEvent::KeyDown(key, input_state.modifiers),
                         ),
-                        None => unimplemented!("dispatch to universal fallthrough")
+                        None => println!("dispatch to universal fallthrough")
                     }
                 }
             },
@@ -244,7 +241,7 @@ impl<F> TranslatorActive<'_, '_, F>
                             widget,
                             WidgetEvent::KeyUp(key, input_state.modifiers),
                         ),
-                        None => unimplemented!("dispatch to universal fallthrough")
+                        None => println!("dispatch to universal fallthrough")
                     }
                 }
             },
@@ -254,10 +251,10 @@ impl<F> TranslatorActive<'_, '_, F>
                         widget,
                         WidgetEvent::Char(c),
                     ),
-                    None => unimplemented!("dispatch to universal fallthrough")
+                    None => println!("dispatch to universal fallthrough")
                 }
             },
-            Timer => unimplemented!(),
+            Timer => None, // The timers will be handled in FrameEventProcessor::finish
             Redraw => try {
                 update_state.borrow_mut().queue_global_update();
             },

@@ -96,7 +96,7 @@ impl TimerTriggerTracker {
     pub fn queue_trigger(&mut self, timer_trigger: TimerTrigger) {
         let insert_location_result = self.timers_by_next_trigger.binary_search(&timer_trigger);
         let insert_location = match insert_location_result {
-            Ok(i) => return,
+            Ok(_) => return,
             Err(i) => i
         };
 
