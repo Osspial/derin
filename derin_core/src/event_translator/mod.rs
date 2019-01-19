@@ -306,26 +306,22 @@ impl<F> TranslatorActive<'_, '_, F>
                             }
                         };
 
-                        let is_focused = input_state.focused_widget == Some(widget_id);
-                        if !(is_focused && focus == FocusChange::Take) {
-                            if let Some(focused_widget) = input_state.focused_widget {
-                                event_dispatcher.queue_event(
-                                    EventDestination::Widget(focused_widget),
-                                    DispatchableEvent::Direct {
-                                        bubble_source: None,
-                                        event: WidgetEvent::LoseFocus
-                                    }
-                                );
-                            }
-                            if let Some((destination, source)) = destination_source_opt {
-                                event_dispatcher.queue_event(
-                                    destination,
-                                    DispatchableEvent::Direct {
-                                        bubble_source: None,
-                                        event: WidgetEvent::GainFocus(source)
-                                    }
-                                );
-                            }
+                        if let Some((destination, source)) = destination_source_opt {
+                            event_dispatcher.queue_event(
+                                destination,
+                                DispatchableEvent::Direct {
+                                    bubble_source: None,
+                                    event: WidgetEvent::GainFocus(source)
+                                }
+                            );
+                        } else if focus == FocusChange::Remove {
+                            event_dispatcher.queue_event(
+                                EventDestination::Widget(widget_id),
+                                DispatchableEvent::Direct {
+                                    bubble_source: None,
+                                    event: WidgetEvent::LoseFocus
+                                }
+                            );
                         }
                     }
                 };
@@ -433,13 +429,39 @@ impl<F> TranslatorActive<'_, '_, F>
                         }
                     },
                     DispatchableEvent::Direct{bubble_source, event} => {
+                        let mut queue_event = None;
                         if bubble_source.is_some() {
                             unimplemented!()
+                        } else {
+                            match event {
+                                WidgetEvent::GainFocus(_) if input_state.focused_widget == Some(widget_id) =>
+                                    return,
+                                WidgetEvent::GainFocus(_) => {
+                                    if let Some(focused_widget_id) = input_state.focused_widget {
+                                        queue_event = Some((
+                                            EventDestination::Widget(focused_widget_id),
+                                            DispatchableEvent::Direct {
+                                                bubble_source: None,
+                                                event: WidgetEvent::LoseFocus
+                                            }
+                                        ));
+                                    }
+
+                                    input_state.focused_widget = Some(widget_id);
+                                },
+                                WidgetEvent::LoseFocus if input_state.focused_widget == Some(widget_id) =>
+                                    input_state.focused_widget = None,
+                                _ => ()
+                            }
                         }
                         perform_event_ops(widget.on_widget_event(
                             WidgetEventSourced::This(event),
                             input_state,
-                        ))
+                        ));
+
+                        if let Some((destination, event)) = queue_event {
+                            event_dispatcher.queue_event(destination, event);
+                        }
                     }
                 }
             }
