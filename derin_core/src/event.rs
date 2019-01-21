@@ -164,10 +164,19 @@ pub enum WidgetEvent {
         /// The button that was released.
         button: MouseButton
     },
-    MouseScrollLines(Vector2<i32>),
-    MouseScrollPx(Vector2<i32>),
+    MouseScrollLines {
+        dir: Vector2<i32>,
+        in_widget: bool,
+    },
+    MouseScrollPx {
+        dir: Vector2<i32>,
+        in_widget: bool,
+    },
     /// The widget has gained keyboard focus.
-    GainFocus(FocusSource),
+    ///
+    /// `FocusSource`: The widget that this gained focus from.
+    /// `FocusChange`: The `FocusChange` request sent by the `FocusSource` widget.
+    GainFocus(FocusSource, FocusChange),
     /// The widget has lost keyboard focus.
     LoseFocus,
     /// The given character has been inputted by the user.
@@ -230,8 +239,8 @@ impl WidgetEventSourced<'_> {
 impl WidgetEvent {
     pub fn default_bubble(&self) -> bool {
         match *self {
-            WidgetEvent::MouseScrollLines(..) |
-            WidgetEvent::MouseScrollPx(..) |
+            WidgetEvent::MouseScrollLines{..} |
+            WidgetEvent::MouseScrollPx{..} |
             WidgetEvent::Char(..) |
             WidgetEvent::KeyDown(..) |
             WidgetEvent::KeyUp(..) => true,
@@ -270,8 +279,8 @@ impl WidgetEvent {
             WidgetEvent::Timer{..}             |
             WidgetEvent::KeyUp(..)             |
             WidgetEvent::KeyDown(..)           |
-            WidgetEvent::MouseScrollPx(..)     |
-            WidgetEvent::MouseScrollLines(..) =>
+            WidgetEvent::MouseScrollPx{..}     |
+            WidgetEvent::MouseScrollLines{..} =>
                 self
         }
     }

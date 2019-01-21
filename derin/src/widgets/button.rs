@@ -160,7 +160,7 @@ impl<F, H> Widget<F> for Button<H>
                 ButtonState::Hover
             },
             MouseUp{in_widget: false, ..} => ButtonState::Normal,
-            GainFocus(_) => ButtonState::Hover,
+            GainFocus(_, _) => ButtonState::Hover,
             LoseFocus => ButtonState::Normal,
             _ => self.state
         };

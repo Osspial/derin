@@ -1,6 +1,6 @@
 use crate::{
     cgmath::Point2,
-    event::{WidgetEvent},
+    event::{FocusChange, FocusSource, WidgetEvent},
     tree::{WidgetID, WidgetIdent},
     render::RenderFrame,
     widget_traverser::{Relation, WidgetTraverser, OffsetWidgetScanPath},
@@ -23,6 +23,10 @@ pub(crate) enum DispatchableEvent {
         old_pos: Point2<i32>,
         new_pos: Point2<i32>,
         exiting_from_child: Option<WidgetIdent>,
+    },
+    GainFocus {
+        source: FocusSource,
+        change: FocusChange,
     },
     Direct {
         bubble_source: Option<WidgetID>,

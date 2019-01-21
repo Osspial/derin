@@ -280,7 +280,7 @@ impl<F, W> Widget<F> for ScrollBox<W>
                 _ => ()
             },
             WidgetEventSourced::Bubble(ref event, _) => match event {
-                WidgetEvent::MouseScrollLines(dir) => {
+                WidgetEvent::MouseScrollLines{dir, in_widget: true} => {
                     allow_bubble = false;
                     if let Some(ref mut slider_x) = self.slider_x {
                         slider_x.value -= (24 * dir.x) as f32;
@@ -291,7 +291,7 @@ impl<F, W> Widget<F> for ScrollBox<W>
                         slider_y.round_to_step();
                     }
                 },
-                WidgetEvent::MouseScrollPx(dir) => {
+                WidgetEvent::MouseScrollPx{dir, in_widget: true} => {
                     allow_bubble = false;
                     if let Some(ref mut slider_x) = self.slider_x {
                         slider_x.value -= dir.x as f32;
