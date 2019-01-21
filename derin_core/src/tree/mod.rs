@@ -108,6 +108,9 @@ pub trait Widget<F: RenderFrame>: 'static {
     #[doc(hidden)]
     fn dispatch_action(&mut self, action: &Any) {
         let action_key = WidgetActionKey::from_dyn_action::<Self>(action);
+
+        // We have to pull the `action_fns` list out of the widget tag so that we can pass self
+        // mutably into the action functions.
         let mut action_fns = {
             let action_fns_cell = match self.widget_tag().registered_actions.get(&action_key) {
                 Some(afc) => afc,
@@ -124,6 +127,12 @@ pub trait Widget<F: RenderFrame>: 'static {
             Some(afc) => afc,
             None => return
         };
+
+        // Pull any new action functions into the canonical `action_fns` list.
+        let new_action_fns = action_fns_cell.replace(SmallVec::new());
+        action_fns.extend(new_action_fns);
+
+        // Put the canonical `action_fns` list back into the cell.
         action_fns_cell.replace(action_fns);
     }
 }
