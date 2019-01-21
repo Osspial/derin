@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::widgets::assistants::SliderAssist;
-use crate::event::{EventOps, WidgetEvent, InputState, MouseButton, WidgetEventSourced};
-use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
-use crate::core::render::{RenderFrameClipped, Theme};
-use crate::theme::RescaleRules;
+use crate::{
+    core::{
+        tree::{WidgetTag, Widget},
+        render::{RenderFrameClipped, Theme},
+    },
+    event::{EventOps, WidgetEvent, InputState, MouseButton, WidgetEventSourced},
+    gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
+    theme::RescaleRules,
+    widgets::assistants::SliderAssist,
+};
 
 use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
-
-use crate::gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 
 pub trait SliderHandler: 'static {
     type Action: 'static;
@@ -190,7 +193,6 @@ impl<F, H> Widget<F> for Slider<H>
 
     #[inline]
     fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
-        let mut action = None;
         if let WidgetEventSourced::This(ref event) = event {
             let start_value = self.assist.value;
             match event {
@@ -208,7 +210,7 @@ impl<F, H> Widget<F> for Slider<H>
                 _ => ()
             }
             if self.assist.value != start_value {
-                action = self.handler.on_move(start_value, self.assist.value);
+                self.widget_tag.broadcast_action(self.handler.on_move(start_value, self.assist.value));
                 self.widget_tag.request_redraw();
             }
         }

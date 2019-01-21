@@ -12,14 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::event::{EventOps, WidgetEventSourced, InputState};
-use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
-use crate::core::render::RenderFrameClipped;
+use crate::{
+    core::{
+        tree::{WidgetTag, Widget},
+        render::RenderFrameClipped,
+    },
+    event::{EventOps, WidgetEventSourced, InputState},
+    gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
+};
 
 use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::BoundBox};
 
-use crate::gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 
 use arrayvec::ArrayVec;
 

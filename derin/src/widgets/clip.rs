@@ -12,15 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::core::LoopFlow;
-use crate::core::event::{EventOps, WidgetEventSourced, InputState};
-use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent};
-use crate::core::render::RenderFrameClipped;
+use crate::{
+    core::{
+        LoopFlow,
+        event::{EventOps, WidgetEventSourced, InputState},
+        tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent},
+        render::RenderFrameClipped,
+    },
+    gl_render::PrimFrame,
+};
 
-use crate::cgmath::{EuclideanSpace, Point2};
+use crate::cgmath::EuclideanSpace;
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
-
-use crate::gl_render::PrimFrame;
 
 /// Assistant widget that is used to clip another widget
 ///
@@ -119,13 +122,13 @@ impl<F, W> Parent<F> for Clip<W>
     fn children<'a, G>(&'a self, mut for_each: G)
         where G: FnMut(WidgetSummary<&'a Widget<F>>) -> LoopFlow
     {
-        for_each(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget));
+        let _ = for_each(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget));
     }
 
     fn children_mut<'a, G>(&'a mut self, mut for_each: G)
         where G: FnMut(WidgetSummary<&'a mut Widget<F>>) -> LoopFlow
     {
-        for_each(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget));
+        let _ = for_each(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget));
     }
 
     fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<F>>> {

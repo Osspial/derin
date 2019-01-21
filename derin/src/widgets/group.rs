@@ -12,18 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::core::LoopFlow;
-use crate::core::event::{EventOps, WidgetEventSourced, InputState};
-use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent};
-use crate::core::render::RenderFrameClipped;
+use crate::{
+    container::WidgetContainer,
+    core::{
+        LoopFlow,
+        event::{EventOps, WidgetEventSourced, InputState},
+        tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent},
+        render::RenderFrameClipped,
+    },
+    gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
+    layout::GridLayout,
+};
 
 use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use derin_common_types::layout::{SizeBounds, WidgetPos};
-
-use crate::container::WidgetContainer;
-use crate::layout::GridLayout;
-use crate::gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 
 use std::cell::RefCell;
 use arrayvec::ArrayVec;

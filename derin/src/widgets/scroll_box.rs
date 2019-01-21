@@ -344,13 +344,13 @@ impl<F, W> Parent<F> for ScrollBox<W>
     fn children<'a, G>(&'a self, mut for_each: G)
         where G: FnMut(WidgetSummary<&'a Widget<F>>) -> LoopFlow
     {
-        for_each(self.child_summary());
+        let _ = for_each(self.child_summary());
     }
 
     fn children_mut<'a, G>(&'a mut self, mut for_each: G)
         where G: FnMut(WidgetSummary<&'a mut Widget<F>>) -> LoopFlow
     {
-        for_each(self.child_summary_mut());
+        let _ = for_each(self.child_summary_mut());
     }
 
     fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<F>>> {

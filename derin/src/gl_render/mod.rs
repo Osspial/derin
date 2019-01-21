@@ -43,7 +43,6 @@ use glutin::*;
 
 use crate::theme::Theme;
 pub use crate::core::render::{Renderer, RenderFrame};
-use crate::core::tree::WidgetIdent;
 
 use self::atlas::Atlas;
 use self::font_cache::FontCache;
