@@ -17,9 +17,8 @@ use glutin::{MouseButton as GMouseButton, WindowEvent as GWindowEvent, MouseScro
 use crate::gl_render::{GLRenderer, GLFrame};
 use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
 use crate::core::{
-    Root, LoopFlow, EventLoopResult, WindowEvent,
-    tree::{Widget, WidgetIdent},
-    event::WidgetEvent,
+    Root, EventLoopResult, WindowEvent,
+    tree::Widget,
     render::Renderer,
 };
 use crate::theme::Theme;
@@ -28,7 +27,6 @@ use gullery::ContextState;
 use std::thread::{self, JoinHandle};
 use std::sync::Arc;
 use std::time::Instant;
-use std::collections::HashMap;
 use std::rc::Rc;
 use crate::cgmath::{Point2, Vector2};
 use cgmath_geometry::{D2, rect::{DimsBox, GeoBox}};
@@ -177,7 +175,7 @@ impl<N: Widget<GLFrame>> GlutinWindow<N> {
             let mut frame = root.start_frame();
             let mut process_glutin_event = |glutin_event| {
                 let derin_event: WindowEvent = match glutin_event {
-                    Event::WindowEvent{window_id, event} => {
+                    Event::WindowEvent{event, ..} => {
                         let scale_factor = primary_renderer.window().hidpi_factor();
                         macro_rules! scale {
                             ($val:expr) => {{($val as f32 / scale_factor) as _}}

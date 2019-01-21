@@ -12,22 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::widgets::assistants::text_edit::{TextEditAssist, TextEditOps, LineCharFilter};
-use crate::core::{
-    event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
-    timer::{Timer, TimerID},
-    tree::{WidgetIdent, WidgetTag, Widget},
-    render::{RenderFrameClipped, Theme},
+use crate::{
+    core::{
+        event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
+        timer::{Timer, TimerID},
+        tree::{WidgetTag, Widget},
+        render::{RenderFrameClipped, Theme},
+    },
+    gl_render::{ThemedPrim, PrimFrame, RenderString, EditString, RelPoint, Prim},
+    widgets::assistants::text_edit::{TextEditAssist, TextEditOps, CursorFlashOp, LineCharFilter},
 };
-
 use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use derin_common_types::layout::SizeBounds;
-
-use crate::gl_render::{ThemedPrim, PrimFrame, RenderString, EditString, RelPoint, Prim};
-
 use std::time::Duration;
-
 use arrayvec::ArrayVec;
 
 /// Multi-line editable text widget.
@@ -158,12 +156,17 @@ macro_rules! render_and_event {
                 focus,
             } = self.edit.adapt_event(&event, input_state);
 
-            if cursor_flash.is_some() {
-                let timer_id = TimerID::new();
-                self.widget_tag.timers_mut().insert(timer_id, Timer::new(Duration::new(1, 0)/2));
-            } else if let Some(timer_id) = self.flash_timer {
-                self.widget_tag.timers_mut().remove(&timer_id);
-                self.flash_timer = None;
+            match (cursor_flash, self.flash_timer) {
+                (Some(CursorFlashOp::Start), None) => {
+                    let timer_id = TimerID::new();
+                    self.widget_tag.timers_mut().insert(timer_id, Timer::new(Duration::new(1, 0)/2));
+                    self.flash_timer = Some(timer_id);
+                },
+                (Some(CursorFlashOp::End), Some(timer_id)) => {
+                    self.widget_tag.timers_mut().remove(&timer_id);
+                    self.flash_timer = None;
+                },
+                _ => ()
             }
 
             if redraw {
@@ -179,7 +182,7 @@ macro_rules! render_and_event {
             };
 
             if let Some(cursor_icon) = cursor_icon {
-                self.widget_tag.set_cursor_icon(cursor_icon);
+                self.widget_tag.set_cursor_icon(cursor_icon).ok();
             }
 
             EventOps {

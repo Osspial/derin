@@ -12,17 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::core::event::{EventOps, WidgetEvent, WidgetEventSourced, InputState};
-use crate::core::tree::{WidgetIdent, WidgetTag, Widget, };
-use crate::core::render::RenderFrameClipped;
+use crate::{
+    core::{
+        event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
+        tree::{WidgetTag, Widget},
+        render::RenderFrameClipped,
+    },
+    gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
+};
 
 use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::BoundBox};
 
-use crate::gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
-
 use std::mem;
-use std::time::Duration;
 
 pub struct DirectRender<R> {
     widget_tag: WidgetTag,

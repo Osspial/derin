@@ -12,17 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::widgets::assistants::ButtonState;
-use crate::widgets::{Contents, ContentsInner, ToggleHandler};
+use crate::{
+    core::{
+        event::{EventOps, InputState, WidgetEvent, WidgetEventSourced, MouseHoverChange},
+        tree::{WidgetTag, Widget},
+        render::RenderFrameClipped,
+    },
+    gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame},
+    widgets::{
+        Contents, ContentsInner, ToggleHandler,
+        assistants::ButtonState,
+    },
+};
 use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
-
-use crate::core::event::{EventOps, InputState, WidgetEvent, WidgetEventSourced, MouseHoverChange};
-use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
-use crate::core::render::RenderFrameClipped;
 use derin_common_types::layout::SizeBounds;
 
-use crate::gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame};
 
 /// A toggleable box that can be either checked or unchecked.
 ///
@@ -155,7 +160,7 @@ impl<F, H> Widget<F> for CheckBox<H>
         ));
     }
 
-    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
         use self::WidgetEvent::*;
         let event = event.unwrap();
 

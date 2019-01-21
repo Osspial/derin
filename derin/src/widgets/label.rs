@@ -12,16 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::widgets::{Contents, ContentsInner};
-use crate::core::event::{EventOps, WidgetEventSourced, InputState};
-use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
-use crate::core::render::RenderFrameClipped;
+use crate::{
+    core::{
+        event::{EventOps, WidgetEventSourced, InputState},
+        tree::{WidgetTag, Widget},
+        render::RenderFrameClipped,
+    },
+    gl_render::PrimFrame,
+    widgets::{Contents, ContentsInner},
+};
 
-use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox}};
 use derin_common_types::layout::SizeBounds;
 
-use crate::gl_render::PrimFrame;
 
 /// A simple, non-interactive label.
 ///

@@ -156,14 +156,14 @@ impl<F, N> WidgetContainer<F> for SingleContainer<F, N>
         where G: FnMut(WidgetSummary<&'a N>) -> LoopFlow,
               F: 'a
     {
-        for_each_child(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget));
+        let _ = for_each_child(WidgetSummary::new(WidgetIdent::Num(0), 0, &self.widget));
     }
 
     fn children_mut<'a, G>(&'a mut self, mut for_each_child: G)
         where G: FnMut(WidgetSummary<&'a mut N>) -> LoopFlow,
               F: 'a
     {
-        for_each_child(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget));
+        let _ = for_each_child(WidgetSummary::new_mut(WidgetIdent::Num(0), 0, &mut self.widget));
     }
 }
 

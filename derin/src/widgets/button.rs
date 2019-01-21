@@ -12,17 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::widgets::assistants::ButtonState;
-use crate::widgets::{Contents, ContentsInner};
-use crate::core::event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange};
-use crate::core::tree::{WidgetIdent, WidgetTag, Widget};
-use crate::core::render::{RenderFrameClipped, Theme};
+use crate::{
+    core::{
+        event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange},
+        tree::{WidgetTag, Widget},
+        render::{RenderFrameClipped, Theme},
+    },
+    gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
+    widgets::{
+        Contents, ContentsInner,
+        assistants::ButtonState,
+    },
+};
 
 use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use derin_common_types::layout::SizeBounds;
 
-use crate::gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim};
 
 use arrayvec::ArrayVec;
 
@@ -144,7 +150,7 @@ impl<F, H> Widget<F> for Button<H>
         self.size_bounds.min.dims.y += render_string_min.height();
     }
 
-    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps {
+    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
         use self::WidgetEvent::*;
         let event = event.unwrap();
 
