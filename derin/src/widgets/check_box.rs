@@ -175,7 +175,7 @@ impl<F, H> Widget<F> for CheckBox<H>
                 new_state = ButtonState::Hover;
             },
             MouseUp{in_widget: false, ..} => new_state = ButtonState::Normal,
-            GainFocus(_) => new_state = ButtonState::Hover,
+            GainFocus(_, _) => new_state = ButtonState::Hover,
             LoseFocus => new_state = ButtonState::Normal,
             _ => ()
         };

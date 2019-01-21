@@ -287,7 +287,10 @@ impl<F> WidgetTraverser<'_, F>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::update_state::UpdateState;
+    use crate::{
+        action_bus::ActionBus,
+        update_state::UpdateState,
+    };
 
     #[test]
     fn test_crawl_widgets() {
@@ -306,7 +309,8 @@ mod tests {
         }
 
         let mut traverser_base = WidgetTraverserBase::new(root);
-        let update_state = UpdateState::new();
+        let action_bus = ActionBus::new();
+        let update_state = UpdateState::new(&action_bus);
         let mut traverser = traverser_base.with_root_ref(&mut tree, update_state.clone());
 
         let mut expected_id_iter = vec![

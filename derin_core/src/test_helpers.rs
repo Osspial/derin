@@ -1,6 +1,6 @@
 use crate::{
     LoopFlow,
-    event::{EventOps, InputState, WidgetEvent, WidgetEventSourced},
+    event::{EventOps, FocusChange, InputState, WidgetEvent, WidgetEventSourced},
     render::{RenderFrameClipped, RenderFrame, Theme},
     tree::{
         *,
@@ -11,7 +11,10 @@ use cgmath_geometry::{
     D2,
     rect::BoundBox,
 };
-use derin_common_types::layout::SizeBounds;
+use derin_common_types::{
+    buttons::Key,
+    layout::SizeBounds,
+};
 use indexmap::IndexMap;
 use std::{
     cell::RefCell,
@@ -24,6 +27,13 @@ pub(crate) struct TestWidget {
     pub rect: BoundBox<D2, i32>,
     pub size_bounds: SizeBounds,
     pub event_list: EventList,
+    /// Enables/disables keyboard focus controls. Enables the following bindings:
+    ///
+    /// - Mouse Click: Takes Focus
+    /// - Escape Key: Removes Focus
+    /// - Right Arrow Key: Focus Next
+    /// - Left Arrow Key: Focus Previous
+    pub focus_controls: bool,
     pub children: Option<IndexMap<WidgetIdent, TestWidget>>,
 }
 
@@ -43,8 +53,6 @@ pub(crate) struct TestEvent {
 pub(crate) struct TestRenderFrame {}
 #[derive(Default)]
 pub(crate) struct TestTheme {}
-#[derive(Default)]
-pub(crate) struct TestAction {}
 
 impl Theme for TestTheme {
     type Key = ();
@@ -92,7 +100,7 @@ impl RenderFrame for TestRenderFrame {
     {}
 }
 
-impl Widget<TestAction, TestRenderFrame> for TestWidget {
+impl Widget<TestRenderFrame> for TestWidget {
     fn widget_tag(&self) -> &WidgetTag {
         &self.widget_tag
     }
@@ -110,12 +118,23 @@ impl Widget<TestAction, TestRenderFrame> for TestWidget {
         &mut self,
         event: WidgetEventSourced,
         input_state: InputState,
-    ) -> EventOps<TestAction> {
+    ) -> EventOps {
         let (event, source_child) = match event {
             WidgetEventSourced::This(event) => (event, &[][..]),
             WidgetEventSourced::Bubble(event, child) => (event, child)
         };
         let ref_event = self.event_list.next();
+        let mut focus = None;
+
+        if self.focus_controls && source_child.len() == 0 {
+            match event {
+                WidgetEvent::MouseDown{in_widget: true, ..} => focus = Some(FocusChange::Take),
+                WidgetEvent::KeyDown(Key::Escape, _) => focus = Some(FocusChange::Remove),
+                WidgetEvent::KeyDown(Key::LArrow, _) => focus = Some(FocusChange::Prev),
+                WidgetEvent::KeyDown(Key::RArrow, _) => focus = Some(FocusChange::Next),
+                _ => ()
+            }
+        }
 
         let real_event = TestEvent {
             widget: self.widget_tag.widget_id,
@@ -125,14 +144,17 @@ impl Widget<TestAction, TestRenderFrame> for TestWidget {
         println!("real event: {:#?}", real_event);
         assert_eq!(ref_event.as_ref(), Some(&real_event), "real event mismatched w/ ref event: {:#?}", ref_event);
 
-        EventOps::default()
+        EventOps {
+            focus,
+            ..EventOps::default()
+        }
     }
 
     fn size_bounds(&self) -> SizeBounds {
         self.size_bounds
     }
 
-    fn as_parent(&self) -> Option<&ParentDyn<TestAction, TestRenderFrame>> {
+    fn as_parent(&self) -> Option<&ParentDyn<TestRenderFrame>> {
         if self.children.is_some() {
             Some(self as _)
         } else {
@@ -140,7 +162,7 @@ impl Widget<TestAction, TestRenderFrame> for TestWidget {
         }
     }
 
-    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<TestAction, TestRenderFrame>> {
+    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<TestRenderFrame>> {
         if self.children.is_some() {
             Some(self as _)
         } else {
@@ -149,32 +171,31 @@ impl Widget<TestAction, TestRenderFrame> for TestWidget {
     }
 }
 
-impl Parent<TestAction, TestRenderFrame> for TestWidget {
+impl Parent<TestRenderFrame> for TestWidget {
     fn num_children(&self) -> usize {
         self.children.as_ref().unwrap().len()
     }
 
-    fn child(&self, ident: WidgetIdent) -> Option<WidgetSummary<&Widget<TestAction, TestRenderFrame>>> {
+    fn child(&self, ident: WidgetIdent) -> Option<WidgetSummary<&Widget<TestRenderFrame>>> {
         self.children.as_ref().unwrap().get_full(&ident)
             .map(|(index, _, widget)| WidgetSummary { ident, index, widget: widget as _ })
     }
-    fn child_mut(&mut self, ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<TestAction, TestRenderFrame>>> {
+    fn child_mut(&mut self, ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<TestRenderFrame>>> {
         self.children.as_mut().unwrap().get_full_mut(&ident)
             .map(|(index, _, widget)| WidgetSummary { ident, index, widget: widget as _ })
     }
 
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<TestAction, TestRenderFrame>>> {
+    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<TestRenderFrame>>> {
         self.children.as_ref().unwrap().get_index(index)
             .map(|(ident, widget)| WidgetSummary { ident: ident.clone(), index, widget: widget as _ })
     }
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<TestAction, TestRenderFrame>>> {
+    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<TestRenderFrame>>> {
         self.children.as_mut().unwrap().get_index_mut(index)
             .map(|(ident, widget)| WidgetSummary { ident: ident.clone(), index, widget: widget as _ })
     }
 
     fn children<'a, G>(&'a self, mut for_each: G)
-        where TestAction: 'a,
-              G: FnMut(WidgetSummary<&'a Widget<TestAction, TestRenderFrame>>) -> LoopFlow
+        where G: FnMut(WidgetSummary<&'a Widget<TestRenderFrame>>) -> LoopFlow
     {
         for (index, (ident, widget)) in self.children.as_ref().unwrap().iter().enumerate() {
             let flow = for_each(WidgetSummary { ident: ident.clone(), index, widget: widget as _ });
@@ -184,8 +205,7 @@ impl Parent<TestAction, TestRenderFrame> for TestWidget {
         }
     }
     fn children_mut<'a, G>(&'a mut self, mut for_each: G)
-        where TestAction: 'a,
-              G: FnMut(WidgetSummary<&'a mut Widget<TestAction, TestRenderFrame>>) -> LoopFlow
+        where G: FnMut(WidgetSummary<&'a mut Widget<TestRenderFrame>>) -> LoopFlow
     {
         for (index, (ident, widget)) in self.children.as_mut().unwrap().iter_mut().enumerate() {
             let flow = for_each(WidgetSummary { ident: ident.clone(), index, widget: widget as _ });
@@ -199,7 +219,8 @@ impl Parent<TestAction, TestRenderFrame> for TestWidget {
 macro_rules! extract_widget_tree_idents {
     ($($widget_ident:ident {
         rect: ($x:expr, $y:expr, $w:expr, $h:expr)
-        $(;$($children:tt)*)*
+        $(, focus_controls: $focus_controls:expr)?
+        $(;$($children:tt)*)?
     }),*) => {$(
         let $widget_ident = WidgetID::new();
         println!("widget {} = {:?}", stringify!($widget_ident), $widget_ident);
@@ -213,13 +234,14 @@ macro_rules! test_widget_tree {
         let $event_list:ident = $event_list_expr:expr;
         let $root_pat:pat = $root:ident {
             rect: ($x:expr, $y:expr, $w:expr, $h:expr)
-            $(;$($rest:tt)*)*
+            $(, focus_controls: $focus_controls:expr)?
+            $(;$($rest:tt)*)?
         };
     ) => {
         extract_widget_tree_idents!{
             $root {
                 rect: ($x, $y, $w, $h)
-                $(;$($rest)*)*
+                $(;$($rest)*)?
             }
         }
         let $event_list: crate::test_helpers::EventList = $event_list_expr;
@@ -243,6 +265,7 @@ macro_rules! test_widget_tree {
                     rect: cgmath_geometry::rect::BoundBox::new2($x, $y, $w, $h),
                     size_bounds: derin_common_types::layout::SizeBounds::default(),
                     event_list: $event_list.clone(),
+                    focus_controls: $($focus_controls ||)? false,
                     children: match children.len() {
                         0 => None,
                         _ => Some(children)
@@ -256,7 +279,8 @@ macro_rules! test_widget_tree {
         @insert $event_list:expr, $widget_map:ident,
         $($child:ident {
             rect: ($x:expr, $y:expr, $w:expr, $h:expr)
-            $(;$($children:tt)*)*
+            $(, focus_controls: $focus_controls:expr)?
+            $(;$($children:tt)*)?
         }),*
     ) => {$({
         let mut children = indexmap::IndexMap::new();
@@ -275,6 +299,7 @@ macro_rules! test_widget_tree {
             rect: cgmath_geometry::rect::BoundBox::new2($x, $y, $w, $h),
             size_bounds: derin_common_types::layout::SizeBounds::default(),
             event_list: $event_list.clone(),
+            focus_controls: $($focus_controls ||)? false,
             children: match children.len() {
                 0 => None,
                 _ => Some(children)
@@ -290,12 +315,12 @@ mod tests {
     use super::*;
 
     fn check_child_widget(
-        parent: &dyn ParentDyn<TestAction, TestRenderFrame>,
+        parent: &dyn ParentDyn<TestRenderFrame>,
         index: usize,
         ident: WidgetIdent,
         id: WidgetID,
         rect: BoundBox<D2, i32>,
-    ) -> &dyn Widget<TestAction, TestRenderFrame> {
+    ) -> &dyn Widget<TestRenderFrame> {
         let summary_by_ident = parent.child(ident.clone()).expect(&format!("Could not find child by ident: {} {:?}", index, ident));
         let summary_by_index = parent.child_by_index(index).expect(&format!("Could not find child by index: {} {:?}", index, ident));
 

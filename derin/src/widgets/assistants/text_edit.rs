@@ -163,7 +163,7 @@ impl<C> TextEditAssist<C>
                     redraw = true;
                 }
             },
-            GainFocus(_) => {
+            GainFocus(_, _) => {
                 redraw = true;
                 cursor_flash = Some(CursorFlashOp::Start);
             }
