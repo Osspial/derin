@@ -43,6 +43,12 @@ pub(crate) struct VirtualWidgetTree {
     tree_data: HashMap<WidgetID, WidgetTreeNode, FnvBuildHasher>
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PathRevItem {
+    pub ident: WidgetIdent,
+    pub id: WidgetID,
+}
+
 impl VirtualWidgetTree {
     pub(crate) fn new(root: WidgetID) -> VirtualWidgetTree {
         VirtualWidgetTree {
@@ -232,45 +238,57 @@ impl VirtualWidgetTree {
 
     /// Gets the identifier chain of the widget, starting with the widget's identifier and ending
     /// with the root identifier.
-    pub(crate) fn ident_chain_reversed(&self, id: WidgetID) -> Option<impl Iterator<Item=&'_ WidgetIdent>> {
-        struct ClosureIterator<'a, F>(F)
-            where F: FnMut() -> Option<&'a WidgetIdent>;
-        impl<'a, F> Iterator for ClosureIterator<'a, F>
-            where F: FnMut() -> Option<&'a WidgetIdent>
+    pub(crate) fn path_reversed(&self, id: WidgetID) -> Option<impl '_ + Iterator<Item=PathRevItem> + ExactSizeIterator> {
+        struct ClosureIterator<F>(F, usize)
+            where F: FnMut() -> Option<PathRevItem>;
+        impl<F> Iterator for ClosureIterator<F>
+            where F: FnMut() -> Option<PathRevItem>
         {
-            type Item = &'a WidgetIdent;
-            fn next(&mut self) -> Option<&'a WidgetIdent> {
+            type Item = PathRevItem;
+            fn next(&mut self) -> Option<PathRevItem> {
                 (self.0)()
             }
+
+            fn size_hint(&self) -> (usize, Option<usize>) {
+                (self.1, Some(self.1))
+            }
         }
+        impl<F> ExactSizeIterator for ClosureIterator<F>
+            where F: FnMut() -> Option<PathRevItem> {}
 
         let get_widget_and_parent = move |id| {
             if self.root == id {
-                Some((&self.root_data.ident, None))
+                Some((&self.root_data.ident, None, 1))
             } else if let Some(node) = self.tree_data.get(&id) {
-                Some((&node.data.ident, Some(node.parent_id)))
+                Some((&node.data.ident, Some(node.parent_id), node.data.depth() + 1))
             } else {
                 None
             }
         };
 
         let mut finished = false;
-        let (mut ident, mut parent_id_opt) = get_widget_and_parent(id)?;
+        let mut id = id;
+        let (mut ident, mut parent_id_opt, len) = get_widget_and_parent(id)?;
         Some(ClosureIterator(move || {
             if finished {
                 return None;
             }
 
             let old_ident = ident;
+            let old_id = id;
             if let Some(parent_id) = parent_id_opt {
-                let (p_ident, p_id) = get_widget_and_parent(parent_id)?;
+                let (p_ident, p_id, _) = get_widget_and_parent(parent_id)?;
                 ident = p_ident;
                 parent_id_opt = p_id;
+                id = parent_id;
             } else {
                 finished = true;
             }
-            Some(old_ident)
-        }))
+            Some(PathRevItem {
+                ident: old_ident.clone(),
+                id: old_id,
+            })
+        }, len as usize))
     }
 }
 
@@ -567,22 +585,40 @@ mod tests {
         };
 
         macro_rules! ident_chain {
-            ($($ident:ident),* ;root) => {{
-                vec![$(&WidgetIdent::new_str(stringify!($ident)),)* &ROOT_IDENT]
+            ($($ident:ident),*) => {{
+                vec![
+                    $(PathRevItem {
+                        id: $ident,
+                        ident: if $ident == root {
+                            ROOT_IDENT
+                        } else {
+                            WidgetIdent::new_str(stringify!($ident))
+                        }
+                    },)*
+                ]
             }}
         }
 
-        assert!(tree.ident_chain_reversed(WidgetID::new()).is_none());
-        assert_eq!(ident_chain![;root], tree.ident_chain_reversed(root).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_0; root], tree.ident_chain_reversed(child_0).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_1; root], tree.ident_chain_reversed(child_1).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_2; root], tree.ident_chain_reversed(child_2).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_0_1, child_0; root], tree.ident_chain_reversed(child_0_1).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_0_2, child_0; root], tree.ident_chain_reversed(child_0_2).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_0_3, child_0; root], tree.ident_chain_reversed(child_0_3).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_0_2_0, child_0_2, child_0; root], tree.ident_chain_reversed(child_0_2_0).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_1_0, child_1; root], tree.ident_chain_reversed(child_1_0).unwrap().collect::<Vec<_>>());
-        assert_eq!(ident_chain![child_1_1, child_1; root], tree.ident_chain_reversed(child_1_1).unwrap().collect::<Vec<_>>());
+        macro_rules! test_ident_chain {
+            ($first:ident $(, $ident:ident)*) => {
+                let iter = tree.path_reversed($first).unwrap();
+                let path_ref = ident_chain!($first $(, $ident)*);
+                assert_eq!(path_ref.len(), iter.len());
+                assert_eq!(path_ref, iter.collect::<Vec<_>>());
+            }
+        }
+
+        assert!(tree.path_reversed(WidgetID::new()).is_none());
+        test_ident_chain![root];
+        test_ident_chain![child_0, root];
+        test_ident_chain![child_1, root];
+        test_ident_chain![child_2, root];
+        test_ident_chain![child_0_1, child_0, root];
+        test_ident_chain![child_0_2, child_0, root];
+        test_ident_chain![child_0_3, child_0, root];
+        test_ident_chain![child_0_2_0, child_0_2, child_0, root];
+        test_ident_chain![child_1_0, child_1, root];
+        test_ident_chain![child_1_1, child_1, root];
     }
 
     #[test]

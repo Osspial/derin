@@ -15,11 +15,12 @@
 use std::mem;
 use crate::render::RenderFrame;
 use crate::tree::{Widget, WidgetID, WidgetIdent, WidgetSummary, ROOT_IDENT};
+use super::virtual_widget_tree::PathRevItem;
 
 use crate::cgmath::{Bounded, EuclideanSpace, Point2, Vector2};
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
-use crate::offset_widget::OffsetWidget;
+use crate::offset_widget::{OffsetWidget, OffsetWidgetTrait};
 
 // TODO: GET CODE REVIEWED FOR SAFETY
 
@@ -30,7 +31,17 @@ struct StackElement<F: RenderFrame> {
     widget_id: WidgetID
 }
 
-#[derive(Debug, Clone, Copy)]
+impl<F: RenderFrame> std::fmt::Debug for StackElement<F> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        f.debug_struct("StackElement")
+            .field("rectangles", &self.rectangles)
+            .field("index", &self.index)
+            .field("widget_id", &self.widget_id)
+            .finish()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ElementRects {
     bounds: BoundBox<D2, i32>,
     bounds_clipped: Option<BoundBox<D2, i32>>
@@ -130,19 +141,23 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
     //     self.clip_rect
     // }
 
-    // #[inline]
-    // pub fn len(&self) -> usize {
-    //     self.vec.len()
-    // }
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.vec.len()
+    }
 
     #[inline]
     pub fn truncate(&mut self, len: usize) {
         assert_ne!(0, len);
 
         self.vec.truncate(len);
+        self.vec.last_mut().unwrap().rectangles = None;
         self.ident_vec.truncate(len);
+        self.truncate_offset_and_clip(len);
+    }
 
-        match self.vec.get(self.vec.len().wrapping_sub(2)).map(|e| e.rectangles.expect("Bad widget bounds stack")) {
+    fn truncate_offset_and_clip(&mut self, len: usize) {
+        match self.vec.get(len.wrapping_sub(2)).map(|e| e.rectangles.expect("Bad widget bounds stack")) {
             None => {
                 self.top_parent_offset = Vector2::new(0, 0);
                 self.clip_rect = Some(BoundBox::new(Point2::new(0, 0), Point2::max_value()));
@@ -176,7 +191,10 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
         where G: FnOnce(&'_ mut dyn Widget<F>) -> Option<WidgetSummary<&'_ mut Widget<F>>>
     {
         let mut old_top = self.top_mut();
+        let top_rect = old_top.widget.rect();
+
         let new_top_opt = with_top(old_top.widget.inner_mut());
+
         if let Some(new_top_summary) = new_top_opt {
             let new_top_id = new_top_summary.widget.widget_tag().widget_id;
             let new_top_widget = new_top_summary.widget as *mut _;
@@ -185,16 +203,14 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
 
             assert_ne!(new_top_widget, self.top_mut().widget.inner_mut() as *mut Widget<F>);
             {
-                let cur_top = self.vec.last_mut().unwrap();
-
-                let top_rect = unsafe{ &*cur_top.widget }.rect() + self.top_parent_offset;
+                let old_top = self.vec.last_mut().unwrap();
                 let top_clip = self.clip_rect.and_then(|r| r.intersect_rect(top_rect));
-                cur_top.rectangles = Some(ElementRects {
+
+                old_top.rectangles = Some(ElementRects {
                     bounds: top_rect,
                     bounds_clipped: top_clip
                 });
                 self.clip_rect = top_clip;
-
                 self.top_parent_offset = top_rect.min().to_vec();
             }
 
@@ -208,6 +224,72 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
             Some(self.top_mut())
         } else {
             None
+        }
+    }
+
+    pub fn move_to_path_rev(&mut self, path_rev: impl Iterator<Item=PathRevItem> + ExactSizeIterator) -> Option<OffsetWidgetPath<'_, F>> {
+        let new_path_len = path_rev.len();
+        self.ident_vec.resize(new_path_len, WidgetIdent::Num(0));
+
+        let mut path_rev = path_rev.peekable();
+        let target_widget_id = path_rev.peek().expect("Requires path with len >= 1").id;
+
+        let mut diverge_index = 0;
+        for (i, path_item) in path_rev.enumerate().map(|(i, item)| (new_path_len - (i + 1), item)) {
+            if Some(path_item.id) == self.vec.get(i).map(|e| e.widget_id) {
+                diverge_index = i + 1;
+                break;
+            }
+
+            self.ident_vec[i] = path_item.ident;
+        }
+
+        self.vec.truncate(diverge_index);
+        self.vec.last_mut().unwrap().rectangles = None;
+        self.truncate_offset_and_clip(diverge_index);
+
+        let new_widget = try {
+            while self.vec.len() < self.ident_vec.len() {
+                let i = self.vec.len() - 1;
+                let top = &mut self.vec[i];
+                let top_widget = unsafe{ &mut *top.widget };
+
+                {
+                    let top_rect = top_widget.rect() + self.top_parent_offset;
+                    let top_clip = self.clip_rect.and_then(|r| r.intersect_rect(top_rect));
+
+                    top.rectangles = Some(ElementRects {
+                        bounds: top_rect,
+                        bounds_clipped: top_clip
+                    });
+                    self.clip_rect = top_clip;
+                    self.top_parent_offset = top_rect.min().to_vec();
+                }
+
+                let new_top = top_widget
+                    .as_parent_mut()?
+                    .child_mut(self.ident_vec[i + 1].clone())?;
+                self.vec.push(StackElement {
+                    widget_id: new_top.widget.widget_tag().widget_id,
+                    widget: new_top.widget as *mut _,
+                    rectangles: None,
+                    index: new_top.index,
+                });
+            }
+            assert_eq!(self.vec.len(), self.ident_vec.len());
+
+            Some(())
+        };
+
+        match new_widget {
+            Some(_) => {
+                Some(self.top_mut())
+            },
+            None => {
+                self.vec.last_mut().unwrap().rectangles = None;
+                self.truncate(self.vec.len());
+                None
+            }
         }
     }
 

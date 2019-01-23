@@ -342,7 +342,10 @@ impl<F> TranslatorActive<'_, '_, F>
                     // `MouseMove` can trigger other `MouseMove`s if the mouse moves into a child
                     // or parent widget.
                     DispatchableEvent::MouseMove{old_pos, new_pos, exiting_from_child} => {
-                        let widget_rect = widget.rect();
+                        let widget_rect = match widget.rect_clipped() {
+                            Some(rect) => rect,
+                            None => return
+                        };
                         let (contains_new, contains_old) = (widget_rect.contains(new_pos), widget_rect.contains(old_pos));
 
                         let mut send_exiting_from_child = |widget: &mut OffsetWidget<'_, dyn Widget<F>>, in_widget| {
@@ -363,7 +366,7 @@ impl<F> TranslatorActive<'_, '_, F>
                                 let mut enter_child_opt = None;
                                 if let Some(mut widget_as_parent) = widget.as_parent_mut() {
                                     widget_as_parent.children_mut(|child_summary| {
-                                        if child_summary.widget.rect().contains(new_pos) {
+                                        if child_summary.widget.rect_clipped().map(|r| r.contains(new_pos)).unwrap_or(false) {
                                             enter_child_opt = Some((child_summary.widget.widget_tag().widget_id, child_summary.ident));
                                             LoopFlow::Break
                                         } else {
