@@ -20,3 +20,4 @@ smallvec = {version = "0.6", features = ["std", "union"]}
 
 [dev-dependencies]
 indexmap = "1"
+rand = "0.6"

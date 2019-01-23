@@ -25,3 +25,19 @@ macro_rules! id {
         }
     }
 }
+
+#[allow(unused_macros)]
+macro_rules! bench {
+    ($($tt:tt)*) => {{
+        let start_time = std::time::Instant::now();
+        let r = {$($tt)*};
+        static mut A: (std::time::Duration, u32) = (std::time::Duration::from_secs(0), 0);
+        let elapsed = std::time::Instant::now() - start_time;
+        unsafe {
+            A.0 += elapsed;
+            A.1 += 1;
+            println!("bench {}:{} avg={:?}", file!(), line!(), A.0 / A.1);
+        }
+        r
+    }}
+}

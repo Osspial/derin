@@ -14,7 +14,7 @@ use crate::{
 use std::rc::Rc;
 use self::{
     widget_stack::{WidgetStack, WidgetStackCache},
-    virtual_widget_tree::VirtualWidgetTree
+    virtual_widget_tree::{WidgetInsertError, VirtualWidgetTree}
 };
 
 pub(crate) type OffsetWidgetScanPath<'a, F> = WidgetPath<'a, OffsetWidgetScan<'a, F>>;
@@ -104,8 +104,7 @@ impl<F> WidgetTraverser<'_, F>
     }
 
     fn get_widget_with_tree(&mut self, id: WidgetID) -> Option<OffsetWidgetPath<'_, F>> {
-        let mut widget_path_rev = self.virtual_widget_tree.ident_chain_reversed(id).unwrap().cloned().collect::<Vec<_>>();
-        self.move_to_path(widget_path_rev.drain(..).rev())
+        self.stack.move_to_path_rev(self.virtual_widget_tree.path_reversed(id)?)
     }
 
     pub fn remove_widget(&mut self, id: WidgetID) {
@@ -235,7 +234,20 @@ impl<F> WidgetTraverser<'_, F>
                 widget_id,
                 ..
             } = self.stack.top();
-            self.virtual_widget_tree.insert(parent.widget_id, widget_id, index, path.last().unwrap().clone()).unwrap();
+            match self.virtual_widget_tree.insert(parent.widget_id, widget_id, index, path.last().unwrap().clone()) {
+                Ok(()) => (),
+                Err(WidgetInsertError::ParentNotInTree) => {
+                    for (parent, widget) in self.stack.widgets().zip(self.stack.widgets().skip(1)) {
+                        self.virtual_widget_tree.insert(
+                            parent.widget_id,
+                            widget.widget_id,
+                            widget.index,
+                            widget.path.last().unwrap().clone()
+                        ).ok();
+                    }
+                },
+                Err(WidgetInsertError::WidgetIsRoot) => ()
+            }
         }
     }
 
@@ -289,8 +301,10 @@ mod tests {
     use super::*;
     use crate::{
         action_bus::ActionBus,
+        offset_widget::OffsetWidgetTrait,
         update_state::UpdateState,
     };
+    use cgmath_geometry::rect::BoundBox;
 
     #[test]
     fn test_crawl_widgets() {
@@ -323,9 +337,63 @@ mod tests {
         ].into_iter();
 
         traverser.crawl_widgets(|path| {
-            println!("crawl {:?}", path.path);
             assert_eq!(Some(path.widget_id), expected_id_iter.next());
         });
         assert_eq!(None, expected_id_iter.next());
+    }
+
+    #[test]
+    fn get_widget() {
+        test_widget_tree!{
+            let event_list = crate::test_helpers::EventList::new();
+            let mut tree = root {
+                rect: (0, 0, 100, 100);
+                a {
+                    rect: (10, 10, 30, 30);
+                    aa {
+                        rect: (-10, -10, 10, 10);
+                        aaa {rect: (0, 0, 10, 10)}
+                    },
+                    ab {rect: (10, 10, 20, 20)}
+                },
+                b {
+                    rect: (20, 20, 40, 40);
+                    ba {rect: (-10, -10, -1, -1)}
+                }
+            };
+        }
+
+        let mut traverser_base = WidgetTraverserBase::new(root);
+        let action_bus = ActionBus::new();
+        let update_state = UpdateState::new(&action_bus);
+        let mut traverser = traverser_base.with_root_ref(&mut tree, update_state.clone());
+
+        let mut assert_widget = |id, rect: (i32, i32, i32, i32), rect_clipped: Option<(i32, i32, i32, i32)>| {
+            let widget_path = traverser.get_widget(id).unwrap();
+            assert_eq!(widget_path.widget_id, id);
+
+            let widget = widget_path.widget;
+            assert_eq!(widget.rect(), BoundBox::new2(rect.0, rect.1, rect.2, rect.3));
+            assert_eq!(widget.rect_clipped(), rect_clipped.map(|rect_clipped| BoundBox::new2(rect_clipped.0, rect_clipped.1, rect_clipped.2, rect_clipped.3)));
+        };
+
+        let mut assert_widget_index = |i: u32| {
+            match i {
+                0 => {println!("root"); assert_widget(root, (0, 0, 100, 100), Some((0, 0, 100, 100)))},
+                1 => {println!("a"); assert_widget(a, (10, 10, 30, 30), Some((10, 10, 30, 30)))},
+                2 => {println!("aa"); assert_widget(aa, (0, 0, 20, 20), Some((10, 10, 20, 20)))},
+                3 => {println!("aaa"); assert_widget(aaa, (0, 0, 10, 10), Some((10, 10, 10, 10)))},
+                4 => {println!("ab"); assert_widget(ab, (20, 20, 30, 30), Some((20, 20, 30, 30)))},
+                5 => {println!("b"); assert_widget(b, (20, 20, 40, 40), Some((20, 20, 40, 40)))},
+                6 => {println!("ba"); assert_widget(ba, (10, 10, 19, 19), None)},
+                _ => panic!("invalid index")
+            }
+        };
+
+        for _ in 0..10000 {
+            use rand::Rng;
+            let index = rand::thread_rng().gen_range(0, 7);
+            assert_widget_index(index);
+        }
     }
 }

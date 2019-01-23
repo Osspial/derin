@@ -222,7 +222,7 @@ macro_rules! extract_widget_tree_idents {
         $(, focus_controls: $focus_controls:expr)?
         $(;$($children:tt)*)?
     }),*) => {$(
-        let $widget_ident = WidgetID::new();
+        let $widget_ident = crate::tree::WidgetID::new();
         println!("widget {} = {:?}", stringify!($widget_ident), $widget_ident);
 
         extract_widget_tree_idents!{$($($children)*)*}
@@ -306,7 +306,7 @@ macro_rules! test_widget_tree {
             }
         };
 
-        $widget_map.insert(WidgetIdent::Str(Arc::from(stringify!($child))), widget);
+        $widget_map.insert(crate::tree::WidgetIdent::Str(Arc::from(stringify!($child))), widget);
     })*};
 }
 
