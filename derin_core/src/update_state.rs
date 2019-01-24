@@ -1,5 +1,5 @@
 use crate::{
-    action_bus::{Action, ActionTarget, ActionTargeted, ActionBus},
+    message_bus::{Message, MessageTarget, MessageTargeted, MessageBus},
     cgmath::Point2,
     tree::WidgetID,
 };
@@ -22,7 +22,7 @@ pub(crate) enum UpdateStateShared<R = Weak<UpdateStateCell>> {
 
 #[derive(Debug, Default)]
 pub(crate) struct UpdateStateVacant {
-    buffered_actions: Vec<ActionTargeted>,
+    buffered_messages: Vec<MessageTargeted>,
 }
 
 pub(crate) type UpdateStateCell = RefCell<UpdateState>;
@@ -32,11 +32,11 @@ pub(crate) struct UpdateState {
     pub redraw: FnvHashSet<WidgetID>,
     pub relayout: FnvHashSet<WidgetID>,
     pub update_timers: FnvHashSet<WidgetID>,
-    pub update_actions: FnvHashSet<WidgetID>,
+    pub update_messages: FnvHashSet<WidgetID>,
     pub remove_from_tree: FnvHashSet<WidgetID>,
     pub set_cursor_icon: Option<CursorIcon>,
     pub set_cursor_pos: Option<(WidgetID, Point2<i32>)>,
-    pub action_sender: Sender<ActionTargeted>,
+    pub message_sender: Sender<MessageTargeted>,
     pub global_update: bool,
 }
 
@@ -46,17 +46,17 @@ pub enum UpdateError {
 }
 
 impl UpdateState {
-    pub fn new(action_bus: &ActionBus) -> Rc<UpdateStateCell> {
+    pub fn new(message_bus: &MessageBus) -> Rc<UpdateStateCell> {
         Rc::new(
             RefCell::new(UpdateState {
                 redraw: FnvHashSet::default(),
                 relayout: FnvHashSet::default(),
                 update_timers: FnvHashSet::default(),
-                update_actions: FnvHashSet::default(),
+                update_messages: FnvHashSet::default(),
                 remove_from_tree: FnvHashSet::default(),
                 set_cursor_icon: None,
                 set_cursor_pos: None,
-                action_sender: action_bus.sender(),
+                message_sender: message_bus.sender(),
                 global_update: true,
             })
         )
@@ -66,7 +66,7 @@ impl UpdateState {
         self.redraw.insert(id);
         self.relayout.insert(id);
         self.update_timers.insert(id);
-        self.update_actions.insert(id);
+        self.update_messages.insert(id);
     }
 
     pub fn queue_global_update(&mut self) {
@@ -81,7 +81,7 @@ impl UpdateState {
 impl UpdateStateShared {
     pub fn new() -> UpdateStateShared {
         UpdateStateShared::Vacant(UpdateStateVacant {
-            buffered_actions: Vec::new(),
+            buffered_messages: Vec::new(),
         })
     }
 
@@ -121,8 +121,8 @@ impl UpdateStateShared {
                 {
                     let mut parent_state = parent_state.borrow_mut();
                     parent_state.queue_insert_id(id);
-                    for action in vacant.buffered_actions.drain(..) {
-                        parent_state.action_sender.send(action).ok();
+                    for message in vacant.buffered_messages.drain(..) {
+                        parent_state.message_sender.send(message).ok();
                     }
                 }
 
@@ -178,29 +178,29 @@ impl UpdateStateShared {
         });
     }
 
-    pub fn request_update_actions(&mut self, id: WidgetID) {
+    pub fn request_update_messages(&mut self, id: WidgetID) {
         self.upgrade(|this| match this {
             UpdateStateShared::Occupied(update_state) => {
                 let mut update_state = update_state.borrow_mut();
-                update_state.update_actions.insert(id);
+                update_state.update_messages.insert(id);
             },
             // Ditto.
             UpdateStateShared::Vacant(_) => ()
         });
     }
 
-    pub fn send_action<A: 'static>(&mut self, action: A, target: Option<ActionTarget>) {
-        let action = ActionTargeted {
-            action: Box::new(action) as Action,
+    pub fn send_message<A: 'static>(&mut self, message: A, target: Option<MessageTarget>) {
+        let message = MessageTargeted {
+            message: Box::new(message) as Message,
             target,
         };
         self.upgrade(|this| match this {
             UpdateStateShared::Occupied(update_state) => {
                 let update_state = update_state.borrow();
-                update_state.action_sender.send(action).ok();
+                update_state.message_sender.send(message).ok();
             },
             UpdateStateShared::Vacant(vacant) => {
-                vacant.buffered_actions.push(action);
+                vacant.buffered_messages.push(message);
             }
         });
     }
@@ -234,7 +234,7 @@ impl UpdateStateShared {
                 update_state.redraw.remove(&id);
                 update_state.relayout.remove(&id);
                 update_state.update_timers.remove(&id);
-                update_state.update_actions.remove(&id);
+                update_state.update_messages.remove(&id);
                 update_state.remove_from_tree.insert(id);
             },
             UpdateStateShared::Vacant(_) => ()

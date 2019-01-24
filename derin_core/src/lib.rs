@@ -32,7 +32,7 @@ pub mod render;
 
 mod mbseq;
 mod offset_widget;
-mod action_bus;
+mod message_bus;
 mod event_translator;
 mod update_state;
 mod widget_traverser;
@@ -41,7 +41,7 @@ use crate::cgmath::{Point2, Vector2, Bounded, EuclideanSpace};
 use cgmath_geometry::{D2, rect::{DimsBox, GeoBox}};
 
 use crate::{
-    action_bus::{ActionBus, ActionTarget},
+    message_bus::{MessageBus, MessageTarget},
     event::{WidgetEvent, WidgetEventSourced},
     event_translator::EventTranslator,
     timer::{TimerTrigger, TimerTriggerTracker},
@@ -86,7 +86,7 @@ pub struct Root<N, F>
     widget_traverser_base: WidgetTraverserBase<F>,
 
     timer_tracker: TimerTriggerTracker,
-    action_bus: ActionBus,
+    message_bus: MessageBus,
     update_state: Rc<UpdateStateCell>,
 
     // User data
@@ -137,7 +137,7 @@ pub struct FrameEventProcessor<'a, F>
     input_state: &'a mut InputState,
     event_translator: &'a mut EventTranslator,
     timer_tracker: &'a mut TimerTriggerTracker,
-    action_bus: &'a mut ActionBus,
+    message_bus: &'a mut MessageBus,
     update_state: Rc<UpdateStateCell>,
     widget_traverser: WidgetTraverser<'a, F>,
 }
@@ -171,7 +171,7 @@ impl<N, F> Root<N, F>
     pub fn new(mut root_widget: N, theme: F::Theme, dims: DimsBox<D2, u32>) -> Root<N, F> {
         // TODO: DRAW ROOT AND DO INITIAL LAYOUT
         *root_widget.rect_mut() = dims.cast().unwrap_or(DimsBox::max_value()).into();
-        let action_bus = ActionBus::new();
+        let message_bus = MessageBus::new();
         Root {
             event_translator: EventTranslator::new(),
 
@@ -180,8 +180,8 @@ impl<N, F> Root<N, F>
             widget_traverser_base: WidgetTraverserBase::new(root_widget.widget_tag().widget_id),
 
             timer_tracker: TimerTriggerTracker::new(),
-            update_state: UpdateState::new(&action_bus),
-            action_bus,
+            update_state: UpdateState::new(&message_bus),
+            message_bus,
 
             root_widget, theme,
         }
@@ -192,7 +192,7 @@ impl<N, F> Root<N, F>
             input_state: &mut self.input_state,
             event_translator: &mut self.event_translator,
             timer_tracker: &mut self.timer_tracker,
-            action_bus: &mut self.action_bus,
+            message_bus: &mut self.message_bus,
             update_state: self.update_state.clone(),
             widget_traverser: self.widget_traverser_base.with_root_ref(&mut self.root_widget, self.update_state.clone())
         }
@@ -337,7 +337,7 @@ impl<F> FrameEventProcessor<'_, F>
             ref update_state,
             ref mut widget_traverser,
             timer_tracker: _,
-            action_bus: _,
+            message_bus: _,
         } = *self;
 
         event_translator
@@ -359,7 +359,7 @@ impl<F> FrameEventProcessor<'_, F>
 
             for remove_id in update_state.remove_from_tree.drain() {
                 self.widget_traverser.remove_widget(remove_id);
-                self.action_bus.remove_widget(remove_id);
+                self.message_bus.remove_widget(remove_id);
             }
 
             for widget_id in update_state.update_timers.drain() {
@@ -375,37 +375,37 @@ impl<F> FrameEventProcessor<'_, F>
                 }
             }
 
-            for widget_id in update_state.update_actions.drain() {
+            for widget_id in update_state.update_messages.drain() {
                 let widget = match self.widget_traverser.get_widget(widget_id) {
                     Some(wpath) => wpath.widget,
                     None => continue
                 };
 
                 let widget_tag = widget.widget_tag();
-                for action_type in widget_tag.action_types() {
-                    self.action_bus.register_widget_action_type(action_type, widget_tag.widget_id);
+                for message_type in widget_tag.message_types() {
+                    self.message_bus.register_widget_message_type(message_type, widget_tag.widget_id);
                 }
             }
         }
 
-        while let Some((action, widgets)) = self.action_bus.next_action() {
-            for action_target in widgets {
-                match action_target {
-                    ActionTarget::Widget(widget_id) => {
+        while let Some((message, widgets)) = self.message_bus.next_message() {
+            for message_target in widgets {
+                match message_target {
+                    MessageTarget::Widget(widget_id) => {
                         match self.widget_traverser.get_widget(widget_id) {
-                            Some(mut wpath) => wpath.widget.inner_mut().dispatch_action(&action),
+                            Some(mut wpath) => wpath.widget.inner_mut().dispatch_message(&message),
                             None => continue
                         }
                     },
-                    ActionTarget::ParentOf(widget_id) => {
+                    MessageTarget::ParentOf(widget_id) => {
                         match self.widget_traverser.get_widget_relation(widget_id, Relation::Parent) {
-                            Some(mut wpath) => wpath.widget.inner_mut().dispatch_action(&action),
+                            Some(mut wpath) => wpath.widget.inner_mut().dispatch_message(&message),
                             None => continue
                         }
                     },
-                    ActionTarget::ChildrenOf(widget_id) => {
+                    MessageTarget::ChildrenOf(widget_id) => {
                         self.widget_traverser.crawl_widget_children(widget_id, |mut wpath| {
-                            wpath.widget.inner_mut().dispatch_action(&action)
+                            wpath.widget.inner_mut().dispatch_message(&message)
                         });
                     }
                 }

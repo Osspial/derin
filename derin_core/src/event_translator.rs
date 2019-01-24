@@ -481,7 +481,7 @@ impl<F> TranslatorActive<'_, '_, F>
 mod tests {
     use super::*;
     use crate::{
-        action_bus::ActionBus,
+        message_bus::MessageBus,
         cgmath::Point2,
         test_helpers::TestEvent,
         update_state::UpdateState,
@@ -491,9 +491,9 @@ mod tests {
 
     macro_rules! create_translator {
         ($translator:pat, $tree:expr, $root_id:expr) => {
-            let action_bus = ActionBus::new();
+            let message_bus = MessageBus::new();
             let mut traverser_base = WidgetTraverserBase::new($root_id);
-            let update_state = UpdateState::new(&action_bus);
+            let update_state = UpdateState::new(&message_bus);
             let mut traverser = traverser_base.with_root_ref($tree, update_state.clone());
             let mut input_state = InputState::new();
 
