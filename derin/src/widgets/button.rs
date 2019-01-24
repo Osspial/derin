@@ -15,7 +15,7 @@
 use crate::{
     core::{
         event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange},
-        tree::{WidgetTag, Widget},
+        widget::{WidgetTag, Widget},
         render::{RenderFrameClipped, Theme},
     },
     gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},

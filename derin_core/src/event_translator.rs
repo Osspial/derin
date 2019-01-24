@@ -4,7 +4,7 @@ use crate::{
     WindowEvent, InputState, LoopFlow,
     cgmath::{Vector2},
     event::{EventOps, FocusChange, FocusSource, MouseHoverChange, WidgetEvent, WidgetEventSourced},
-    tree::*,
+    widget::*,
     render::RenderFrame,
     widget_traverser::{Relation, WidgetTraverser, OffsetWidgetScanPath},
     update_state::{UpdateStateCell},

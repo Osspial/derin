@@ -14,8 +14,8 @@
 
 use crate::{
     {LoopFlow, InputState},
-    tree::{Widget, WidgetID, WidgetTag, WidgetSummary},
-    tree::dynamic::ParentDyn,
+    widget::{Widget, WidgetID, WidgetTag, WidgetSummary},
+    widget::dynamic::ParentDyn,
     event::{InputState as EventInputState, WidgetEventSourced, EventOps},
     render::{RenderFrame, RenderFrameClipped},
 };

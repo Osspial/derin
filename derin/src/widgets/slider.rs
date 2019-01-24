@@ -14,7 +14,7 @@
 
 use crate::{
     core::{
-        tree::{WidgetTag, Widget},
+        widget::{WidgetTag, Widget},
         render::{RenderFrameClipped, Theme},
     },
     event::{EventOps, WidgetEvent, InputState, MouseButton, WidgetEventSourced},

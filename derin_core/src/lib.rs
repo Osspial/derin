@@ -26,9 +26,9 @@ pub mod test_helpers;
 
 pub mod timer;
 #[macro_use]
-pub mod tree;
 pub mod event;
 pub mod render;
+pub mod widget;
 
 mod mbseq;
 mod offset_widget;
@@ -45,7 +45,7 @@ use crate::{
     event::{WidgetEvent, WidgetEventSourced},
     event_translator::EventTranslator,
     timer::{TimerTrigger, TimerTriggerTracker},
-    tree::*,
+    widget::*,
     render::{Renderer, RenderFrame, RenderFrameClipped},
     mbseq::MouseButtonSequenceTrackPos,
     offset_widget::OffsetWidgetTrait,

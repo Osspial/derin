@@ -2,7 +2,7 @@ use crate::{
     LoopFlow,
     event::{EventOps, FocusChange, InputState, WidgetEvent, WidgetEventSourced},
     render::{RenderFrameClipped, RenderFrame, Theme},
-    tree::{
+    widget::{
         *,
         dynamic::ParentDyn,
     },
@@ -222,7 +222,7 @@ macro_rules! extract_widget_tree_idents {
         $(, focus_controls: $focus_controls:expr)?
         $(;$($children:tt)*)?
     }),*) => {$(
-        let $widget_ident = crate::tree::WidgetID::new();
+        let $widget_ident = crate::widget::WidgetID::new();
         println!("widget {} = {:?}", stringify!($widget_ident), $widget_ident);
 
         extract_widget_tree_idents!{$($($children)*)*}
@@ -257,7 +257,7 @@ macro_rules! test_widget_tree {
                     $($($rest)*)*
                 );
 
-                let mut widget_tag = crate::tree::WidgetTag::new();
+                let mut widget_tag = crate::widget::WidgetTag::new();
                 widget_tag.widget_id = $root;
 
                 let root = crate::test_helpers::TestWidget {
@@ -291,7 +291,7 @@ macro_rules! test_widget_tree {
             $($($children)*)*
         );
 
-        let mut widget_tag = crate::tree::WidgetTag::new();
+        let mut widget_tag = crate::widget::WidgetTag::new();
         widget_tag.widget_id = $child;
 
         let widget = crate::test_helpers::TestWidget {
@@ -306,7 +306,7 @@ macro_rules! test_widget_tree {
             }
         };
 
-        $widget_map.insert(crate::tree::WidgetIdent::Str(Arc::from(stringify!($child))), widget);
+        $widget_map.insert(crate::widget::WidgetIdent::Str(Arc::from(stringify!($child))), widget);
     })*};
 }
 

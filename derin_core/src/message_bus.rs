@@ -1,4 +1,4 @@
-use crate::tree::WidgetID;
+use crate::widget::WidgetID;
 use fnv::{FnvHashMap, FnvHashSet};
 use std::{
     any::{Any, TypeId},

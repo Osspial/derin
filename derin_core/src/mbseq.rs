@@ -19,7 +19,7 @@ use arrayvec::{ArrayVec, IntoIter};
 use crate::{
     cgmath::Point2,
     event::MouseDown,
-    tree::WidgetID,
+    widget::WidgetID,
 };
 
 type PointArray = [(Point2<i32>, WidgetID); MOUSE_INT_MASK_LEN as usize];

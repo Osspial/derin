@@ -7,7 +7,7 @@ use crate::{
     render::RenderFrame,
     offset_widget::OffsetWidget,
     update_state::UpdateStateCell,
-    tree::Widget,
+    widget::Widget,
 };
 use super::virtual_widget_tree::VirtualWidgetTree;
 

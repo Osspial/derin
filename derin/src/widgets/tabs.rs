@@ -18,7 +18,7 @@ use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 use crate::core::LoopFlow;
 use crate::core::event::{EventOps, WidgetEvent, WidgetEventSourced, InputState};
-use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent};
+use crate::core::widget::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent};
 use crate::core::render::RenderFrameClipped;
 use derin_common_types::layout::{SizeBounds, WidgetPos, GridSize, WidgetSpan, TrackHints};
 

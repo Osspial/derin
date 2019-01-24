@@ -1,7 +1,7 @@
 use crate::{
     message_bus::{Message, MessageTarget, MessageTargeted, MessageBus},
     cgmath::Point2,
-    tree::WidgetID,
+    widget::WidgetID,
 };
 use derin_common_types::cursor::CursorIcon;
 use fnv::FnvHashSet;
