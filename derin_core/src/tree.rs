@@ -14,7 +14,7 @@
 
 pub(crate) mod dynamic;
 pub use crate::{
-    action_bus::ActionTarget,
+    message_bus::MessageTarget,
     update_state::UpdateError,
 };
 
@@ -22,7 +22,7 @@ use self::dynamic::ParentDyn;
 use crate::{
     LoopFlow,
     event::{WidgetEventSourced, EventOps, InputState},
-    action_bus::{WidgetActionKey, WidgetActionFn},
+    message_bus::{WidgetMessageKey, WidgetMessageFn},
     render::{RenderFrame, RenderFrameClipped},
     timer::{TimerID, Timer},
     update_state::{UpdateStateShared, UpdateStateCell},
@@ -58,7 +58,7 @@ pub enum WidgetIdent {
 
 pub struct WidgetTag {
     update_state: RefCell<UpdateStateShared>,
-    registered_actions: FnvHashMap<WidgetActionKey, Cell<SmallVec<[WidgetActionFn; 1]>>>,
+    registered_messages: FnvHashMap<WidgetMessageKey, Cell<SmallVec<[WidgetMessageFn; 1]>>>,
     pub(crate) widget_id: WidgetID,
     pub(crate) timers: FnvHashMap<TimerID, Timer>,
 }
@@ -109,34 +109,34 @@ pub trait Widget<F: RenderFrame>: 'static {
     }
 
     #[doc(hidden)]
-    fn dispatch_action(&mut self, action: &Any) {
-        let action_key = WidgetActionKey::from_dyn_action::<Self>(action);
+    fn dispatch_message(&mut self, message: &Any) {
+        let message_key = WidgetMessageKey::from_dyn_message::<Self>(message);
 
-        // We have to pull the `action_fns` list out of the widget tag so that we can pass self
-        // mutably into the action functions.
-        let mut action_fns = {
-            let action_fns_cell = match self.widget_tag().registered_actions.get(&action_key) {
+        // We have to pull the `message_fns` list out of the widget tag so that we can pass self
+        // mutably into the message functions.
+        let mut message_fns = {
+            let message_fns_cell = match self.widget_tag().registered_messages.get(&message_key) {
                 Some(afc) => afc,
                 None => return
             };
-            action_fns_cell.replace(SmallVec::new())
+            message_fns_cell.replace(SmallVec::new())
         };
 
-        for f in &mut action_fns {
-            dynamic::to_any(self, |w| f(w, action));
+        for f in &mut message_fns {
+            dynamic::to_any(self, |w| f(w, message));
         }
 
-        let action_fns_cell = match self.widget_tag().registered_actions.get(&action_key) {
+        let message_fns_cell = match self.widget_tag().registered_messages.get(&message_key) {
             Some(afc) => afc,
             None => return
         };
 
-        // Pull any new action functions into the canonical `action_fns` list.
-        let new_action_fns = action_fns_cell.replace(SmallVec::new());
-        action_fns.extend(new_action_fns);
+        // Pull any new message functions into the canonical `message_fns` list.
+        let new_message_fns = message_fns_cell.replace(SmallVec::new());
+        message_fns.extend(new_message_fns);
 
-        // Put the canonical `action_fns` list back into the cell.
-        action_fns_cell.replace(action_fns);
+        // Put the canonical `message_fns` list back into the cell.
+        message_fns_cell.replace(message_fns);
     }
 }
 
@@ -270,7 +270,7 @@ impl WidgetTag {
         WidgetTag {
             update_state: RefCell::new(UpdateStateShared::new()),
             widget_id: WidgetID::new(),
-            registered_actions: FnvHashMap::default(),
+            registered_messages: FnvHashMap::default(),
             timers: FnvHashMap::default(),
         }
     }
@@ -296,34 +296,34 @@ impl WidgetTag {
         &mut self.timers
     }
 
-    pub fn register_action<W, A>(&mut self, mut f: impl 'static + FnMut(&mut W, &A))
+    pub fn register_message<W, A>(&mut self, mut f: impl 'static + FnMut(&mut W, &A))
         where W: 'static,
               A: 'static
     {
-        self.update_state.get_mut().request_update_actions(self.widget_id);
+        self.update_state.get_mut().request_update_messages(self.widget_id);
 
-        let f: Box<FnMut(&mut Any, &Any)> = Box::new(move |widget_any, action_any| {
-            let widget = widget_any.downcast_mut::<W>().expect("Passed bad widget type to action fn");
-            let action = action_any.downcast_ref::<A>().expect("Passed bad action type to action fn");
-            f(widget, action);
+        let f: Box<FnMut(&mut Any, &Any)> = Box::new(move |widget_any, message_any| {
+            let widget = widget_any.downcast_mut::<W>().expect("Passed bad widget type to message fn");
+            let message = message_any.downcast_ref::<A>().expect("Passed bad message type to message fn");
+            f(widget, message);
         });
 
-        self.registered_actions.entry(WidgetActionKey::new::<W, A>())
+        self.registered_messages.entry(WidgetMessageKey::new::<W, A>())
             .or_insert(Cell::new(SmallVec::new()))
             .get_mut()
             .push(f);
     }
 
-    pub fn action_types(&self) -> impl '_ + Iterator<Item=TypeId> {
-        self.registered_actions.keys().map(|k| k.action_type())
+    pub fn message_types(&self) -> impl '_ + Iterator<Item=TypeId> {
+        self.registered_messages.keys().map(|k| k.message_type())
     }
 
-    pub fn broadcast_action<A: 'static>(&mut self, action: A) {
-        self.update_state.get_mut().send_action(action, None);
+    pub fn broadcast_message<A: 'static>(&mut self, message: A) {
+        self.update_state.get_mut().send_message(message, None);
     }
 
-    pub fn send_action_to<A: 'static>(&mut self, action: A, target: ActionTarget) {
-        self.update_state.get_mut().send_action(action, Some(target));
+    pub fn send_message_to<A: 'static>(&mut self, message: A, target: MessageTarget) {
+        self.update_state.get_mut().send_message(message, Some(target));
     }
 
     pub fn set_cursor_pos(&mut self, cursor_pos: Point2<i32>) -> Result<(), UpdateError> {

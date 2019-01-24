@@ -36,7 +36,7 @@ macro_rules! bench {
         unsafe {
             A.0 += elapsed;
             A.1 += 1;
-            println!("bench {}:{} avg={:?}", file!(), line!(), A.0 / A.1);
+            println!("bench {}:{} avg={:?}\tthis={:?}", file!(), line!(), A.0 / A.1, elapsed);
         }
         r
     }}

@@ -210,7 +210,7 @@ impl<F, H> Widget<F> for Slider<H>
                 _ => ()
             }
             if self.assist.value != start_value {
-                self.widget_tag.broadcast_action(self.handler.on_move(start_value, self.assist.value));
+                self.widget_tag.broadcast_message(self.handler.on_move(start_value, self.assist.value));
                 self.widget_tag.request_redraw();
             }
         }

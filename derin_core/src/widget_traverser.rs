@@ -341,7 +341,7 @@ impl<F> WidgetTraverser<'_, F>
 mod tests {
     use super::*;
     use crate::{
-        action_bus::ActionBus,
+        message_bus::MessageBus,
         offset_widget::OffsetWidgetTrait,
         update_state::UpdateState,
     };
@@ -364,8 +364,8 @@ mod tests {
         }
 
         let mut traverser_base = WidgetTraverserBase::new(root);
-        let action_bus = ActionBus::new();
-        let update_state = UpdateState::new(&action_bus);
+        let message_bus = MessageBus::new();
+        let update_state = UpdateState::new(&message_bus);
         let mut traverser = traverser_base.with_root_ref(&mut tree, update_state.clone());
 
         let mut expected_id_iter = vec![
@@ -406,8 +406,8 @@ mod tests {
 
         for _ in 0..1000 {
             let mut traverser_base = WidgetTraverserBase::new(root);
-            let action_bus = ActionBus::new();
-            let update_state = UpdateState::new(&action_bus);
+            let message_bus = MessageBus::new();
+            let update_state = UpdateState::new(&message_bus);
             let mut traverser = traverser_base.with_root_ref(&mut tree, update_state.clone());
 
             let mut assert_widget = |id, rect: (i32, i32, i32, i32), rect_clipped: Option<(i32, i32, i32, i32)>| {
@@ -463,8 +463,8 @@ mod tests {
         }
 
         let mut traverser_base = WidgetTraverserBase::new(root);
-        let action_bus = ActionBus::new();
-        let update_state = UpdateState::new(&action_bus);
+        let message_bus = MessageBus::new();
+        let update_state = UpdateState::new(&message_bus);
         let mut traverser = traverser_base.with_root_ref(&mut tree, update_state.clone());
 
         let mut test_crawl_children = |id, children: &[WidgetID]| {
