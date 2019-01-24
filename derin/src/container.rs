@@ -20,7 +20,7 @@ use std::marker::PhantomData;
 
 use crate::core::LoopFlow;
 use crate::core::render::RenderFrame;
-use crate::core::tree::{WidgetIdent, WidgetSummary, Widget};
+use crate::core::widget::{WidgetIdent, WidgetSummary, Widget};
 
 /// Designates a struct that contains other widgets.
 ///

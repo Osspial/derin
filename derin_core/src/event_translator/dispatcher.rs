@@ -1,7 +1,7 @@
 use crate::{
     cgmath::Point2,
     event::{FocusChange, FocusSource, WidgetEvent},
-    tree::{WidgetID, WidgetIdent},
+    widget::{WidgetID, WidgetIdent},
     render::RenderFrame,
     widget_traverser::{Relation, WidgetTraverser, OffsetWidgetScanPath},
 };

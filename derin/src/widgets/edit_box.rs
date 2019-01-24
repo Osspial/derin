@@ -16,7 +16,7 @@ use crate::{
     core::{
         event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
         timer::{Timer, TimerID},
-        tree::{WidgetTag, Widget},
+        widget::{WidgetTag, Widget},
         render::{RenderFrameClipped, Theme},
     },
     gl_render::{ThemedPrim, PrimFrame, RenderString, EditString, RelPoint, Prim},

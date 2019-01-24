@@ -14,7 +14,7 @@
 
 use crate::core::LoopFlow;
 use crate::core::event::{EventOps, WidgetEvent, InputState, WidgetEventSourced};
-use crate::core::tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent};
+use crate::core::widget::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent};
 use crate::core::render::RenderFrameClipped;
 
 use crate::cgmath::{Point2, Vector2};

@@ -1,4 +1,4 @@
-use crate::tree::{WidgetID, WidgetIdent, ROOT_IDENT};
+use crate::widget::{WidgetID, WidgetIdent, ROOT_IDENT};
 use std::{
     cell::Cell,
     collections::{

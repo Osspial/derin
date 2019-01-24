@@ -14,7 +14,7 @@
 
 //! Utilities for specifying the layout of widgets.
 pub use derin_common_types::layout::{Align, Align2, GridSize, Margins, SizeBounds, TrRange, TrackHints, WidgetPos, WidgetSpan};
-use crate::core::tree::WidgetIdent;
+use crate::core::widget::WidgetIdent;
 
 /// Places widgets in a resizable grid-based layout.
 pub trait GridLayout: 'static {

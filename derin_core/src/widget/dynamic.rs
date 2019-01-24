@@ -16,7 +16,7 @@
 
 use crate::LoopFlow;
 use crate::render::RenderFrame;
-use crate::tree::{Parent, WidgetIdent, WidgetSummary, Widget};
+use crate::widget::{Parent, WidgetIdent, WidgetSummary, Widget};
 
 use arrayvec::ArrayVec;
 use std::{

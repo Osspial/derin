@@ -8,7 +8,7 @@ pub(crate) use self::{
 };
 use crate::{
     render::RenderFrame,
-    tree::{Widget, WidgetID, WidgetIdent},
+    widget::{Widget, WidgetID, WidgetIdent},
     update_state::UpdateStateCell,
 };
 use std::rc::Rc;

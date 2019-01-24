@@ -16,7 +16,7 @@ use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
 use crate::cgmath::{Point2, Vector2};
 use crate::{
     timer::TimerID,
-    tree::{WidgetIdent},
+    widget::{WidgetIdent},
 };
 
 use std::time::{Instant, Duration};

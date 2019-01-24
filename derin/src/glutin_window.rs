@@ -18,7 +18,7 @@ use crate::gl_render::{GLRenderer, GLFrame};
 use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
 use crate::core::{
     Root, EventLoopResult, WindowEvent,
-    tree::Widget,
+    widget::Widget,
     render::Renderer,
 };
 use crate::theme::Theme;

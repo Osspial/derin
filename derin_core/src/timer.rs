@@ -1,4 +1,4 @@
-use crate::tree::WidgetID;
+use crate::widget::WidgetID;
 use std::{
     cell::Cell,
     time::{Instant, Duration},

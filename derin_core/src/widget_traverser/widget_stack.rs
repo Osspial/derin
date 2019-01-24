@@ -14,7 +14,7 @@
 
 use std::mem;
 use crate::render::RenderFrame;
-use crate::tree::{Widget, WidgetID, WidgetIdent, WidgetSummary, ROOT_IDENT};
+use crate::widget::{Widget, WidgetID, WidgetIdent, WidgetSummary, ROOT_IDENT};
 use super::virtual_widget_tree::PathRevItem;
 
 use crate::cgmath::{Bounded, EuclideanSpace, Point2, Vector2};

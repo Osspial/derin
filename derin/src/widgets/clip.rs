@@ -16,7 +16,7 @@ use crate::{
     core::{
         LoopFlow,
         event::{EventOps, WidgetEventSourced, InputState},
-        tree::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent},
+        widget::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent},
         render::RenderFrameClipped,
     },
     gl_render::PrimFrame,
