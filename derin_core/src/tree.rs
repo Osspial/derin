@@ -84,6 +84,10 @@ id!(pub WidgetID);
 
 pub trait Widget<F: RenderFrame>: 'static {
     fn widget_tag(&self) -> &WidgetTag;
+    fn widget_id(&self) -> WidgetID {
+        self.widget_id()
+    }
+
     fn rect(&self) -> BoundBox<D2, i32>;
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32>;
     fn render(&mut self, frame: &mut RenderFrameClipped<F>);
@@ -273,6 +277,11 @@ impl WidgetTag {
             registered_messages: FnvHashMap::default(),
             timers: FnvHashMap::default(),
         }
+    }
+
+    #[inline]
+    pub fn widget_id(&self) -> WidgetID {
+        self.widget_id
     }
 
     #[inline]

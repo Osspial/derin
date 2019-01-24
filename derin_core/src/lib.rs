@@ -177,7 +177,7 @@ impl<N, F> Root<N, F>
 
             input_state: InputState::new(),
 
-            widget_traverser_base: WidgetTraverserBase::new(root_widget.widget_tag().widget_id),
+            widget_traverser_base: WidgetTraverserBase::new(root_widget.widget_id()),
 
             timer_tracker: TimerTriggerTracker::new(),
             update_state: UpdateState::new(&message_bus),

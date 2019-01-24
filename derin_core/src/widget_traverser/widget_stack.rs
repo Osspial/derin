@@ -84,7 +84,7 @@ impl<F: RenderFrame> WidgetStackCache<F> {
         self.ident_vec.clear();
 
         self.vec.push(StackElement {
-            widget_id: widget.widget_tag().widget_id,
+            widget_id: widget.widget_id(),
             widget,
             rectangles: None,
             index: 0,
@@ -201,7 +201,7 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
         let new_top_opt = with_top(old_top.widget.inner_mut());
 
         if let Some(new_top_summary) = new_top_opt {
-            let new_top_id = new_top_summary.widget.widget_tag().widget_id;
+            let new_top_id = new_top_summary.widget.widget_id();
             let new_top_widget = new_top_summary.widget as *mut _;
             let new_top_index = new_top_summary.index;
             let new_top_ident = new_top_summary.ident.clone();
@@ -275,7 +275,7 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
                     .as_parent_mut()?
                     .child_mut(self.ident_vec[i + 1].clone())?;
                 self.vec.push(StackElement {
-                    widget_id: new_top.widget.widget_tag().widget_id,
+                    widget_id: new_top.widget.widget_id(),
                     widget: new_top.widget as *mut _,
                     rectangles: None,
                     index: new_top.index,

@@ -14,7 +14,7 @@
 
 use crate::{
     {LoopFlow, InputState},
-    tree::{Widget, WidgetTag, WidgetSummary},
+    tree::{Widget, WidgetID, WidgetTag, WidgetSummary},
     tree::dynamic::ParentDyn,
     event::{InputState as EventInputState, WidgetEventSourced, EventOps},
     render::{RenderFrame, RenderFrameClipped},
@@ -64,6 +64,7 @@ pub(crate) trait OffsetWidgetTrait<F>
     type Widget: Widget<F> + ?Sized;
 
     fn widget_tag(&self) -> &WidgetTag;
+    fn widget_id(&self) -> WidgetID;
     fn rect(&self) -> BoundBox<D2, i32>;
     fn rect_clipped(&self) -> Option<BoundBox<D2, i32>>;
     fn set_rect(&mut self, rect: BoundBox<D2, i32>);
@@ -104,6 +105,9 @@ impl<'a, F, W> OffsetWidgetTrait<F> for OffsetWidget<'a, W>
 
     fn widget_tag(&self) -> &WidgetTag {
         self.widget.widget_tag()
+    }
+    fn widget_id(&self) -> WidgetID {
+        self.widget.widget_id()
     }
     fn rect(&self) -> BoundBox<D2, i32> {
         self.widget.rect() + self.offset
