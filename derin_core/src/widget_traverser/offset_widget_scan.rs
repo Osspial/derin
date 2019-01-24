@@ -58,7 +58,7 @@ impl<F: RenderFrame> OffsetWidgetScan<'_, F> {
     }
 }
 
-fn update_recursive<F: RenderFrame>(widget: &dyn Widget<F>, tree: &mut VirtualWidgetTree, update_state: &Rc<UpdateStateCell>) {
+pub(crate) fn update_recursive<F: RenderFrame>(widget: &dyn Widget<F>, tree: &mut VirtualWidgetTree, update_state: &Rc<UpdateStateCell>) {
     let widget_tag = widget.widget_tag();
     let widget_id = widget_tag.widget_id;
     widget_tag.set_owning_update_state(update_state);

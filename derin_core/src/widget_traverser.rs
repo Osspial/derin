@@ -176,6 +176,47 @@ impl<F> WidgetTraverser<'_, F>
         }
     }
 
+    pub fn crawl_widget_children(&mut self, parent: WidgetID, mut for_each: impl FnMut(OffsetWidgetPath<'_, F>)) {
+        if let None = self.get_widget_with_tree(parent) {
+            return;
+        }
+
+        let stack = &mut self.stack;
+        let mut child_index = 0;
+        loop {
+            let child_opt = stack.try_push(|top_widget| {
+                if let Some(top_widget_as_parent) = top_widget.as_parent_mut() {
+                    return top_widget_as_parent.child_by_index_mut(child_index);
+                }
+
+                None
+            });
+
+
+            match child_opt {
+                Some(child) => {
+                    for_each(child);
+                    child_index = 0;
+                },
+                None => {
+                    child_index = stack.top_index() + 1;
+                    if stack.top().widget_id == parent {
+                        break;
+                    } else {
+                        stack.pop();
+                    }
+                }
+            }
+        }
+
+        assert_eq!(self.stack.top_id(), parent);
+        offset_widget_scan::update_recursive(
+            self.stack.top_mut().widget.inner_mut(),
+            &mut self.virtual_widget_tree,
+            &self.update_state
+        );
+    }
+
     pub fn root_id(&self) -> WidgetID {
         self.virtual_widget_tree.root_id()
     }
@@ -363,37 +404,86 @@ mod tests {
             };
         }
 
+        for _ in 0..1000 {
+            let mut traverser_base = WidgetTraverserBase::new(root);
+            let action_bus = ActionBus::new();
+            let update_state = UpdateState::new(&action_bus);
+            let mut traverser = traverser_base.with_root_ref(&mut tree, update_state.clone());
+
+            let mut assert_widget = |id, rect: (i32, i32, i32, i32), rect_clipped: Option<(i32, i32, i32, i32)>| {
+                let widget_path = traverser.get_widget(id).unwrap();
+                assert_eq!(widget_path.widget_id, id);
+
+                let widget = widget_path.widget;
+                assert_eq!(widget.rect(), BoundBox::new2(rect.0, rect.1, rect.2, rect.3));
+                assert_eq!(widget.rect_clipped(), rect_clipped.map(|rect_clipped| BoundBox::new2(rect_clipped.0, rect_clipped.1, rect_clipped.2, rect_clipped.3)));
+            };
+
+            let mut assert_widget_index = |i: u32| {
+                match i {
+                    0 => {println!("root"); assert_widget(root, (0, 0, 100, 100), Some((0, 0, 100, 100)))},
+                    1 => {println!("a"); assert_widget(a, (10, 10, 30, 30), Some((10, 10, 30, 30)))},
+                    2 => {println!("aa"); assert_widget(aa, (0, 0, 20, 20), Some((10, 10, 20, 20)))},
+                    3 => {println!("aaa"); assert_widget(aaa, (0, 0, 10, 10), Some((10, 10, 10, 10)))},
+                    4 => {println!("ab"); assert_widget(ab, (20, 20, 30, 30), Some((20, 20, 30, 30)))},
+                    5 => {println!("b"); assert_widget(b, (20, 20, 40, 40), Some((20, 20, 40, 40)))},
+                    6 => {println!("ba"); assert_widget(ba, (10, 10, 19, 19), None)},
+                    _ => panic!("invalid index")
+                }
+            };
+
+            for _ in 0..10000 {
+                use rand::Rng;
+                let index = rand::thread_rng().gen_range(0, 7);
+                assert_widget_index(index);
+            }
+            println!();
+        }
+    }
+
+    #[test]
+    fn crawl_widget_children() {
+        test_widget_tree!{
+            let event_list = crate::test_helpers::EventList::new();
+            let mut tree = root {
+                rect: (0, 0, 100, 100);
+                a {
+                    rect: (10, 10, 30, 30);
+                    aa {
+                        rect: (-10, -10, 10, 10);
+                        aaa {rect: (0, 0, 10, 10)}
+                    },
+                    ab {rect: (10, 10, 20, 20)}
+                },
+                b {
+                    rect: (20, 20, 40, 40);
+                    ba {rect: (-10, -10, -1, -1)}
+                }
+            };
+        }
+
         let mut traverser_base = WidgetTraverserBase::new(root);
         let action_bus = ActionBus::new();
         let update_state = UpdateState::new(&action_bus);
         let mut traverser = traverser_base.with_root_ref(&mut tree, update_state.clone());
 
-        let mut assert_widget = |id, rect: (i32, i32, i32, i32), rect_clipped: Option<(i32, i32, i32, i32)>| {
-            let widget_path = traverser.get_widget(id).unwrap();
-            assert_eq!(widget_path.widget_id, id);
-
-            let widget = widget_path.widget;
-            assert_eq!(widget.rect(), BoundBox::new2(rect.0, rect.1, rect.2, rect.3));
-            assert_eq!(widget.rect_clipped(), rect_clipped.map(|rect_clipped| BoundBox::new2(rect_clipped.0, rect_clipped.1, rect_clipped.2, rect_clipped.3)));
+        let mut test_crawl_children = |id, children: &[WidgetID]| {
+            println!();
+            dbg!((&id, children));
+            let mut children_iter = children.into_iter().cloned();
+            traverser.crawl_widget_children(id, |wpath| {
+                dbg!(wpath.widget_id);
+                assert_eq!(Some(wpath.widget_id), children_iter.next());
+            });
+            assert_eq!(None, children_iter.next());
         };
 
-        let mut assert_widget_index = |i: u32| {
-            match i {
-                0 => {println!("root"); assert_widget(root, (0, 0, 100, 100), Some((0, 0, 100, 100)))},
-                1 => {println!("a"); assert_widget(a, (10, 10, 30, 30), Some((10, 10, 30, 30)))},
-                2 => {println!("aa"); assert_widget(aa, (0, 0, 20, 20), Some((10, 10, 20, 20)))},
-                3 => {println!("aaa"); assert_widget(aaa, (0, 0, 10, 10), Some((10, 10, 10, 10)))},
-                4 => {println!("ab"); assert_widget(ab, (20, 20, 30, 30), Some((20, 20, 30, 30)))},
-                5 => {println!("b"); assert_widget(b, (20, 20, 40, 40), Some((20, 20, 40, 40)))},
-                6 => {println!("ba"); assert_widget(ba, (10, 10, 19, 19), None)},
-                _ => panic!("invalid index")
-            }
-        };
-
-        for _ in 0..10000 {
-            use rand::Rng;
-            let index = rand::thread_rng().gen_range(0, 7);
-            assert_widget_index(index);
-        }
+        test_crawl_children(root, &[a, aa, aaa, ab, b, ba]);
+        test_crawl_children(a, &[aa, aaa, ab]);
+        test_crawl_children(aa, &[aaa]);
+        test_crawl_children(aaa, &[]);
+        test_crawl_children(ab, &[]);
+        test_crawl_children(b, &[ba]);
+        test_crawl_children(ba, &[]);
     }
 }

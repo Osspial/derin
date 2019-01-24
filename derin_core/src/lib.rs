@@ -41,7 +41,7 @@ use crate::cgmath::{Point2, Vector2, Bounded, EuclideanSpace};
 use cgmath_geometry::{D2, rect::{DimsBox, GeoBox}};
 
 use crate::{
-    action_bus::ActionBus,
+    action_bus::{ActionBus, ActionTarget},
     event::{WidgetEvent, WidgetEventSourced},
     event_translator::EventTranslator,
     timer::{TimerTrigger, TimerTriggerTracker},
@@ -374,16 +374,41 @@ impl<F> FrameEventProcessor<'_, F>
                     self.timer_tracker.queue_trigger(trigger);
                 }
             }
-        }
 
-        while let Some((action, widgets)) = self.action_bus.next_action() {
-            for widget_id in widgets {
-                let mut widget = match self.widget_traverser.get_widget(widget_id) {
+            for widget_id in update_state.update_actions.drain() {
+                let widget = match self.widget_traverser.get_widget(widget_id) {
                     Some(wpath) => wpath.widget,
                     None => continue
                 };
 
-                widget.inner_mut().dispatch_action(&action);
+                let widget_tag = widget.widget_tag();
+                for action_type in widget_tag.action_types() {
+                    self.action_bus.register_widget_action_type(action_type, widget_tag.widget_id);
+                }
+            }
+        }
+
+        while let Some((action, widgets)) = self.action_bus.next_action() {
+            for action_target in widgets {
+                match action_target {
+                    ActionTarget::Widget(widget_id) => {
+                        match self.widget_traverser.get_widget(widget_id) {
+                            Some(mut wpath) => wpath.widget.inner_mut().dispatch_action(&action),
+                            None => continue
+                        }
+                    },
+                    ActionTarget::ParentOf(widget_id) => {
+                        match self.widget_traverser.get_widget_relation(widget_id, Relation::Parent) {
+                            Some(mut wpath) => wpath.widget.inner_mut().dispatch_action(&action),
+                            None => continue
+                        }
+                    },
+                    ActionTarget::ChildrenOf(widget_id) => {
+                        self.widget_traverser.crawl_widget_children(widget_id, |mut wpath| {
+                            wpath.widget.inner_mut().dispatch_action(&action)
+                        });
+                    }
+                }
             }
         }
 

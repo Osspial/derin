@@ -133,6 +133,11 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
         self.vec.last().unwrap().index
     }
 
+    #[inline]
+    pub fn top_id(&self) -> WidgetID {
+        self.vec.last().unwrap().widget_id
+    }
+
     // pub fn top_parent_offset(&self) -> Vector2<i32> {
     //     self.top_parent_offset
     // }
