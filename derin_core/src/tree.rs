@@ -13,7 +13,10 @@
 // limitations under the License.
 
 pub(crate) mod dynamic;
-pub use crate::update_state::UpdateError;
+pub use crate::{
+    action_bus::ActionTarget,
+    update_state::UpdateError,
+};
 
 use self::dynamic::ParentDyn;
 use crate::{
@@ -316,7 +319,11 @@ impl WidgetTag {
     }
 
     pub fn broadcast_action<A: 'static>(&mut self, action: A) {
-        self.update_state.get_mut().broadcast_action(action);
+        self.update_state.get_mut().send_action(action, None);
+    }
+
+    pub fn send_action_to<A: 'static>(&mut self, action: A, target: ActionTarget) {
+        self.update_state.get_mut().send_action(action, Some(target));
     }
 
     pub fn set_cursor_pos(&mut self, cursor_pos: Point2<i32>) -> Result<(), UpdateError> {

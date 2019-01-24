@@ -1,12 +1,11 @@
 use crate::{
-    action_bus::ActionBus,
+    action_bus::{Action, ActionTarget, ActionTargeted, ActionBus},
     cgmath::Point2,
     tree::WidgetID,
 };
 use derin_common_types::cursor::CursorIcon;
 use fnv::FnvHashSet;
 use std::{
-    any::Any,
     mem,
     rc::{Rc, Weak},
     sync::mpsc::Sender,
@@ -23,7 +22,7 @@ pub(crate) enum UpdateStateShared<R = Weak<UpdateStateCell>> {
 
 #[derive(Debug, Default)]
 pub(crate) struct UpdateStateVacant {
-    buffered_actions: Vec<Box<Any>>,
+    buffered_actions: Vec<ActionTargeted>,
 }
 
 pub(crate) type UpdateStateCell = RefCell<UpdateState>;
@@ -37,7 +36,7 @@ pub(crate) struct UpdateState {
     pub remove_from_tree: FnvHashSet<WidgetID>,
     pub set_cursor_icon: Option<CursorIcon>,
     pub set_cursor_pos: Option<(WidgetID, Point2<i32>)>,
-    pub action_sender: Sender<Box<Any>>,
+    pub action_sender: Sender<ActionTargeted>,
     pub global_update: bool,
 }
 
@@ -190,8 +189,11 @@ impl UpdateStateShared {
         });
     }
 
-    pub fn broadcast_action<A: 'static>(&mut self, action: A) {
-        let action = Box::new(action) as Box<Any>;
+    pub fn send_action<A: 'static>(&mut self, action: A, target: Option<ActionTarget>) {
+        let action = ActionTargeted {
+            action: Box::new(action) as Action,
+            target,
+        };
         self.upgrade(|this| match this {
             UpdateStateShared::Occupied(update_state) => {
                 let update_state = update_state.borrow();
