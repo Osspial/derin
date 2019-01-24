@@ -324,8 +324,8 @@ mod tests {
         let summary_by_ident = parent.child(ident.clone()).expect(&format!("Could not find child by ident: {} {:?}", index, ident));
         let summary_by_index = parent.child_by_index(index).expect(&format!("Could not find child by index: {} {:?}", index, ident));
 
-        assert_eq!(summary_by_ident.widget.widget_tag().widget_id, summary_by_index.widget.widget_tag().widget_id);
-        assert_eq!(summary_by_ident.widget.widget_tag().widget_id, id);
+        assert_eq!(summary_by_ident.widget.widget_id(), summary_by_index.widget.widget_id());
+        assert_eq!(summary_by_ident.widget.widget_id(), id);
 
         assert_eq!(summary_by_ident.ident, ident);
         assert_eq!(summary_by_index.ident, ident);
@@ -354,7 +354,7 @@ mod tests {
             };
         }
 
-        assert_eq!(tree.widget_tag().widget_id, root);
+        assert_eq!(tree.widget_id(), root);
         assert_eq!(tree.rect(), BoundBox::new2(0, 0, 500, 500));
 
         let root_as_parent = tree.as_parent().unwrap();

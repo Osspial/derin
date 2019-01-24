@@ -52,7 +52,7 @@ impl<F> WidgetTraverserBase<F>
     pub fn with_root_ref<'a>(&'a mut self, root: &'a mut dyn Widget<F>, update_state: Rc<UpdateStateCell>) -> WidgetTraverser<'a, F> {
         // This isn't a necessary limitation with the code, but the current code assumes this assertion
         // holds.
-        assert_eq!(root.widget_tag().widget_id, self.virtual_widget_tree.root_id());
+        assert_eq!(root.widget_id(), self.virtual_widget_tree.root_id());
 
         WidgetTraverser {
             stack: self.stack_cache.use_cache(root),
@@ -237,7 +237,7 @@ impl<F> WidgetTraverser<'_, F>
         let mut child_index = 0;
         loop {
             let valid_child = stack.try_push(|top_widget| {
-                let top_id = top_widget.widget_tag().widget_id;
+                let top_id = top_widget.widget_id();
 
                 if widget_id == top_id {
                     widget_found = true;

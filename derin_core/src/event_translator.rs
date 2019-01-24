@@ -367,7 +367,7 @@ impl<F> TranslatorActive<'_, '_, F>
                                 if let Some(mut widget_as_parent) = widget.as_parent_mut() {
                                     widget_as_parent.children_mut(|child_summary| {
                                         if child_summary.widget.rect_clipped().map(|r| r.contains(new_pos)).unwrap_or(false) {
-                                            enter_child_opt = Some((child_summary.widget.widget_tag().widget_id, child_summary.ident));
+                                            enter_child_opt = Some((child_summary.widget.widget_id(), child_summary.ident));
                                             LoopFlow::Break
                                         } else {
                                             LoopFlow::Continue
