@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) mod dynamic;
+mod dynamic;
+pub(crate) use dynamic::WidgetDyn;
 pub use crate::{
     message_bus::MessageTarget,
     update_state::UpdateError,
 };
 
-use self::dynamic::ParentDyn;
 use crate::{
     LoopFlow,
     event::{WidgetEventSourced, EventOps, InputState},
@@ -34,6 +34,7 @@ use derin_common_types::{
 use smallvec::SmallVec;
 use std::{
     any::{Any, TypeId},
+    borrow::{Borrow, BorrowMut},
     cell::{Cell, RefCell},
     fmt,
     ops::Drop,
@@ -82,34 +83,26 @@ impl Clone for WidgetTag {
 id!(pub WidgetID);
 
 
-pub trait Widget<F: RenderFrame>: 'static {
+/// The base widget trait.
+///
+/// ## Warnings
+/// Note that this trait ***should not be implemented for unsized types***. TODO EXPLAIN WHY
+pub trait Widget: 'static {
     fn widget_tag(&self) -> &WidgetTag;
     fn widget_id(&self) -> WidgetID {
-        self.widget_id()
+        self.widget_tag().widget_id
     }
 
     fn rect(&self) -> BoundBox<D2, i32>;
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32>;
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>);
     fn on_widget_event(
         &mut self,
         event: WidgetEventSourced<'_>,
         input_state: InputState,
     ) -> EventOps;
 
-    fn update_layout(&mut self, _theme: &F::Theme) {}
     fn size_bounds(&self) -> SizeBounds {
         SizeBounds::default()
-    }
-
-    #[doc(hidden)]
-    fn as_parent(&self) -> Option<&ParentDyn<F>> {
-        ParentDyn::from_widget(self)
-    }
-
-    #[doc(hidden)]
-    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<F>> {
-        ParentDyn::from_widget_mut(self)
     }
 
     #[doc(hidden)]
@@ -144,9 +137,13 @@ pub trait Widget<F: RenderFrame>: 'static {
     }
 }
 
-impl<F, W> Widget<F> for Box<W>
-    where W: Widget<F> + ?Sized,
-          F: RenderFrame
+pub trait WidgetRender<F: RenderFrame>: Widget {
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>);
+    fn update_layout(&mut self, _theme: &F::Theme) {}
+}
+
+impl<W> Widget for Box<W>
+    where W: Widget + ?Sized
 {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
@@ -158,9 +155,6 @@ impl<F, W> Widget<F> for Box<W>
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
         W::rect_mut(self)
     }
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
-        W::render(self, frame)
-    }
     fn on_widget_event(
         &mut self,
         event: WidgetEventSourced<'_>,
@@ -169,94 +163,217 @@ impl<F, W> Widget<F> for Box<W>
         W::on_widget_event(self, event, input_state)
     }
 
-    fn update_layout(&mut self, theme: &F::Theme) {
-        W::update_layout(self, theme)
-    }
     fn size_bounds(&self) -> SizeBounds {
         W::size_bounds(self)
     }
 
-    #[doc(hidden)]
-    fn as_parent(&self) -> Option<&ParentDyn<F>> {
-        W::as_parent(self)
-    }
-
-    #[doc(hidden)]
-    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<F>> {
-        W::as_parent_mut(self)
+    fn dispatch_message(&mut self, message: &Any) {
+        W::dispatch_message(self, message)
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct WidgetSummary<W: ?Sized> {
+pub struct WidgetInfo<'a, F: RenderFrame, S: ?Sized=Widget> {
     pub ident: WidgetIdent,
     pub index: usize,
-    pub widget: W,
+    pub(crate) widget: &'a WidgetDyn<F>,
+    to_secondary: fn(&'_ WidgetDyn<F>) -> &'_ S,
 }
 
-pub trait Parent<F: RenderFrame>: Widget<F> {
+pub struct WidgetInfoMut<'a, F: RenderFrame, S: ?Sized=Widget> {
+    pub ident: WidgetIdent,
+    pub index: usize,
+    pub(crate) widget: &'a mut WidgetDyn<F>,
+    to_secondary: fn(Reference<'_, WidgetDyn<F>>) -> Reference<'_, S>
+}
+
+enum Reference<'a, T: ?Sized> {
+    Ref(&'a T),
+    Mut(&'a mut T),
+}
+
+impl<'a, T: ?Sized> Reference<'a, T> {
+    fn as_ref(&self) -> &T {
+        match self {
+            Reference::Ref(r) => r,
+            Reference::Mut(r) => r
+        }
+    }
+}
+
+pub trait Parent: Widget {
     fn num_children(&self) -> usize;
 
-    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<F>>>;
-    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<F>>>;
+    fn framed_child<F: RenderFrame>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, F>>
+        where Self: Sized;
+    fn framed_child_mut<F: RenderFrame>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, F>>
+        where Self: Sized;
 
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<F>>>;
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<F>>>;
+    fn framed_child_by_index<F: RenderFrame>(&self, index: usize) -> Option<WidgetInfo<'_, F>>
+        where Self: Sized;
+    fn framed_child_by_index_mut<F: RenderFrame>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, F>>
+        where Self: Sized;
 
-    fn children<'a, G>(&'a self, for_each: G)
-        where G: FnMut(WidgetSummary<&'a Widget<F>>) -> LoopFlow;
-    fn children_mut<'a, G>(&'a mut self, for_each: G)
-        where G: FnMut(WidgetSummary<&'a mut Widget<F>>) -> LoopFlow;
+    fn framed_children<'a, F, G>(&'a self, for_each: G)
+        where Self: Sized,
+              F: RenderFrame,
+              G: FnMut(WidgetInfo<'a, F>) -> LoopFlow;
+    fn framed_children_mut<'a, F, G>(&'a mut self, for_each: G)
+        where Self: Sized,
+              F: RenderFrame,
+              G: FnMut(WidgetInfoMut<'a, F>) -> LoopFlow;
 }
 
-impl<'a, W: ?Sized> WidgetSummary<&'a W> {
-    pub fn new<F>(ident: WidgetIdent, index: usize, widget: &'a W) -> WidgetSummary<&'a W>
-        where W: Widget<F>,
-              F: RenderFrame
+pub trait WidgetSubtype<W: Widget> {
+    fn from_widget(widget: &W) -> &Self;
+    fn from_widget_mut(widget: &mut W) -> &mut Self;
+}
+
+impl<W, S> WidgetSubtype<W> for S
+    where W: Widget + Borrow<S> + BorrowMut<S>
+{
+    #[inline(always)]
+    fn from_widget(widget: &W) -> &S {
+        widget.borrow()
+    }
+
+    #[inline(always)]
+    fn from_widget_mut(widget: &mut W) -> &mut S {
+        widget.borrow_mut()
+    }
+}
+
+impl<W: Widget> WidgetSubtype<W> for dyn Widget {
+    fn from_widget(widget: &W) -> &Self {
+        widget
+    }
+    fn from_widget_mut(widget: &mut W) -> &mut Self {
+        widget
+    }
+}
+
+impl<W: WidgetRender<F>, F: RenderFrame> WidgetSubtype<W> for dyn WidgetRender<F> {
+    fn from_widget(widget: &W) -> &Self {
+        widget
+    }
+    fn from_widget_mut(widget: &mut W) -> &mut Self {
+        widget
+    }
+}
+
+impl<W: Parent> WidgetSubtype<W> for dyn Parent {
+    fn from_widget(widget: &W) -> &Self {
+        widget
+    }
+    fn from_widget_mut(widget: &mut W) -> &mut Self {
+        widget
+    }
+}
+
+impl<'a, F, S> WidgetInfo<'a, F, S>
+    where F: RenderFrame
+{
+    pub fn new<W>(
+        ident: WidgetIdent,
+        index: usize,
+        widget: &'a W
+    ) -> WidgetInfo<'a, F, S>
+        where W: Widget,
+              S: WidgetSubtype<W>
     {
-        WidgetSummary {
+        WidgetInfo {
             ident,
             index,
-            widget
+            widget: WidgetDyn::new(widget),
+            to_secondary: |r| {
+                if r.get_type_id() == TypeId::of::<W>() {
+                    S::from_widget(unsafe{ &*(r as *const WidgetDyn<F> as *const W) })
+                } else {
+                    panic!("widget type replaced")
+                }
+            }
         }
     }
 
-    pub fn to_dyn<F>(self) -> WidgetSummary<&'a Widget<F>>
-        where W: Widget<F>,
-              F: RenderFrame
-    {
-        WidgetSummary {
+    pub fn erase_subtype(self) -> WidgetInfo<'a, F> {
+        WidgetInfo {
             ident: self.ident,
             index: self.index,
-            widget: dynamic::to_widget_object(self.widget)
+            widget: self.widget,
+            to_secondary: |r| {
+                r.to_widget()
+            }
         }
     }
 }
 
-impl<'a, W: ?Sized> WidgetSummary<&'a mut W> {
-    pub fn new_mut<F>(ident: WidgetIdent, index: usize, widget: &'a mut W) -> WidgetSummary<&'a mut W>
-        where W: Widget<F>,
-              F: RenderFrame
+impl<'a, F, S> WidgetInfoMut<'a, F, S>
+    where F: RenderFrame
+{
+    pub fn new<W>(ident: WidgetIdent, index: usize, widget: &'a mut W) -> WidgetInfoMut<'a, F, S>
+        where W: Widget,
+              S: WidgetSubtype<W>
     {
-        WidgetSummary {
+        WidgetInfoMut {
             ident,
             index,
-            widget
+            widget: WidgetDyn::new_mut(widget),
+            to_secondary: |r| {
+                if r.as_ref().get_type_id() == TypeId::of::<W>() {
+                    match r {
+                        Reference::Ref(r) =>
+                            Reference::Ref(S::from_widget(unsafe{ &*(r as *const WidgetDyn<F> as *const W) })),
+                        Reference::Mut(r) =>
+                            Reference::Mut(S::from_widget_mut(unsafe{ &mut *(r as *mut WidgetDyn<F> as *mut W) }))
+                    }
+                } else {
+                    panic!("widget type replaced")
+                }
+            }
         }
     }
 
-    pub fn to_dyn_mut<F>(self) -> WidgetSummary<&'a mut Widget<F>>
-        where W: Widget<F>,
-              F: RenderFrame
-    {
-        WidgetSummary {
+    pub fn erase_subtype(self) -> WidgetInfoMut<'a, F> {
+        WidgetInfoMut {
             ident: self.ident,
             index: self.index,
-            widget: dynamic::to_widget_object_mut(self.widget)
+            widget: self.widget,
+            to_secondary: |r| match r {
+                Reference::Ref(r) => Reference::Ref(r.to_widget()),
+                Reference::Mut(r) => Reference::Mut(r.to_widget_mut()),
+            }
         }
     }
 }
 
+impl<'a, F, S> Borrow<S> for WidgetInfo<'a, F, S>
+    where F: RenderFrame
+{
+    fn borrow(&self) -> &S {
+        (self.to_secondary)(self.widget)
+    }
+}
+
+impl<'a, F, S> Borrow<S> for WidgetInfoMut<'a, F, S>
+    where F: RenderFrame
+{
+    fn borrow(&self) -> &S {
+        match (self.to_secondary)(Reference::Ref(self.widget)) {
+            Reference::Ref(r) => r,
+            Reference::Mut(_) => unreachable!()
+        }
+    }
+}
+
+impl<'a, F, S> BorrowMut<S> for WidgetInfoMut<'a, F, S>
+    where F: RenderFrame
+{
+    fn borrow_mut(&mut self) -> &mut S {
+        match (self.to_secondary)(Reference::Mut(self.widget)) {
+            Reference::Mut(r) => r,
+            Reference::Ref(_) => unreachable!()
+        }
+    }
+}
 
 impl WidgetIdent {
     pub fn new_str(s: &str) -> WidgetIdent {

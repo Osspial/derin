@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(range_contains, nll, specialization, try_blocks, get_type_id)]
+#![feature(range_contains, nll, specialization, try_blocks, get_type_id, trace_macros)]
 
 use cgmath_geometry::cgmath;
 extern crate derin_common_types;
@@ -48,7 +48,6 @@ use crate::{
     widget::*,
     render::{Renderer, RenderFrame, RenderFrameClipped},
     mbseq::MouseButtonSequenceTrackPos,
-    offset_widget::OffsetWidgetTrait,
     update_state::{UpdateState, UpdateStateCell},
     widget_traverser::{Relation, WidgetPath, WidgetTraverser, WidgetTraverserBase},
 };
@@ -74,7 +73,7 @@ fn vec_remove_element<T: PartialEq>(v: &mut Vec<T>, element: &T) -> Option<T> {
 }
 
 pub struct Root<N, F>
-    where N: Widget<F> + 'static,
+    where N: Widget + 'static,
           F: RenderFrame + 'static
 {
     // Event handing and dispatch
@@ -164,7 +163,7 @@ impl InputState {
 }
 
 impl<N, F> Root<N, F>
-    where N: Widget<F>,
+    where N: Widget,
           F: RenderFrame
 {
     #[inline]

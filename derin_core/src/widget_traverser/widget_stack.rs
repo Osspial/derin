@@ -14,18 +14,18 @@
 
 use std::mem;
 use crate::render::RenderFrame;
-use crate::widget::{Widget, WidgetID, WidgetIdent, WidgetSummary, ROOT_IDENT};
+use crate::widget::{WidgetDyn, WidgetID, WidgetIdent, WidgetInfoMut, ROOT_IDENT};
 use super::virtual_widget_tree::PathRevItem;
 
 use crate::cgmath::{Bounded, EuclideanSpace, Point2, Vector2};
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
-use crate::offset_widget::{OffsetWidget, OffsetWidgetTrait};
+use crate::offset_widget::OffsetWidget;
 
 // TODO: GET CODE REVIEWED FOR SAFETY
 
 struct StackElement<F: RenderFrame> {
-    widget: *mut (Widget<F>),
+    widget: *mut (WidgetDyn<F>),
     rectangles: Option<ElementRects>,
     index: usize,
     widget_id: WidgetID
@@ -59,7 +59,7 @@ pub(crate) struct WidgetStack<'a, F: 'a + RenderFrame> {
     top_parent_offset: Vector2<i32>,
 }
 
-pub(crate) type OffsetWidgetPath<'a, F> = WidgetPath<'a, OffsetWidget<'a, dyn Widget<F>>>;
+pub(crate) type OffsetWidgetPath<'a, F> = WidgetPath<'a, OffsetWidget<'a, F>>;
 
 pub(crate) struct WidgetPath<'a, W> {
     pub widget: W,
@@ -76,7 +76,7 @@ impl<F: RenderFrame> WidgetStackCache<F> {
         }
     }
 
-    pub fn use_cache<'a>(&'a mut self, widget: &mut Widget<F>) -> WidgetStack<'a, F> {
+    pub fn use_cache<'a>(&'a mut self, widget: &mut WidgetDyn<F>) -> WidgetStack<'a, F> {
         let mut cache_swap = Vec::new();
         mem::swap(&mut cache_swap, &mut self.vec);
 
@@ -102,7 +102,7 @@ impl<F: RenderFrame> WidgetStackCache<F> {
 
 impl<'a, F: RenderFrame> WidgetStack<'a, F> {
     #[inline]
-    pub fn top(&self) -> WidgetPath<'_, &'_ Widget<F>> {
+    pub fn top(&self) -> WidgetPath<'_, &'_ WidgetDyn<F>> {
         let (widget, widget_id) = self.vec.last().map(|n| unsafe{ (&*n.widget, n.widget_id) }).unwrap();
         WidgetPath {
             widget: widget,
@@ -146,10 +146,10 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
     //     self.clip_rect
     // }
 
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.vec.len()
-    }
+    // #[inline]
+    // pub fn len(&self) -> usize {
+    //     self.vec.len()
+    // }
 
     #[inline]
     pub fn truncate(&mut self, len: usize) {
@@ -175,7 +175,7 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
     }
 
     #[inline]
-    pub fn widgets(&self) -> impl '_ + Iterator<Item=WidgetPath<'_, &'_ Widget<F>>> + DoubleEndedIterator + ExactSizeIterator {
+    pub fn widgets(&self) -> impl '_ + Iterator<Item=WidgetPath<'_, &'_ WidgetDyn<F>>> + DoubleEndedIterator + ExactSizeIterator {
         let path = &self.ident_vec[..];
         self.vec.iter().enumerate().map(move |(i, n)| WidgetPath {
             widget: unsafe{ &*n.widget },
@@ -185,15 +185,15 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
         })
     }
 
-    #[inline]
-    pub fn path(&self) -> &[WidgetIdent] {
-        debug_assert_eq!(self.ident_vec.len(), self.vec.len());
-        &self.ident_vec
-    }
+    // #[inline]
+    // pub fn path(&self) -> &[WidgetIdent] {
+    //     debug_assert_eq!(self.ident_vec.len(), self.vec.len());
+    //     &self.ident_vec
+    // }
 
     #[inline]
     pub fn try_push<G>(&mut self, with_top: G) -> Option<OffsetWidgetPath<'_, F>>
-        where G: FnOnce(&'_ mut dyn Widget<F>) -> Option<WidgetSummary<&'_ mut Widget<F>>>
+        where G: FnOnce(&'_ mut dyn WidgetDyn<F>) -> Option<WidgetInfoMut<F>>
     {
         let mut old_top = self.top_mut();
         let top_rect = old_top.widget.rect();
@@ -206,7 +206,7 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
             let new_top_index = new_top_summary.index;
             let new_top_ident = new_top_summary.ident.clone();
 
-            assert_ne!(new_top_widget, self.top_mut().widget.inner_mut() as *mut Widget<F>);
+            assert_ne!(new_top_widget, self.top_mut().widget.inner_mut() as *mut WidgetDyn<F>);
             {
                 let old_top = self.vec.last_mut().unwrap();
                 let top_clip = self.clip_rect.and_then(|r| r.intersect_rect(top_rect));
@@ -272,7 +272,6 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
                 }
 
                 let new_top = top_widget
-                    .as_parent_mut()?
                     .child_mut(self.ident_vec[i + 1].clone())?;
                 self.vec.push(StackElement {
                     widget_id: new_top.widget.widget_id(),
@@ -299,7 +298,7 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
     }
 
     #[inline]
-    pub fn pop(&mut self) -> Option<&mut Widget<F>> {
+    pub fn pop(&mut self) -> Option<&mut WidgetDyn<F>> {
         // Ensure the base is never popped
         if self.vec.len() == 1 {
             return None;

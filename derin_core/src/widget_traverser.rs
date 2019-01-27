@@ -8,7 +8,7 @@ pub(crate) use self::{
 };
 use crate::{
     render::RenderFrame,
-    widget::{Widget, WidgetID, WidgetIdent},
+    widget::{WidgetDyn, WidgetID, WidgetIdent},
     update_state::UpdateStateCell,
 };
 use std::rc::Rc;
@@ -49,7 +49,7 @@ impl<F> WidgetTraverserBase<F>
         }
     }
 
-    pub fn with_root_ref<'a>(&'a mut self, root: &'a mut dyn Widget<F>, update_state: Rc<UpdateStateCell>) -> WidgetTraverser<'a, F> {
+    pub fn with_root_ref<'a>(&'a mut self, root: &'a mut dyn WidgetDyn<F>, update_state: Rc<UpdateStateCell>) -> WidgetTraverser<'a, F> {
         // This isn't a necessary limitation with the code, but the current code assumes this assertion
         // holds.
         assert_eq!(root.widget_id(), self.virtual_widget_tree.root_id());
@@ -153,11 +153,7 @@ impl<F> WidgetTraverser<'_, F>
         let mut child_index = 0;
         loop {
             let child_opt = stack.try_push(|top_widget| {
-                if let Some(top_widget_as_parent) = top_widget.as_parent_mut() {
-                    return top_widget_as_parent.child_by_index_mut(child_index);
-                }
-
-                None
+                top_widget.child_by_index_mut(child_index)
             });
 
 
@@ -185,11 +181,7 @@ impl<F> WidgetTraverser<'_, F>
         let mut child_index = 0;
         loop {
             let child_opt = stack.try_push(|top_widget| {
-                if let Some(top_widget_as_parent) = top_widget.as_parent_mut() {
-                    return top_widget_as_parent.child_by_index_mut(child_index);
-                }
-
-                None
+                top_widget.child_by_index_mut(child_index)
             });
 
 
@@ -244,11 +236,7 @@ impl<F> WidgetTraverser<'_, F>
                     return None;
                 }
 
-                if let Some(top_widget_as_parent) = top_widget.as_parent_mut() {
-                    return top_widget_as_parent.child_by_index_mut(child_index);
-                }
-
-                None
+                top_widget.child_by_index_mut(child_index)
             }).is_some();
 
             if widget_found {
@@ -291,50 +279,6 @@ impl<F> WidgetTraverser<'_, F>
             }
         }
     }
-
-    fn move_to_path<I>(&mut self, ident_path: I) -> Option<OffsetWidgetPath<F>>
-        where I: IntoIterator<Item=WidgetIdent>
-    {
-        let mut ident_path_iter = ident_path.into_iter().peekable();
-
-        // Find the depth at which the given path and the current path diverge, and move the stack
-        // to that depth.
-        let mut diverge_depth = 0;
-        {
-            let mut active_path_iter = self.stack.path().iter();
-            // While the next item in the ident path and the active path are equal, increment the
-            // diverge depth.
-            while active_path_iter.next().and_then(|ident| ident_path_iter.peek().map(|i| i == ident)).unwrap_or(false) {
-                diverge_depth += 1;
-                ident_path_iter.next();
-            }
-        }
-        if diverge_depth == 0 {
-            return None;
-        }
-        self.stack.truncate(diverge_depth);
-
-        let mut valid_path = true;
-        for ident in ident_path_iter {
-            valid_path = self.stack.try_push(|widget| {
-                if let Some(widget_as_parent) = widget.as_parent_mut() {
-                    widget_as_parent.child_mut(ident)
-                } else {
-                    None
-                }
-            }).is_some();
-
-            if !valid_path {
-                break;
-            }
-        }
-
-        match valid_path {
-            true => Some(self.stack.top_mut()),
-            false => None
-        }
-    }
-
 }
 
 #[cfg(test)]

@@ -14,8 +14,7 @@
 
 use crate::{
     {LoopFlow, InputState},
-    widget::{Widget, WidgetID, WidgetTag, WidgetSummary},
-    widget::dynamic::ParentDyn,
+    widget::{WidgetDyn, WidgetID, WidgetIdent, WidgetTag},
     event::{InputState as EventInputState, WidgetEventSourced, EventOps},
     render::{RenderFrame, RenderFrameClipped},
 };
@@ -27,15 +26,21 @@ use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 use arrayvec::ArrayVec;
 
-pub(crate) struct OffsetWidget<'a, W: 'a + ?Sized> {
-    widget: &'a mut W,
+pub(crate) struct OffsetWidget<'a, F: RenderFrame> {
+    widget: &'a mut WidgetDyn<F>,
     offset: Vector2<i32>,
     clip: Option<BoundBox<D2, i32>>,
 }
 
-impl<'a, W: ?Sized> OffsetWidget<'a, W> {
+pub(crate) struct OffsetWidgetInfo<'a, F: RenderFrame> {
+    pub ident: WidgetIdent,
+    pub index: usize,
+    pub widget: OffsetWidget<'a, F>,
+}
+
+impl<'a, F: RenderFrame> OffsetWidget<'a, F> {
     #[inline]
-    pub fn new(widget: &'a mut W, offset: Vector2<i32>, clip: Option<BoundBox<D2, i32>>) -> OffsetWidget<'a, W> {
+    pub fn new(widget: &'a mut WidgetDyn<F>, offset: Vector2<i32>, clip: Option<BoundBox<D2, i32>>) -> OffsetWidget<'a, F> {
         OffsetWidget {
             widget,
             offset,
@@ -44,84 +49,38 @@ impl<'a, W: ?Sized> OffsetWidget<'a, W> {
     }
 
     #[inline]
-    pub fn inner(&self) -> &W {
+    pub fn inner(&self) -> &WidgetDyn<F> {
         self.widget
     }
 
     #[inline]
-    pub fn inner_mut(&mut self) -> &mut W {
+    pub fn inner_mut(&mut self) -> &mut WidgetDyn<F> {
         self.widget
     }
 
     pub fn clip(&self) -> Option<BoundBox<D2, i32>> {
         self.clip
     }
-}
 
-pub(crate) trait OffsetWidgetTrait<F>
-    where F: RenderFrame
-{
-    type Widget: Widget<F> + ?Sized;
-
-    fn widget_tag(&self) -> &WidgetTag;
-    fn widget_id(&self) -> WidgetID;
-    fn rect(&self) -> BoundBox<D2, i32>;
-    fn rect_clipped(&self) -> Option<BoundBox<D2, i32>>;
-    fn set_rect(&mut self, rect: BoundBox<D2, i32>);
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>);
-    fn on_widget_event(
-        &mut self,
-        event: WidgetEventSourced,
-        input_state: &InputState,
-    ) -> EventOps;
-
-    // fn subtrait(&self) -> WidgetSubtrait<F>;
-    // fn subtrait_mut(&mut self) -> WidgetSubtraitMut<F>;
-
-    fn update_layout(&mut self, theme: &F::Theme);
-    fn size_bounds(&self) -> SizeBounds;
-
-    fn num_children(&self) -> usize
-        where Self::Widget: ParentDyn<F>;
-    fn children<'b, G>(&'b self, for_each: G)
-        where Self::Widget: ParentDyn<F>,
-              G: FnMut(WidgetSummary<&'b Widget<F>>) -> LoopFlow;
-    fn children_mut<'b, G>(&'b mut self, for_each: G)
-        where Self::Widget: ParentDyn<F>,
-              G: FnMut(WidgetSummary<OffsetWidget<'b, Widget<F>>>) -> LoopFlow;
-}
-
-pub(crate) trait OffsetWidgetTraitAs<'a, F: RenderFrame> {
-    type AsParent: 'a;
-
-    fn as_parent_mut(self) -> Option<Self::AsParent>;
-}
-
-impl<'a, F, W> OffsetWidgetTrait<F> for OffsetWidget<'a, W>
-    where F: RenderFrame,
-          W: Widget<F> + ?Sized
-{
-    type Widget = W;
-
-    fn widget_tag(&self) -> &WidgetTag {
+    pub fn widget_tag(&self) -> &WidgetTag {
         self.widget.widget_tag()
     }
-    fn widget_id(&self) -> WidgetID {
+    pub fn widget_id(&self) -> WidgetID {
         self.widget.widget_id()
     }
-    fn rect(&self) -> BoundBox<D2, i32> {
+    pub fn rect(&self) -> BoundBox<D2, i32> {
         self.widget.rect() + self.offset
     }
-    fn rect_clipped(&self) -> Option<BoundBox<D2, i32>> {
+    pub fn rect_clipped(&self) -> Option<BoundBox<D2, i32>> {
         self.clip.and_then(|clip_rect| clip_rect.intersect_rect(self.rect()))
     }
-    fn set_rect(&mut self, rect: BoundBox<D2, i32>) {
+    pub fn set_rect(&mut self, rect: BoundBox<D2, i32>) {
         *self.widget.rect_mut() = rect - self.offset;
     }
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
+    pub fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         self.widget.render(frame);
     }
-    fn on_widget_event(
+    pub fn on_widget_event(
         &mut self,
         event: WidgetEventSourced,
         input_state: &InputState,
@@ -156,77 +115,54 @@ impl<'a, F, W> OffsetWidgetTrait<F> for OffsetWidget<'a, W>
         );
         ops
     }
-    // fn subtrait(&self) -> WidgetSubtrait<F>;
-    // fn subtrait_mut(&mut self) -> WidgetSubtraitMut<F>;
+    // pub fn subtrait(&self) -> WidgetSubtrait<F>;
+    // pub fn subtrait_mut(&mut self) -> WidgetSubtraitMut<F>;
 
-    fn size_bounds(&self) -> SizeBounds {
+    pub fn size_bounds(&self) -> SizeBounds {
         self.widget.size_bounds()
     }
 
-    fn num_children(&self) -> usize
-        where W: ParentDyn<F>
-    {
-        self.widget.num_children()
-    }
-    fn update_layout(&mut self, theme: &F::Theme)
-    {
+    // pub fn num_children(&self) -> usize {
+    //     self.widget.num_children()
+    // }
+    pub fn update_layout(&mut self, theme: &F::Theme) {
         self.widget.update_layout(theme);
     }
 
-    fn children<'b, G>(&'b self, mut for_each: G)
-        where Self::Widget: ParentDyn<F>,
-              G: FnMut(WidgetSummary<&'b Widget<F>>) -> LoopFlow
-    {
-        self.widget.children(&mut |summary_slice| {
-            for summary in summary_slice {
-                if LoopFlow::Break == for_each(summary) {
-                    return LoopFlow::Break;
-                }
-            }
+    // pub fn children<'b, G>(&'b self, mut for_each: G)
+    //     where G: FnMut(WidgetSummary<&'b WidgetDyn<F>>) -> LoopFlow
+    // {
+    //     self.widget.children(&mut |summary_slice| {
+    //         for summary in summary_slice {
+    //             if LoopFlow::Break == for_each(summary) {
+    //                 return LoopFlow::Break;
+    //             }
+    //         }
 
-            LoopFlow::Continue
-        });
-    }
+    //         LoopFlow::Continue
+    //     });
+    // }
 
-    fn children_mut<'b, G>(&'b mut self, mut for_each: G)
-        where Self::Widget: ParentDyn<F>,
-              G: FnMut(WidgetSummary<OffsetWidget<'b, Widget<F>>>) -> LoopFlow
+    pub fn children_mut<'b, G>(&'b mut self, mut for_each: G)
+        where G: FnMut(OffsetWidgetInfo<'b, F>) -> LoopFlow
     {
         let child_offset = self.rect().min().to_vec();
         let clip_rect = self.rect_clipped();
 
-        self.widget.children_mut(&mut |summary_slice| {
-            for summary in summary_slice {
-                let widget: OffsetWidget<'b, _> = OffsetWidget::new(summary.widget, child_offset, clip_rect);
-                let summary_offset = WidgetSummary {
-                    ident: summary.ident,
-                    index: summary.index,
+        self.widget.children_mut(&mut |widget_slice| {
+            for info in widget_slice {
+                let widget: OffsetWidget<'b, _> = OffsetWidget::new(info.widget, child_offset, clip_rect);
+                let child_offset = OffsetWidgetInfo {
+                    ident: info.ident,
+                    index: info.index,
                     widget
                 };
-                if LoopFlow::Break == for_each(summary_offset) {
+                if LoopFlow::Break == for_each(child_offset) {
                     return LoopFlow::Break;
                 }
             }
 
             LoopFlow::Continue
         });
-    }
-}
-
-impl<'a, 'b, F, W> OffsetWidgetTraitAs<'b, F> for &'b mut OffsetWidget<'a, W>
-    where F: RenderFrame,
-          W: Widget<F> + ?Sized
-{
-    type AsParent = OffsetWidget<'b, ParentDyn<F>>;
-
-    fn as_parent_mut(self) -> Option<OffsetWidget<'b, ParentDyn<F>>> {
-        match self.widget.as_parent_mut() {
-            Some(self_as_parent) => Some(OffsetWidget {
-                widget: self_as_parent,
-                offset: self.offset,
-                clip: self.clip,
-            }),
-            None => None
-        }
     }
 }
