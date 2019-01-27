@@ -4,11 +4,10 @@ use crate::{
     WindowEvent, InputState, LoopFlow,
     cgmath::{Vector2},
     event::{EventOps, FocusChange, FocusSource, MouseHoverChange, WidgetEvent, WidgetEventSourced},
-    widget::*,
     render::RenderFrame,
     widget_traverser::{Relation, WidgetTraverser, OffsetWidgetScanPath},
     update_state::{UpdateStateCell},
-    offset_widget::{OffsetWidget, OffsetWidgetTrait, OffsetWidgetTraitAs},
+    offset_widget::OffsetWidget,
 };
 use self::dispatcher::{EventDispatcher, EventDestination, DispatchableEvent};
 use cgmath_geometry::rect::{GeoBox, BoundBox};
@@ -348,7 +347,7 @@ impl<F> TranslatorActive<'_, '_, F>
                         };
                         let (contains_new, contains_old) = (widget_rect.contains(new_pos), widget_rect.contains(old_pos));
 
-                        let mut send_exiting_from_child = |widget: &mut OffsetWidget<'_, dyn Widget<F>>, in_widget| {
+                        let mut send_exiting_from_child = |widget: &mut OffsetWidget<'_, F>, in_widget| {
                             if let Some(child_ident) = exiting_from_child.clone() {
                                 perform_event_ops(widget.on_widget_event(
                                     WidgetEventSourced::This(WidgetEvent::MouseMove {
@@ -364,16 +363,14 @@ impl<F> TranslatorActive<'_, '_, F>
                         match contains_new {
                             true => {
                                 let mut enter_child_opt = None;
-                                if let Some(mut widget_as_parent) = widget.as_parent_mut() {
-                                    widget_as_parent.children_mut(|child_summary| {
-                                        if child_summary.widget.rect_clipped().map(|r| r.contains(new_pos)).unwrap_or(false) {
-                                            enter_child_opt = Some((child_summary.widget.widget_id(), child_summary.ident));
-                                            LoopFlow::Break
-                                        } else {
-                                            LoopFlow::Continue
-                                        }
-                                    });
-                                }
+                                widget.children_mut(|child_summary| {
+                                    if child_summary.widget.rect_clipped().map(|r| r.contains(new_pos)).unwrap_or(false) {
+                                        enter_child_opt = Some((child_summary.widget.widget_id(), child_summary.ident));
+                                        LoopFlow::Break
+                                    } else {
+                                        LoopFlow::Continue
+                                    }
+                                });
 
                                 send_exiting_from_child(&mut widget, contains_new && enter_child_opt.is_none());
 
