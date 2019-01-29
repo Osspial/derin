@@ -3,7 +3,7 @@ name = "derin_macros"
 edition = "2018"
 version = "0.1.0"
 authors = ["Osspial <osspial@gmail.com>"]
-license = "Apache-2.0"
+license = "MPL-2.0"
 
 [lib]
 proc-macro = true

@@ -60,9 +60,9 @@ fn main() {
 ```
 
 ## License
-Derin is made available under the Apache License, 2.0, viewable [in this repository](https://github.com/Osspial/derin/blob/master/LICENSE)
-or on the [Apache Website](https://www.apache.org/licenses/LICENSE-2.0).
+Derin is made available under the Mozilla Public License, 2.0, viewable [in this repository](https://github.com/Osspial/derin/blob/master/LICENSE)
+or on the [Mozilla Website](https://mozilla.org/MPL/2.0/).
 
 ## Contribution
 Unless explicitly stated otherwise, any contributions intentionally submitted for inclusion within
-Derin will be licensed under the Apache-2.0 license, without any additional terms or conditions.
+Derin will be licensed under the MPL-2.0 license, without any additional terms or conditions.
