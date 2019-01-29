@@ -17,8 +17,8 @@ use crate::{
     core::{
         LoopFlow,
         event::{EventOps, WidgetEventSourced, InputState},
-        widget::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent},
-        render::RenderFrameClipped,
+        widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
+        render::{RenderFrame, RenderFrameClipped},
     },
     gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
     layout::GridLayout,
@@ -73,10 +73,8 @@ impl<C, L> Group<C, L>
     }
 }
 
-impl<F, C, L> Widget<F> for Group<C, L>
-    where F: PrimFrame,
-          C: WidgetContainer<F>,
-          C::Widget: Widget<F>,
+impl<C, L> Widget for Group<C, L>
+    where C: WidgetContainer<dyn Widget>,
           L: GridLayout
 {
     #[inline]
@@ -98,6 +96,58 @@ impl<F, C, L> Widget<F> for Group<C, L>
         self.layout_engine.actual_size_bounds()
     }
 
+    #[inline]
+    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps {
+        // TODO: PASS FOCUS THROUGH SELF
+        EventOps {
+            focus: None,
+            bubble: true,
+        }
+    }
+}
+
+impl<C, L> Parent for Group<C, L>
+    where C: WidgetContainer<dyn Widget>,
+          L: GridLayout
+{
+    fn num_children(&self) -> usize {
+        self.container.num_children()
+    }
+
+    fn framed_child<F: RenderFrame>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, F>> {
+        self.container.framed_child(widget_ident).map(WidgetInfo::erase_subtype)
+    }
+    fn framed_child_mut<F: RenderFrame>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, F>> {
+        self.container.framed_child_mut(widget_ident).map(WidgetInfoMut::erase_subtype)
+    }
+
+    fn framed_children<'a, F, G>(&'a self, mut for_each: G)
+        where F: RenderFrame,
+              G: FnMut(WidgetInfo<'a, F>) -> LoopFlow
+    {
+        self.container.framed_children(|summary| for_each(WidgetInfo::erase_subtype(summary)))
+    }
+
+    fn framed_children_mut<'a, F, G>(&'a mut self, mut for_each: G)
+        where F: RenderFrame,
+              G: FnMut(WidgetInfoMut<'a, F>) -> LoopFlow
+    {
+        self.container.framed_children_mut(|summary| for_each(WidgetInfoMut::erase_subtype(summary)))
+    }
+
+    fn framed_child_by_index<F: RenderFrame>(&self, index: usize) -> Option<WidgetInfo<'_, F>> {
+        self.container.framed_child_by_index(index).map(WidgetInfo::erase_subtype)
+    }
+    fn framed_child_by_index_mut<F: RenderFrame>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, F>> {
+        self.container.framed_child_by_index_mut(index).map(WidgetInfoMut::erase_subtype)
+    }
+}
+
+impl<F, C, L> WidgetRender<F> for Group<C, L>
+    where F: PrimFrame,
+          C: WidgetContainer<dyn Widget>,
+          L: GridLayout
+{
     fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         frame.upload_primitives(ArrayVec::from([
             ThemedPrim {
@@ -138,8 +188,8 @@ impl<F, C, L> Widget<F> for Group<C, L>
 
             let num_children = self.num_children();
             self.container.children::<_>(|summary| {
+                let widget_size_bounds = summary.widget().size_bounds();
                 let mut layout_hints = self.layout.positions(summary.ident, summary.index, num_children).unwrap_or(WidgetPos::default());
-                let widget_size_bounds = summary.widget.size_bounds();
 
                 layout_hints.size_bounds = SizeBounds {
                     min: layout_hints.size_bounds.bound_rect(widget_size_bounds.min),
@@ -155,9 +205,9 @@ impl<F, C, L> Widget<F> for Group<C, L>
             self.layout_engine.update_engine(hints_vec, rects_vec, update_heap_cache);
 
             let mut rects_iter = rects_vec.drain(..);
-            self.container.children_mut::<_>(|summary| {
+            self.container.children_mut::<_>(|mut summary| {
                 match rects_iter.next() {
-                    Some(rect) => *summary.widget.rect_mut() = rect.unwrap_or(BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF)),
+                    Some(rect) => *summary.widget_mut().rect_mut() = rect.unwrap_or(BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF)),
                     None => return LoopFlow::Break
                 }
                 LoopFlow::Continue
@@ -165,51 +215,5 @@ impl<F, C, L> Widget<F> for Group<C, L>
 
             hints_vec.clear();
         })
-    }
-
-    #[inline]
-    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps {
-        // TODO: PASS FOCUS THROUGH SELF
-        EventOps {
-            focus: None,
-            bubble: true,
-        }
-    }
-}
-
-impl<F, C, L> Parent<F> for Group<C, L>
-    where F: PrimFrame,
-          C: WidgetContainer<F>,
-          C::Widget: Widget<F>,
-          L: GridLayout
-{
-    fn num_children(&self) -> usize {
-        self.container.num_children()
-    }
-
-    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<F>>> {
-        self.container.child(widget_ident).map(WidgetSummary::to_dyn)
-    }
-    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<F>>> {
-        self.container.child_mut(widget_ident).map(WidgetSummary::to_dyn_mut)
-    }
-
-    fn children<'a, G>(&'a self, mut for_each: G)
-        where G: FnMut(WidgetSummary<&'a Widget<F>>) -> LoopFlow
-    {
-        self.container.children(|summary| for_each(WidgetSummary::to_dyn(summary)))
-    }
-
-    fn children_mut<'a, G>(&'a mut self, mut for_each: G)
-        where G: FnMut(WidgetSummary<&'a mut Widget<F>>) -> LoopFlow
-    {
-        self.container.children_mut(|summary| for_each(WidgetSummary::to_dyn_mut(summary)))
-    }
-
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<F>>> {
-        self.container.child_by_index(index).map(WidgetSummary::to_dyn)
-    }
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<F>>> {
-        self.container.child_by_index_mut(index).map(WidgetSummary::to_dyn_mut)
     }
 }

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(range_contains, nll, specialization, try_blocks, get_type_id, trace_macros)]
+#![feature(range_contains, nll, specialization, try_blocks, get_type_id, never_type)]
 
 use cgmath_geometry::cgmath;
 extern crate derin_common_types;

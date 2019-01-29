@@ -15,7 +15,7 @@
 use crate::{
     core::{
         event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
-        widget::{WidgetTag, Widget},
+        widget::{WidgetRender, WidgetTag, Widget},
         render::RenderFrameClipped,
     },
     gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
@@ -26,13 +26,13 @@ use cgmath_geometry::{D2, rect::BoundBox};
 
 use std::mem;
 
-pub struct DirectRender<R> {
+pub struct DirectRender<R: DirectRenderState> {
     widget_tag: WidgetTag,
     bounds: BoundBox<D2, i32>,
     render_state: R,
 }
 
-pub trait DirectRenderState {
+pub trait DirectRenderState: 'static {
     type RenderType;
 
     fn render(&mut self, _: &mut Self::RenderType);
@@ -48,7 +48,7 @@ pub trait DirectRenderState {
     }
 }
 
-impl<R> DirectRender<R> {
+impl<R: DirectRenderState> DirectRender<R> {
     pub fn new(render_state: R) -> DirectRender<R> {
         DirectRender {
             widget_tag: WidgetTag::new(),
@@ -71,10 +71,7 @@ impl<R> DirectRender<R> {
     }
 }
 
-impl<F, R> Widget<F> for DirectRender<R>
-    where R: DirectRenderState + 'static,
-          F: PrimFrame<DirectRender = R::RenderType>
-{
+impl<R: DirectRenderState> Widget for DirectRender<R> {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
         &self.widget_tag
@@ -90,6 +87,20 @@ impl<F, R> Widget<F> for DirectRender<R>
         &mut self.bounds
     }
 
+    #[inline]
+    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps {
+        let event = event.unwrap();
+
+        let ops = self.render_state.on_widget_event(event, input_state);
+
+        ops
+    }
+}
+
+impl<F, R> WidgetRender<F> for DirectRender<R>
+    where F: PrimFrame<DirectRender=R::RenderType>,
+          R: DirectRenderState
+{
     fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         let mut draw_fn = |render_type: &mut R::RenderType| self.render_state.render(render_type);
         frame.upload_primitives(Some(ThemedPrim {
@@ -105,14 +116,5 @@ impl<F, R> Widget<F> for DirectRender<R>
             prim: unsafe{ Prim::DirectRender(mem::transmute((&mut draw_fn) as &mut FnMut(&mut R::RenderType))) },
             rect_px_out: None
         }).into_iter());
-    }
-
-    #[inline]
-    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps {
-        let event = event.unwrap();
-
-        let ops = self.render_state.on_widget_event(event, input_state);
-
-        ops
     }
 }

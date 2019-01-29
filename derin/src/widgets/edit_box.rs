@@ -16,7 +16,7 @@ use crate::{
     core::{
         event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
         timer::{Timer, TimerID},
-        widget::{WidgetTag, Widget},
+        widget::{WidgetTag, WidgetRender, Widget},
         render::{RenderFrameClipped, Theme},
     },
     gl_render::{ThemedPrim, PrimFrame, RenderString, EditString, RelPoint, Prim},
@@ -108,43 +108,49 @@ impl LineBox {
     }
 }
 
-macro_rules! render_and_event {
+macro_rules! render {
     ($ty:ty) => {
-        fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
-            frame.upload_primitives(ArrayVec::from([
-                ThemedPrim {
-                    theme_path: stringify!($ty),
-                    min: Point2::new(
-                        RelPoint::new(-1.0, 0),
-                        RelPoint::new(-1.0, 0),
-                    ),
-                    max: Point2::new(
-                        RelPoint::new( 1.0, 0),
-                        RelPoint::new( 1.0, 0)
-                    ),
-                    prim: Prim::Image,
-                    rect_px_out: None
-                },
-                ThemedPrim {
-                    theme_path: stringify!($ty),
-                    min: Point2::new(
-                        RelPoint::new(-1.0, 0),
-                        RelPoint::new(-1.0, 0),
-                    ),
-                    max: Point2::new(
-                        RelPoint::new( 1.0, 0),
-                        RelPoint::new( 1.0, 0)
-                    ),
-                    prim: Prim::EditString(&mut self.edit.string),
-                    rect_px_out: None
-                }
-            ]).into_iter());
+        impl<F: PrimFrame> WidgetRender<F> for $ty {
+            fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
+                frame.upload_primitives(ArrayVec::from([
+                    ThemedPrim {
+                        theme_path: stringify!($ty),
+                        min: Point2::new(
+                            RelPoint::new(-1.0, 0),
+                            RelPoint::new(-1.0, 0),
+                        ),
+                        max: Point2::new(
+                            RelPoint::new( 1.0, 0),
+                            RelPoint::new( 1.0, 0)
+                        ),
+                        prim: Prim::Image,
+                        rect_px_out: None
+                    },
+                    ThemedPrim {
+                        theme_path: stringify!($ty),
+                        min: Point2::new(
+                            RelPoint::new(-1.0, 0),
+                            RelPoint::new(-1.0, 0),
+                        ),
+                        max: Point2::new(
+                            RelPoint::new( 1.0, 0),
+                            RelPoint::new( 1.0, 0)
+                        ),
+                        prim: Prim::EditString(&mut self.edit.string),
+                        rect_px_out: None
+                    }
+                ]).into_iter());
 
-            self.min_size = frame.theme().widget_theme(stringify!($ty)).image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
-            let render_string_min = self.edit.string.render_string.min_size();
-            self.min_size.dims.y += render_string_min.height();
+                self.min_size = frame.theme().widget_theme(stringify!($ty)).image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
+                let render_string_min = self.edit.string.render_string.min_size();
+                self.min_size.dims.y += render_string_min.height();
+            }
         }
+    }
+}
 
+macro_rules! event {
+    ($ty:ty) => {
         fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps {
             let event = event.unwrap();
 
@@ -193,9 +199,7 @@ macro_rules! render_and_event {
     }
 }
 
-impl<F> Widget<F> for EditBox
-    where F: PrimFrame
-{
+impl Widget for EditBox {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
         &self.widget_tag
@@ -216,12 +220,10 @@ impl<F> Widget<F> for EditBox
         SizeBounds::new_min(self.min_size)
     }
 
-    render_and_event!(EditBox);
+    event!(EditBox);
 }
 
-impl<F> Widget<F> for LineBox
-    where F: PrimFrame
-{
+impl Widget for LineBox {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
         &self.widget_tag
@@ -245,5 +247,8 @@ impl<F> Widget<F> for LineBox
         }
     }
 
-    render_and_event!(LineBox);
+    event!(LineBox);
 }
+
+render!(EditBox);
+render!(LineBox);

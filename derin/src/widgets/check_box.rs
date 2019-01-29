@@ -15,7 +15,7 @@
 use crate::{
     core::{
         event::{EventOps, InputState, WidgetEvent, WidgetEventSourced, MouseHoverChange},
-        widget::{WidgetTag, Widget},
+        widget::{WidgetTag, WidgetRender, Widget},
         render::RenderFrameClipped,
     },
     gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame},
@@ -92,9 +92,8 @@ impl<H> CheckBox<H> {
     }
 }
 
-impl<F, H> Widget<F> for CheckBox<H>
-    where F: PrimFrame,
-          H: ToggleHandler
+impl<H> Widget for CheckBox<H>
+    where H: ToggleHandler
 {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
@@ -115,6 +114,49 @@ impl<F, H> Widget<F> for CheckBox<H>
         SizeBounds::new_min(self.check_rect.dims())
     }
 
+    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
+        use self::WidgetEvent::*;
+        let event = event.unwrap();
+
+        let (mut new_checked, mut new_state) = (self.checked, self.button_state);
+        match event {
+            MouseMove{hover_change: Some(ref change), ..} => match change {
+                MouseHoverChange::Enter => new_state = ButtonState::Hover,
+                MouseHoverChange::Exit => new_state = ButtonState::Normal,
+                _ => ()
+            },
+            MouseDown{..} => new_state = ButtonState::Pressed,
+            MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
+                if !self.checked {
+                    self.handler.change_state(!self.checked);
+                }
+                new_checked = !self.checked;
+                new_state = ButtonState::Hover;
+            },
+            MouseUp{in_widget: false, ..} => new_state = ButtonState::Normal,
+            GainFocus(_, _) => new_state = ButtonState::Hover,
+            LoseFocus => new_state = ButtonState::Normal,
+            _ => ()
+        };
+
+        if new_checked != self.checked || new_state != self.button_state {
+            self.widget_tag.request_redraw();
+            self.checked = new_checked;
+            self.button_state = new_state;
+        }
+
+
+        EventOps {
+            focus: None,
+            bubble: event.default_bubble(),
+        }
+    }
+}
+
+impl<F, H> WidgetRender<F> for CheckBox<H>
+    where F: PrimFrame,
+          H: ToggleHandler
+{
     fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         let image_str = match (self.checked, self.button_state) {
             (true, ButtonState::Normal) => "CheckBox::Checked",
@@ -158,43 +200,5 @@ impl<F, H> Widget<F> for CheckBox<H>
                 }
             }
         ));
-    }
-
-    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
-        use self::WidgetEvent::*;
-        let event = event.unwrap();
-
-        let (mut new_checked, mut new_state) = (self.checked, self.button_state);
-        match event {
-            MouseMove{hover_change: Some(ref change), ..} => match change {
-                MouseHoverChange::Enter => new_state = ButtonState::Hover,
-                MouseHoverChange::Exit => new_state = ButtonState::Normal,
-                _ => ()
-            },
-            MouseDown{..} => new_state = ButtonState::Pressed,
-            MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
-                if !self.checked {
-                    self.handler.change_state(!self.checked);
-                }
-                new_checked = !self.checked;
-                new_state = ButtonState::Hover;
-            },
-            MouseUp{in_widget: false, ..} => new_state = ButtonState::Normal,
-            GainFocus(_, _) => new_state = ButtonState::Hover,
-            LoseFocus => new_state = ButtonState::Normal,
-            _ => ()
-        };
-
-        if new_checked != self.checked || new_state != self.button_state {
-            self.widget_tag.request_redraw();
-            self.checked = new_checked;
-            self.button_state = new_state;
-        }
-
-
-        EventOps {
-            focus: None,
-            bubble: event.default_bubble(),
-        }
     }
 }

@@ -16,10 +16,10 @@ extern crate derin;
 #[macro_use]
 extern crate derin_macros;
 
-use derin::{LoopFlow, Window, WindowConfig};
+use derin::{Window, WindowConfig};
 use derin::layout::{Margins, LayoutHorizontal, LayoutVertical};
 use derin::widgets::*;
-use derin::geometry::{D2, rect::DimsBox};
+use derin::geometry::rect::DimsBox;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum GalleryEvent {
@@ -29,7 +29,6 @@ enum GalleryEvent {
 }
 
 #[derive(WidgetContainer)]
-#[derin(action = "GalleryEvent")]
 struct BasicContainer {
     button: Button<Option<GalleryEvent>>,
     nested: ScrollBox<Group<NestedContainer, LayoutVertical>>,
@@ -37,7 +36,6 @@ struct BasicContainer {
 }
 
 #[derive(WidgetContainer)]
-#[derin(action = "GalleryEvent")]
 struct NestedContainer {
     label: Label,
     edit_box: LineBox,

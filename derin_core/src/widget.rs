@@ -221,15 +221,56 @@ pub trait Parent: Widget {
         where Self: Sized,
               F: RenderFrame,
               G: FnMut(WidgetInfoMut<'a, F>) -> LoopFlow;
+
+    // Ideally all these functions should be callable by `dyn Parent` and automatically implemented
+    // with `default impl` (see RFC 1210) but that hasn't been implemented yet in rustc.
+    //
+    // TODO: REMOVE `Sized` RESTRICTION
+    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, !>>
+        where Self: Sized
+    {
+        self.framed_child::<!>(widget_ident)
+    }
+
+    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, !>>
+        where Self: Sized
+    {
+        self.framed_child_mut::<!>(widget_ident)
+    }
+
+    fn child_by_index(&self, index: usize) -> Option<WidgetInfo<'_, !>>
+        where Self: Sized
+    {
+        self.framed_child_by_index::<!>(index)
+    }
+
+    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetInfoMut<'_, !>>
+        where Self: Sized
+    {
+        self.framed_child_by_index_mut::<!>(index)
+    }
+
+    fn children<'a, G>(&'a self, for_each: G)
+        where Self: Sized,
+              G: FnMut(WidgetInfo<'a, !>) -> LoopFlow
+    {
+        self.framed_children::<!, G>(for_each)
+    }
+    fn children_mut<'a, G>(&'a mut self, for_each: G)
+        where Self: Sized,
+              G: FnMut(WidgetInfoMut<'a, !>) -> LoopFlow
+    {
+        self.framed_children_mut::<!, G>(for_each)
+    }
 }
 
-pub trait WidgetSubtype<W: Widget> {
+pub trait WidgetSubtype<W: Widget + ?Sized> {
     fn from_widget(widget: &W) -> &Self;
     fn from_widget_mut(widget: &mut W) -> &mut Self;
 }
 
 impl<W, S> WidgetSubtype<W> for S
-    where W: Widget + Borrow<S> + BorrowMut<S>
+    where W: Widget + ?Sized + Borrow<S> + BorrowMut<S>
 {
     #[inline(always)]
     fn from_widget(widget: &W) -> &S {
@@ -270,7 +311,8 @@ impl<W: Parent> WidgetSubtype<W> for dyn Parent {
 }
 
 impl<'a, F, S> WidgetInfo<'a, F, S>
-    where F: RenderFrame
+    where F: RenderFrame,
+          S: ?Sized
 {
     pub fn new<W>(
         ident: WidgetIdent,
@@ -294,6 +336,14 @@ impl<'a, F, S> WidgetInfo<'a, F, S>
         }
     }
 
+    pub fn widget(&self) -> &Widget {
+        self.widget.to_widget()
+    }
+
+    pub fn subtype(&self) -> &S {
+        self.borrow()
+    }
+
     pub fn erase_subtype(self) -> WidgetInfo<'a, F> {
         WidgetInfo {
             ident: self.ident,
@@ -307,7 +357,8 @@ impl<'a, F, S> WidgetInfo<'a, F, S>
 }
 
 impl<'a, F, S> WidgetInfoMut<'a, F, S>
-    where F: RenderFrame
+    where F: RenderFrame,
+          S: ?Sized
 {
     pub fn new<W>(ident: WidgetIdent, index: usize, widget: &'a mut W) -> WidgetInfoMut<'a, F, S>
         where W: Widget,
@@ -332,6 +383,22 @@ impl<'a, F, S> WidgetInfoMut<'a, F, S>
         }
     }
 
+    pub fn widget(&self) -> &Widget {
+        self.widget.to_widget()
+    }
+
+    pub fn widget_mut(&mut self) -> &mut Widget {
+        self.widget.to_widget_mut()
+    }
+
+    pub fn subtype(&self) -> &S {
+        self.borrow()
+    }
+
+    pub fn subtype_mut(&mut self) -> &mut S {
+        self.borrow_mut()
+    }
+
     pub fn erase_subtype(self) -> WidgetInfoMut<'a, F> {
         WidgetInfoMut {
             ident: self.ident,
@@ -345,8 +412,9 @@ impl<'a, F, S> WidgetInfoMut<'a, F, S>
     }
 }
 
-impl<'a, F, S> Borrow<S> for WidgetInfo<'a, F, S>
-    where F: RenderFrame
+impl<'a, F, S:> Borrow<S> for WidgetInfo<'a, F, S>
+    where F: RenderFrame,
+          S: ?Sized
 {
     fn borrow(&self) -> &S {
         (self.to_secondary)(self.widget)
@@ -354,7 +422,8 @@ impl<'a, F, S> Borrow<S> for WidgetInfo<'a, F, S>
 }
 
 impl<'a, F, S> Borrow<S> for WidgetInfoMut<'a, F, S>
-    where F: RenderFrame
+    where F: RenderFrame,
+          S: ?Sized
 {
     fn borrow(&self) -> &S {
         match (self.to_secondary)(Reference::Ref(self.widget)) {
@@ -365,7 +434,8 @@ impl<'a, F, S> Borrow<S> for WidgetInfoMut<'a, F, S>
 }
 
 impl<'a, F, S> BorrowMut<S> for WidgetInfoMut<'a, F, S>
-    where F: RenderFrame
+    where F: RenderFrame,
+          S: ?Sized
 {
     fn borrow_mut(&mut self) -> &mut S {
         match (self.to_secondary)(Reference::Mut(self.widget)) {

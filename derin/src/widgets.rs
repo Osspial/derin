@@ -49,7 +49,7 @@ use crate::core::render::Theme as CoreTheme;
 
 /// The `Widget` trait, as well as associated types used to create custom widgets.
 pub mod custom {
-    pub use crate::core::widget::{WidgetTag, Widget, WidgetSummary, WidgetIdent};
+    pub use crate::core::widget::{WidgetTag, Widget, Parent, WidgetSubtype, WidgetInfo, WidgetInfoMut, WidgetIdent};
 }
 
 /// Determines which action, if any, should be taken in response to a button toggle.

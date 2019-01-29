@@ -176,7 +176,7 @@ impl Parent<TestRenderFrame> for TestWidget {
         self.children.as_ref().unwrap().len()
     }
 
-    fn child(&self, ident: WidgetIdent) -> Option<WidgetSummary<&Widget<TestRenderFrame>>> {
+    fn framed_child<F: RenderFrame>(&self, ident: WidgetIdent) -> Option<WidgetSummary<&Widget<TestRenderFrame>>> {
         self.children.as_ref().unwrap().get_full(&ident)
             .map(|(index, _, widget)| WidgetSummary { ident, index, widget: widget as _ })
     }

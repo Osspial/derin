@@ -14,7 +14,7 @@
 
 use crate::{
     core::{
-        widget::{WidgetTag, Widget},
+        widget::{WidgetTag, WidgetRender, Widget},
         render::{RenderFrameClipped, Theme},
     },
     event::{EventOps, WidgetEvent, InputState, MouseButton, WidgetEventSourced},
@@ -121,9 +121,8 @@ impl<H: SliderHandler> Slider<H> {
     }
 }
 
-impl<F, H> Widget<F> for Slider<H>
-    where F: PrimFrame,
-          H: SliderHandler
+impl<H> Widget for Slider<H>
+    where H: SliderHandler
 {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
@@ -140,6 +139,40 @@ impl<F, H> Widget<F> for Slider<H>
         &mut self.bounds
     }
 
+    #[inline]
+    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
+        if let WidgetEventSourced::This(ref event) = event {
+            let start_value = self.assist.value;
+            match event {
+                WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left} => {
+                    self.assist.click_head(*pos);
+                    self.widget_tag.request_redraw();
+                },
+                WidgetEvent::MouseMove{new_pos, ..} => {
+                    self.assist.move_head(new_pos.x);
+                },
+                WidgetEvent::MouseUp{button: MouseButton::Left, ..} => {
+                    self.assist.head_click_pos = None;
+                    self.widget_tag.request_redraw();
+                },
+                _ => ()
+            }
+            if self.assist.value != start_value {
+                self.widget_tag.broadcast_message(self.handler.on_move(start_value, self.assist.value));
+                self.widget_tag.request_redraw();
+            }
+        }
+        EventOps {
+            focus: None,
+            bubble: event.default_bubble(),
+        }
+    }
+}
+
+impl<F, H> WidgetRender<F> for Slider<H>
+    where F: PrimFrame,
+          H: SliderHandler
+{
     fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         self.assist.round_to_step();
         let bar_margins = match frame.theme().widget_theme("Slider::Bar").image.map(|b| b.rescale) {
@@ -189,34 +222,5 @@ impl<F, H> Widget<F> for Slider<H>
                 rect_px_out: None
             },
         ).into_iter());
-    }
-
-    #[inline]
-    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
-        if let WidgetEventSourced::This(ref event) = event {
-            let start_value = self.assist.value;
-            match event {
-                WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left} => {
-                    self.assist.click_head(*pos);
-                    self.widget_tag.request_redraw();
-                },
-                WidgetEvent::MouseMove{new_pos, ..} => {
-                    self.assist.move_head(new_pos.x);
-                },
-                WidgetEvent::MouseUp{button: MouseButton::Left, ..} => {
-                    self.assist.head_click_pos = None;
-                    self.widget_tag.request_redraw();
-                },
-                _ => ()
-            }
-            if self.assist.value != start_value {
-                self.widget_tag.broadcast_message(self.handler.on_move(start_value, self.assist.value));
-                self.widget_tag.request_redraw();
-            }
-        }
-        EventOps {
-            focus: None,
-            bubble: event.default_bubble(),
-        }
     }
 }
