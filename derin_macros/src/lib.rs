@@ -39,7 +39,6 @@ pub fn derive_widget_container(input_tokens: TokenStream) -> TokenStream {
 fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
     let DeriveInput{
         ref ident,
-        ref attrs,
         ref body,
         ref generics,
         ..
@@ -77,7 +76,7 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
     let (impl_generics, _, where_clause) = generics_expanded.split_for_impl();
     let (_, ty_generics, _) = generics.split_for_impl();
 
-    let widget_trait_ty = quote!((Widget<__F> + 'static));
+    let widget_trait_ty = quote!(Widget);
     let mut widget_ty = None;
     for ty in field_types(widget_fields.iter()) {
         let mut ty_tokens = Tokens::new();
@@ -92,7 +91,6 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
             _ => ()
         }
     }
-    let widget_ty = widget_ty.unwrap_or(widget_trait_ty);
 
     let call_child_iter = CallChildIter {
         fields: widget_fields.iter().cloned(),
@@ -130,7 +128,8 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
             extern crate derin as _derive_derin;
             use self::_derive_derin::LoopFlow;
             use self::_derive_derin::container::WidgetContainer;
-            use self::_derive_derin::widgets::custom::{Widget, WidgetSummary};
+            use self::_derive_derin::widgets::custom::{Widget, WidgetInfo, WidgetInfoMut};
+            use self::_derive_derin::gl_render::RenderFrame;
             use std::sync::Arc;
             use super::*;
 
@@ -141,27 +140,25 @@ fn impl_widget_container(derive_input: &DeriveInput) -> Tokens {
             }
 
             #[automatically_derived]
-            impl #impl_generics WidgetContainer<__F> for #ident #ty_generics #where_clause {
-                type Widget = #widget_ty;
-
+            impl #impl_generics WidgetContainer<__S> for #ident #ty_generics #where_clause {
                 #[inline]
                 fn num_children(&self) -> usize {
                     0 #(#num_children_iter)*
                 }
 
                 #[allow(unused_assignments, unused_variables, unused_mut)]
-                fn children<'a, __G>(&'a self, mut for_each_child: __G)
-                    where __G: FnMut(WidgetSummary<&'a Self::Widget>) -> LoopFlow,
-                          __F: 'a
+                fn framed_children<'a, __F, __G>(&'a self, mut for_each_child: __G)
+                    where __G: FnMut(WidgetInfo<'a, __F, __S>) -> LoopFlow,
+                          __F: 'a + RenderFrame
                 {
                     let mut index = 0;
                     #(#call_child_iter)*
                 }
 
                 #[allow(unused_assignments, unused_variables, unused_mut)]
-                fn children_mut<'a, __G>(&'a mut self, mut for_each_child: __G)
-                    where __G: FnMut(WidgetSummary<&'a mut Self::Widget>) -> LoopFlow,
-                          __F: 'a
+                fn framed_children_mut<'a, __F, __G>(&'a mut self, mut for_each_child: __G)
+                    where __G: FnMut(WidgetInfoMut<'a, __F, __S>) -> LoopFlow,
+                          __F: 'a + RenderFrame
                 {
                     let mut index = 0;
                     #(#call_child_mut_iter)*
@@ -199,8 +196,8 @@ impl<'a, W> Iterator for CallChildIter<'a, W>
                 false => quote!(&self.#widget_ident)
             };
             let new_summary = match self.is_mut {
-                true => quote!(_derive_derin::widgets::custom::WidgetSummary::new_mut),
-                false => quote!(_derive_derin::widgets::custom::WidgetSummary::new),
+                true => quote!(_derive_derin::widgets::custom::WidgetInfoMut::new),
+                false => quote!(_derive_derin::widgets::custom::WidgetInfo::new),
             };
 
             let output: Tokens;
@@ -284,39 +281,46 @@ fn expand_generics(generics: &Generics, widget_fields: &[WidgetField]) -> Generi
     let mut generics = generics.clone();
     generics.ty_params.insert(0, TyParam {
         attrs: Vec::new(),
-        ident: Ident::new("__F"),
+        ident: Ident::new("__S"),
         bounds: Vec::new(),
         default: None
     });
 
-    let init_bound = WhereBoundPredicate {
+    let mut init_bound = WhereBoundPredicate {
         bound_lifetimes: Vec::new(),
-        bounded_ty: syn::parse_type("__F").unwrap(),
+        bounded_ty: syn::parse_type("__S").unwrap(),
         bounds: vec![TyParamBound::Trait(
             PolyTraitRef {
                 bound_lifetimes: Vec::new(),
-                trait_ref: syn::parse_path("_derive_derin::gl_render::RenderFrame").unwrap()
+                trait_ref: syn::parse_path("Sized").unwrap()
             },
-            TraitBoundModifier::None
+            TraitBoundModifier::Maybe
         )]
     };
-    generics.where_clause.predicates.push(WherePredicate::BoundPredicate(init_bound));
 
     for ty in field_types(widget_fields.iter()) {
         let member_bound = WhereBoundPredicate {
             bound_lifetimes: Vec::new(),
-            bounded_ty: ty,
+            bounded_ty: ty.clone(),
             bounds: vec![TyParamBound::Trait(
                 PolyTraitRef{
                     bound_lifetimes: Vec::new(),
-                    trait_ref: syn::parse_path(&quote!(_derive_derin::widgets::custom::Widget<__F>).to_string()).unwrap(),
+                    trait_ref: syn::parse_path(&quote!(_derive_derin::widgets::custom::Widget).to_string()).unwrap(),
                 },
                 TraitBoundModifier::None
             )]
         };
         generics.where_clause.predicates.push(WherePredicate::BoundPredicate(member_bound));
+        init_bound.bounds.push(TyParamBound::Trait(
+            PolyTraitRef {
+                bound_lifetimes: Vec::new(),
+                trait_ref: syn::parse_path(&quote!(_derive_derin::widgets::custom::WidgetSubtype<#ty>).to_string()).unwrap(),
+            },
+            TraitBoundModifier::None
+        ))
     }
 
+    generics.where_clause.predicates.push(WherePredicate::BoundPredicate(init_bound));
 
     generics
 }

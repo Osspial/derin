@@ -12,19 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::widgets::assistants::ButtonState;
-use crate::cgmath::Point2;
-use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
-use crate::core::LoopFlow;
-use crate::core::event::{EventOps, WidgetEvent, WidgetEventSourced, InputState};
-use crate::core::widget::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent};
-use crate::core::render::RenderFrameClipped;
+use crate::{
+    core::{
+        LoopFlow,
+        event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
+        widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
+        render::{RenderFrame, RenderFrameClipped},
+    },
+    gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame, RenderString},
+    widgets::assistants::ButtonState,
+};
+
 use derin_common_types::layout::{SizeBounds, WidgetPos, GridSize, WidgetSpan, TrackHints};
 
 use std::cell::RefCell;
+use crate::cgmath::Point2;
+use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
-use crate::gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame, RenderString};
 use derin_layout_engine::{GridEngine, UpdateHeapCache, SolveError};
 
 use arrayvec::ArrayVec;
@@ -108,9 +113,8 @@ impl<W> TabList<W> {
     }
 }
 
-impl<F, W> Widget<F> for TabList<W>
-    where F: PrimFrame,
-          W: Widget<F>
+impl<W> Widget for TabList<W>
+    where W: Widget
 {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
@@ -131,44 +135,6 @@ impl<F, W> Widget<F> for TabList<W>
     #[inline]
     fn size_bounds(&self) -> SizeBounds {
         self.layout_engine.actual_size_bounds()
-    }
-
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
-        for tab in &mut self.tabs {
-            let theme_path = match tab.button_state {
-                ButtonState::Normal => "Tab::Normal",
-                ButtonState::Hover => "Tab::Hover",
-                ButtonState::Pressed => "Tab::Pressed"
-            };
-            frame.upload_primitives(ArrayVec::from([
-                ThemedPrim {
-                    theme_path,
-                    min: Point2::new(
-                        RelPoint::new(-1.0, tab.rect.min.x),
-                        RelPoint::new(-1.0, tab.rect.min.y),
-                    ),
-                    max: Point2::new(
-                        RelPoint::new(-1.0, tab.rect.max.x),
-                        RelPoint::new(-1.0, tab.rect.max.y)
-                    ),
-                    prim: Prim::Image,
-                    rect_px_out: None
-                },
-                ThemedPrim {
-                    theme_path,
-                    min: Point2::new(
-                        RelPoint::new(-1.0, tab.rect.min.x),
-                        RelPoint::new(-1.0, tab.rect.min.y),
-                    ),
-                    max: Point2::new(
-                        RelPoint::new(-1.0, tab.rect.max.x),
-                        RelPoint::new(-1.0, tab.rect.max.y)
-                    ),
-                    prim: Prim::String(&mut tab.title),
-                    rect_px_out: None
-                },
-            ]));
-        }
     }
 
     #[inline]
@@ -267,6 +233,103 @@ impl<F, W> Widget<F> for TabList<W>
         EventOps {
             focus: None,
             bubble: event.default_bubble() || event.is_bubble(),
+        }
+    }
+}
+
+impl<W> Parent for TabList<W>
+    where W: Widget
+{
+    fn num_children(&self) -> usize {
+        self.tabs.len()
+    }
+
+    fn framed_child<F: RenderFrame>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, F>> {
+        if let WidgetIdent::Num(index) = widget_ident {
+            self.tabs.get(index as usize).map(|t| WidgetInfo::new(widget_ident, index as usize, &t.page))
+        } else {
+            None
+        }
+    }
+    fn framed_child_mut<F: RenderFrame>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, F>> {
+        if let WidgetIdent::Num(index) = widget_ident {
+            self.tabs.get_mut(index as usize).map(|t| WidgetInfoMut::new(widget_ident, index as usize, &mut t.page))
+        } else {
+            None
+        }
+    }
+
+    fn framed_children<'a, F, G>(&'a self, mut for_each: G)
+        where F: RenderFrame,
+              G: FnMut(WidgetInfo<'a, F>) -> LoopFlow
+    {
+        for (index, tab) in self.tabs.iter().enumerate() {
+            match for_each(WidgetInfo::new(WidgetIdent::Num(index as u32), index, &tab.page)) {
+                LoopFlow::Continue => (),
+                LoopFlow::Break => return
+            }
+        }
+    }
+
+    fn framed_children_mut<'a, F, G>(&'a mut self, mut for_each: G)
+        where F: RenderFrame,
+              G: FnMut(WidgetInfoMut<'a, F>) -> LoopFlow
+    {
+        for (index, tab) in self.tabs.iter_mut().enumerate() {
+            match for_each(WidgetInfoMut::new(WidgetIdent::Num(index as u32), index, &mut tab.page)) {
+                LoopFlow::Continue => (),
+                LoopFlow::Break => return
+            }
+        }
+    }
+
+    fn framed_child_by_index<F: RenderFrame>(&self, index: usize) -> Option<WidgetInfo<'_, F>> {
+        self.tabs.get(index).map(|t| WidgetInfo::new(WidgetIdent::Num(index as u32), index, &t.page))
+    }
+    fn framed_child_by_index_mut<F: RenderFrame>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, F>> {
+        self.tabs.get_mut(index).map(|t| WidgetInfoMut::new(WidgetIdent::Num(index as u32), index, &mut t.page))
+    }
+}
+
+impl<F, W> WidgetRender<F> for TabList<W>
+    where F: PrimFrame,
+          W: Widget
+{
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
+        for tab in &mut self.tabs {
+            let theme_path = match tab.button_state {
+                ButtonState::Normal => "Tab::Normal",
+                ButtonState::Hover => "Tab::Hover",
+                ButtonState::Pressed => "Tab::Pressed"
+            };
+            frame.upload_primitives(ArrayVec::from([
+                ThemedPrim {
+                    theme_path,
+                    min: Point2::new(
+                        RelPoint::new(-1.0, tab.rect.min.x),
+                        RelPoint::new(-1.0, tab.rect.min.y),
+                    ),
+                    max: Point2::new(
+                        RelPoint::new(-1.0, tab.rect.max.x),
+                        RelPoint::new(-1.0, tab.rect.max.y)
+                    ),
+                    prim: Prim::Image,
+                    rect_px_out: None
+                },
+                ThemedPrim {
+                    theme_path,
+                    min: Point2::new(
+                        RelPoint::new(-1.0, tab.rect.min.x),
+                        RelPoint::new(-1.0, tab.rect.min.y),
+                    ),
+                    max: Point2::new(
+                        RelPoint::new(-1.0, tab.rect.max.x),
+                        RelPoint::new(-1.0, tab.rect.max.y)
+                    ),
+                    prim: Prim::String(&mut tab.title),
+                    rect_px_out: None
+                },
+            ]));
         }
     }
 
@@ -373,58 +436,5 @@ impl<F, W> Widget<F> for TabList<W>
 
             hints_vec.clear();
         })
-    }
-}
-
-impl<F, W> Parent<F> for TabList<W>
-    where F: PrimFrame,
-          W: Widget<F>
-{
-    fn num_children(&self) -> usize {
-        self.tabs.len()
-    }
-
-    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<F>>> {
-        if let WidgetIdent::Num(index) = widget_ident {
-            self.tabs.get(index as usize).map(|t| WidgetSummary::new(widget_ident, index as usize, &t.page).to_dyn())
-        } else {
-            None
-        }
-    }
-    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<F>>> {
-        if let WidgetIdent::Num(index) = widget_ident {
-            self.tabs.get_mut(index as usize).map(|t| WidgetSummary::new_mut(widget_ident, index as usize, &mut t.page).to_dyn_mut())
-        } else {
-            None
-        }
-    }
-
-    fn children<'a, G>(&'a self, mut for_each: G)
-        where G: FnMut(WidgetSummary<&'a Widget<F>>) -> LoopFlow
-    {
-        for (index, tab) in self.tabs.iter().enumerate() {
-            match for_each(WidgetSummary::new(WidgetIdent::Num(index as u32), index, &tab.page)) {
-                LoopFlow::Continue => (),
-                LoopFlow::Break => return
-            }
-        }
-    }
-
-    fn children_mut<'a, G>(&'a mut self, mut for_each: G)
-        where G: FnMut(WidgetSummary<&'a mut Widget<F>>) -> LoopFlow
-    {
-        for (index, tab) in self.tabs.iter_mut().enumerate() {
-            match for_each(WidgetSummary::new_mut(WidgetIdent::Num(index as u32), index, &mut tab.page)) {
-                LoopFlow::Continue => (),
-                LoopFlow::Break => return
-            }
-        }
-    }
-
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<F>>> {
-        self.tabs.get(index).map(|t| WidgetSummary::new(WidgetIdent::Num(index as u32), index, &t.page).to_dyn())
-    }
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<F>>> {
-        self.tabs.get_mut(index).map(|t| WidgetSummary::new_mut(WidgetIdent::Num(index as u32), index, &mut t.page).to_dyn_mut())
     }
 }

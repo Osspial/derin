@@ -71,3 +71,24 @@ impl<'a, F: RenderFrame> RenderFrameClipped<'a, F> {
         self.frame.upload_primitives(self.theme, self.transform, self.clip, prim_iter.into_iter())
     }
 }
+
+impl Theme for ! {
+    type Key = !;
+    type ThemeValue = !;
+    fn widget_theme(&self, _: &!) -> ! {*self}
+}
+
+impl RenderFrame for ! {
+    type Theme = !;
+    type Primitive = !;
+
+    fn upload_primitives<I>(
+        &mut self,
+        _: &Self::Theme,
+        _: BoundBox<D2, i32>,
+        _: BoundBox<D2, i32>,
+        _: I
+    )
+        where I: Iterator<Item=Self::Primitive>
+    {}
+}

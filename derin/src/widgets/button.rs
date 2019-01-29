@@ -15,7 +15,7 @@
 use crate::{
     core::{
         event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange},
-        widget::{WidgetTag, Widget},
+        widget::{WidgetTag, WidgetRender, Widget},
         render::{RenderFrameClipped, Theme},
     },
     gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
@@ -95,9 +95,8 @@ impl<H> Button<H> {
     }
 }
 
-impl<F, H> Widget<F> for Button<H>
-    where F: PrimFrame,
-          H: ButtonHandler
+impl<H> Widget for Button<H>
+    where H: ButtonHandler
 {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
@@ -116,38 +115,6 @@ impl<F, H> Widget<F> for Button<H>
 
     fn size_bounds(&self) -> SizeBounds {
         self.size_bounds
-    }
-
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
-        let image_str = match self.state {
-            ButtonState::Normal    => "Button::Normal",
-            ButtonState::Hover     => "Button::Hover",
-            ButtonState::Pressed   => "Button::Pressed",
-            // ButtonState::Disabled  => "Button::Disabled",
-            // ButtonState::Defaulted => "Button::Defaulted"
-        };
-
-        frame.upload_primitives(ArrayVec::from([
-            ThemedPrim {
-                theme_path: image_str,
-                min: Point2::new(
-                    RelPoint::new(-1.0, 0),
-                    RelPoint::new(-1.0, 0),
-                ),
-                max: Point2::new(
-                    RelPoint::new( 1.0, 0),
-                    RelPoint::new( 1.0, 0)
-                ),
-                prim: Prim::Image,
-                rect_px_out: None
-            },
-            self.contents.to_prim(image_str, None)
-        ]).into_iter());
-
-        self.size_bounds.min = frame.theme().widget_theme(image_str).image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
-        let render_string_min = self.contents.min_size(frame.theme());
-        self.size_bounds.min.dims.x += render_string_min.width();
-        self.size_bounds.min.dims.y += render_string_min.height();
     }
 
     fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
@@ -181,5 +148,42 @@ impl<F, H> Widget<F> for Button<H>
             focus: None,
             bubble: event.default_bubble(),
         }
+    }
+}
+
+impl<F, H> WidgetRender<F> for Button<H>
+    where F: PrimFrame,
+          H: ButtonHandler
+{
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
+        let image_str = match self.state {
+            ButtonState::Normal    => "Button::Normal",
+            ButtonState::Hover     => "Button::Hover",
+            ButtonState::Pressed   => "Button::Pressed",
+            // ButtonState::Disabled  => "Button::Disabled",
+            // ButtonState::Defaulted => "Button::Defaulted"
+        };
+
+        frame.upload_primitives(ArrayVec::from([
+            ThemedPrim {
+                theme_path: image_str,
+                min: Point2::new(
+                    RelPoint::new(-1.0, 0),
+                    RelPoint::new(-1.0, 0),
+                ),
+                max: Point2::new(
+                    RelPoint::new( 1.0, 0),
+                    RelPoint::new( 1.0, 0)
+                ),
+                prim: Prim::Image,
+                rect_px_out: None
+            },
+            self.contents.to_prim(image_str, None)
+        ]).into_iter());
+
+        self.size_bounds.min = frame.theme().widget_theme(image_str).image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
+        let render_string_min = self.contents.min_size(frame.theme());
+        self.size_bounds.min.dims.x += render_string_min.width();
+        self.size_bounds.min.dims.y += render_string_min.height();
     }
 }

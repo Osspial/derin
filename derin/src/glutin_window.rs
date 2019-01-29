@@ -56,12 +56,12 @@ impl Default for WindowConfig {
 }
 
 /// A window displayed on the desktop, which contains a set of drawable widgets.
-pub struct GlutinWindow<N: 'static + Widget<GLFrame>> {
+pub struct GlutinWindow<W: Widget> {
     primary_renderer: GLRenderer,
     events_loop: EventsLoop,
     timer_sync: Arc<Mutex<TimerPark>>,
     timer_thread_handle: JoinHandle<()>,
-    root: Root<N, GLFrame>
+    root: Root<W, GLFrame>
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -71,13 +71,13 @@ enum TimerPark {
     Abort
 }
 
-impl<N: Widget<GLFrame>> GlutinWindow<N> {
+impl<W: Widget> GlutinWindow<W> {
     /// Creates a new window, with the given window configuration, root widget, and theme.
     ///
     /// This is unsafe, because it creates at least one OpenGL context. By calling this function,
     /// you hand all control over the thread's OpenGL context management to this window. In most
     /// cases this shouldn't be an issue, though.
-    pub unsafe fn new(config: WindowConfig, root: N, theme: Theme) -> Result<GlutinWindow<N>, CreationError> {
+    pub unsafe fn new(config: WindowConfig, root: W, theme: Theme) -> Result<GlutinWindow<W>, CreationError> {
         let mut window_builder = WindowBuilder::new();
         window_builder.window.dimensions = config.dimensions.map(|d| (d.width(), d.height()));
         window_builder.window.title = config.title.clone();
@@ -135,12 +135,12 @@ impl<N: Widget<GLFrame>> GlutinWindow<N> {
     }
 
     /// Retrieves a reference to the root widget.
-    pub fn root(&self) -> &N {
+    pub fn root(&self) -> &W {
         &self.root.root_widget
     }
 
     /// Retrieves a mutable reference to the root widget.
-    pub fn root_mut(&mut self) -> &mut N {
+    pub fn root_mut(&mut self) -> &mut W {
         &mut self.root.root_widget
     }
 
@@ -275,7 +275,7 @@ impl<N: Widget<GLFrame>> GlutinWindow<N> {
     }
 }
 
-impl<N: Widget<GLFrame>> Drop for GlutinWindow<N> {
+impl<N: Widget> Drop for GlutinWindow<N> {
     fn drop(&mut self) {
         *self.timer_sync.lock() = TimerPark::Abort;
         self.timer_thread_handle.thread().unpark();

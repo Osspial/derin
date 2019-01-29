@@ -15,7 +15,7 @@
 use crate::{
     core::{
         event::{EventOps, WidgetEventSourced, InputState},
-        widget::{WidgetTag, Widget},
+        widget::{WidgetRender, WidgetTag, Widget},
         render::RenderFrameClipped,
     },
     gl_render::PrimFrame,
@@ -63,9 +63,7 @@ impl Label {
     }
 }
 
-impl<F> Widget<F> for Label
-    where F: PrimFrame
-{
+impl Widget for Label {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
         &self.widget_tag
@@ -85,16 +83,20 @@ impl<F> Widget<F> for Label
         SizeBounds::new_min(self.min_size)
     }
 
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
-        frame.upload_primitives(Some(self.contents.to_prim("Label", None)).into_iter());
-        self.min_size = self.contents.min_size(frame.theme());
-    }
-
     #[inline]
     fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps {
         EventOps {
             focus: None,
             bubble: true,
         }
+    }
+}
+
+impl<F> WidgetRender<F> for Label
+    where F: PrimFrame
+{
+    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
+        frame.upload_primitives(Some(self.contents.to_prim("Label", None)).into_iter());
+        self.min_size = self.contents.min_size(frame.theme());
     }
 }

@@ -14,7 +14,7 @@
 
 use crate::{
     core::{
-        widget::{WidgetTag, Widget},
+        widget::{WidgetRender, WidgetTag, Widget},
         render::RenderFrameClipped,
     },
     event::{EventOps, WidgetEventSourced, InputState},
@@ -82,9 +82,7 @@ impl ProgressBar {
     }
 }
 
-impl<F> Widget<F> for ProgressBar
-    where F: PrimFrame
-{
+impl Widget for ProgressBar {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
         &self.widget_tag
@@ -100,6 +98,18 @@ impl<F> Widget<F> for ProgressBar
         &mut self.bounds
     }
 
+    #[inline]
+    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps {
+        EventOps {
+            focus: None,
+            bubble: true,
+        }
+    }
+}
+
+impl<F> WidgetRender<F> for ProgressBar
+    where F: PrimFrame
+{
     fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         self.value = self.value.min(self.max).max(self.min);
         frame.upload_primitives(ArrayVec::from([
@@ -130,13 +140,5 @@ impl<F> Widget<F> for ProgressBar
                 rect_px_out: None
             }
         ]).into_iter());
-    }
-
-    #[inline]
-    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps {
-        EventOps {
-            focus: None,
-            bubble: true,
-        }
     }
 }

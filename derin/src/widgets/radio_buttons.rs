@@ -12,24 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::container::WidgetContainer;
-use crate::widgets::assistants::ButtonState;
-use crate::widgets::{Contents, ContentsInner};
-use crate::cgmath::Point2;
-use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
+use crate::{
+    container::WidgetContainer,
+    core::{
+        LoopFlow,
+        event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange},
+        widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
+        render::{RenderFrame, RenderFrameClipped},
+        render::Theme as CoreTheme,
+    },
+    gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame},
+    layout::GridLayout,
+    widgets::assistants::ButtonState,
+    widgets::{Contents, ContentsInner},
+};
 
-use crate::core::LoopFlow;
-use crate::core::event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange};
-use crate::core::widget::{WidgetIdent, WidgetTag, WidgetSummary, Widget, Parent};
-use crate::core::render::RenderFrameClipped;
-use crate::core::render::Theme as CoreTheme;
 use derin_common_types::layout::{SizeBounds, WidgetPos};
 
+use crate::cgmath::Point2;
+use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use std::cell::RefCell;
 
-use crate::gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame};
 use derin_layout_engine::{GridEngine, UpdateHeapCache, SolveError};
-use crate::layout::GridLayout;
 
 /// A radio button widget.
 ///
@@ -134,9 +138,7 @@ impl RadioButton {
     }
 }
 
-impl<F> Widget<F> for RadioButton
-    where F: PrimFrame
-{
+impl Widget for RadioButton {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
         &self.widget_tag
@@ -156,6 +158,143 @@ impl<F> Widget<F> for RadioButton
         SizeBounds::new_min(self.min_size)
     }
 
+    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps {
+        use self::WidgetEvent::*;
+        let event = event.unwrap();
+
+        let mut force_bubble = false;
+        let (mut new_selected, mut new_state) = (self.selected, self.button_state);
+        match event {
+            MouseMove{hover_change: Some(ref change), ..} if input_state.mouse_buttons_down_in_widget.is_empty() => {
+                match change {
+                    MouseHoverChange::Enter => new_state = ButtonState::Hover,
+                    MouseHoverChange::Exit => new_state = ButtonState::Normal,
+                    _ => ()
+                }
+            },
+            MouseDown{..} => new_state = ButtonState::Pressed,
+            MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
+                // if !self.selected {
+                //     action = self.handler.change_state(!self.selected);
+                // }
+                force_bubble = true;
+                new_selected = true;
+                new_state = ButtonState::Hover;
+            },
+            MouseUp{in_widget: false, ..} => new_state = ButtonState::Normal,
+            GainFocus(_, _) => new_state = ButtonState::Hover,
+            LoseFocus => new_state = ButtonState::Normal,
+            _ => ()
+        };
+
+        if new_selected != self.selected || new_state != self.button_state {
+            self.widget_tag.request_redraw();
+            self.selected = new_selected;
+            self.button_state = new_state;
+        }
+
+
+
+        EventOps {
+            focus: None,
+            bubble: force_bubble || event.default_bubble(),
+        }
+    }
+}
+
+impl<C, L> Widget for RadioButtonList<C, L>
+    where C: WidgetContainer<RadioButton>,
+          L: GridLayout
+{
+    #[inline]
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
+    }
+
+    #[inline]
+    fn rect(&self) -> BoundBox<D2, i32> {
+        self.rect
+    }
+
+    #[inline]
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
+        self.widget_tag.request_relayout();
+        &mut self.rect
+    }
+
+    fn size_bounds(&self) -> SizeBounds {
+        self.layout_engine.actual_size_bounds()
+    }
+
+    #[inline]
+    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
+        // TODO: PASS FOCUS TO CHILD
+
+        let mut bubble = true;
+        // Un-select any child radio buttons after a new button was selected.
+        if let WidgetEventSourced::Bubble(WidgetEvent::MouseUp{in_widget: true, pressed_in_widget: true, ..}, [child_ident]) = event {
+            bubble = false;
+            let mut state_changed = false;
+            self.buttons.children_mut::<_>(|mut summary| {
+                if summary.ident != *child_ident {
+                    let radio_button = summary.subtype_mut();
+                    if radio_button.selected {
+                        radio_button.widget_tag.request_redraw();
+                    }
+                    state_changed |= radio_button.selected;
+                    radio_button.selected = false;
+                }
+                LoopFlow::Continue
+            });
+        }
+
+        EventOps {
+            focus: None,
+            bubble,
+        }
+    }
+}
+
+impl<C, L> Parent for RadioButtonList<C, L>
+    where C: WidgetContainer<RadioButton>,
+          L: GridLayout
+{
+    fn num_children(&self) -> usize {
+        self.buttons.num_children()
+    }
+
+    fn framed_child<F: RenderFrame>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, F>> {
+        self.buttons.framed_child(widget_ident).map(WidgetInfo::erase_subtype)
+    }
+    fn framed_child_mut<F: RenderFrame>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, F>> {
+        self.buttons.framed_child_mut(widget_ident).map(WidgetInfoMut::erase_subtype)
+    }
+
+    fn framed_children<'a, F, G>(&'a self, mut for_each: G)
+        where F: RenderFrame,
+              G: FnMut(WidgetInfo<'a, F>) -> LoopFlow
+    {
+        self.buttons.framed_children(|summary| for_each(WidgetInfo::erase_subtype(summary)))
+    }
+
+    fn framed_children_mut<'a, F, G>(&'a mut self, mut for_each: G)
+        where F: RenderFrame,
+              G: FnMut(WidgetInfoMut<'a, F>) -> LoopFlow
+    {
+        self.buttons.framed_children_mut(|summary| for_each(WidgetInfoMut::erase_subtype(summary)))
+    }
+
+    fn framed_child_by_index<F: RenderFrame>(&self, index: usize) -> Option<WidgetInfo<'_, F>> {
+        self.buttons.framed_child_by_index(index).map(WidgetInfo::erase_subtype)
+    }
+    fn framed_child_by_index_mut<F: RenderFrame>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, F>> {
+        self.buttons.framed_child_by_index_mut(index).map(WidgetInfoMut::erase_subtype)
+    }
+}
+
+impl<F> WidgetRender<F> for RadioButton
+    where F: PrimFrame
+{
     fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
         let image_str = match (self.selected, self.button_state) {
             (true, ButtonState::Normal) => "RadioButton::Selected",
@@ -222,77 +361,13 @@ impl<F> Widget<F> for RadioButton
             icon_min_size.height().max(self.contents.min_size(frame.theme()).height())
         );
     }
-
-    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps {
-        use self::WidgetEvent::*;
-        let event = event.unwrap();
-
-        let mut force_bubble = false;
-        let (mut new_selected, mut new_state) = (self.selected, self.button_state);
-        match event {
-            MouseMove{hover_change: Some(ref change), ..} if input_state.mouse_buttons_down_in_widget.is_empty() => {
-                match change {
-                    MouseHoverChange::Enter => new_state = ButtonState::Hover,
-                    MouseHoverChange::Exit => new_state = ButtonState::Normal,
-                    _ => ()
-                }
-            },
-            MouseDown{..} => new_state = ButtonState::Pressed,
-            MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
-                // if !self.selected {
-                //     action = self.handler.change_state(!self.selected);
-                // }
-                force_bubble = true;
-                new_selected = true;
-                new_state = ButtonState::Hover;
-            },
-            MouseUp{in_widget: false, ..} => new_state = ButtonState::Normal,
-            GainFocus(_, _) => new_state = ButtonState::Hover,
-            LoseFocus => new_state = ButtonState::Normal,
-            _ => ()
-        };
-
-        if new_selected != self.selected || new_state != self.button_state {
-            self.widget_tag.request_redraw();
-            self.selected = new_selected;
-            self.button_state = new_state;
-        }
-
-
-
-        EventOps {
-            focus: None,
-            bubble: force_bubble || event.default_bubble(),
-        }
-    }
 }
 
-impl<F, C, L> Widget<F> for RadioButtonList<C, L>
+impl<F, C, L> WidgetRender<F> for RadioButtonList<C, L>
     where F: PrimFrame,
-          C: WidgetContainer<F, Widget=RadioButton>,
-          RadioButton: Widget<F>,
+          C: WidgetContainer<RadioButton>,
           L: GridLayout
 {
-    #[inline]
-    fn widget_tag(&self) -> &WidgetTag {
-        &self.widget_tag
-    }
-
-    #[inline]
-    fn rect(&self) -> BoundBox<D2, i32> {
-        self.rect
-    }
-
-    #[inline]
-    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
-        self.widget_tag.request_relayout();
-        &mut self.rect
-    }
-
-    fn size_bounds(&self) -> SizeBounds {
-        self.layout_engine.actual_size_bounds()
-    }
-
     fn render(&mut self, _: &mut RenderFrameClipped<F>) {}
 
     fn update_layout(&mut self, _: &F::Theme) {
@@ -317,8 +392,8 @@ impl<F, C, L> Widget<F> for RadioButtonList<C, L>
 
             let num_children = self.num_children();
             self.buttons.children::<_>(|summary| {
+                let widget_size_bounds = summary.widget().size_bounds();
                 let mut layout_hints = self.layout.positions(summary.ident, summary.index, num_children).unwrap_or(WidgetPos::default());
-                let widget_size_bounds = summary.widget.size_bounds();
                 layout_hints.size_bounds = SizeBounds {
                     min: layout_hints.size_bounds.bound_rect(widget_size_bounds.min),
                     max: layout_hints.size_bounds.bound_rect(widget_size_bounds.max),
@@ -333,9 +408,9 @@ impl<F, C, L> Widget<F> for RadioButtonList<C, L>
             self.layout_engine.update_engine(hints_vec, rects_vec, update_heap_cache);
 
             let mut rects_iter = rects_vec.drain(..);
-            self.buttons.children_mut::<_>(|summary| {
+            self.buttons.children_mut::<_>(|mut summary| {
                 match rects_iter.next() {
-                    Some(rect) => *summary.widget.rect_mut() = rect.unwrap_or(BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF)),
+                    Some(rect) => *summary.widget_mut().rect_mut() = rect.unwrap_or(BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF)),
                     None => return LoopFlow::Break
                 }
 
@@ -344,69 +419,5 @@ impl<F, C, L> Widget<F> for RadioButtonList<C, L>
 
             hints_vec.clear();
         })
-    }
-
-    #[inline]
-    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
-        // TODO: PASS FOCUS TO CHILD
-
-        let mut bubble = true;
-        // Un-select any child radio buttons after a new button was selected.
-        if let WidgetEventSourced::Bubble(WidgetEvent::MouseUp{in_widget: true, pressed_in_widget: true, ..}, [child_ident]) = event {
-            bubble = false;
-            let mut state_changed = false;
-            self.buttons.children_mut::<_>(|summary| {
-                if summary.ident != *child_ident {
-                    if summary.widget.selected {
-                        summary.widget.widget_tag.request_redraw();
-                    }
-                    state_changed |= summary.widget.selected;
-                    summary.widget.selected = false;
-                }
-                LoopFlow::Continue
-            });
-        }
-
-        EventOps {
-            focus: None,
-            bubble,
-        }
-    }
-}
-
-impl<F, C, L> Parent<F> for RadioButtonList<C, L>
-    where F: PrimFrame,
-          C: WidgetContainer<F, Widget=RadioButton>,
-          RadioButton: Widget<F>,
-          L: GridLayout
-{
-    fn num_children(&self) -> usize {
-        self.buttons.num_children()
-    }
-
-    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&Widget<F>>> {
-        self.buttons.child(widget_ident).map(WidgetSummary::to_dyn)
-    }
-    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<F>>> {
-        self.buttons.child_mut(widget_ident).map(WidgetSummary::to_dyn_mut)
-    }
-
-    fn children<'a, G>(&'a self, mut for_each: G)
-        where G: FnMut(WidgetSummary<&'a Widget<F>>) -> LoopFlow
-    {
-        self.buttons.children(|summary| for_each(WidgetSummary::to_dyn(summary)))
-    }
-
-    fn children_mut<'a, G>(&'a mut self, mut for_each: G)
-        where G: FnMut(WidgetSummary<&'a mut Widget<F>>) -> LoopFlow
-    {
-        self.buttons.children_mut(|summary| for_each(WidgetSummary::to_dyn_mut(summary)))
-    }
-
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<F>>> {
-        self.buttons.child_by_index(index).map(WidgetSummary::to_dyn)
-    }
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<F>>> {
-        self.buttons.child_by_index_mut(index).map(WidgetSummary::to_dyn_mut)
     }
 }
