@@ -290,7 +290,7 @@ mod tests {
     use super::*;
     use crate::{
         message_bus::MessageBus,
-        offset_widget::OffsetWidgetTrait,
+        test_helpers::TestRenderFrame,
         update_state::UpdateState,
     };
     use cgmath_geometry::rect::BoundBox;
@@ -311,7 +311,7 @@ mod tests {
             };
         }
 
-        let mut traverser_base = WidgetTraverserBase::new(root);
+        let mut traverser_base: WidgetTraverserBase<TestRenderFrame> = WidgetTraverserBase::new(root);
         let message_bus = MessageBus::new();
         let update_state = UpdateState::new(&message_bus);
         let mut traverser = traverser_base.with_root_ref(&mut tree, update_state.clone());
@@ -353,7 +353,7 @@ mod tests {
         }
 
         for _ in 0..1000 {
-            let mut traverser_base = WidgetTraverserBase::new(root);
+            let mut traverser_base: WidgetTraverserBase<TestRenderFrame> = WidgetTraverserBase::new(root);
             let message_bus = MessageBus::new();
             let update_state = UpdateState::new(&message_bus);
             let mut traverser = traverser_base.with_root_ref(&mut tree, update_state.clone());
@@ -380,7 +380,7 @@ mod tests {
                 }
             };
 
-            for _ in 0..10000 {
+            for _ in 0..1000 {
                 use rand::Rng;
                 let index = rand::thread_rng().gen_range(0, 7);
                 assert_widget_index(index);
@@ -410,7 +410,7 @@ mod tests {
             };
         }
 
-        let mut traverser_base = WidgetTraverserBase::new(root);
+        let mut traverser_base: WidgetTraverserBase<TestRenderFrame> = WidgetTraverserBase::new(root);
         let message_bus = MessageBus::new();
         let update_state = UpdateState::new(&message_bus);
         let mut traverser = traverser_base.with_root_ref(&mut tree, update_state.clone());

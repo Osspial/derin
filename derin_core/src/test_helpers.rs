@@ -6,10 +6,7 @@ use crate::{
     LoopFlow,
     event::{EventOps, FocusChange, InputState, WidgetEvent, WidgetEventSourced},
     render::{RenderFrameClipped, RenderFrame, Theme},
-    widget::{
-        *,
-        dynamic::ParentDyn,
-    },
+    widget::*,
 };
 use cgmath_geometry::{
     D2,
@@ -104,7 +101,7 @@ impl RenderFrame for TestRenderFrame {
     {}
 }
 
-impl Widget<TestRenderFrame> for TestWidget {
+impl Widget for TestWidget {
     fn widget_tag(&self) -> &WidgetTag {
         &self.widget_tag
     }
@@ -117,7 +114,6 @@ impl Widget<TestRenderFrame> for TestWidget {
         &mut self.rect
     }
 
-    fn render(&mut self, _frame: &mut RenderFrameClipped<TestRenderFrame>) {}
     fn on_widget_event(
         &mut self,
         event: WidgetEventSourced,
@@ -157,62 +153,56 @@ impl Widget<TestRenderFrame> for TestWidget {
     fn size_bounds(&self) -> SizeBounds {
         self.size_bounds
     }
-
-    fn as_parent(&self) -> Option<&ParentDyn<TestRenderFrame>> {
-        if self.children.is_some() {
-            Some(self as _)
-        } else {
-            None
-        }
-    }
-
-    fn as_parent_mut(&mut self) -> Option<&mut ParentDyn<TestRenderFrame>> {
-        if self.children.is_some() {
-            Some(self as _)
-        } else {
-            None
-        }
-    }
 }
 
-impl Parent<TestRenderFrame> for TestWidget {
+impl<F: RenderFrame> WidgetRender<F> for TestWidget {
+    fn render(&mut self, _frame: &mut RenderFrameClipped<F>) {}
+}
+
+impl Parent for TestWidget {
     fn num_children(&self) -> usize {
-        self.children.as_ref().unwrap().len()
+        self.children.as_ref().map(|c| c.len()).unwrap_or(0)
     }
 
-    fn framed_child<F: RenderFrame>(&self, ident: WidgetIdent) -> Option<WidgetSummary<&Widget<TestRenderFrame>>> {
-        self.children.as_ref().unwrap().get_full(&ident)
-            .map(|(index, _, widget)| WidgetSummary { ident, index, widget: widget as _ })
+    fn framed_child<F: RenderFrame>(&self, ident: WidgetIdent) -> Option<WidgetInfo<'_, F>> {
+        self.children.as_ref()
+            .and_then(|c| c.get_full(&ident))
+            .map(|(index, _, widget)| WidgetInfo::new(ident, index, widget))
     }
-    fn child_mut(&mut self, ident: WidgetIdent) -> Option<WidgetSummary<&mut Widget<TestRenderFrame>>> {
-        self.children.as_mut().unwrap().get_full_mut(&ident)
-            .map(|(index, _, widget)| WidgetSummary { ident, index, widget: widget as _ })
-    }
-
-    fn child_by_index(&self, index: usize) -> Option<WidgetSummary<&Widget<TestRenderFrame>>> {
-        self.children.as_ref().unwrap().get_index(index)
-            .map(|(ident, widget)| WidgetSummary { ident: ident.clone(), index, widget: widget as _ })
-    }
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetSummary<&mut Widget<TestRenderFrame>>> {
-        self.children.as_mut().unwrap().get_index_mut(index)
-            .map(|(ident, widget)| WidgetSummary { ident: ident.clone(), index, widget: widget as _ })
+    fn framed_child_mut<F: RenderFrame>(&mut self, ident: WidgetIdent) -> Option<WidgetInfoMut<'_, F>> {
+        self.children.as_mut()
+            .and_then(|c| c.get_full_mut(&ident))
+            .map(|(index, _, widget)| WidgetInfoMut::new(ident, index, widget))
     }
 
-    fn children<'a, G>(&'a self, mut for_each: G)
-        where G: FnMut(WidgetSummary<&'a Widget<TestRenderFrame>>) -> LoopFlow
+    fn framed_child_by_index<F: RenderFrame>(&self, index: usize) -> Option<WidgetInfo<'_, F>> {
+        self.children.as_ref()
+            .and_then(|c| c.get_index(index))
+            .map(|(ident, widget)| WidgetInfo::new(ident.clone(), index, widget))
+    }
+    fn framed_child_by_index_mut<F: RenderFrame>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, F>> {
+        self.children.as_mut()
+            .and_then(|c| c.get_index_mut(index))
+            .map(|(ident, widget)| WidgetInfoMut::new(ident.clone(), index, widget))
+    }
+
+    fn framed_children<'a, F, G>(&'a self, mut for_each: G)
+        where F: RenderFrame,
+              G: FnMut(WidgetInfo<'a, F>) -> LoopFlow
     {
-        for (index, (ident, widget)) in self.children.as_ref().unwrap().iter().enumerate() {
-            let flow = for_each(WidgetSummary { ident: ident.clone(), index, widget: widget as _ });
+        for (index, (ident, widget)) in self.children.as_ref().into_iter().flat_map(|c| c.iter().enumerate()) {
+            let flow = for_each(WidgetInfo::new(ident.clone(), index, widget));
             if let LoopFlow::Break = flow {
                 return;
             }
         }
     }
-    fn children_mut<'a, G>(&'a mut self, mut for_each: G)
-        where G: FnMut(WidgetSummary<&'a mut Widget<TestRenderFrame>>) -> LoopFlow
+    fn framed_children_mut<'a, F, G>(&'a mut self, mut for_each: G)
+        where F: RenderFrame,
+              G: FnMut(WidgetInfoMut<'a, F>) -> LoopFlow
     {
-        for (index, (ident, widget)) in self.children.as_mut().unwrap().iter_mut().enumerate() {
-            let flow = for_each(WidgetSummary { ident: ident.clone(), index, widget: widget as _ });
+        for (index, (ident, widget)) in self.children.as_mut().into_iter().flat_map(|c| c.iter_mut().enumerate()) {
+            let flow = for_each(WidgetInfoMut::new(ident.clone(), index, widget));
             if let LoopFlow::Break = flow {
                 return;
             }
@@ -317,14 +307,15 @@ macro_rules! test_widget_tree {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::widget::WidgetDyn;
 
     fn check_child_widget(
-        parent: &dyn ParentDyn<TestRenderFrame>,
+        parent: &dyn WidgetDyn<TestRenderFrame>,
         index: usize,
         ident: WidgetIdent,
         id: WidgetID,
         rect: BoundBox<D2, i32>,
-    ) -> &dyn Widget<TestRenderFrame> {
+    ) -> &dyn WidgetDyn<TestRenderFrame> {
         let summary_by_ident = parent.child(ident.clone()).expect(&format!("Could not find child by ident: {} {:?}", index, ident));
         let summary_by_index = parent.child_by_index(index).expect(&format!("Could not find child by index: {} {:?}", index, ident));
 
@@ -358,18 +349,14 @@ mod tests {
             };
         }
 
-        assert_eq!(tree.widget_id(), root);
-        assert_eq!(tree.rect(), BoundBox::new2(0, 0, 500, 500));
+        assert_eq!((&tree as &Widget).widget_id(), root);
+        assert_eq!((&tree as &Widget).rect(), BoundBox::new2(0, 0, 500, 500));
 
-        let root_as_parent = tree.as_parent().unwrap();
-        let left_widget = check_child_widget(root_as_parent, 0, WidgetIdent::new_str("left"), left, BoundBox::new2(10, 10, 240, 490));
-        let right_widget = check_child_widget(root_as_parent, 1, WidgetIdent::new_str("right"), right, BoundBox::new2(260, 10, 490, 490));
+        let left_widget = check_child_widget(&tree, 0, WidgetIdent::new_str("left"), left, BoundBox::new2(10, 10, 240, 490));
+        let right_widget = check_child_widget(&tree, 1, WidgetIdent::new_str("right"), right, BoundBox::new2(260, 10, 490, 490));
 
-        assert!(right_widget.as_parent().is_none());
-
-        let left_widget_as_parent = left_widget.as_parent().unwrap();
-        check_child_widget(left_widget_as_parent, 0, WidgetIdent::new_str("tl"), tl, BoundBox::new2(10, 10, 220, 230));
-        check_child_widget(left_widget_as_parent, 1, WidgetIdent::new_str("bl"), bl, BoundBox::new2(10, 250, 220, 470));
+        check_child_widget(left_widget, 0, WidgetIdent::new_str("tl"), tl, BoundBox::new2(10, 10, 220, 230));
+        check_child_widget(left_widget, 1, WidgetIdent::new_str("bl"), bl, BoundBox::new2(10, 250, 220, 470));
     }
 
     #[test]

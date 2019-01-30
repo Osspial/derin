@@ -277,6 +277,7 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
 
         match new_widget {
             Some(_) => {
+                assert_eq!(target_widget_id, self.top_id());
                 Some(self.top_mut())
             },
             None => {

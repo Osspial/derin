@@ -484,8 +484,9 @@ mod tests {
     use crate::{
         message_bus::MessageBus,
         cgmath::Point2,
-        test_helpers::TestEvent,
+        test_helpers::{TestEvent, TestRenderFrame},
         update_state::UpdateState,
+        widget::WidgetIdent,
         widget_traverser::WidgetTraverserBase,
     };
     use derin_common_types::buttons::{Key, ModifierKeys, MouseButton};
@@ -493,7 +494,7 @@ mod tests {
     macro_rules! create_translator {
         ($translator:pat, $tree:expr, $root_id:expr) => {
             let message_bus = MessageBus::new();
-            let mut traverser_base = WidgetTraverserBase::new($root_id);
+            let mut traverser_base: WidgetTraverserBase<TestRenderFrame> = WidgetTraverserBase::new($root_id);
             let update_state = UpdateState::new(&message_bus);
             let mut traverser = traverser_base.with_root_ref($tree, update_state.clone());
             let mut input_state = InputState::new();

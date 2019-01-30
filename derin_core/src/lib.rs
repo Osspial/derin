@@ -57,7 +57,6 @@ fn find_index<T: PartialEq>(s: &[T], element: &T) -> Option<usize> {
     s.iter().enumerate().find(|&(_, e)| e == element).map(|(i, _)| i)
 }
 
-#[must_use]
 fn vec_remove_element<T: PartialEq>(v: &mut Vec<T>, element: &T) -> Option<T> {
     find_index(v, element).map(|i| v.remove(i))
 }
