@@ -96,14 +96,18 @@ impl VirtualWidgetTree {
                     let node = occ.get_mut();
 
                     let old_parent_id = node.parent_id;
+                    node.parent_id = parent_id;
+                    node.data.ident = widget_ident;
+
+                    let (_, old_parent_children) = self.get_widget_node_mut(old_parent_id).expect("Bad tree state");
+                    // Remove any trailing `None`s from the parent.
+                    while let Some(None) = old_parent_children.last() {
+                        old_parent_children.pop();
+                    }
+
                     if old_parent_id != parent_id {
-                        node.parent_id = parent_id;
-                        node.data.ident = widget_ident;
-
-                        self.update_node_depth(parent_depth + 1, &self.tree_data[&widget_id]);
-
-                        let (_, old_parent_children) = self.get_widget_node_mut(old_parent_id).expect("Bad tree state");
                         crate::vec_remove_element(old_parent_children, &Some(widget_id)).unwrap();
+                        self.update_node_depth(parent_depth + 1, &self.tree_data[&widget_id]);
                     }
                 },
                 Entry::Vacant(vac) => {
@@ -129,7 +133,13 @@ impl VirtualWidgetTree {
     pub(crate) fn remove(&mut self, widget_id: WidgetID) -> Option<WidgetData> {
         if let Entry::Occupied(occ) = self.tree_data.entry(widget_id) {
             let node = occ.remove();
-            crate::vec_remove_element(&mut self.get_widget_node_mut(node.parent_id).unwrap().1, &Some(widget_id));
+
+            // Remove the widget from the parent's child list and remove any trailing `None`s.
+            let mut parent_children = &mut self.get_widget_node_mut(node.parent_id).unwrap().1;
+            crate::vec_remove_element(parent_children, &Some(widget_id));
+            while let Some(None) = parent_children.last() {
+                parent_children.pop();
+            }
 
             // Remove all the child widgets.
             let mut widgets_to_remove = VecDeque::from(node.children);
@@ -748,7 +758,7 @@ mod tests {
             }
         };
 
-        macro_tree.insert(root, child_1, 0, WidgetIdent::new_str("child_0")).unwrap();
+        macro_tree.insert(root, child_1, 0, WidgetIdent::new_str("child_1")).unwrap();
 
         virtual_widget_tree!{
             let expected_tree = root in old {
@@ -758,5 +768,31 @@ mod tests {
         };
 
         assert_eq!(macro_tree, expected_tree);
+    }
+
+    #[test]
+    fn widget_trim() {
+        virtual_widget_tree!{
+            let mut macro_tree = root {
+                child_0
+            }
+        };
+        let child_1 = WidgetID::new();
+        let reference_tree = macro_tree.clone();
+
+        macro_tree.insert(root, child_1, 10, WidgetIdent::new_str("child_1")).unwrap();
+        macro_tree.remove(child_1);
+        assert_eq!(macro_tree, reference_tree);
+
+        virtual_widget_tree!{
+            let reference_tree = root in old {
+                child_0 in old,
+                child_1 in old
+            }
+        };
+
+        macro_tree.insert(root, child_1, 10, WidgetIdent::new_str("child_1")).unwrap();
+        macro_tree.insert(root, child_1, 1, WidgetIdent::new_str("child_1")).unwrap();
+        assert_eq!(macro_tree, reference_tree);
     }
 }
