@@ -7,7 +7,7 @@ use crate::{
     core::{
         LoopFlow,
         event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange},
-        widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
+        widget::{MessageTarget, WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, WidgetID, Widget, Parent},
         render::{RenderFrame, RenderFrameClipped},
         render::Theme as CoreTheme,
     },
@@ -58,15 +58,21 @@ pub struct RadioButtonList<C, L>
     layout: L
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RadioButtonSelected(WidgetID);
+
 impl<C, L> RadioButtonList<C, L>
-    where L: GridLayout
+    where C: WidgetContainer<RadioButton>,
+          L: GridLayout
 {
     /// Takes a collection of radio buttons, as well as the layout in which to place those buttons.
     ///
     /// The passed collection can *only contain radio buttons*, otherwise this will fail to compile.
     pub fn new(buttons: C, layout: L) -> RadioButtonList<C, L> {
+        let mut widget_tag = WidgetTag::new();
+        widget_tag.register_message(Self::on_child_selected);
         RadioButtonList {
-            widget_tag: WidgetTag::new(),
+            widget_tag,
             rect: BoundBox::new2(0, 0, 0, 0),
 
             layout_engine: GridEngine::new(),
@@ -82,6 +88,18 @@ impl<C, L> RadioButtonList<C, L>
     /// Retrieves the collection of radio buttons stored within this list, for mutation.
     pub fn buttons_mut(&mut self) -> &mut C {
         &mut self.buttons
+    }
+
+    fn on_child_selected(&mut self, child_selected: &RadioButtonSelected) {
+        self.buttons.children_mut(|mut child_info| {
+            let mut child_radio_button = child_info.subtype_mut();
+            if child_radio_button.widget_id() != child_selected.0 {
+                child_radio_button.selected = false;
+                child_radio_button.widget_tag.request_redraw();
+            }
+
+            LoopFlow::Continue
+        });
     }
 }
 
@@ -152,7 +170,6 @@ impl Widget for RadioButton {
         use self::WidgetEvent::*;
         let event = event.unwrap();
 
-        let mut force_bubble = false;
         let (mut new_selected, mut new_state) = (self.selected, self.button_state);
         match event {
             MouseMove{hover_change: Some(ref change), ..} if input_state.mouse_buttons_down_in_widget.is_empty() => {
@@ -164,10 +181,10 @@ impl Widget for RadioButton {
             },
             MouseDown{..} => new_state = ButtonState::Pressed,
             MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
-                // if !self.selected {
-                //     action = self.handler.change_state(!self.selected);
-                // }
-                force_bubble = true;
+                self.widget_tag.send_message_to(
+                    RadioButtonSelected(self.widget_id()),
+                    MessageTarget::ParentOf(self.widget_id()),
+                );
                 new_selected = true;
                 new_state = ButtonState::Hover;
             },
@@ -187,7 +204,7 @@ impl Widget for RadioButton {
 
         EventOps {
             focus: None,
-            bubble: force_bubble || event.default_bubble(),
+            bubble: event.default_bubble(),
         }
     }
 }

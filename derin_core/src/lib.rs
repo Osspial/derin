@@ -381,19 +381,19 @@ impl<F> FrameEventProcessor<'_, F>
                 match message_target {
                     MessageTarget::Widget(widget_id) => {
                         match self.widget_traverser.get_widget(widget_id) {
-                            Some(mut wpath) => wpath.widget.inner_mut().dispatch_message(&message),
+                            Some(mut wpath) => wpath.widget.inner_mut().dispatch_message(&*message),
                             None => continue
                         }
                     },
                     MessageTarget::ParentOf(widget_id) => {
                         match self.widget_traverser.get_widget_relation(widget_id, Relation::Parent) {
-                            Some(mut wpath) => wpath.widget.inner_mut().dispatch_message(&message),
+                            Some(mut wpath) => wpath.widget.inner_mut().dispatch_message(&*message),
                             None => continue
                         }
                     },
                     MessageTarget::ChildrenOf(widget_id) => {
                         self.widget_traverser.crawl_widget_children(widget_id, |mut wpath| {
-                            wpath.widget.inner_mut().dispatch_message(&message)
+                            wpath.widget.inner_mut().dispatch_message(&*message)
                         });
                     }
                 }
