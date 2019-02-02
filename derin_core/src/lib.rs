@@ -28,7 +28,7 @@ mod update_state;
 mod widget_traverser;
 
 use crate::cgmath::{Point2, Vector2, Bounded, EuclideanSpace};
-use cgmath_geometry::{D2, rect::{DimsBox, GeoBox}};
+use cgmath_geometry::{D2, rect::{DimsBox, BoundBox, GeoBox}};
 
 use crate::{
     message_bus::{MessageBus, MessageTarget},
@@ -285,29 +285,33 @@ impl<N, F> Root<N, F>
             ..
         } = *self;
 
-        let mut update_state = update_state.borrow_mut();
-        if update_state.global_update || update_state.redraw.len() > 0 {
+        let mut update_state_ref = update_state.borrow_mut();
+        if update_state_ref.global_update || update_state_ref.redraw.len() > 0 {
             // We should probably support incremental redraw at some point but not doing that is
             // soooo much easier.
-            update_state.redraw.clear();
-            update_state.reset_global_update();
-            drop(update_state);
+            update_state_ref.redraw.clear();
+            update_state_ref.reset_global_update();
+            drop(update_state_ref);
 
-            let (frame, window_rect) = renderer.make_frame();
+            let window_rect = renderer.dims();
+            let window_rect = BoundBox::new2(0, 0, window_rect.width() as i32, window_rect.height() as i32);
 
-            let mut widget_traverser = widget_traverser_base.with_root_ref(root_widget, self.update_state.clone());
-            widget_traverser.crawl_widgets(|mut path| {
-                let mut render_frame_clipped = RenderFrameClipped {
-                    frame,
-                    transform: path.widget.rect(),
-                    clip: path.widget.clip().unwrap_or(window_rect),
-                    theme: theme
-                };
+            renderer.render(
+                theme,
+                |frame| {
+                    let mut widget_traverser = widget_traverser_base.with_root_ref(root_widget, update_state.clone());
+                    widget_traverser.crawl_widgets(|mut path| {
+                        let mut render_frame_clipped = RenderFrameClipped {
+                            frame,
+                            transform: path.widget.rect(),
+                            clip: path.widget.clip().unwrap_or(window_rect),
+                            theme: theme
+                        };
 
-                path.widget.render(&mut render_frame_clipped);
-            });
-
-            renderer.finish_frame(theme);
+                        path.widget.render(&mut render_frame_clipped);
+                    });
+                }
+            );
         }
     }
 }

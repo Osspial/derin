@@ -186,16 +186,32 @@ impl GLRenderer {
     pub fn context_state(&self) -> Rc<ContextState> {
         self.frame.draw.context_state.clone()
     }
-}
 
-impl Renderer for GLRenderer {
-    type Frame = GLFrame;
-    fn force_full_redraw(&self) -> bool {true}
+    pub(crate) fn set_size_bounds(&mut self, client_size_bounds: SizeBounds) {
+        if client_size_bounds != self.client_size_bounds {
+            self.client_size_bounds = client_size_bounds;
+            let outer_rect = self.window.get_outer_size().unwrap();
+            let inner_rect = self.window.get_inner_size().unwrap();
+            let x_expand = outer_rect.0 - inner_rect.0;
+            let y_expand = outer_rect.1 - inner_rect.1;
 
-    fn set_cursor_pos(&mut self, pos: Point2<i32>) {
+            let min_dimensions = match client_size_bounds.min == DimsBox::new2(0, 0) {
+                true => None,
+                false => Some((client_size_bounds.min.width().max(0) as u32 + x_expand, client_size_bounds.min.height().max(0) as u32 + y_expand))
+            };
+            let max_dimensions = match client_size_bounds.max == DimsBox::max_value() {
+                true => None,
+                false => Some((client_size_bounds.max.width() as u32 + x_expand, client_size_bounds.max.height() as u32 + y_expand))
+            };
+            self.window.set_min_dimensions(min_dimensions);
+            self.window.set_max_dimensions(max_dimensions);
+        }
+    }
+
+    pub(crate) fn set_cursor_pos(&mut self, pos: Point2<i32>) {
         self.window.set_cursor_position(pos.x, pos.y).ok();
     }
-    fn set_cursor_icon(&mut self, icon: CursorIcon) {
+    pub(crate) fn set_cursor_icon(&mut self, icon: CursorIcon) {
         let glutin_icon = match icon {
             CursorIcon::Pointer => MouseCursor::Default,
             CursorIcon::Wait => MouseCursor::Wait,
@@ -217,6 +233,10 @@ impl Renderer for GLRenderer {
         self.window.set_cursor_state(CursorState::Normal).ok();
         self.window.set_cursor(glutin_icon);
     }
+}
+
+impl Renderer for GLRenderer {
+    type Frame = GLFrame;
     fn resized(&mut self, new_size: DimsBox<D2, u32>) {
         self.window.context().resize(new_size.width(), new_size.height());
     }
@@ -226,28 +246,11 @@ impl Renderer for GLRenderer {
         DimsBox::new2(width, height)
     }
 
-    fn set_size_bounds(&mut self, client_size_bounds: SizeBounds) {
-        if client_size_bounds != self.client_size_bounds {
-            self.client_size_bounds = client_size_bounds;
-            let outer_rect = self.window.get_outer_size().unwrap();
-            let inner_rect = self.window.get_inner_size().unwrap();
-            let x_expand = outer_rect.0 - inner_rect.0;
-            let y_expand = outer_rect.1 - inner_rect.1;
-
-            let min_dimensions = match client_size_bounds.min == DimsBox::new2(0, 0) {
-                true => None,
-                false => Some((client_size_bounds.min.width().max(0) as u32 + x_expand, client_size_bounds.min.height().max(0) as u32 + y_expand))
-            };
-            let max_dimensions = match client_size_bounds.max == DimsBox::max_value() {
-                true => None,
-                false => Some((client_size_bounds.max.width() as u32 + x_expand, client_size_bounds.max.height() as u32 + y_expand))
-            };
-            self.window.set_min_dimensions(min_dimensions);
-            self.window.set_max_dimensions(max_dimensions);
-        }
-    }
-
-    fn make_frame(&mut self) -> (&mut GLFrame, BoundBox<D2, i32>) {
+    fn render(
+        &mut self,
+        _: &<Self::Frame as RenderFrame>::Theme,
+        draw_to_frame: impl FnOnce(&mut Self::Frame)
+    ) {
         let (width, height) = self.window.get_inner_size().unwrap();
         let scale_factor = self.window.hidpi_factor();
         self.frame.draw.window_dims = DimsBox::new2(width, height);
@@ -259,10 +262,8 @@ impl Renderer for GLRenderer {
         self.frame.draw.fb.clear_depth(1.0);
         self.frame.draw.fb.clear_stencil(0);
 
-        (&mut self.frame, BoundBox::new2(0, 0, width as i32, height as i32))
-    }
+        draw_to_frame(&mut self.frame);
 
-    fn finish_frame(&mut self, _: &Theme) {
         self.frame.draw.draw_contents();
         self.window.swap_buffers().unwrap();
         self.frame.draw.atlas.bump_frame_count();

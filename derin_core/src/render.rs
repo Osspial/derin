@@ -9,15 +9,13 @@ use derin_common_types::layout::SizeBounds;
 
 pub trait Renderer {
     type Frame: RenderFrame;
-    #[inline]
-    fn force_full_redraw(&self) -> bool {false}
-    fn set_cursor_pos(&mut self, pos: Point2<i32>);
-    fn set_cursor_icon(&mut self, icon: CursorIcon);
-    fn set_size_bounds(&mut self, size_bounds: SizeBounds);
     fn resized(&mut self, new_size: DimsBox<D2, u32>);
     fn dims(&self) -> DimsBox<D2, u32>;
-    fn make_frame(&mut self) -> (&mut Self::Frame, BoundBox<D2, i32>);
-    fn finish_frame(&mut self, theme: &<Self::Frame as RenderFrame>::Theme);
+    fn render(
+        &mut self,
+        theme: &<Self::Frame as RenderFrame>::Theme,
+        draw_to_frame: impl FnOnce(&mut Self::Frame)
+    );
 }
 
 pub trait RenderFrame: 'static {
