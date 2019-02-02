@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::widget::{WidgetID, WidgetIdent, ROOT_IDENT};
+use crate::widget::{WidgetId, WidgetIdent, ROOT_IDENT};
 use std::{
     cell::Cell,
     collections::{
@@ -30,10 +30,10 @@ pub(crate) enum WidgetRelationError {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct WidgetTreeNode {
-    parent_id: WidgetID,
+    parent_id: WidgetId,
     // If an entry in the child array is `None`, that means a high-index widget has been inserted
     // before it's lower-index counterparts.
-    children: Vec<Option<WidgetID>>,
+    children: Vec<Option<WidgetId>>,
     data: WidgetData
 }
 
@@ -45,20 +45,20 @@ pub struct WidgetData {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct VirtualWidgetTree {
-    root: WidgetID,
+    root: WidgetId,
     root_data: WidgetData,
-    root_children: Vec<Option<WidgetID>>,
-    tree_data: HashMap<WidgetID, WidgetTreeNode, FnvBuildHasher>
+    root_children: Vec<Option<WidgetId>>,
+    tree_data: HashMap<WidgetId, WidgetTreeNode, FnvBuildHasher>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PathRevItem {
     pub ident: WidgetIdent,
-    pub id: WidgetID,
+    pub id: WidgetId,
 }
 
 impl VirtualWidgetTree {
-    pub(crate) fn new(root: WidgetID) -> VirtualWidgetTree {
+    pub(crate) fn new(root: WidgetId) -> VirtualWidgetTree {
         VirtualWidgetTree {
             root,
             root_data: WidgetData {
@@ -70,13 +70,13 @@ impl VirtualWidgetTree {
         }
     }
 
-    pub fn root_id(&self) -> WidgetID {
+    pub fn root_id(&self) -> WidgetId {
         self.root
     }
 
     /// Insert a widget ID into the tree. If the widget in already in the tree, change the widget's
     /// parent to the new parent.
-    pub(crate) fn insert(&mut self, parent_id: WidgetID, widget_id: WidgetID, child_index: usize, widget_ident: WidgetIdent) -> Result<(), WidgetInsertError> {
+    pub(crate) fn insert(&mut self, parent_id: WidgetId, widget_id: WidgetId, child_index: usize, widget_ident: WidgetIdent) -> Result<(), WidgetInsertError> {
         if widget_id == self.root {
             return Err(WidgetInsertError::WidgetIsRoot);
         }
@@ -130,7 +130,7 @@ impl VirtualWidgetTree {
         }
     }
 
-    pub(crate) fn remove(&mut self, widget_id: WidgetID) -> Option<WidgetData> {
+    pub(crate) fn remove(&mut self, widget_id: WidgetId) -> Option<WidgetData> {
         if let Entry::Occupied(occ) = self.tree_data.entry(widget_id) {
             let node = occ.remove();
 
@@ -164,7 +164,7 @@ impl VirtualWidgetTree {
     // A recursive remove function existed at one point, but has been removed from the source tree.
     // Check commits from early January 2019 to find it.
 
-    pub(crate) fn parent(&self, widget_id: WidgetID) -> Result<WidgetID, WidgetRelationError> {
+    pub(crate) fn parent(&self, widget_id: WidgetId) -> Result<WidgetId, WidgetRelationError> {
         if widget_id == self.root {
             Err(WidgetRelationError::RelationNotFound)
         } else if let Some(node) = self.tree_data.get(&widget_id) {
@@ -174,7 +174,7 @@ impl VirtualWidgetTree {
         }
     }
 
-    pub(crate) fn sibling(&self, widget_id: WidgetID, offset: isize) -> Result<WidgetID, WidgetRelationError> {
+    pub(crate) fn sibling(&self, widget_id: WidgetId, offset: isize) -> Result<WidgetId, WidgetRelationError> {
         if widget_id == self.root {
             return if offset == 0 {
                 Ok(self.root)
@@ -197,7 +197,7 @@ impl VirtualWidgetTree {
         siblings.get(sibling_index as usize).cloned().and_then(|id| id).ok_or(WidgetRelationError::RelationNotFound)
     }
 
-    pub(crate) fn sibling_wrapping(&self, widget_id: WidgetID, offset: isize) -> Option<WidgetID> {
+    pub(crate) fn sibling_wrapping(&self, widget_id: WidgetId, offset: isize) -> Option<WidgetId> {
         if widget_id == self.root {
             return Some(self.root);
         }
@@ -229,13 +229,13 @@ impl VirtualWidgetTree {
         siblings[mod_euc(sibling_index, siblings.len() as isize) as usize]
     }
 
-    pub(crate) fn child_index(&self, widget_id: WidgetID, child_index: usize) -> Result<WidgetID, WidgetRelationError> {
+    pub(crate) fn child_index(&self, widget_id: WidgetId, child_index: usize) -> Result<WidgetId, WidgetRelationError> {
         let children = self.get_widget_node(widget_id).ok_or(WidgetRelationError::WidgetNotFound)?.1;
 
         children.get(child_index).cloned().and_then(|id| id).ok_or(WidgetRelationError::RelationNotFound)
     }
 
-    pub(crate) fn child_ident(&self, widget_id: WidgetID, child_ident: WidgetIdent) -> Result<WidgetID, WidgetRelationError> {
+    pub(crate) fn child_ident(&self, widget_id: WidgetId, child_ident: WidgetIdent) -> Result<WidgetId, WidgetRelationError> {
         let mut children = self.children(widget_id).ok_or(WidgetRelationError::WidgetNotFound)?;
 
         children.find(|(_, data)| data.ident == child_ident)
@@ -243,27 +243,27 @@ impl VirtualWidgetTree {
             .ok_or(WidgetRelationError::RelationNotFound)
     }
 
-    // pub(crate) fn child_from_end(&self, widget_id: WidgetID, offset: usize) -> Option<WidgetID> {unimplemented!()}
+    // pub(crate) fn child_from_end(&self, widget_id: WidgetId, offset: usize) -> Option<WidgetId> {unimplemented!()}
 
-    pub(crate) fn children(&self, widget_id: WidgetID) -> Option<impl Iterator<Item=(WidgetID, &'_ WidgetData)>> {
+    pub(crate) fn children(&self, widget_id: WidgetId) -> Option<impl Iterator<Item=(WidgetId, &'_ WidgetData)>> {
         Some(self.children_nodes(widget_id)?.map(|(id, node)| (id, &node.data)))
     }
 
-    fn children_nodes(&self, widget_id: WidgetID) -> Option<impl Iterator<Item=(WidgetID, &'_ WidgetTreeNode)>> {
+    fn children_nodes(&self, widget_id: WidgetId) -> Option<impl Iterator<Item=(WidgetId, &'_ WidgetTreeNode)>> {
         let (_, children) = self.get_widget_node(widget_id)?;
         Some(children.iter().flatten().map(move |c| (*c, self.tree_data.get(c).expect("Bad tree state"))))
     }
 
-    pub fn all_nodes(&self) -> impl Iterator<Item=(WidgetID, &'_ WidgetData)> {
+    pub fn all_nodes(&self) -> impl Iterator<Item=(WidgetId, &'_ WidgetData)> {
         Some((self.root, &self.root_data)).into_iter().chain(self.tree_data.iter().map(|(&k, v)| (k, &v.data)))
     }
 
-    pub(crate) fn get_widget(&self, id: WidgetID) -> Option<&WidgetData> {
+    pub(crate) fn get_widget(&self, id: WidgetId) -> Option<&WidgetData> {
         self.get_widget_node(id).map(|(d, _)| d)
     }
 
     /// Returns `Option<WidgetData, Children>`
-    fn get_widget_node(&self, id: WidgetID) -> Option<(&WidgetData, &[Option<WidgetID>])> {
+    fn get_widget_node(&self, id: WidgetId) -> Option<(&WidgetData, &[Option<WidgetId>])> {
         if self.root == id {
             Some((&self.root_data, &self.root_children))
         } else {
@@ -271,7 +271,7 @@ impl VirtualWidgetTree {
         }
     }
 
-    fn get_widget_node_mut(&mut self, id: WidgetID) -> Option<(&mut WidgetData, &mut Vec<Option<WidgetID>>)> {
+    fn get_widget_node_mut(&mut self, id: WidgetId) -> Option<(&mut WidgetData, &mut Vec<Option<WidgetId>>)> {
         if self.root == id {
             Some((&mut self.root_data, &mut self.root_children))
         } else {
@@ -281,7 +281,7 @@ impl VirtualWidgetTree {
 
     /// Gets the identifier chain of the widget, starting with the widget's identifier and ending
     /// with the root identifier.
-    pub(crate) fn path_reversed(&self, id: WidgetID) -> Option<impl '_ + Iterator<Item=PathRevItem> + ExactSizeIterator> {
+    pub(crate) fn path_reversed(&self, id: WidgetId) -> Option<impl '_ + Iterator<Item=PathRevItem> + ExactSizeIterator> {
         struct ClosureIterator<F>(F, usize)
             where F: FnMut() -> Option<PathRevItem>;
         impl<F> Iterator for ClosureIterator<F>
@@ -336,7 +336,7 @@ impl VirtualWidgetTree {
 }
 
 impl WidgetTreeNode {
-    fn new(parent_id: WidgetID, ident: WidgetIdent, depth: u32) -> WidgetTreeNode {
+    fn new(parent_id: WidgetId, ident: WidgetIdent, depth: u32) -> WidgetTreeNode {
         WidgetTreeNode {
             parent_id,
             children: Vec::new(),
@@ -366,7 +366,7 @@ mod tests {
             $root:ident $(in $old:ident)* $({$($rest:tt)*})*
         ),*) => {$(
             if_tokens!{($($old)*) {} else {
-                let $root = WidgetID::new();
+                let $root = WidgetId::new();
                 println!("{} = {:?}", stringify!($root), $root);
             }}
 
@@ -541,7 +541,7 @@ mod tests {
         };
         println!("{:#?}", tree);
 
-        assert_eq!(Err(WidgetRelationError::WidgetNotFound), tree.parent(WidgetID::new()));
+        assert_eq!(Err(WidgetRelationError::WidgetNotFound), tree.parent(WidgetId::new()));
         assert_eq!(Err(WidgetRelationError::RelationNotFound), tree.parent(root));
         assert_eq!(Ok(root), tree.parent(child_0));
         assert_eq!(Ok(root), tree.parent(child_1));
@@ -554,8 +554,8 @@ mod tests {
         assert_eq!(Ok(child_1), tree.parent(child_1_1));
 
         for i in -16..16 {
-            assert_eq!(Err(WidgetRelationError::WidgetNotFound), tree.sibling(WidgetID::new(), i), "{}", i);
-            assert_eq!(None, tree.sibling_wrapping(WidgetID::new(), i), "{}", i);
+            assert_eq!(Err(WidgetRelationError::WidgetNotFound), tree.sibling(WidgetId::new(), i), "{}", i);
+            assert_eq!(None, tree.sibling_wrapping(WidgetId::new(), i), "{}", i);
             if i != 0 {
                 assert_eq!(Err(WidgetRelationError::RelationNotFound), tree.sibling(root, i), "{}", i);
                 assert_eq!(Err(WidgetRelationError::RelationNotFound), tree.sibling(child_0_2_0, i), "{}", i);
@@ -598,7 +598,7 @@ mod tests {
         }
 
         for i in 0..16 {
-            assert_eq!(Err(WidgetRelationError::WidgetNotFound), tree.child_index(WidgetID::new(), i));
+            assert_eq!(Err(WidgetRelationError::WidgetNotFound), tree.child_index(WidgetId::new(), i));
         }
         assert_eq!(Ok(child_0), tree.child_index(root, 0));
         assert_eq!(Ok(child_1), tree.child_index(root, 1));
@@ -655,7 +655,7 @@ mod tests {
             }
         }
 
-        assert!(tree.path_reversed(WidgetID::new()).is_none());
+        assert!(tree.path_reversed(WidgetId::new()).is_none());
         test_ident_chain![root];
         test_ident_chain![child_0, root];
         test_ident_chain![child_1, root];
@@ -777,7 +777,7 @@ mod tests {
                 child_0
             }
         };
-        let child_1 = WidgetID::new();
+        let child_1 = WidgetId::new();
         let reference_tree = macro_tree.clone();
 
         macro_tree.insert(root, child_1, 10, WidgetIdent::new_str("child_1")).unwrap();

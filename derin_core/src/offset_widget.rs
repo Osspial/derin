@@ -4,7 +4,7 @@
 
 use crate::{
     {LoopFlow, InputState},
-    widget::{WidgetDyn, WidgetID, WidgetIdent, WidgetTag},
+    widget::{WidgetDyn, WidgetId, WidgetIdent, WidgetTag},
     event::{InputState as EventInputState, WidgetEventSourced, EventOps},
     render::{RenderFrame, RenderFrameClipped},
 };
@@ -55,7 +55,7 @@ impl<'a, F: RenderFrame> OffsetWidget<'a, F> {
     pub fn widget_tag(&self) -> &WidgetTag {
         self.widget.widget_tag()
     }
-    pub fn widget_id(&self) -> WidgetID {
+    pub fn widget_id(&self) -> WidgetId {
         self.widget.widget_id()
     }
     pub fn rect(&self) -> BoundBox<D2, i32> {

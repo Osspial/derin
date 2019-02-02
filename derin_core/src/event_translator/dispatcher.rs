@@ -5,7 +5,7 @@
 use crate::{
     cgmath::Point2,
     event::{FocusChange, FocusSource, WidgetEvent},
-    widget::{WidgetID, WidgetIdent},
+    widget::{WidgetId, WidgetIdent},
     render::RenderFrame,
     widget_traverser::{Relation, WidgetTraverser, OffsetWidgetScanPath},
 };
@@ -17,8 +17,8 @@ pub(crate) struct EventDispatcher {
 
 #[derive(Debug, Clone)]
 pub(crate) enum EventDestination {
-    Widget(WidgetID),
-    Relation(WidgetID, Relation)
+    Widget(WidgetId),
+    Relation(WidgetId, Relation)
 }
 
 #[derive(Debug, Clone)]
@@ -33,7 +33,7 @@ pub(crate) enum DispatchableEvent {
         change: FocusChange,
     },
     Direct {
-        bubble_source: Option<WidgetID>,
+        bubble_source: Option<WidgetId>,
         event: WidgetEvent,
     },
 }
@@ -49,7 +49,7 @@ impl EventDispatcher {
         self.events.push_back((destination, event));
     }
 
-    pub fn queue_direct_event(&mut self, widget_id: WidgetID, event: WidgetEvent) {
+    pub fn queue_direct_event(&mut self, widget_id: WidgetId, event: WidgetEvent) {
         self.queue_event(
             EventDestination::Widget(widget_id),
             DispatchableEvent::Direct {

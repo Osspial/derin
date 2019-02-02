@@ -12,7 +12,7 @@ pub(crate) use self::{
 };
 use crate::{
     render::RenderFrame,
-    widget::{WidgetDyn, WidgetID, WidgetIdent},
+    widget::{WidgetDyn, WidgetId, WidgetIdent},
     update_state::UpdateStateCell,
 };
 use std::rc::Rc;
@@ -46,7 +46,7 @@ pub(crate) struct WidgetTraverser<'a, F: RenderFrame> {
 impl<F> WidgetTraverserBase<F>
     where F: RenderFrame
 {
-    pub fn new(root_id: WidgetID) -> Self {
+    pub fn new(root_id: WidgetId) -> Self {
         WidgetTraverserBase {
             stack_cache: WidgetStackCache::new(),
             virtual_widget_tree: VirtualWidgetTree::new(root_id),
@@ -69,7 +69,7 @@ impl<F> WidgetTraverserBase<F>
 impl<F> WidgetTraverser<'_, F>
     where F: RenderFrame
 {
-    pub fn get_widget(&mut self, id: WidgetID) -> Option<OffsetWidgetScanPath<'_, F>> {
+    pub fn get_widget(&mut self, id: WidgetId) -> Option<OffsetWidgetScanPath<'_, F>> {
         // Move the stack top to the desired widget.
         match self.get_widget_with_tree(id) {
             Some(_) => (),
@@ -88,7 +88,7 @@ impl<F> WidgetTraverser<'_, F>
         Some(stack.top_mut().map(move |w| OffsetWidgetScan::new(w, virtual_widget_tree, update_state)))
     }
 
-    pub fn get_widget_relation(&mut self, id: WidgetID, relation: Relation) -> Option<OffsetWidgetScanPath<'_, F>> {
+    pub fn get_widget_relation(&mut self, id: WidgetId, relation: Relation) -> Option<OffsetWidgetScanPath<'_, F>> {
         let relation_id = match relation {
             Relation::Parent => {
                 self.virtual_widget_tree.parent(id).ok()?
@@ -107,11 +107,11 @@ impl<F> WidgetTraverser<'_, F>
         self.get_widget(relation_id)
     }
 
-    fn get_widget_with_tree(&mut self, id: WidgetID) -> Option<OffsetWidgetPath<'_, F>> {
+    fn get_widget_with_tree(&mut self, id: WidgetId) -> Option<OffsetWidgetPath<'_, F>> {
         self.stack.move_to_path_rev(self.virtual_widget_tree.path_reversed(id)?)
     }
 
-    pub fn remove_widget(&mut self, id: WidgetID) {
+    pub fn remove_widget(&mut self, id: WidgetId) {
         self.virtual_widget_tree.remove(id);
     }
 
@@ -123,7 +123,7 @@ impl<F> WidgetTraverser<'_, F>
     /// If multiple instances of the same Widget ID are in the array, they are placed next to
     /// each other.
     #[must_use]
-    pub fn sort_widgets_by_depth<'a>(&mut self, widgets: &'a mut [WidgetID]) -> &'a mut [WidgetID] {
+    pub fn sort_widgets_by_depth<'a>(&mut self, widgets: &'a mut [WidgetId]) -> &'a mut [WidgetId] {
         widgets.sort_unstable_by_key(|id| {
             (
                 self.virtual_widget_tree
@@ -176,7 +176,7 @@ impl<F> WidgetTraverser<'_, F>
         }
     }
 
-    pub fn crawl_widget_children(&mut self, parent: WidgetID, mut for_each: impl FnMut(OffsetWidgetPath<'_, F>)) {
+    pub fn crawl_widget_children(&mut self, parent: WidgetId, mut for_each: impl FnMut(OffsetWidgetPath<'_, F>)) {
         if let None = self.get_widget_with_tree(parent) {
             return;
         }
@@ -213,11 +213,11 @@ impl<F> WidgetTraverser<'_, F>
         );
     }
 
-    pub fn root_id(&self) -> WidgetID {
+    pub fn root_id(&self) -> WidgetId {
         self.virtual_widget_tree.root_id()
     }
 
-    pub fn all_widgets(&self) -> impl '_ + Iterator<Item=WidgetID> {
+    pub fn all_widgets(&self) -> impl '_ + Iterator<Item=WidgetId> {
         self.virtual_widget_tree.all_nodes().map(|(id, _)| id)
     }
 }
@@ -225,7 +225,7 @@ impl<F> WidgetTraverser<'_, F>
 impl<F> WidgetTraverser<'_, F>
     where F: RenderFrame
 {
-    fn scan_for_widget(&mut self, widget_id: WidgetID) -> Option<OffsetWidgetPath<F>> {
+    fn scan_for_widget(&mut self, widget_id: WidgetId) -> Option<OffsetWidgetPath<F>> {
         let stack = &mut self.stack;
 
         stack.truncate(1);
@@ -415,7 +415,7 @@ mod tests {
         let update_state = UpdateState::new(&message_bus);
         let mut traverser = traverser_base.with_root_ref(&mut tree, update_state.clone());
 
-        let mut test_crawl_children = |id, children: &[WidgetID]| {
+        let mut test_crawl_children = |id, children: &[WidgetId]| {
             println!();
             dbg!((&id, children));
             let mut children_iter = children.into_iter().cloned();

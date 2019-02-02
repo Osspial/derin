@@ -45,7 +45,7 @@ pub(crate) struct EventList {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct TestEvent {
-    pub widget: WidgetID,
+    pub widget: WidgetId,
     pub event: WidgetEvent,
     pub source_child: Vec<WidgetIdent>,
 }
@@ -216,7 +216,7 @@ macro_rules! extract_widget_tree_idents {
         $(, focus_controls: $focus_controls:expr)?
         $(;$($children:tt)*)?
     }),*) => {$(
-        let $widget_ident = crate::widget::WidgetID::new();
+        let $widget_ident = crate::widget::WidgetId::new();
         println!("widget {} = {:?}", stringify!($widget_ident), $widget_ident);
 
         extract_widget_tree_idents!{$($($children)*)*}
@@ -313,7 +313,7 @@ mod tests {
         parent: &dyn WidgetDyn<TestRenderFrame>,
         index: usize,
         ident: WidgetIdent,
-        id: WidgetID,
+        id: WidgetId,
         rect: BoundBox<D2, i32>,
     ) -> &dyn WidgetDyn<TestRenderFrame> {
         let summary_by_ident = parent.child(ident.clone()).expect(&format!("Could not find child by ident: {} {:?}", index, ident));
@@ -364,7 +364,7 @@ mod tests {
     fn event_list_force_clear() {
         let event_list = EventList::new();
         event_list.set_events(vec![TestEvent {
-            widget: WidgetID::new(),
+            widget: WidgetId::new(),
             event: WidgetEvent::Char('♥'),
             source_child: vec![],
         }])

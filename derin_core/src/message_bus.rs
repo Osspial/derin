@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::widget::WidgetID;
+use crate::widget::WidgetId;
 use fnv::{FnvHashMap, FnvHashSet};
 use std::{
     any::{Any, TypeId},
@@ -45,7 +45,7 @@ impl WidgetMessageKey {
 
 pub struct MessageBus {
     /// Maps message types to widget IDs.
-    type_map: FnvHashMap<TypeId, FnvHashSet<WidgetID>>,
+    type_map: FnvHashMap<TypeId, FnvHashSet<WidgetId>>,
     messages_recv: Receiver<MessageTargeted>,
     messages_send: Sender<MessageTargeted>,
 }
@@ -58,9 +58,9 @@ pub struct MessageTargeted {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum MessageTarget {
-    Widget(WidgetID),
-    ParentOf(WidgetID),
-    ChildrenOf(WidgetID),
+    Widget(WidgetId),
+    ParentOf(WidgetId),
+    ChildrenOf(WidgetId),
 }
 
 impl MessageBus {
@@ -101,11 +101,11 @@ impl MessageBus {
         None
     }
 
-    pub fn register_widget_message_type(&mut self, message_type: TypeId, widget_id: WidgetID) {
+    pub fn register_widget_message_type(&mut self, message_type: TypeId, widget_id: WidgetId) {
         self.type_map.entry(message_type).or_default().insert(widget_id);
     }
 
-    pub fn remove_widget(&mut self, widget_id: WidgetID) {
+    pub fn remove_widget(&mut self, widget_id: WidgetId) {
         for wid_vec in self.type_map.values_mut() {
             wid_vec.retain(|id| *id != widget_id);
         }
@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     fn next_message() {
-        let (a, b, c, d) = (WidgetID::new(), WidgetID::new(), WidgetID::new(), WidgetID::new());
+        let (a, b, c, d) = (WidgetId::new(), WidgetId::new(), WidgetId::new(), WidgetId::new());
 
         let mut message_bus = MessageBus::new();
 

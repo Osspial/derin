@@ -14,7 +14,7 @@ use crate::{
     event::{WidgetEventSourced, EventOps, InputState},
     message_bus::{WidgetMessageKey, WidgetMessageFn},
     render::{RenderFrame, RenderFrameClipped},
-    timer::{TimerID, Timer},
+    timer::{TimerId, Timer},
     update_state::{UpdateStateShared, UpdateStateCell},
 };
 use derin_common_types::{
@@ -50,8 +50,8 @@ pub enum WidgetIdent {
 pub struct WidgetTag {
     update_state: RefCell<UpdateStateShared>,
     registered_messages: FnvHashMap<WidgetMessageKey, Cell<SmallVec<[WidgetMessageFn; 1]>>>,
-    pub(crate) widget_id: WidgetID,
-    pub(crate) timers: FnvHashMap<TimerID, Timer>,
+    pub(crate) widget_id: WidgetId,
+    pub(crate) timers: FnvHashMap<TimerId, Timer>,
 }
 
 impl fmt::Debug for WidgetTag {
@@ -70,7 +70,7 @@ impl Clone for WidgetTag {
     }
 }
 
-id!(pub WidgetID);
+id!(pub WidgetId);
 
 
 /// The base widget trait.
@@ -79,7 +79,7 @@ id!(pub WidgetID);
 /// Note that this trait ***should not be implemented for unsized types***. TODO EXPLAIN WHY
 pub trait Widget: 'static {
     fn widget_tag(&self) -> &WidgetTag;
-    fn widget_id(&self) -> WidgetID {
+    fn widget_id(&self) -> WidgetId {
         self.widget_tag().widget_id
     }
 
@@ -450,14 +450,14 @@ impl WidgetTag {
     pub fn new() -> WidgetTag {
         WidgetTag {
             update_state: RefCell::new(UpdateStateShared::new()),
-            widget_id: WidgetID::new(),
+            widget_id: WidgetId::new(),
             registered_messages: FnvHashMap::default(),
             timers: FnvHashMap::default(),
         }
     }
 
     #[inline]
-    pub fn widget_id(&self) -> WidgetID {
+    pub fn widget_id(&self) -> WidgetId {
         self.widget_id
     }
 
@@ -473,11 +473,11 @@ impl WidgetTag {
         self
     }
 
-    pub fn timers(&self) -> &FnvHashMap<TimerID, Timer> {
+    pub fn timers(&self) -> &FnvHashMap<TimerId, Timer> {
         &self.timers
     }
 
-    pub fn timers_mut(&mut self) -> &mut FnvHashMap<TimerID, Timer> {
+    pub fn timers_mut(&mut self) -> &mut FnvHashMap<TimerId, Timer> {
         self.update_state.get_mut().request_update_timers(self.widget_id);
         &mut self.timers
     }

@@ -5,7 +5,7 @@
 use crate::{
     message_bus::{Message, MessageTarget, MessageTargeted, MessageBus},
     cgmath::Point2,
-    widget::WidgetID,
+    widget::WidgetId,
 };
 use derin_common_types::cursor::CursorIcon;
 use fnv::FnvHashSet;
@@ -33,13 +33,13 @@ pub(crate) type UpdateStateCell = RefCell<UpdateState>;
 
 #[derive(Debug)]
 pub(crate) struct UpdateState {
-    pub redraw: FnvHashSet<WidgetID>,
-    pub relayout: FnvHashSet<WidgetID>,
-    pub update_timers: FnvHashSet<WidgetID>,
-    pub update_messages: FnvHashSet<WidgetID>,
-    pub remove_from_tree: FnvHashSet<WidgetID>,
+    pub redraw: FnvHashSet<WidgetId>,
+    pub relayout: FnvHashSet<WidgetId>,
+    pub update_timers: FnvHashSet<WidgetId>,
+    pub update_messages: FnvHashSet<WidgetId>,
+    pub remove_from_tree: FnvHashSet<WidgetId>,
     pub set_cursor_icon: Option<CursorIcon>,
-    pub set_cursor_pos: Option<(WidgetID, Point2<i32>)>,
+    pub set_cursor_pos: Option<(WidgetId, Point2<i32>)>,
     pub message_sender: Sender<MessageTargeted>,
     pub global_update: bool,
 }
@@ -66,7 +66,7 @@ impl UpdateState {
         )
     }
 
-    fn queue_insert_id(&mut self, id: WidgetID) {
+    fn queue_insert_id(&mut self, id: WidgetId) {
         self.redraw.insert(id);
         self.relayout.insert(id);
         self.update_timers.insert(id);
@@ -119,7 +119,7 @@ impl UpdateStateShared {
         ret
     }
 
-    pub fn set_owning_update_state(&mut self, id: WidgetID, parent_state: &Rc<UpdateStateCell>) {
+    pub fn set_owning_update_state(&mut self, id: WidgetId, parent_state: &Rc<UpdateStateCell>) {
         self.upgrade(|this| match this {
             UpdateStateShared::Vacant(vacant) => {
                 {
@@ -148,7 +148,7 @@ impl UpdateStateShared {
         });
     }
 
-    pub fn request_redraw(&mut self, id: WidgetID) {
+    pub fn request_redraw(&mut self, id: WidgetId) {
         self.upgrade(|this| match this {
             UpdateStateShared::Occupied(update_state) => {
                 let mut update_state = update_state.borrow_mut();
@@ -160,7 +160,7 @@ impl UpdateStateShared {
         });
     }
 
-    pub fn request_relayout(&mut self, id: WidgetID) {
+    pub fn request_relayout(&mut self, id: WidgetId) {
         self.upgrade(|this| match this {
             UpdateStateShared::Occupied(update_state) => {
                 let mut update_state = update_state.borrow_mut();
@@ -171,7 +171,7 @@ impl UpdateStateShared {
         });
     }
 
-    pub fn request_update_timers(&mut self, id: WidgetID) {
+    pub fn request_update_timers(&mut self, id: WidgetId) {
         self.upgrade(|this| match this {
             UpdateStateShared::Occupied(update_state) => {
                 let mut update_state = update_state.borrow_mut();
@@ -182,7 +182,7 @@ impl UpdateStateShared {
         });
     }
 
-    pub fn request_update_messages(&mut self, id: WidgetID) {
+    pub fn request_update_messages(&mut self, id: WidgetId) {
         self.upgrade(|this| match this {
             UpdateStateShared::Occupied(update_state) => {
                 let mut update_state = update_state.borrow_mut();
@@ -209,7 +209,7 @@ impl UpdateStateShared {
         });
     }
 
-    pub fn request_set_cursor_pos(&mut self, id: WidgetID, pos: Point2<i32>) -> Result<(), UpdateError> {
+    pub fn request_set_cursor_pos(&mut self, id: WidgetId, pos: Point2<i32>) -> Result<(), UpdateError> {
         self.upgrade(|this| match this {
             UpdateStateShared::Occupied(update_state) => {
                 let mut update_state = update_state.borrow_mut();
@@ -231,7 +231,7 @@ impl UpdateStateShared {
         })
     }
 
-    pub fn remove_from_tree(&mut self, id: WidgetID) {
+    pub fn remove_from_tree(&mut self, id: WidgetId) {
         self.upgrade(|this| match this {
             UpdateStateShared::Occupied(update_state) => {
                 let mut update_state = update_state.borrow_mut();

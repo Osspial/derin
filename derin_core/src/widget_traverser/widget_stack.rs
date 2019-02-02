@@ -4,7 +4,7 @@
 
 use std::mem;
 use crate::render::RenderFrame;
-use crate::widget::{WidgetDyn, WidgetID, WidgetIdent, WidgetInfoMut, ROOT_IDENT};
+use crate::widget::{WidgetDyn, WidgetId, WidgetIdent, WidgetInfoMut, ROOT_IDENT};
 use super::virtual_widget_tree::PathRevItem;
 
 use crate::cgmath::{Bounded, EuclideanSpace, Point2, Vector2};
@@ -18,7 +18,7 @@ struct StackElement<F: RenderFrame> {
     widget: *mut (WidgetDyn<F>),
     rectangles: Option<ElementRects>,
     index: usize,
-    widget_id: WidgetID
+    widget_id: WidgetId
 }
 
 impl<F: RenderFrame> std::fmt::Debug for StackElement<F> {
@@ -55,7 +55,7 @@ pub(crate) struct WidgetPath<'a, W> {
     pub widget: W,
     pub path: &'a [WidgetIdent],
     pub index: usize,
-    pub widget_id: WidgetID
+    pub widget_id: WidgetId
 }
 
 impl<F: RenderFrame> WidgetStackCache<F> {
@@ -124,7 +124,7 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
     }
 
     #[inline]
-    pub fn top_id(&self) -> WidgetID {
+    pub fn top_id(&self) -> WidgetId {
         self.vec.last().unwrap().widget_id
     }
 

@@ -8,7 +8,7 @@ use crate::{
     LoopFlow,
     event::{EventOps, InputState, WidgetEventSourced},
     render::{RenderFrame, RenderFrameClipped},
-    widget::{Parent, WidgetIdent, Widget, WidgetRender, WidgetID, WidgetTag, WidgetInfo, WidgetInfoMut},
+    widget::{Parent, WidgetIdent, Widget, WidgetRender, WidgetId, WidgetTag, WidgetInfo, WidgetInfoMut},
 };
 use arrayvec::ArrayVec;
 use std::{
@@ -27,7 +27,7 @@ pub type ForEachSummary<'a, W> = &'a mut FnMut(ArrayVec<[W; CHILD_BATCH_SIZE]>) 
 /// Trait used internally to aid with dynamic dispatch.
 pub(crate) trait WidgetDyn<F: RenderFrame>: 'static {
     fn widget_tag(&self) -> &WidgetTag;
-    fn widget_id(&self) -> WidgetID;
+    fn widget_id(&self) -> WidgetId;
 
     fn rect(&self) -> BoundBox<D2, i32>;
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32>;
@@ -111,7 +111,7 @@ impl<W, F> WidgetDyn<F> for W
     fn widget_tag(&self) -> &WidgetTag {
         <Self as Widget>::widget_tag(self)
     }
-    fn widget_id(&self) -> WidgetID {
+    fn widget_id(&self) -> WidgetId {
         <Self as Widget>::widget_id(self)
     }
 

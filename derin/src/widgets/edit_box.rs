@@ -5,7 +5,7 @@
 use crate::{
     core::{
         event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
-        timer::{Timer, TimerID},
+        timer::{Timer, TimerId},
         widget::{WidgetTag, WidgetRender, Widget},
         render::{RenderFrameClipped, Theme},
     },
@@ -25,7 +25,7 @@ pub struct EditBox {
     bounds: BoundBox<D2, i32>,
     edit: TextEditAssist,
     min_size: DimsBox<D2, i32>,
-    flash_timer: Option<TimerID>,
+    flash_timer: Option<TimerId>,
 }
 
 /// Single-line editable text widget.
@@ -35,7 +35,7 @@ pub struct LineBox {
     bounds: BoundBox<D2, i32>,
     edit: TextEditAssist<LineCharFilter>,
     min_size: DimsBox<D2, i32>,
-    flash_timer: Option<TimerID>,
+    flash_timer: Option<TimerId>,
 }
 
 impl EditBox {
@@ -154,7 +154,7 @@ macro_rules! event {
 
             match (cursor_flash, self.flash_timer) {
                 (Some(CursorFlashOp::Start), None) => {
-                    let timer_id = TimerID::new();
+                    let timer_id = TimerId::new();
                     self.widget_tag.timers_mut().insert(timer_id, Timer::new(Duration::new(1, 0)/2));
                     self.flash_timer = Some(timer_id);
                 },

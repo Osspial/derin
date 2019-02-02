@@ -9,10 +9,10 @@ use arrayvec::{ArrayVec, IntoIter};
 use crate::{
     cgmath::Point2,
     event::MouseDown,
-    widget::WidgetID,
+    widget::WidgetId,
 };
 
-type PointArray = [(Point2<i32>, WidgetID); MOUSE_INT_MASK_LEN as usize];
+type PointArray = [(Point2<i32>, WidgetId); MOUSE_INT_MASK_LEN as usize];
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct MouseButtonSequenceTrackPos {
@@ -37,9 +37,9 @@ pub struct MouseButtonSeqIter {
     len: u8
 }
 
-pub(crate) struct MouseDownWithID {
+pub(crate) struct MouseDownWithId {
     pub mouse_down: MouseDown,
-    pub widget_id: WidgetID,
+    pub widget_id: WidgetId,
 }
 
 impl MouseButtonSequenceTrackPos {
@@ -50,7 +50,7 @@ impl MouseButtonSequenceTrackPos {
         }
     }
 
-    pub fn push_button(&mut self, button: MouseButton, pos: Point2<i32>, widget_id: WidgetID) -> &mut MouseButtonSequenceTrackPos {
+    pub fn push_button(&mut self, button: MouseButton, pos: Point2<i32>, widget_id: WidgetId) -> &mut MouseButtonSequenceTrackPos {
         self.release_button(button);
         self.seq.push_button(button);
         self.down_positions.push((pos, widget_id));
@@ -68,9 +68,9 @@ impl MouseButtonSequenceTrackPos {
         self
     }
 
-    pub fn contains(&self, button: MouseButton) -> Option<MouseDownWithID> {
+    pub fn contains(&self, button: MouseButton) -> Option<MouseDownWithId> {
         self.seq.into_iter().enumerate().find(|&(_, b)| b == button)
-            .map(|(i, b)| MouseDownWithID {
+            .map(|(i, b)| MouseDownWithId {
                 mouse_down: MouseDown {
                     button: b,
                     down_pos: self.down_positions[i].0
@@ -166,7 +166,7 @@ impl FromIterator<MouseButton> for MouseButtonSequence {
 }
 
 impl IntoIterator for MouseButtonSequenceTrackPos {
-    type Item = MouseDownWithID;
+    type Item = MouseDownWithId;
     type IntoIter = MouseButtonSeqTrackPosIter;
 
     #[inline]
@@ -203,12 +203,12 @@ impl Iterator for MouseButtonSeqIter {
 impl ExactSizeIterator for MouseButtonSeqIter {}
 
 impl Iterator for MouseButtonSeqTrackPosIter {
-    type Item = MouseDownWithID;
+    type Item = MouseDownWithId;
 
     #[inline]
-    fn next(&mut self) -> Option<MouseDownWithID> {
+    fn next(&mut self) -> Option<MouseDownWithId> {
         let (down_pos, widget_id) = self.pos_iter.next()?;
-        Some(MouseDownWithID {
+        Some(MouseDownWithId {
             mouse_down: MouseDown {
                 button: self.seq_iter.next()?,
                 down_pos,

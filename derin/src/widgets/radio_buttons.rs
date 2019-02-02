@@ -7,7 +7,7 @@ use crate::{
     core::{
         LoopFlow,
         event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange},
-        widget::{MessageTarget, WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, WidgetID, Widget, Parent},
+        widget::{MessageTarget, WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, WidgetId, Widget, Parent},
         render::{RenderFrame, RenderFrameClipped},
         render::Theme as CoreTheme,
     },
@@ -59,7 +59,7 @@ pub struct RadioButtonList<C, L>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct RadioButtonSelected(WidgetID);
+struct RadioButtonSelected(WidgetId);
 
 impl<C, L> RadioButtonList<C, L>
     where C: WidgetContainer<RadioButton>,

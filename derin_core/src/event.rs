@@ -5,7 +5,7 @@
 use derin_common_types::buttons::{MouseButton, Key, ModifierKeys};
 use crate::cgmath::{Point2, Vector2};
 use crate::{
-    timer::TimerID,
+    timer::TimerId,
     widget::{WidgetIdent},
 };
 
@@ -181,7 +181,7 @@ pub enum WidgetEvent {
     /// Enough time has elapsed for a registered timer to be triggered.
     Timer {
         /// The timer's ID.
-        timer_id: TimerID,
+        timer_id: TimerId,
         /// The time at which the timer was registered.
         start_time: Instant,
         /// The time at which the timer was last triggered.

@@ -2,13 +2,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::widget::WidgetID;
+use crate::widget::WidgetId;
 use std::{
     cell::Cell,
     time::{Instant, Duration},
 };
 
-id!(pub TimerID);
+id!(pub TimerId);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Timer {
@@ -21,8 +21,8 @@ pub struct Timer {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct TimerTrigger {
     pub instant: Instant,
-    pub timer_id: TimerID,
-    pub widget_id: WidgetID,
+    pub timer_id: TimerId,
+    pub widget_id: WidgetId,
 }
 
 pub(crate) struct TimerTriggerTracker {
@@ -66,7 +66,7 @@ impl Timer {
 }
 
 impl TimerTrigger {
-    pub fn new(instant: Instant, timer_id: TimerID, widget_id: WidgetID) -> TimerTrigger {
+    pub fn new(instant: Instant, timer_id: TimerId, widget_id: WidgetId) -> TimerTrigger {
         TimerTrigger{ instant, timer_id, widget_id }
     }
 }

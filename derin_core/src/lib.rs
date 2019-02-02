@@ -87,8 +87,8 @@ struct InputState {
     mouse_buttons_down: MouseButtonSequenceTrackPos,
     modifiers: ModifierKeys,
     keys_down: Vec<Key>,
-    mouse_hover_widget: Option<WidgetID>,
-    focused_widget: Option<WidgetID>
+    mouse_hover_widget: Option<WidgetId>,
+    focused_widget: Option<WidgetId>
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
