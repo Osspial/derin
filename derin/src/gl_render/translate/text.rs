@@ -50,20 +50,15 @@ pub struct RenderGlyph {
 }
 
 #[derive(Debug, Clone)]
-pub struct EditString {
-    pub render_string: RenderString,
-    pub draw_cursor: bool,
-    cursor_pos: usize,
-    highlight_range: Range<usize>,
-    cursor_target_x_px: Option<i32>,
-}
-
-#[derive(Debug, Clone)]
 pub struct RenderString {
     pub offset: Vector2<i32>,
     string: String,
     min_size: DimsBox<D2, i32>,
-    draw_data: Option<StringDrawData>
+    draw_data: Option<StringDrawData>,
+    pub draw_cursor: bool,
+    cursor_pos: usize,
+    highlight_range: Range<usize>,
+    cursor_target_x_px: Option<i32>,
 }
 
 #[derive(Debug, Clone)]
@@ -162,45 +157,7 @@ struct Run {
 }
 
 impl<'a> TextTranslate<'a> {
-    pub fn new_rs<'b, F>(
-        rect: BoundBox<D2, i32>,
-        clip_rect: BoundBox<D2, i32>,
-        text_style: ThemeText,
-        face: &'a mut Face<Any>,
-        dpi: DPI,
-        atlas: &'a mut Atlas,
-        shape_text: F,
-        render_string: &'a mut RenderString
-    ) -> TextTranslate<'a>
-        where F: FnOnce(&str, &mut Face<Any>) -> &'b ShapedBuffer
-    {
-        Self::new_raw(rect, clip_rect, text_style, face, dpi, atlas, shape_text, render_string, 0..0, None)
-    }
-
-    pub fn new_es<'b, F>(
-        rect: BoundBox<D2, i32>,
-        clip_rect: BoundBox<D2, i32>,
-        text_style: ThemeText,
-        face: &'a mut Face<Any>,
-        dpi: DPI,
-        atlas: &'a mut Atlas,
-        shape_text: F,
-        edit_string: &'a mut EditString
-    ) -> TextTranslate<'a>
-        where F: FnOnce(&str, &mut Face<Any>) -> &'b ShapedBuffer
-    {
-        Self::new_raw(
-            rect, clip_rect, text_style, face, dpi, atlas,
-            shape_text, &mut edit_string.render_string,
-            edit_string.highlight_range.clone(),
-            match edit_string.draw_cursor && edit_string.highlight_range.len() == 0 {
-                true => Some(edit_string.cursor_pos),
-                false => None
-            }
-        )
-    }
-
-    fn new_raw<'b, F>(
+    pub fn new<'b, F>(
         mut rect: BoundBox<D2, i32>,
         clip_rect: BoundBox<D2, i32>,
         text_style: ThemeText,
@@ -208,9 +165,7 @@ impl<'a> TextTranslate<'a> {
         dpi: DPI,
         atlas: &'a mut Atlas,
         shape_text: F,
-        render_string: &'a mut RenderString,
-        highlight_range: Range<usize>,
-        cursor_pos: Option<usize>,
+        render_string: &'a mut RenderString
     ) -> TextTranslate<'a>
         where F: FnOnce(&str, &mut Face<Any>) -> &'b ShapedBuffer
     {
@@ -225,14 +180,14 @@ impl<'a> TextTranslate<'a> {
 
         TextTranslate {
             glyph_slice_index: 0,
-            highlight_range,
-            cursor_pos,
+            highlight_range: render_string.highlight_range.clone(),
+            cursor_pos: Some(render_string.cursor_pos).filter(|_| render_string.draw_cursor()),
             offset: render_string.offset,
 
             font_ascender: ascender,
             font_descender: descender,
 
-            glyph_slice: render_string.reshape_glyphs(rect, shape_text, &text_style, face, dpi, cursor_pos),
+            glyph_slice: render_string.reshape_glyphs(rect, shape_text, &text_style, face, dpi),
             glyph_draw: GlyphDraw {
                 face, atlas, text_style, dpi, rect,
                 clip_rect: clip_rect.intersect_rect(rect).unwrap_or(BoundBox::new2(0, 0, 0, 0))
@@ -853,20 +808,17 @@ impl Default for RenderString {
     }
 }
 
-impl Default for EditString {
-    #[inline]
-    fn default() -> EditString {
-        EditString::new(RenderString::default())
-    }
-}
-
 impl RenderString {
     pub fn new(string: String) -> RenderString {
         RenderString {
             offset: Vector2::new(0, 0),
             string,
             min_size: DimsBox::new2(0, 0),
-            draw_data: None
+            draw_data: None,
+            draw_cursor: false,
+            cursor_pos: 0,
+            highlight_range: 0..0,
+            cursor_target_x_px: None,
         }
     }
 
@@ -899,7 +851,6 @@ impl RenderString {
         text_style: &ThemeText,
         face: &mut Face<Any>,
         dpi: DPI,
-        cursor_pos_opt: Option<usize>
     ) -> &[RenderGlyph]
         where F: FnOnce(&str, &mut Face<Any>) -> &'a ShapedBuffer
     {
@@ -928,6 +879,7 @@ impl RenderString {
             }
         }
 
+        let draw_cursor = self.draw_cursor();
         let draw_data = self.draw_data.as_mut().unwrap();
         if !use_cached_glyphs {
             let shaped_buffer = shape_text(&self.string, face);
@@ -947,7 +899,7 @@ impl RenderString {
             };
         }
 
-        if let Some(cursor_pos) = cursor_pos_opt {
+        if draw_cursor {
             let (draw_width, draw_height) = (draw_data.draw_rect.width(), draw_data.draw_rect.height());
 
             // Used to work around ICE
@@ -956,7 +908,7 @@ impl RenderString {
             }
 
             let mut offset = Vector2::new(0, 0);
-            if let Some(cursor_glyph) = get_glyph(self, cursor_pos) {
+            if let Some(cursor_glyph) = get_glyph(self, self.cursor_pos) {
                 let cursor_x = cursor_glyph.highlight_rect.min.x;
                 let cursor_y_start = cursor_glyph.highlight_rect.min.y;
                 let cursor_y_end = cursor_glyph.highlight_rect.max.y;
@@ -1005,18 +957,6 @@ impl RenderString {
             empty_iter
         }
     }
-}
-
-impl EditString {
-    pub fn new(render_string: RenderString) -> EditString {
-        EditString {
-            render_string,
-            draw_cursor: false,
-            cursor_pos: 0,
-            highlight_range: 0..0,
-            cursor_target_x_px: None
-        }
-    }
 
     #[inline]
     pub fn cursor_pos(&self) -> usize {
@@ -1036,21 +976,18 @@ impl EditString {
 
     pub fn move_cursor_vertical(&mut self, dist: isize, expand_selection: bool) {
         let cursor_start_pos = self.cursor_pos;
-        let EditString {
-            ref mut cursor_pos,
-            ref mut cursor_target_x_px,
-            ref mut render_string,
-            ..
-        } = *self;
+
+        let mut cursor_pos = self.cursor_pos;
+        let mut cursor_target_x_px = self.cursor_target_x_px;
 
         macro_rules! search_for_glyph {
             ($iter:expr) => {{
-                let cursor_pos_move = *cursor_pos;
+                let cursor_pos_move = cursor_pos;
                 let mut glyph_iter = $iter.skip_while(move |g| g.str_index != cursor_pos_move);
                 if let Some(cursor_glyph) = glyph_iter.next() {
                     let cursor_pos_px = cursor_glyph.highlight_rect.min;
                     if cursor_target_x_px.is_none() {
-                        *cursor_target_x_px = Some(cursor_pos_px.x);
+                        cursor_target_x_px = Some(cursor_pos_px.x);
                     }
                     let target_x_px = cursor_target_x_px.unwrap();
 
@@ -1068,7 +1005,7 @@ impl EditString {
                             }
 
                             min_dist_x = glyph_dist_x;
-                            *cursor_pos = glyph.str_index;
+                            cursor_pos = glyph.str_index;
 
                             continue;
                         }
@@ -1078,20 +1015,23 @@ impl EditString {
 
                         if glyph_dist_x < min_dist_x {
                             min_dist_x = glyph_dist_x;
-                            *cursor_pos = glyph.str_index;
+                            cursor_pos = glyph.str_index;
                         }
                     }
                 }
             }}
         }
 
-        let glyph_iter = render_string.glyph_iter();
+        let glyph_iter = self.glyph_iter();
         match dist.signum() {
              0 => return,
              1 => search_for_glyph!(glyph_iter),
             -1 => search_for_glyph!(glyph_iter.rev()),
             _ => unreachable!()
         }
+        self.cursor_pos = cursor_pos;
+        self.cursor_target_x_px = cursor_target_x_px;
+
         if expand_selection {
             self.expand_selection_to_cursor(cursor_start_pos);
         } else {
@@ -1105,21 +1045,21 @@ impl EditString {
         self.cursor_pos = match (self.highlight_range.len() * !expand_selection as usize, dist.signum(), jump_to_word_boundaries) {
             (_, 0, _) => return,
             (0, 1, false) =>
-                self.render_string.string[self.cursor_pos..].grapheme_indices(true)
+                self.string[self.cursor_pos..].grapheme_indices(true)
                     .skip(dist as usize).map(|(i, _)| i + self.cursor_pos)
-                    .next().unwrap_or(self.render_string.string.len()),
+                    .next().unwrap_or(self.string.len()),
             (0, -1, false) =>
-                self.render_string.string[..self.cursor_pos].grapheme_indices(true)
+                self.string[..self.cursor_pos].grapheme_indices(true)
                     .rev().skip(dist.abs() as usize - 1).map(|(i, _)| i)
                     .next().unwrap_or(0),
             (0, 1, true) =>
-                self.render_string.string[self.cursor_pos..].unicode_words()
+                self.string[self.cursor_pos..].unicode_words()
                 .skip(dist as usize).next()
-                .map(|word| word.as_ptr() as usize - self.render_string.string.as_ptr() as usize)
-                .unwrap_or(self.render_string.string.len()),
-            (0, -1, true) => self.render_string.string[..self.cursor_pos].unicode_words()
+                .map(|word| word.as_ptr() as usize - self.string.as_ptr() as usize)
+                .unwrap_or(self.string.len()),
+            (0, -1, true) => self.string[..self.cursor_pos].unicode_words()
                 .rev().skip(dist.abs() as usize - 1).next()
-                .map(|word| word.as_ptr() as usize - self.render_string.string.as_ptr() as usize)
+                .map(|word| word.as_ptr() as usize - self.string.as_ptr() as usize)
                 .unwrap_or(0),
             (_, 1, _) => self.highlight_range.end,
             (_, -1, _) => self.highlight_range.start,
@@ -1151,8 +1091,12 @@ impl EditString {
         }
     }
 
+    fn draw_cursor(&self) -> bool {
+        self.draw_cursor && self.highlight_range.len() == 0
+    }
+
     pub fn select_on_line(&mut self, segment: Segment<D2, i32>) {
-        let shaped_glyphs = match self.render_string.draw_data {
+        let shaped_glyphs = match self.draw_data {
             Some(ref draw_data) => &draw_data.shaped_glyphs,
             None => {self.highlight_range = 0..0; return}
         };
@@ -1205,7 +1149,7 @@ impl EditString {
     }
 
     pub fn select_all(&mut self) {
-        self.highlight_range = 0..self.render_string.string.len();
+        self.highlight_range = 0..self.string.len();
         self.cursor_pos = self.highlight_range.end;
     }
 
@@ -1215,21 +1159,25 @@ impl EditString {
 
     pub fn insert_char(&mut self, c: char) {
         if self.highlight_range.len() != 0 {
-            self.render_string.string_mut().drain(self.highlight_range.clone());
+            let highlight_range = self.highlight_range.clone();
+            self.string_mut().drain(highlight_range);
             self.cursor_pos = self.highlight_range.start;
             self.highlight_range = 0..0;
         }
-        self.render_string.string_mut().insert(self.cursor_pos, c);
+        let cursor_pos = self.cursor_pos;
+        self.string_mut().insert(cursor_pos, c);
         self.cursor_pos += c.len_utf8();
     }
 
     pub fn insert_str(&mut self, s: &str) {
         if self.highlight_range.len() != 0 {
-            self.render_string.string_mut().drain(self.highlight_range.clone());
+            let highlight_range = self.highlight_range.clone();
+            self.string_mut().drain(highlight_range);
             self.cursor_pos = self.highlight_range.start;
             self.highlight_range = 0..0;
         }
-        self.render_string.string_mut().insert_str(self.cursor_pos, s);
+        let cursor_pos = self.cursor_pos;
+        self.string_mut().insert_str(cursor_pos, s);
         self.cursor_pos += s.len();
     }
 
@@ -1242,7 +1190,7 @@ impl EditString {
             let new_pos = self.cursor_pos;
             cmp::min(old_pos, new_pos)..cmp::max(old_pos, new_pos)
         };
-        self.render_string.string_mut().drain(drain_range.clone());
+        self.string_mut().drain(drain_range.clone());
         self.highlight_range = 0..0;
         self.cursor_pos = drain_range.start;
     }

@@ -19,7 +19,7 @@ use crate::core::render::Theme as CoreTheme;
 use self::image::ImageTranslate;
 use self::text::TextTranslate;
 
-pub use self::text::{EditString, RenderString};
+pub use self::text::RenderString;
 
 use std::mem;
 
@@ -44,7 +44,6 @@ pub struct RelPoint {
 pub enum Prim<D> {
     Image,
     String(*mut RenderString),
-    EditString(*mut EditString),
     DirectRender(*mut FnMut(&mut D))
 }
 
@@ -125,7 +124,7 @@ impl Translator {
                             Ok(face) => {
                                 let render_string = unsafe{ &mut *render_string };
 
-                                let vertex_iter = TextTranslate::new_rs(
+                                let vertex_iter = TextTranslate::new(
                                     abs_rect,
                                     parent_clipped,
                                     theme_text.clone(),
@@ -146,40 +145,6 @@ impl Translator {
                                 );
                                 draw.vertices.extend(vertex_iter);
                                 if let (Some(rect_px_out), Some(text_rect)) = (prim.rect_px_out, render_string.text_rect()) {
-                                    unsafe{ *rect_px_out = text_rect + abs_rect.min().to_vec() - parent_rect.min().to_vec() };
-                                }
-                            },
-                            Err(_) => {
-                                //TODO: log
-                            }
-                        }
-                    },
-                    (Prim::EditString(edit_string), _, Some(theme_text)) => {
-                        match draw.font_cache.face(theme_text.face.clone()) {
-                            Ok(face) => {
-                                let edit_string = unsafe{ &mut *edit_string };
-
-                                let vertex_iter = TextTranslate::new_es(
-                                    abs_rect,
-                                    parent_clipped,
-                                    theme_text.clone(),
-                                    face,
-                                    dpi,
-                                    &mut draw.atlas,
-                                    |string, face| {
-                                        self.shaper.shape_text(
-                                            string,
-                                            face,
-                                            FaceSize::new(theme_text.face_size, theme_text.face_size),
-                                            dpi,
-                                            &mut self.shaped_text
-                                        ).ok();
-                                        &self.shaped_text
-                                    },
-                                    edit_string
-                                );
-                                draw.vertices.extend(vertex_iter);
-                                if let (Some(rect_px_out), Some(text_rect)) = (prim.rect_px_out, edit_string.render_string.text_rect()) {
                                     unsafe{ *rect_px_out = text_rect + abs_rect.min().to_vec() - parent_rect.min().to_vec() };
                                 }
                             },

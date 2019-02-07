@@ -9,7 +9,7 @@ use crate::{
         widget::{WidgetTag, WidgetRender, Widget},
         render::{RenderFrameClipped, Theme},
     },
-    gl_render::{ThemedPrim, PrimFrame, RenderString, EditString, RelPoint, Prim},
+    gl_render::{ThemedPrim, PrimFrame, RenderString, RelPoint, Prim},
     widgets::assistants::text_edit::{TextEditAssist, TextEditOps, CursorFlashOp, LineCharFilter},
 };
 use crate::cgmath::Point2;
@@ -45,7 +45,7 @@ impl EditBox {
             widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             edit: TextEditAssist {
-                string: EditString::new(RenderString::new(string)),
+                string: RenderString::new(string),
                 ..TextEditAssist::default()
             },
             min_size: DimsBox::new2(0, 0),
@@ -55,7 +55,7 @@ impl EditBox {
 
     /// Retrieves a reference to the string stored within the `EditBox`.
     pub fn string(&self) -> &str {
-        self.edit.string.render_string.string()
+        self.edit.string.string()
     }
 
     /// Retrieves the `String` stored in the `EditBox`, for mutation.
@@ -64,7 +64,7 @@ impl EditBox {
     /// it unless you're actually changing the contents.
     pub fn string_mut(&mut self) -> &mut String {
         self.widget_tag.request_redraw();
-        self.edit.string.render_string.string_mut()
+        self.edit.string.string_mut()
     }
 }
 
@@ -75,7 +75,7 @@ impl LineBox {
             widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             edit: TextEditAssist {
-                string: EditString::new(RenderString::new(string)),
+                string: RenderString::new(string),
                 ..TextEditAssist::default()
             },
             min_size: DimsBox::new2(0, 0),
@@ -85,7 +85,7 @@ impl LineBox {
 
     /// Retrieves a reference to the string stored within the `LineBox`.
     pub fn string(&self) -> &str {
-        self.edit.string.render_string.string()
+        self.edit.string.string()
     }
 
     /// Retrieves the `String` stored in the `LineBox`, for mutation.
@@ -94,7 +94,7 @@ impl LineBox {
     /// it unless you're actually changing the contents.
     pub fn string_mut(&mut self) -> &mut String {
         self.widget_tag.request_redraw();
-        self.edit.string.render_string.string_mut()
+        self.edit.string.string_mut()
     }
 }
 
@@ -126,13 +126,13 @@ macro_rules! render {
                             RelPoint::new( 1.0, 0),
                             RelPoint::new( 1.0, 0)
                         ),
-                        prim: Prim::EditString(&mut self.edit.string),
+                        prim: Prim::String(&mut self.edit.string),
                         rect_px_out: None
                     }
                 ]).into_iter());
 
                 self.min_size = frame.theme().widget_theme(stringify!($ty)).image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
-                let render_string_min = self.edit.string.render_string.min_size();
+                let render_string_min = self.edit.string.min_size();
                 self.min_size.dims.y += render_string_min.height();
             }
         }

@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::gl_render::EditString;
+use crate::gl_render::RenderString;
 use crate::event::{Key, ModifierKeys, WidgetEvent, FocusChange, InputState, MouseHoverChange};
 use crate::theme::CursorIcon;
 use clipboard::{ClipboardContext, ClipboardProvider};
@@ -58,7 +58,7 @@ pub struct TextEditOps {
 pub struct TextEditAssist<C = DefaultCharFilter>
     where C: CharFilter
 {
-    pub string: EditString,
+    pub string: RenderString,
     pub filter: C
 }
 
@@ -96,7 +96,7 @@ impl<C> TextEditAssist<C>
                     (Key::C, ModifierKeys::CTRL) => {
                         if let Ok(mut clipboard) = ClipboardContext::new() {
                             let select_range = self.string.highlight_range();
-                            clipboard.set_contents(self.string.render_string.string()[select_range].to_string()).ok();
+                            clipboard.set_contents(self.string.string()[select_range].to_string()).ok();
                         }
                     },
                     (Key::V, ModifierKeys::CTRL) => {
@@ -107,7 +107,7 @@ impl<C> TextEditAssist<C>
                     (Key::X, ModifierKeys::CTRL) => {
                         if let Ok(mut clipboard) = ClipboardContext::new() {
                             let highlight_range = self.string.highlight_range();
-                            clipboard.set_contents(self.string.render_string.string()[highlight_range.clone()].to_string()).ok();
+                            clipboard.set_contents(self.string.string()[highlight_range.clone()].to_string()).ok();
                             if highlight_range.len() > 0 {
                                 self.string.delete_chars(1, false);
                             }

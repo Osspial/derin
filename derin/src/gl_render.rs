@@ -37,7 +37,7 @@ pub use crate::core::render::{Renderer, RenderFrame};
 use self::atlas::Atlas;
 use self::font_cache::FontCache;
 use self::translate::Translator;
-pub use self::translate::{EditString, Prim, ThemedPrim, RelPoint, RenderString};
+pub use self::translate::{Prim, ThemedPrim, RelPoint, RenderString};
 
 pub struct GLRenderer {
     window: GlWindow,
