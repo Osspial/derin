@@ -899,6 +899,8 @@ impl RenderString {
             };
         }
 
+        // If the cursor is outside of the draw rectangle, offset the text so that the cursor and
+        // cursor glyph get drawn.
         if draw_cursor {
             let (draw_width, draw_height) = (draw_data.draw_rect.width(), draw_data.draw_rect.height());
 
@@ -1095,7 +1097,7 @@ impl RenderString {
         self.draw_cursor && self.highlight_range.len() == 0
     }
 
-    pub fn select_on_line(&mut self, segment: Segment<D2, i32>) {
+    pub fn select_on_line(&mut self, mut segment: Segment<D2, i32>) {
         let shaped_glyphs = match self.draw_data {
             Some(ref draw_data) => &draw_data.shaped_glyphs,
             None => {self.highlight_range = 0..0; return}
@@ -1114,6 +1116,9 @@ impl RenderString {
         let (mut min_start_x_dist, mut min_start_y_dist) = (i32::max_value(), i32::max_value());
         let (mut min_end_x_dist, mut min_end_y_dist) = (i32::max_value(), i32::max_value());
         let (mut start_index, mut end_index) = (0, 0);
+
+        // Offset the segment so that we're properly selecting offset text.
+        segment = Segment::new(segment.start - self.offset, segment.end - self.offset);
 
         for glyph in shaped_glyphs.iter() {
             let x_dist = |point: Point2<_>| dist(glyph.highlight_rect.min.x, glyph.highlight_rect.max.x, point.x);
