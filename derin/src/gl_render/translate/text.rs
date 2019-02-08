@@ -890,11 +890,12 @@ impl RenderString {
             draw_data.text_rect = glyph_iter.text_rect;
 
             self.min_size = match text_style.line_wrap {
-                LineWrap::None => DimsBox::new2(
-                    // withholding the +1 leads to clipping bugs so I'm just including it
-                    glyph_iter.cursor.x - glyph_iter.line_start_x + 1 + text_style.margins.width() as i32,
-                    glyph_iter.line_height + -glyph_iter.font_descender + text_style.margins.height() as i32
-                ),
+                LineWrap::None => {
+                    let mut dims_margins = glyph_iter.text_rect.map(|r| r.dims()).unwrap_or(DimsBox::new2(0, 0));
+                    dims_margins.dims.x += text_style.margins.width() as i32;
+                    dims_margins.dims.y += text_style.margins.height() as i32;
+                    dims_margins
+                },
                 _ => DimsBox::new2(0, 0)
             };
         }
