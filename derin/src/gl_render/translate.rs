@@ -16,8 +16,8 @@ use crate::gl_render::{FrameDraw, GLFrame, PrimFrame};
 use crate::theme::Theme;
 use crate::core::render::Theme as CoreTheme;
 
-use self::image::ImageTranslate;
-use self::text::TextTranslate;
+use self::image::ImageToVertices;
+use self::text::TextToVertices;
 
 pub use self::text::RenderString;
 
@@ -106,7 +106,7 @@ impl Translator {
                         abs_rect.max.y = abs_rect.min.y + abs_rect_dims_bounded.height();
                         abs_rect = abs_rect + (abs_rect_dims.dims - abs_rect_dims_bounded.dims) / 2;
 
-                        let image_translate = ImageTranslate::new(
+                        let image_translate = ImageToVertices::new(
                             abs_rect,
                             parent_clipped,
                             atlas_rect,
@@ -124,7 +124,7 @@ impl Translator {
                             Ok(face) => {
                                 let render_string = unsafe{ &mut *render_string };
 
-                                let vertex_iter = TextTranslate::new(
+                                let vertex_iter = TextToVertices::new(
                                     abs_rect,
                                     parent_clipped,
                                     theme_text.clone(),

@@ -12,7 +12,7 @@ use crate::theme::RescaleRules;
 
 use derin_common_types::layout::{Align, Margins};
 
-pub(in crate::gl_render) struct ImageTranslate {
+pub(in crate::gl_render) struct ImageToVertices {
     verts: TranslateVerts,
     rect: Option<BoundBox<D2, i32>>,
     cur_vertex: usize
@@ -34,11 +34,11 @@ enum TranslateVerts {
     None
 }
 
-impl ImageTranslate {
-    pub fn new(rect: BoundBox<D2, i32>, clip: BoundBox<D2, i32>, atlas_rect: OffsetBox<D2, u16>, color: Rgba<u8>, rescale: RescaleRules) -> ImageTranslate {
+impl ImageToVertices {
+    pub fn new(rect: BoundBox<D2, i32>, clip: BoundBox<D2, i32>, atlas_rect: OffsetBox<D2, u16>, color: Rgba<u8>, rescale: RescaleRules) -> ImageToVertices {
         let clipped_rect = match clip.intersect_rect(rect) {
             Some(clipped_rect) => clipped_rect,
-            None => return ImageTranslate {
+            None => return ImageToVertices {
                 verts: TranslateVerts::None,
                 rect: None,
                 cur_vertex: 0
@@ -236,7 +236,7 @@ impl ImageTranslate {
             }
         };
 
-        ImageTranslate {
+        ImageToVertices {
             verts,
             rect: rect_out,
             cur_vertex: 0
@@ -248,7 +248,7 @@ impl ImageTranslate {
     }
 }
 
-impl Iterator for ImageTranslate {
+impl Iterator for ImageToVertices {
     type Item = GLVertex;
 
     #[inline]
