@@ -150,14 +150,14 @@ impl<'a> Iterator for TextToVertices<'a> {
                     let next_glyph_opt = get_glyph_slice!(*glyph_slice_index);
 
                     *cursor_vertex_iter = cursor_pos.and_then(|pos| {
+                        // The position of the top-left corner of the cursor.
                         let base_pos = match next_glyph_opt {
                             Some(next_glyph) => {
-                                let str_index = next_glyph.str_index;
                                 let highlight_rect = next_glyph.highlight_rect + glyph_draw.rect.min().to_vec();
 
-                                if pos == str_index && pos == 0 {
+                                if pos == next_glyph.str_index {
                                     Some(highlight_rect.min())
-                                } else if pos == str_index + 1 {
+                                } else if pos == next_glyph.str_index + next_glyph.grapheme_len {
                                     Some(Point2::new(highlight_rect.max().x, highlight_rect.min().y))
                                 } else {
                                     None
@@ -490,6 +490,7 @@ impl RenderString {
                     dummy_last_glyph_pos_x, last_glyph.highlight_rect.min.y + last_glyph.highlight_rect.height()
                 ),
                 str_index: self.string.len(),
+                grapheme_len: 0,
                 glyph_index: None
             };
             shaped_glyphs.iter().cloned().chain(Some(dummy_last_glyph)).map(offset_glyph)

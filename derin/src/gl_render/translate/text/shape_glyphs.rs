@@ -10,6 +10,8 @@ use itertools::Itertools;
 use std::vec;
 use std::any::Any;
 
+use unicode_segmentation::UnicodeSegmentation;
+
 pub fn shape_glyphs(
     rect: BoundBox<D2, i32>,
     shaped_text: &ShapedBuffer,
@@ -41,6 +43,8 @@ pub struct RenderGlyph {
     pub highlight_rect: BoundBox<D2, i32>,
     /// The index into the string where this character is stored.
     pub str_index: usize,
+    /// The length, in bytes, of the grapheme cluster the glyph represents.
+    pub grapheme_len: usize,
     /// The glyph's index in the font face.
     pub glyph_index: Option<u32>,
 }
@@ -80,7 +84,10 @@ struct GlyphIter {
 #[derive(Debug, PartialEq, Eq)]
 enum GlyphItem {
     /// A single shaped glyph. Location is relative to word start.
-    Glyph(ShapedGlyph),
+    Glyph {
+        glyph: ShapedGlyph,
+        grapheme_len: usize,
+    },
     /// A sequence of renderable glyphs.
     Word {
         glyph_count: u32,
@@ -178,7 +185,10 @@ impl GlyphIter {
                 for (glyph, _) in glyphs.peeking_take_while(|&(_, c)| !c.is_whitespace()) {
                     glyph_count += 1;
                     word_advance += glyph.advance.x;
-                    glyph_items.push(GlyphItem::Glyph(glyph));
+                    glyph_items.push(GlyphItem::Glyph {
+                        glyph,
+                        grapheme_len: segment.text[glyph.word_str_index..].graphemes(true).next().unwrap().len(),
+                    });
                 }
                 // If there are glyphs to add, insert a `Word` and increment the advances.
                 if glyph_count > 0 {
@@ -383,12 +393,13 @@ impl Iterator for GlyphIter {
     fn next(&mut self) -> Option<RenderGlyph> {
         loop {
             match self.glyph_items.next()? {
-                GlyphItem::Glyph(glyph) => {
+                GlyphItem::Glyph{glyph, grapheme_len} => {
                     let render_glyph = RenderGlyph {
                         pos: Point2::from_vec(self.cursor),
                         highlight_rect: self.highlight_rect(Point2::from_vec(self.cursor), glyph.advance.x),
                         str_index: glyph.str_index,
-                        glyph_index: Some(glyph.glyph_index)
+                        grapheme_len,
+                        glyph_index: Some(glyph.glyph_index),
                     };
 
                     self.cursor += glyph.advance.mul_element_wise(Vector2::new(1, -1));
@@ -442,6 +453,7 @@ impl Iterator for GlyphIter {
                         pos: Point2::from_vec(self.cursor),
                         highlight_rect: self.highlight_rect(Point2::from_vec(self.cursor), cursor_advance),
                         str_index: glyph.str_index,
+                        grapheme_len: 1,
                         glyph_index: None
                     };
                     self.cursor.x += cursor_advance;
@@ -472,6 +484,7 @@ impl Iterator for GlyphIter {
                         pos: Point2::from_vec(self.cursor),
                         highlight_rect: self.highlight_rect(Point2::from_vec(self.cursor), new_cursor_x - self.cursor.x),
                         str_index,
+                        grapheme_len: 1,
                         glyph_index: None
                     };
                     self.cursor.x = new_cursor_x;
