@@ -124,13 +124,8 @@ impl Translator {
                             Ok(face) => {
                                 let render_string = unsafe{ &mut *render_string };
 
-                                let vertex_iter = TextToVertices::new(
+                                render_string.reshape_glyphs(
                                     abs_rect,
-                                    parent_clipped,
-                                    theme_text.clone(),
-                                    face,
-                                    dpi,
-                                    &mut draw.atlas,
                                     |string, face| {
                                         self.shaper.shape_text(
                                             string,
@@ -141,7 +136,23 @@ impl Translator {
                                         ).ok();
                                         &self.shaped_text
                                     },
-                                    render_string
+                                    &theme_text,
+                                    face,
+                                    dpi,
+                                );
+
+                                let vertex_iter = TextToVertices::new(
+                                    render_string.string_draw_data().unwrap(),
+                                    render_string.highlight_range(),
+                                    match render_string.draw_cursor {
+                                        true => Some(render_string.cursor_pos()),
+                                        false => None,
+                                    },
+                                    render_string.offset,
+                                    parent_clipped,
+
+                                    face,
+                                    &mut draw.atlas,
                                 );
                                 draw.vertices.extend(vertex_iter);
                                 if let (Some(rect_px_out), Some(text_rect)) = (prim.rect_px_out, render_string.text_rect()) {

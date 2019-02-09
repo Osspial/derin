@@ -56,12 +56,12 @@ pub struct RenderString {
 }
 
 #[derive(Debug, Clone)]
-struct StringDrawData {
+pub struct StringDrawData {
     shaped_glyphs: Vec<RenderGlyph>,
     text_style: ThemeText,
     dpi: DPI,
     draw_rect: BoundBox<D2, i32>,
-    text_rect: Option<BoundBox<D2, i32>>
+    text_rect: Option<BoundBox<D2, i32>>,
 }
 
 struct GlyphDraw<'a> {
@@ -70,44 +70,42 @@ struct GlyphDraw<'a> {
     face: &'a mut Face<Any>,
     atlas: &'a mut Atlas,
     text_style: ThemeText,
-    dpi: DPI
+    dpi: DPI,
 }
 
 impl<'a> TextToVertices<'a> {
-    pub fn new<'b, F>(
-        mut rect: BoundBox<D2, i32>,
+    pub fn new<'b>(
+        draw_data: &'a StringDrawData,
+        highlight_range: Range<usize>,
+        cursor_pos: Option<usize>,
+        offset: Vector2<i32>,
         clip_rect: BoundBox<D2, i32>,
-        text_style: ThemeText,
-        face: &'a mut Face<Any>,
-        dpi: DPI,
-        atlas: &'a mut Atlas,
-        shape_text: F,
-        render_string: &'a mut RenderString
-    ) -> TextToVertices<'a>
-        where F: FnOnce(&str, &mut Face<Any>) -> &'b ShapedBuffer
-    {
-        let face_size = FaceSize::new(text_style.face_size, text_style.face_size);
-        let font_metrics = face.metrics_sized(face_size, dpi).unwrap();
-        let (ascender, descender) = ((font_metrics.ascender / 64) as i32, (font_metrics.descender / 64) as i32);
 
-        rect.min.x += text_style.margins.left as i32;
-        rect.max.x -= text_style.margins.right as i32;
-        rect.min.y += text_style.margins.top as i32;
-        rect.max.y -= text_style.margins.bottom as i32;
+        face: &'a mut Face<Any>,
+        atlas: &'a mut Atlas,
+    ) -> TextToVertices<'a>
+    {
+        let face_size = FaceSize::new(draw_data.text_style.face_size, draw_data.text_style.face_size);
+        let font_metrics = face.metrics_sized(face_size, draw_data.dpi).unwrap();
+        let (ascender, descender) = ((font_metrics.ascender / 64) as i32, (font_metrics.descender / 64) as i32);
 
         TextToVertices {
             glyph_slice_index: 0,
-            highlight_range: render_string.highlight_range.clone(),
-            cursor_pos: Some(render_string.cursor_pos).filter(|_| render_string.draw_cursor()),
-            offset: render_string.offset,
+            highlight_range: highlight_range.clone(),
+            cursor_pos,
+            offset: offset,
 
             font_ascender: ascender,
             font_descender: descender,
 
-            glyph_slice: render_string.reshape_glyphs(rect, shape_text, &text_style, face, dpi),
+            glyph_slice: &draw_data.shaped_glyphs,
             glyph_draw: GlyphDraw {
-                face, atlas, text_style, dpi, rect,
-                clip_rect: clip_rect.intersect_rect(rect).unwrap_or(BoundBox::new2(0, 0, 0, 0))
+                face,
+                atlas,
+                text_style: draw_data.text_style.clone(),
+                dpi: draw_data.dpi,
+                rect: draw_data.draw_rect,
+                clip_rect: clip_rect.intersect_rect(draw_data.draw_rect).unwrap_or(BoundBox::new2(0, 0, 0, 0))
             },
 
             highlight_vertex_iter: None,
@@ -376,16 +374,23 @@ impl RenderString {
         self.draw_data.as_ref().and_then(|d| d.text_rect)
     }
 
-    fn reshape_glyphs<'a, F>(&mut self,
+    pub fn reshape_glyphs<'a, F>(
+        &mut self,
         rect: BoundBox<D2, i32>,
         shape_text: F,
         text_style: &ThemeText,
         face: &mut Face<Any>,
         dpi: DPI,
-    ) -> &[RenderGlyph]
+    ) -> &StringDrawData
         where F: FnOnce(&str, &mut Face<Any>) -> &'a ShapedBuffer
     {
         let use_cached_glyphs: bool;
+        let rect = BoundBox::new2(
+            rect.min.x + text_style.margins.left as i32,
+            rect.min.y + text_style.margins.top as i32,
+            rect.max.x - text_style.margins.right as i32,
+            rect.max.y - text_style.margins.bottom as i32,
+        );
         match self.draw_data {
             Some(ref mut draw_data) => {
                 use_cached_glyphs =
@@ -468,7 +473,11 @@ impl RenderString {
             self.offset += offset;
         }
 
-        &self.draw_data.as_ref().unwrap().shaped_glyphs[..]
+        self.draw_data.as_ref().unwrap()
+    }
+
+    pub fn string_draw_data(&self) -> Option<&StringDrawData> {
+        self.draw_data.as_ref()
     }
 
     fn glyph_iter<'a>(&'a self) -> impl 'a + Iterator<Item=RenderGlyph> + DoubleEndedIterator {
