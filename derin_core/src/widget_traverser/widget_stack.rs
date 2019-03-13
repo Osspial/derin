@@ -3,25 +3,27 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use std::mem;
-use crate::render::RenderFrame;
-use crate::widget::{WidgetDyn, WidgetId, WidgetIdent, WidgetInfoMut, ROOT_IDENT};
-use super::virtual_widget_tree::PathRevItem;
+
+use crate::{
+    offset_widget::OffsetWidget,
+    render::Renderer,
+    widget::{WidgetDyn, WidgetId, WidgetIdent, WidgetInfoMut, ROOT_IDENT},
+    widget_traverser::virtual_widget_tree::PathRevItem,
+};
 
 use crate::cgmath::{Bounded, EuclideanSpace, Point2, Vector2};
 use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
-use crate::offset_widget::OffsetWidget;
-
 // TODO: GET CODE REVIEWED FOR SAFETY
 
-struct StackElement<F: RenderFrame> {
-    widget: *mut (WidgetDyn<F>),
+struct StackElement<R: Renderer> {
+    widget: *mut (WidgetDyn<R>),
     rectangles: Option<ElementRects>,
     index: usize,
     widget_id: WidgetId
 }
 
-impl<F: RenderFrame> std::fmt::Debug for StackElement<F> {
+impl<R: Renderer> std::fmt::Debug for StackElement<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         f.debug_struct("StackElement")
             .field("rectangles", &self.rectangles)
@@ -37,19 +39,19 @@ struct ElementRects {
     bounds_clipped: Option<BoundBox<D2, i32>>
 }
 
-pub(crate) struct WidgetStackCache<F: RenderFrame> {
-    vec: Vec<StackElement<F>>,
+pub(crate) struct WidgetStackCache<R: Renderer> {
+    vec: Vec<StackElement<R>>,
     ident_vec: Vec<WidgetIdent>
 }
 
-pub(crate) struct WidgetStack<'a, F: 'a + RenderFrame> {
-    vec: &'a mut Vec<StackElement<F>>,
+pub(crate) struct WidgetStack<'a, R: 'a + Renderer> {
+    vec: &'a mut Vec<StackElement<R>>,
     ident_vec: &'a mut Vec<WidgetIdent>,
     clip_rect: Option<BoundBox<D2, i32>>,
     top_parent_offset: Vector2<i32>,
 }
 
-pub(crate) type OffsetWidgetPath<'a, F> = WidgetPath<'a, OffsetWidget<'a, F>>;
+pub(crate) type OffsetWidgetPath<'a, R> = WidgetPath<'a, OffsetWidget<'a, R>>;
 
 pub(crate) struct WidgetPath<'a, W> {
     pub widget: W,
@@ -58,15 +60,15 @@ pub(crate) struct WidgetPath<'a, W> {
     pub widget_id: WidgetId
 }
 
-impl<F: RenderFrame> WidgetStackCache<F> {
-    pub fn new() -> WidgetStackCache<F> {
+impl<R: Renderer> WidgetStackCache<R> {
+    pub fn new() -> WidgetStackCache<R> {
         WidgetStackCache {
             vec: Vec::new(),
             ident_vec: Vec::new(),
         }
     }
 
-    pub fn use_cache<'a>(&'a mut self, widget: &mut WidgetDyn<F>) -> WidgetStack<'a, F> {
+    pub fn use_cache<'a>(&'a mut self, widget: &mut WidgetDyn<R>) -> WidgetStack<'a, R> {
         let mut cache_swap = Vec::new();
         mem::swap(&mut cache_swap, &mut self.vec);
 
@@ -90,9 +92,9 @@ impl<F: RenderFrame> WidgetStackCache<F> {
     }
 }
 
-impl<'a, F: RenderFrame> WidgetStack<'a, F> {
+impl<'a, R: Renderer> WidgetStack<'a, R> {
     #[inline]
-    pub fn top(&self) -> WidgetPath<'_, &'_ WidgetDyn<F>> {
+    pub fn top(&self) -> WidgetPath<'_, &'_ WidgetDyn<R>> {
         let (widget, widget_id) = self.vec.last().map(|n| unsafe{ (&*n.widget, n.widget_id) }).unwrap();
         WidgetPath {
             widget: widget,
@@ -103,7 +105,7 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
     }
 
     #[inline]
-    pub fn top_mut(&mut self) -> OffsetWidgetPath<F> {
+    pub fn top_mut(&mut self) -> OffsetWidgetPath<R> {
         let (widget, widget_id) = self.vec.last_mut().map(|n| unsafe{ (&mut *n.widget, n.widget_id) }).unwrap();
         OffsetWidgetPath {
             widget: OffsetWidget::new(widget, self.top_parent_offset, self.clip_rect),
@@ -165,7 +167,7 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
     }
 
     #[inline]
-    pub fn widgets(&self) -> impl '_ + Iterator<Item=WidgetPath<'_, &'_ WidgetDyn<F>>> + DoubleEndedIterator + ExactSizeIterator {
+    pub fn widgets(&self) -> impl '_ + Iterator<Item=WidgetPath<'_, &'_ WidgetDyn<R>>> + DoubleEndedIterator + ExactSizeIterator {
         let path = &self.ident_vec[..];
         self.vec.iter().enumerate().map(move |(i, n)| WidgetPath {
             widget: unsafe{ &*n.widget },
@@ -182,8 +184,8 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
     // }
 
     #[inline]
-    pub fn try_push<G>(&mut self, with_top: G) -> Option<OffsetWidgetPath<'_, F>>
-        where G: FnOnce(&'_ mut dyn WidgetDyn<F>) -> Option<WidgetInfoMut<F>>
+    pub fn try_push<G>(&mut self, with_top: G) -> Option<OffsetWidgetPath<'_, R>>
+        where G: FnOnce(&'_ mut dyn WidgetDyn<R>) -> Option<WidgetInfoMut<R>>
     {
         let mut old_top = self.top_mut();
         let top_rect = old_top.widget.rect();
@@ -196,7 +198,7 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
             let new_top_index = new_top_summary.index;
             let new_top_ident = new_top_summary.ident.clone();
 
-            assert_ne!(new_top_widget, self.top_mut().widget.inner_mut() as *mut WidgetDyn<F>);
+            assert_ne!(new_top_widget, self.top_mut().widget.inner_mut() as *mut WidgetDyn<R>);
             {
                 let old_top = self.vec.last_mut().unwrap();
                 let top_clip = self.clip_rect.and_then(|r| r.intersect_rect(top_rect));
@@ -222,7 +224,7 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
         }
     }
 
-    pub fn move_to_path_rev(&mut self, path_rev: impl Iterator<Item=PathRevItem> + ExactSizeIterator) -> Option<OffsetWidgetPath<'_, F>> {
+    pub fn move_to_path_rev(&mut self, path_rev: impl Iterator<Item=PathRevItem> + ExactSizeIterator) -> Option<OffsetWidgetPath<'_, R>> {
         let new_path_len = path_rev.len();
         self.ident_vec.resize(new_path_len, WidgetIdent::Num(0));
 
@@ -289,7 +291,7 @@ impl<'a, F: RenderFrame> WidgetStack<'a, F> {
     }
 
     #[inline]
-    pub fn pop(&mut self) -> Option<&mut WidgetDyn<F>> {
+    pub fn pop(&mut self) -> Option<&mut WidgetDyn<R>> {
         // Ensure the base is never popped
         if self.vec.len() == 1 {
             return None;

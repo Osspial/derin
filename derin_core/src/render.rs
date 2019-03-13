@@ -2,81 +2,167 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::cgmath::{Point2};
-use cgmath_geometry::{D2, rect::{BoundBox, DimsBox}};
-use derin_common_types::cursor::CursorIcon;
+use crate::widget::WidgetId;
+use cgmath_geometry::{
+    D2,
+    line::Segment,
+    rect::{BoundBox, DimsBox},
+};
 use derin_common_types::layout::SizeBounds;
+use std::ops::Range;
 
-pub trait Renderer {
-    type Frame: RenderFrame;
+pub trait Renderer: 'static {
+    type SubFrame: SubFrame;
+    type Theme;
+    type Layout: RendererLayout;
+
     fn resized(&mut self, new_size: DimsBox<D2, u32>);
     fn dims(&self) -> DimsBox<D2, u32>;
-    fn render(
+    fn widget_removed(&mut self, widget_id: WidgetId);
+    fn layout(
         &mut self,
-        theme: &<Self::Frame as RenderFrame>::Theme,
-        draw_to_frame: impl FnOnce(&mut Self::Frame)
+        widget_id: WidgetId,
+        layout: impl FnOnce(&mut Self::Layout)
     );
-}
-
-pub trait RenderFrame: 'static {
-    type Theme: Theme;
-    type Primitive;
-
-    fn upload_primitives<I>(
+    fn start_frame(&mut self, theme: &Self::Theme);
+    fn render_subframe(
         &mut self,
+        widget_id: WidgetId,
         theme: &Self::Theme,
         transform: BoundBox<D2, i32>,
         clip: BoundBox<D2, i32>,
-        prim_iter: I
-    )
-        where I: Iterator<Item=Self::Primitive>;
+        with_frame: impl FnOnce(&mut Self::SubFrame)
+    );
+    fn finish_frame(&mut self, theme: &Self::Theme);
+}
+
+pub trait SubFrame {
+    fn render_laid_out_content(&mut self);
+}
+
+#[derive(Debug, Clone)]
+pub struct CursorData {
+    pub draw_cursor: bool,
+    pub cursor_pos: usize,
+    pub highlight_range: Range<usize>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CursorOp {
+    MoveVertical {
+        delta: isize,
+        expand_selection: bool,
+    },
+    MoveHorizontal {
+        delta: isize,
+        expand_selection: bool,
+        jump_to_word_boundaries: bool,
+    },
+    SelectOnSegment(Segment<D2, i32>),
+    SelectAll,
+    UnselectAll,
+    InsertChar(char),
+    InsertString(String),
+    DeleteChars {
+        dist: isize,
+        jump_to_word_boundaries: bool,
+    },
+    DeleteSelection,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct LayoutResult {
+    pub size_bounds: SizeBounds,
+    /// The rectangle child content widgets should be put in.
+    pub content_rect: BoundBox<D2, i32>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct WidgetTheme<'a> {
+    pub typ: &'a str,
+    pub state: Option<&'a str>,
+}
+
+pub trait RendererLayout {
+    fn prepare_string(&mut self, string: &str);
+    /// Layout the render string and perform any queued cursor operations.
+    fn prepare_edit_string(
+        &mut self,
+        string: &mut String,
+        cursor_data: &mut CursorData,
+        cursor_ops: impl Iterator<Item=CursorOp>,
+    );
+    fn prepare_icon(&mut self, icon_name: &str);
+    /// Finish laying stuff out and retrieve widget-level layout parameters. Calling this more than
+    /// once should panic.
+    fn finish(&mut self) -> LayoutResult;
 }
 
 pub trait Theme {
-    type Key: ?Sized;
     type ThemeValue;
-    fn widget_theme(&self, key: &Self::Key) -> Self::ThemeValue;
+    fn widget_theme(&self, key: WidgetTheme) -> Self::ThemeValue;
 }
 
-pub struct RenderFrameClipped<'a, F: 'a + RenderFrame> {
-    pub(crate) frame: &'a mut F,
-    pub(crate) transform: BoundBox<D2, i32>,
-    pub(crate) clip: BoundBox<D2, i32>,
-
-    pub(crate) theme: &'a F::Theme,
-}
-
-impl<'a, F: RenderFrame> RenderFrameClipped<'a, F> {
-    #[inline(always)]
-    pub fn theme(&self) -> &F::Theme {
-        self.theme
+impl WidgetTheme<'_> {
+    pub const fn new(typ: &str) -> WidgetTheme<'_> {
+        WidgetTheme {
+            typ,
+            state: None,
+        }
     }
 
-    #[inline]
-    pub fn upload_primitives<I>(&mut self, prim_iter: I)
-        where I: IntoIterator<Item=F::Primitive>
-    {
-        self.frame.upload_primitives(self.theme, self.transform, self.clip, prim_iter.into_iter())
+    pub const fn new_state<'a>(typ: &'a str, state: &'a str) -> WidgetTheme<'a> {
+        WidgetTheme{ typ, state: Some(state) }
     }
 }
 
-impl Theme for ! {
-    type Key = !;
-    type ThemeValue = !;
-    fn widget_theme(&self, _: &!) -> ! {*self}
-}
-
-impl RenderFrame for ! {
+impl Renderer for ! {
+    type SubFrame = !;
     type Theme = !;
-    type Primitive = !;
+    type Layout = !;
 
-    fn upload_primitives<I>(
+    fn resized(&mut self, _: DimsBox<D2, u32>) {unreachable!()}
+    fn dims(&self) -> DimsBox<D2, u32> {unreachable!()}
+    fn layout(
         &mut self,
+        _: WidgetId,
+        _: impl FnOnce(&mut Self::Layout)
+    ) {unreachable!()}
+    fn widget_removed(&mut self, _: WidgetId) {unreachable!()}
+    fn start_frame(&mut self, _: &Self::Theme) {unreachable!()}
+    fn render_subframe(
+        &mut self,
+        _: WidgetId,
         _: &Self::Theme,
         _: BoundBox<D2, i32>,
         _: BoundBox<D2, i32>,
-        _: I
-    )
-        where I: Iterator<Item=Self::Primitive>
-    {}
+        _: impl FnOnce(&mut Self::SubFrame)
+    ) {unreachable!()}
+    fn finish_frame(&mut self, _: &Self::Theme) {unreachable!()}
+}
+
+impl RendererLayout for ! {
+    fn prepare_string(&mut self, _string: &str) {}
+    fn prepare_edit_string(
+        &mut self,
+        _: &mut String,
+        _: &mut CursorData,
+        _: impl Iterator<Item=CursorOp>,
+    ) {}
+    fn prepare_icon(&mut self, _: &str) {}
+    fn finish(&mut self) -> LayoutResult {*self}
+}
+
+impl SubFrame for ! {
+    fn render_laid_out_content(&mut self) {unreachable!()}
+}
+
+impl Default for CursorData {
+    fn default() -> CursorData {
+        CursorData {
+            draw_cursor: false,
+            cursor_pos: 0,
+            highlight_range: 0..0,
+        }
+    }
 }

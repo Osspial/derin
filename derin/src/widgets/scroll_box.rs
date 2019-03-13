@@ -7,7 +7,7 @@ use crate::{
         LoopFlow,
         event::{EventOps, WidgetEvent, InputState, WidgetEventSourced},
         widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
-        render::{RenderFrame, RenderFrameClipped},
+        render::Renderer,
     },
     gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
     widgets::Clip,
@@ -61,16 +61,16 @@ impl<W> ScrollBox<W> {
         self.clip.widget_mut()
     }
 
-    fn child_summary<F>(&self) -> WidgetInfo<'_, F>
+    fn child_summary<R>(&self) -> WidgetInfo<'_, R>
         where W: Widget,
-              F: RenderFrame
+              R: Renderer
     {
         WidgetInfo::new(CLIP_IDENT.clone(), 0, &self.clip)
     }
 
-    fn child_summary_mut<F>(&mut self) -> WidgetInfoMut<'_, F>
+    fn child_summary_mut<R>(&mut self) -> WidgetInfoMut<'_, R>
         where W: Widget,
-              F: RenderFrame
+              R: Renderer
     {
         WidgetInfoMut::new(CLIP_IDENT.clone(), 0, &mut self.clip)
     }
@@ -184,40 +184,40 @@ impl<W> Parent for ScrollBox<W>
         1
     }
 
-    fn framed_child<F: RenderFrame>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, F>> {
+    fn framed_child<R: Renderer>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, R>> {
         match widget_ident {
             _ if widget_ident == *CLIP_IDENT => Some(self.child_summary()),
             _ => None
         }
     }
-    fn framed_child_mut<F: RenderFrame>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, F>> {
+    fn framed_child_mut<R: Renderer>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, R>> {
         match widget_ident {
             _ if widget_ident == *CLIP_IDENT => Some(self.child_summary_mut()),
             _ => None
         }
     }
 
-    fn framed_children<'a, F, G>(&'a self, mut for_each: G)
-        where F: RenderFrame,
-              G: FnMut(WidgetInfo<'a, F>) -> LoopFlow
+    fn framed_children<'a, R, G>(&'a self, mut for_each: G)
+        where R: Renderer,
+              G: FnMut(WidgetInfo<'a, R>) -> LoopFlow
     {
         let _ = for_each(self.child_summary());
     }
 
-    fn framed_children_mut<'a, F, G>(&'a mut self, mut for_each: G)
-        where F: RenderFrame,
-              G: FnMut(WidgetInfoMut<'a, F>) -> LoopFlow
+    fn framed_children_mut<'a, R, G>(&'a mut self, mut for_each: G)
+        where R: Renderer,
+              G: FnMut(WidgetInfoMut<'a, R>) -> LoopFlow
     {
         let _ = for_each(self.child_summary_mut());
     }
 
-    fn framed_child_by_index<F: RenderFrame>(&self, index: usize) -> Option<WidgetInfo<'_, F>> {
+    fn framed_child_by_index<R: Renderer>(&self, index: usize) -> Option<WidgetInfo<'_, R>> {
         match index {
             0 => Some(self.child_summary()),
             _ => None
         }
     }
-    fn framed_child_by_index_mut<F: RenderFrame>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, F>> {
+    fn framed_child_by_index_mut<R: Renderer>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, R>> {
         match index {
             0 => Some(self.child_summary_mut()),
             _ => None
@@ -225,11 +225,11 @@ impl<W> Parent for ScrollBox<W>
     }
 }
 
-impl<W, F> WidgetRender<F> for ScrollBox<W>
+impl<W, R> WidgetRender<R> for ScrollBox<W>
     where W: Widget,
-          F: PrimFrame
+          R: Renderer
 {
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
+    fn render(&mut self, frame: &mut R::SubFrame) {
         let mut primitives: ArrayVec<[_; 4]> = ArrayVec::new();
 
         if let Some(slider_x) = self.slider_x.clone() {
@@ -298,7 +298,7 @@ impl<W, F> WidgetRender<F> for ScrollBox<W>
         frame.upload_primitives(primitives.into_iter());
     }
 
-    fn update_layout(&mut self, _: &F::Theme) {
+    fn update_layout(&mut self, _: &R::Theme) {
         let child_size_bounds = self.clip.widget().size_bounds();
         let mut child_dims: DimsBox<D2, _> = self.rect.dims();
         let mut offset = Vector2 {

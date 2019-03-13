@@ -87,6 +87,7 @@ pub struct ThemeText {
 pub struct ThemeWidget {
     pub text: Option<ThemeText>,
     pub image: Option<Rc<Image>>,
+    pub content_margins: Margins<u16>,
 }
 
 /// Reference-counted face handle. This is cheap to clone.
@@ -216,17 +217,13 @@ impl Theme {
     pub fn insert_widget(&mut self, key: String, theme: ThemeWidget) -> Option<ThemeWidget> {
         self.map.insert(key, theme)
     }
-}
 
-impl CoreTheme for Theme {
-    type Key = str;
-    type ThemeValue = ThemeWidget;
-
-    fn widget_theme(&self, path: &str) -> ThemeWidget {
+    pub fn widget_theme(&self, path: &str) -> ThemeWidget {
         self.map.get(path).cloned().unwrap_or(
             ThemeWidget {
                 text: None,
-                image: None
+                image: None,
+                content_margins: Margins::default(),
             }
         )
     }
@@ -286,7 +283,8 @@ impl Default for Theme {
                                 min: DimsBox::new2($border * 2, $border * 2),
                                 ..SizeBounds::default()
                             }
-                        }))
+                        })),
+                        content_margins: Margins::default(),
                     }
                 );
             }}
@@ -310,7 +308,8 @@ impl Default for Theme {
                         min: DimsBox::new2(32, 8),
                         max: DimsBox::new2(i32::max_value(), 8)
                     }
-                }))
+                })),
+                content_margins: Margins::default(),
             }
         );
         theme.insert_widget(
@@ -325,7 +324,8 @@ impl Default for Theme {
                         min: DimsBox::new2(8, 16),
                         ..SizeBounds::default()
                     }
-                }))
+                })),
+                content_margins: Margins::default(),
             }
         );
         theme.insert_widget(
@@ -342,7 +342,8 @@ impl Default for Theme {
                     margins: Margins::default(),
                     line_wrap: LineWrap::Normal
                 }),
-                image: None
+                image: None,
+                content_margins: Margins::default(),
             }
         );
         theme.insert_widget(
@@ -359,7 +360,8 @@ impl Default for Theme {
                     margins: Margins::new(18, 0, 0, 0),
                     line_wrap: LineWrap::None
                 }),
-                image: None
+                image: None,
+                content_margins: Margins::default(),
             }
         );
         macro_rules! checkbox {
@@ -376,7 +378,8 @@ impl Default for Theme {
                                 min: DimsBox::new2(16, 16),
                                 ..SizeBounds::default()
                             }
-                        }))
+                        })),
+                        content_margins: Margins::default(),
                     }
                 );
             }
@@ -401,7 +404,8 @@ impl Default for Theme {
                     margins: Margins::new(18, 0, 0, 0),
                     line_wrap: LineWrap::None
                 }),
-                image: None
+                image: None,
+                content_margins: Margins::default(),
             }
         );
         macro_rules! radiobutton {
@@ -418,7 +422,8 @@ impl Default for Theme {
                                 min: DimsBox::new2(16, 16),
                                 ..SizeBounds::default()
                             }
-                        }))
+                        })),
+                        content_margins: Margins::default(),
                     }
                 );
             }
@@ -444,7 +449,8 @@ impl Default for Theme {
                                 min: $min,
                                 ..SizeBounds::default()
                             }
-                        }))
+                        })),
+                        content_margins: Margins::default(),
                     }
                 );
             }
@@ -476,7 +482,8 @@ impl Default for Theme {
                                 min: DimsBox::new2(8, 4),
                                 ..SizeBounds::default()
                             }
-                        }))
+                        })),
+                        content_margins: Margins::default(),
                     }
                 );
             }
@@ -506,7 +513,8 @@ impl Default for Theme {
                         min: DimsBox::new2(3 * 2, 3 * 2),
                         ..SizeBounds::default()
                     }
-                }))
+                })),
+                content_margins: Margins::default(),
             }
         );
         theme.insert_widget(
@@ -531,7 +539,8 @@ impl Default for Theme {
                         min: DimsBox::new2(3 * 2, 3 * 2),
                         ..SizeBounds::default()
                     }
-                }))
+                })),
+                content_margins: Margins::default(),
             }
         );
 

@@ -6,7 +6,7 @@ use crate::{
     {LoopFlow, InputState},
     widget::{WidgetDyn, WidgetId, WidgetIdent, WidgetTag},
     event::{InputState as EventInputState, WidgetEventSourced, EventOps},
-    render::{RenderFrame, RenderFrameClipped},
+    render::{Renderer},
 };
 
 use derin_common_types::layout::SizeBounds;
@@ -16,21 +16,21 @@ use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 use arrayvec::ArrayVec;
 
-pub(crate) struct OffsetWidget<'a, F: RenderFrame> {
-    widget: &'a mut WidgetDyn<F>,
+pub(crate) struct OffsetWidget<'a, R: Renderer> {
+    widget: &'a mut WidgetDyn<R>,
     offset: Vector2<i32>,
     clip: Option<BoundBox<D2, i32>>,
 }
 
-pub(crate) struct OffsetWidgetInfo<'a, F: RenderFrame> {
+pub(crate) struct OffsetWidgetInfo<'a, R: Renderer> {
     pub ident: WidgetIdent,
     pub index: usize,
-    pub widget: OffsetWidget<'a, F>,
+    pub widget: OffsetWidget<'a, R>,
 }
 
-impl<'a, F: RenderFrame> OffsetWidget<'a, F> {
+impl<'a, R: Renderer> OffsetWidget<'a, R> {
     #[inline]
-    pub fn new(widget: &'a mut WidgetDyn<F>, offset: Vector2<i32>, clip: Option<BoundBox<D2, i32>>) -> OffsetWidget<'a, F> {
+    pub fn new(widget: &'a mut WidgetDyn<R>, offset: Vector2<i32>, clip: Option<BoundBox<D2, i32>>) -> OffsetWidget<'a, R> {
         OffsetWidget {
             widget,
             offset,
@@ -39,12 +39,12 @@ impl<'a, F: RenderFrame> OffsetWidget<'a, F> {
     }
 
     #[inline]
-    pub fn inner(&self) -> &WidgetDyn<F> {
+    pub fn inner(&self) -> &WidgetDyn<R> {
         self.widget
     }
 
     #[inline]
-    pub fn inner_mut(&mut self) -> &mut WidgetDyn<F> {
+    pub fn inner_mut(&mut self) -> &mut WidgetDyn<R> {
         self.widget
     }
 
@@ -67,7 +67,7 @@ impl<'a, F: RenderFrame> OffsetWidget<'a, F> {
     pub fn set_rect(&mut self, rect: BoundBox<D2, i32>) {
         *self.widget.rect_mut() = rect - self.offset;
     }
-    pub fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
+    pub fn render(&mut self, frame: &mut R::SubFrame) {
         self.widget.render(frame);
     }
     pub fn on_widget_event(
@@ -105,8 +105,8 @@ impl<'a, F: RenderFrame> OffsetWidget<'a, F> {
         );
         ops
     }
-    // pub fn subtrait(&self) -> WidgetSubtrait<F>;
-    // pub fn subtrait_mut(&mut self) -> WidgetSubtraitMut<F>;
+    // pub fn subtrait(&self) -> WidgetSubtrait<R>;
+    // pub fn subtrait_mut(&mut self) -> WidgetSubtraitMut<R>;
 
     pub fn size_bounds(&self) -> SizeBounds {
         self.widget.size_bounds()
@@ -115,12 +115,12 @@ impl<'a, F: RenderFrame> OffsetWidget<'a, F> {
     // pub fn num_children(&self) -> usize {
     //     self.widget.num_children()
     // }
-    pub fn update_layout(&mut self, theme: &F::Theme) {
-        self.widget.update_layout(theme);
+    pub fn update_layout(&mut self, layout: &mut R::Layout) {
+        self.widget.update_layout(layout);
     }
 
     // pub fn children<'b, G>(&'b self, mut for_each: G)
-    //     where G: FnMut(WidgetSummary<&'b WidgetDyn<F>>) -> LoopFlow
+    //     where G: FnMut(WidgetSummary<&'b WidgetDyn<R>>) -> LoopFlow
     // {
     //     self.widget.children(&mut |summary_slice| {
     //         for summary in summary_slice {
@@ -134,7 +134,7 @@ impl<'a, F: RenderFrame> OffsetWidget<'a, F> {
     // }
 
     pub fn children_mut<'b, G>(&'b mut self, mut for_each: G)
-        where G: FnMut(OffsetWidgetInfo<'b, F>) -> LoopFlow
+        where G: FnMut(OffsetWidgetInfo<'b, R>) -> LoopFlow
     {
         let child_offset = self.rect().min().to_vec();
         let clip_rect = self.rect_clipped();

@@ -2,24 +2,21 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use derin_core::{
+    LoopFlow,
+    event::{EventOps, WidgetEventSourced, InputState},
+    widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
+    render::{Renderer, SubFrame, WidgetTheme},
+};
 use crate::{
     container::WidgetContainer,
-    core::{
-        LoopFlow,
-        event::{EventOps, WidgetEventSourced, InputState},
-        widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
-        render::{RenderFrame, RenderFrameClipped},
-    },
-    gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
     layout::GridLayout,
 };
 
-use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use derin_common_types::layout::{SizeBounds, WidgetPos};
 
 use std::cell::RefCell;
-use arrayvec::ArrayVec;
 
 use derin_layout_engine::{GridEngine, UpdateHeapCache, SolveError};
 
@@ -104,59 +101,50 @@ impl<C, L> Parent for Group<C, L>
         self.container.num_children()
     }
 
-    fn framed_child<F: RenderFrame>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, F>> {
+    fn framed_child<R: Renderer>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, R>> {
         self.container.framed_child(widget_ident).map(WidgetInfo::erase_subtype)
     }
-    fn framed_child_mut<F: RenderFrame>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, F>> {
+    fn framed_child_mut<R: Renderer>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, R>> {
         self.container.framed_child_mut(widget_ident).map(WidgetInfoMut::erase_subtype)
     }
 
-    fn framed_children<'a, F, G>(&'a self, mut for_each: G)
-        where F: RenderFrame,
-              G: FnMut(WidgetInfo<'a, F>) -> LoopFlow
+    fn framed_children<'a, R, G>(&'a self, mut for_each: G)
+        where R: Renderer,
+              G: FnMut(WidgetInfo<'a, R>) -> LoopFlow
     {
         self.container.framed_children(|summary| for_each(WidgetInfo::erase_subtype(summary)))
     }
 
-    fn framed_children_mut<'a, F, G>(&'a mut self, mut for_each: G)
-        where F: RenderFrame,
-              G: FnMut(WidgetInfoMut<'a, F>) -> LoopFlow
+    fn framed_children_mut<'a, R, G>(&'a mut self, mut for_each: G)
+        where R: Renderer,
+              G: FnMut(WidgetInfoMut<'a, R>) -> LoopFlow
     {
         self.container.framed_children_mut(|summary| for_each(WidgetInfoMut::erase_subtype(summary)))
     }
 
-    fn framed_child_by_index<F: RenderFrame>(&self, index: usize) -> Option<WidgetInfo<'_, F>> {
+    fn framed_child_by_index<R: Renderer>(&self, index: usize) -> Option<WidgetInfo<'_, R>> {
         self.container.framed_child_by_index(index).map(WidgetInfo::erase_subtype)
     }
-    fn framed_child_by_index_mut<F: RenderFrame>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, F>> {
+    fn framed_child_by_index_mut<R: Renderer>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, R>> {
         self.container.framed_child_by_index_mut(index).map(WidgetInfoMut::erase_subtype)
     }
 }
 
-impl<F, C, L> WidgetRender<F> for Group<C, L>
-    where F: PrimFrame,
+impl<R, C, L> WidgetRender<R> for Group<C, L>
+    where R: Renderer,
           C: WidgetContainer<dyn Widget>,
           L: GridLayout
 {
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
-        frame.upload_primitives(ArrayVec::from([
-            ThemedPrim {
-                theme_path: "Group",
-                min: Point2::new(
-                    RelPoint::new(-1.0, 0),
-                    RelPoint::new(-1.0, 0),
-                ),
-                max: Point2::new(
-                    RelPoint::new( 1.0, 0),
-                    RelPoint::new( 1.0, 0)
-                ),
-                prim: Prim::Image,
-                rect_px_out: None
-            }
-        ]).into_iter());
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        frame.render_laid_out_content();
     }
 
-    fn update_layout(&mut self, _: &F::Theme) {
+    fn theme_list(&self) -> &[WidgetTheme] {
+        static GROUP: &[WidgetTheme] = &[WidgetTheme::new("Group")];
+        GROUP
+    }
+
+    fn update_layout(&mut self, _: &mut R::Layout) {
         #[derive(Default)]
         struct HeapCache {
             update_heap_cache: UpdateHeapCache,

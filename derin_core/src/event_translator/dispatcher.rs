@@ -5,8 +5,8 @@
 use crate::{
     cgmath::Point2,
     event::{FocusChange, FocusSource, WidgetEvent},
+    render::Renderer,
     widget::{WidgetId, WidgetIdent},
-    render::RenderFrame,
     widget_traverser::{Relation, WidgetTraverser, OffsetWidgetScanPath},
 };
 use std::collections::VecDeque;
@@ -59,12 +59,12 @@ impl EventDispatcher {
         )
     }
 
-    pub fn dispatch_events<F>(
+    pub fn dispatch_events<R>(
         &mut self,
-        widget_traverser: &mut WidgetTraverser<F>,
-        mut f: impl FnMut(&mut Self, OffsetWidgetScanPath<F>, DispatchableEvent)
+        widget_traverser: &mut WidgetTraverser<R>,
+        mut f: impl FnMut(&mut Self, OffsetWidgetScanPath<R>, DispatchableEvent)
     )
-        where F: RenderFrame
+        where R: Renderer
     {
         while let Some((destination, event)) = self.events.pop_front() {
             let widget_opt = {

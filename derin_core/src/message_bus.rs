@@ -34,7 +34,7 @@ impl WidgetMessageKey {
     {
         WidgetMessageKey {
             widget_type: TypeId::of::<W>(),
-            message_type: message.get_type_id(),
+            message_type: message.type_id(),
         }
     }
 
@@ -80,7 +80,7 @@ impl MessageBus {
         while let Ok(MessageTargeted{message, target}) = self.messages_recv.try_recv() {
             // We have to dereference `message` here because otherwise it would get the TypeId of
             // `Box<Any>`, not the inner `Any`.
-            let type_id = (*message).get_type_id();
+            let type_id = (*message).type_id();
 
             let untargeted_widget_ids = self.type_map.get(&type_id)
                 .filter(|wids| wids.len() > 0)
@@ -138,7 +138,7 @@ mod tests {
             }}
         }
 
-        assert_eq!(TypeId::of::<MessageA>(), (*(Box::new(MessageA) as Message)).get_type_id());
+        assert_eq!(TypeId::of::<MessageA>(), (*(Box::new(MessageA) as Message)).type_id());
 
         message_bus.register_widget_message_type(TypeId::of::<MessageA>(), a);
         message_bus.register_widget_message_type(TypeId::of::<MessageA>(), b);

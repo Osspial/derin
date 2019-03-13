@@ -2,21 +2,16 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{
-    core::{
-        event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
-        timer::{Timer, TimerId},
-        widget::{WidgetTag, WidgetRender, Widget},
-        render::{RenderFrameClipped, Theme},
-    },
-    gl_render::{ThemedPrim, PrimFrame, RenderString, RelPoint, Prim},
-    widgets::assistants::text_edit::{TextEditAssist, TextEditOps, CursorFlashOp, LineCharFilter},
+use derin_core::{
+    event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
+    timer::{Timer, TimerId},
+    widget::{WidgetTag, WidgetRender, Widget},
+    render::{Renderer, RendererLayout, SubFrame, WidgetTheme},
 };
-use crate::cgmath::Point2;
-use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
+use crate::widgets::assistants::text_edit::{TextEditAssist, TextEditOps, CursorFlashOp, LineCharFilter};
+use cgmath_geometry::{D2, rect::BoundBox};
 use derin_common_types::layout::SizeBounds;
 use std::time::Duration;
-use arrayvec::ArrayVec;
 
 /// Multi-line editable text widget.
 #[derive(Debug, Clone)]
@@ -24,7 +19,7 @@ pub struct EditBox {
     widget_tag: WidgetTag,
     bounds: BoundBox<D2, i32>,
     edit: TextEditAssist,
-    min_size: DimsBox<D2, i32>,
+    size_bounds: SizeBounds,
     flash_timer: Option<TimerId>,
 }
 
@@ -34,7 +29,7 @@ pub struct LineBox {
     widget_tag: WidgetTag,
     bounds: BoundBox<D2, i32>,
     edit: TextEditAssist<LineCharFilter>,
-    min_size: DimsBox<D2, i32>,
+    size_bounds: SizeBounds,
     flash_timer: Option<TimerId>,
 }
 
@@ -45,17 +40,17 @@ impl EditBox {
             widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             edit: TextEditAssist {
-                string: RenderString::new(string),
+                string,
                 ..TextEditAssist::default()
             },
-            min_size: DimsBox::new2(0, 0),
+            size_bounds: SizeBounds::default(),
             flash_timer: None,
         }
     }
 
     /// Retrieves a reference to the string stored within the `EditBox`.
     pub fn string(&self) -> &str {
-        self.edit.string.string()
+        &self.edit.string
     }
 
     /// Retrieves the `String` stored in the `EditBox`, for mutation.
@@ -63,8 +58,8 @@ impl EditBox {
     /// Calling this function forces the box to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn string_mut(&mut self) -> &mut String {
-        self.widget_tag.request_redraw();
-        self.edit.string.string_mut()
+        self.widget_tag.request_redraw().request_relayout();
+        &mut self.edit.string
     }
 }
 
@@ -75,17 +70,17 @@ impl LineBox {
             widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             edit: TextEditAssist {
-                string: RenderString::new(string),
+                string,
                 ..TextEditAssist::default()
             },
-            min_size: DimsBox::new2(0, 0),
+            size_bounds: SizeBounds::default(),
             flash_timer: None,
         }
     }
 
     /// Retrieves a reference to the string stored within the `LineBox`.
     pub fn string(&self) -> &str {
-        self.edit.string.string()
+        &self.edit.string
     }
 
     /// Retrieves the `String` stored in the `LineBox`, for mutation.
@@ -93,54 +88,39 @@ impl LineBox {
     /// Calling this function forces the box to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn string_mut(&mut self) -> &mut String {
-        self.widget_tag.request_redraw();
-        self.edit.string.string_mut()
+        self.widget_tag.request_redraw().request_relayout();
+        &mut self.edit.string
     }
 }
 
 macro_rules! render {
     ($ty:ty) => {
-        impl<F: PrimFrame> WidgetRender<F> for $ty {
-            fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
-                frame.upload_primitives(ArrayVec::from([
-                    ThemedPrim {
-                        theme_path: stringify!($ty),
-                        min: Point2::new(
-                            RelPoint::new(-1.0, 0),
-                            RelPoint::new(-1.0, 0),
-                        ),
-                        max: Point2::new(
-                            RelPoint::new( 1.0, 0),
-                            RelPoint::new( 1.0, 0)
-                        ),
-                        prim: Prim::Image,
-                        rect_px_out: None
-                    },
-                    ThemedPrim {
-                        theme_path: stringify!($ty),
-                        min: Point2::new(
-                            RelPoint::new(-1.0, 0),
-                            RelPoint::new(-1.0, 0),
-                        ),
-                        max: Point2::new(
-                            RelPoint::new( 1.0, 0),
-                            RelPoint::new( 1.0, 0)
-                        ),
-                        prim: Prim::String(&mut self.edit.string),
-                        rect_px_out: None
-                    }
-                ]).into_iter());
+        impl<R: Renderer> WidgetRender<R> for $ty {
+            fn render(&mut self, frame: &mut R::SubFrame) {
+                frame.render_laid_out_content();
+            }
 
-                self.min_size = frame.theme().widget_theme(stringify!($ty)).image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
-                let render_string_min = self.edit.string.min_size();
-                self.min_size.dims.y += render_string_min.height();
+            fn theme_list(&self) -> &[WidgetTheme] {
+                const LABEL: &[WidgetTheme] = &[WidgetTheme::new(stringify!($ty))];
+                LABEL
+            }
+
+            fn update_layout(&mut self, layout: &mut R::Layout) {
+                layout.prepare_edit_string(
+                    &mut self.edit.string,
+                    &mut self.edit.cursor_data,
+                    self.edit.cursor_ops.drain(..),
+                );
+
+                let result = layout.finish();
+                self.size_bounds = result.size_bounds;
             }
         }
     }
 }
 
 macro_rules! event {
-    ($ty:ty) => {
+    () => {
         fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps {
             let event = event.unwrap();
 
@@ -171,7 +151,7 @@ macro_rules! event {
 
             match event {
                 WidgetEvent::Timer{timer_id, times_triggered, ..} if Some(timer_id) == self.flash_timer => {
-                    self.edit.string.draw_cursor = times_triggered % 2 == 0;
+                    self.edit.cursor_data.draw_cursor = times_triggered % 2 == 0;
                     self.widget_tag.request_redraw();
                 },
                 _ => ()
@@ -207,10 +187,10 @@ impl Widget for EditBox {
 
     #[inline]
     fn size_bounds(&self) -> SizeBounds {
-        SizeBounds::new_min(self.min_size)
+        self.size_bounds
     }
 
-    event!(EditBox);
+    event!();
 }
 
 impl Widget for LineBox {
@@ -231,13 +211,10 @@ impl Widget for LineBox {
 
     #[inline]
     fn size_bounds(&self) -> SizeBounds {
-        SizeBounds {
-            min: self.min_size,
-            max: DimsBox::new2(i32::max_value(), self.min_size.height())
-        }
+        self.size_bounds
     }
 
-    event!(LineBox);
+    event!();
 }
 
 render!(EditBox);

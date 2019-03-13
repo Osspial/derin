@@ -4,6 +4,7 @@
 
 mod slider;
 pub mod text_edit;
+pub mod toggle_button;
 
 pub use self::slider::*;
 

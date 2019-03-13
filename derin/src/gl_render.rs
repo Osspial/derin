@@ -8,11 +8,12 @@
 
 mod atlas;
 mod font_cache;
-mod translate;
+// mod translate;
 
 use std::rc::Rc;
 use derin_common_types::cursor::CursorIcon;
 use derin_common_types::layout::SizeBounds;
+use core::widget::WidgetId;
 
 use crate::cgmath::{Array, Bounded, Point2, Vector2, EuclideanSpace};
 
@@ -32,12 +33,12 @@ use cgmath_geometry::{D2, rect::{BoundBox, OffsetBox, DimsBox, GeoBox}};
 use glutin::*;
 
 use crate::theme::Theme;
-pub use crate::core::render::{Renderer, RenderFrame};
+pub use crate::core::render::Renderer;
 
 use self::atlas::Atlas;
 use self::font_cache::FontCache;
-use self::translate::Translator;
-pub use self::translate::{Prim, ThemedPrim, RelPoint, RenderString};
+// use self::translate::Translator;
+// pub use self::translate::{Prim, ThemedPrim, RelPoint};
 
 pub struct GLRenderer {
     window: GlWindow,
@@ -46,7 +47,7 @@ pub struct GLRenderer {
 }
 
 pub struct GLFrame {
-    poly_translator: Translator,
+    // poly_translator: Translator,
     draw: FrameDraw
 }
 
@@ -66,6 +67,7 @@ struct FrameDraw {
     scale_factor: f32
 }
 
+
 #[derive(Vertex, Debug, Clone, Copy)]
 struct GLVertex {
     loc: Point2<f32>,
@@ -78,10 +80,6 @@ struct GLUniforms<'a> {
     atlas_size: Vector2<u32>,
     window_size: Point2<f32>,
     tex_atlas: &'a Texture<D2, Rgba<u8>>
-}
-
-pub trait PrimFrame: RenderFrame<Primitive=ThemedPrim<<Self as PrimFrame>::DirectRender>, Theme=Theme> {
-    type DirectRender;
 }
 
 
@@ -150,7 +148,7 @@ impl GLRenderer {
 
         Ok(GLRenderer {
             frame: GLFrame {
-                poly_translator: Translator::new(),
+                // poly_translator: Translator::new(),
                 draw: FrameDraw {
                     vertices,
                     atlas: Atlas::new(),
@@ -236,7 +234,6 @@ impl GLRenderer {
 }
 
 impl Renderer for GLRenderer {
-    type Frame = GLFrame;
     fn resized(&mut self, new_size: DimsBox<D2, u32>) {
         self.window.context().resize(new_size.width(), new_size.height());
     }
@@ -246,11 +243,11 @@ impl Renderer for GLRenderer {
         DimsBox::new2(width, height)
     }
 
-    fn render(
-        &mut self,
-        _: &<Self::Frame as RenderFrame>::Theme,
-        draw_to_frame: impl FnOnce(&mut Self::Frame)
-    ) {
+    fn widget_removed(&mut self, widget_id: WidgetId) {
+        unimplemented!()
+    }
+
+    fn start_frame(&mut self, _: &Self::Theme) {
         let (width, height) = self.window.get_inner_size().unwrap();
         let scale_factor = self.window.hidpi_factor();
         self.frame.draw.window_dims = DimsBox::new2(width, height);
@@ -261,9 +258,19 @@ impl Renderer for GLRenderer {
         self.frame.draw.fb.clear_color_all(Rgba::new(1., 1., 1., 1.));
         self.frame.draw.fb.clear_depth(1.0);
         self.frame.draw.fb.clear_stencil(0);
+    }
 
+    fn render_subframe(
+        &mut self,
+        _: &Self::Theme,
+        transform: BoundBox<D2, i32>,
+        clip: BoundBox<D2, i32>,
+        draw_to_frame: impl FnOnce(&mut Self::SubFrame)
+    ) {
         draw_to_frame(&mut self.frame);
+    }
 
+    fn finish_frame(&mut self, _: &Self::Theme) {
         self.frame.draw.draw_contents();
         self.window.swap_buffers().unwrap();
         self.frame.draw.atlas.bump_frame_count();
@@ -289,29 +296,6 @@ impl FrameDraw {
             self.fb.draw(DrawMode::Triangles, 0..verts.len(), &self.vao, &self.program, uniform, self.render_state);
         }
         self.vertices.clear();
-    }
-}
-
-impl PrimFrame for GLFrame {
-    type DirectRender = (FramebufferDefault, OffsetBox<D2, u32>, Rc<ContextState>);
-}
-
-impl RenderFrame for GLFrame {
-    type Primitive = ThemedPrim<<Self as PrimFrame>::DirectRender>;
-    type Theme = Theme;
-
-    fn upload_primitives<I>(&mut self, theme: &Theme, transform: BoundBox<D2, i32>, clip_rect: BoundBox<D2, i32>, prim_iter: I)
-        where I: Iterator<Item=ThemedPrim<<GLFrame as PrimFrame>::DirectRender>>
-    {
-        let dpi_axis = 72;// (72. * self.draw.scale_factor) as u32;
-        self.poly_translator.translate_prims(
-            transform,
-            clip_rect,
-            theme,
-            DPI::new(dpi_axis, dpi_axis), // TODO: REPLACE HARDCODED VALUE
-            prim_iter,
-            &mut self.draw
-        );
     }
 }
 
@@ -347,3 +331,4 @@ const FRAG_SHADER: &str = r#"
         out_color = frag_color * texture(tex_atlas, tex_coord_out);
     }
 "#;
+

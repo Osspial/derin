@@ -8,7 +8,7 @@ use crate::{
         LoopFlow,
         event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
         widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
-        render::{RenderFrame, RenderFrameClipped},
+        render::Renderer,
     },
     gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame, RenderString},
     widgets::assistants::ButtonState,
@@ -234,14 +234,14 @@ impl<W> Parent for TabList<W>
         self.tabs.len()
     }
 
-    fn framed_child<F: RenderFrame>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, F>> {
+    fn framed_child<R: Renderer>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, R>> {
         if let WidgetIdent::Num(index) = widget_ident {
             self.tabs.get(index as usize).map(|t| WidgetInfo::new(widget_ident, index as usize, &t.page))
         } else {
             None
         }
     }
-    fn framed_child_mut<F: RenderFrame>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, F>> {
+    fn framed_child_mut<R: Renderer>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, R>> {
         if let WidgetIdent::Num(index) = widget_ident {
             self.tabs.get_mut(index as usize).map(|t| WidgetInfoMut::new(widget_ident, index as usize, &mut t.page))
         } else {
@@ -249,9 +249,9 @@ impl<W> Parent for TabList<W>
         }
     }
 
-    fn framed_children<'a, F, G>(&'a self, mut for_each: G)
-        where F: RenderFrame,
-              G: FnMut(WidgetInfo<'a, F>) -> LoopFlow
+    fn framed_children<'a, R, G>(&'a self, mut for_each: G)
+        where R: Renderer,
+              G: FnMut(WidgetInfo<'a, R>) -> LoopFlow
     {
         for (index, tab) in self.tabs.iter().enumerate() {
             match for_each(WidgetInfo::new(WidgetIdent::Num(index as u32), index, &tab.page)) {
@@ -261,9 +261,9 @@ impl<W> Parent for TabList<W>
         }
     }
 
-    fn framed_children_mut<'a, F, G>(&'a mut self, mut for_each: G)
-        where F: RenderFrame,
-              G: FnMut(WidgetInfoMut<'a, F>) -> LoopFlow
+    fn framed_children_mut<'a, R, G>(&'a mut self, mut for_each: G)
+        where R: Renderer,
+              G: FnMut(WidgetInfoMut<'a, R>) -> LoopFlow
     {
         for (index, tab) in self.tabs.iter_mut().enumerate() {
             match for_each(WidgetInfoMut::new(WidgetIdent::Num(index as u32), index, &mut tab.page)) {
@@ -273,19 +273,19 @@ impl<W> Parent for TabList<W>
         }
     }
 
-    fn framed_child_by_index<F: RenderFrame>(&self, index: usize) -> Option<WidgetInfo<'_, F>> {
+    fn framed_child_by_index<R: Renderer>(&self, index: usize) -> Option<WidgetInfo<'_, R>> {
         self.tabs.get(index).map(|t| WidgetInfo::new(WidgetIdent::Num(index as u32), index, &t.page))
     }
-    fn framed_child_by_index_mut<F: RenderFrame>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, F>> {
+    fn framed_child_by_index_mut<R: Renderer>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, R>> {
         self.tabs.get_mut(index).map(|t| WidgetInfoMut::new(WidgetIdent::Num(index as u32), index, &mut t.page))
     }
 }
 
-impl<F, W> WidgetRender<F> for TabList<W>
-    where F: PrimFrame,
+impl<R, W> WidgetRender<R> for TabList<W>
+    where R: Renderer,
           W: Widget
 {
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
+    fn render(&mut self, frame: &mut R::SubFrame) {
         for tab in &mut self.tabs {
             let theme_path = match tab.button_state {
                 ButtonState::Normal => "Tab::Normal",
@@ -323,7 +323,7 @@ impl<F, W> WidgetRender<F> for TabList<W>
         }
     }
 
-    fn update_layout(&mut self, _: &F::Theme) {
+    fn update_layout(&mut self, _: &R::Theme) {
         #[derive(Default)]
         struct HeapCache {
             update_heap_cache: UpdateHeapCache,

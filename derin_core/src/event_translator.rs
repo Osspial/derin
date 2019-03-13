@@ -8,7 +8,7 @@ use crate::{
     WindowEvent, InputState, LoopFlow,
     cgmath::{Vector2},
     event::{EventOps, FocusChange, FocusSource, MouseHoverChange, WidgetEvent, WidgetEventSourced},
-    render::RenderFrame,
+    render::Renderer,
     widget_traverser::{Relation, WidgetTraverser, OffsetWidgetScanPath},
     update_state::{UpdateStateCell},
     offset_widget::OffsetWidget,
@@ -22,10 +22,10 @@ pub(crate) struct EventTranslator
     inner: TranslatorInner
 }
 
-pub(crate) struct TranslatorActive<'a, 'b, F>
-    where F: RenderFrame + 'static
+pub(crate) struct TranslatorActive<'a, 'b, R>
+    where R: Renderer + 'static
 {
-    widget_traverser: &'a mut WidgetTraverser<'b, F>,
+    widget_traverser: &'a mut WidgetTraverser<'b, R>,
     inner: &'a mut TranslatorInner,
     input_state: &'a mut InputState,
     update_state: Rc<UpdateStateCell>,
@@ -45,12 +45,12 @@ impl EventTranslator
         }
     }
 
-    pub fn with_data<'a, 'b, F: RenderFrame>(
+    pub fn with_data<'a, 'b, R: Renderer>(
         &'a mut self,
-        widget_traverser: &'a mut WidgetTraverser<'b, F>,
+        widget_traverser: &'a mut WidgetTraverser<'b, R>,
         input_state: &'a mut InputState,
         update_state: Rc<UpdateStateCell>,
-    ) -> TranslatorActive<'a, 'b, F> {
+    ) -> TranslatorActive<'a, 'b, R> {
         TranslatorActive {
             widget_traverser,
             inner: &mut self.inner,
@@ -60,8 +60,8 @@ impl EventTranslator
     }
 }
 
-impl<F> TranslatorActive<'_, '_, F>
-    where F: RenderFrame + 'static
+impl<R> TranslatorActive<'_, '_, R>
+    where R: Renderer + 'static
 {
     pub fn translate_window_event(&mut self, window_event: WindowEvent) {
         use self::WindowEvent::*;
@@ -351,7 +351,7 @@ impl<F> TranslatorActive<'_, '_, F>
                         };
                         let (contains_new, contains_old) = (widget_rect.contains(new_pos), widget_rect.contains(old_pos));
 
-                        let mut send_exiting_from_child = |widget: &mut OffsetWidget<'_, F>, in_widget| {
+                        let mut send_exiting_from_child = |widget: &mut OffsetWidget<'_, R>, in_widget| {
                             if let Some(child_ident) = exiting_from_child.clone() {
                                 perform_event_ops(widget.on_widget_event(
                                     WidgetEventSourced::This(WidgetEvent::MouseMove {

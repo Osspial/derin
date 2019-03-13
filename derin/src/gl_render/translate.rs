@@ -3,7 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 mod image;
-mod text;
+// mod text;
 
 use crate::cgmath::{Point2, EuclideanSpace};
 use cgmath_geometry::{D2, rect::{GeoBox, OffsetBox, BoundBox}};
@@ -11,25 +11,25 @@ use glyphydog::{ShapedBuffer, Shaper, FaceSize, DPI};
 
 use gullery::image_format::Rgba;
 
-use crate::gl_render::{FrameDraw, GLFrame, PrimFrame};
+use crate::gl_render::FrameDraw;
 
 use crate::theme::Theme;
 use crate::core::render::Theme as CoreTheme;
 
 use self::image::ImageToVertices;
-use self::text::TextToVertices;
+// use self::text::TextToVertices;
 
-pub use self::text::RenderString;
+// pub use self::text::RenderString;
 
 use std::mem;
 
 
 #[derive(Debug, PartialEq)]
-pub struct ThemedPrim<D> {
+pub struct ThemedPrim {
     pub theme_path: *const str,
     pub min: Point2<RelPoint>,
     pub max: Point2<RelPoint>,
-    pub prim: Prim<D>,
+    pub prim: Prim,
     /// Optionally outputs the widget's transformed pixel rectangle.
     pub rect_px_out: Option<*mut BoundBox<D2, i32>>
 }
@@ -41,9 +41,9 @@ pub struct RelPoint {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Prim<D> {
+pub enum Prim {
     Image,
-    String(*mut RenderString),
+    // String(*mut RenderString),
     DirectRender(*mut FnMut(&mut D))
 }
 
@@ -73,7 +73,7 @@ impl Translator {
         clip_rect: BoundBox<D2, i32>,
         theme: &Theme,
         dpi: DPI,
-        prims: impl IntoIterator<Item=ThemedPrim<<GLFrame as PrimFrame>::DirectRender>>,
+        prims: impl IntoIterator<Item=ThemedPrim>,
         draw: &mut FrameDraw
     ) {
         let prim_rect_iter = prims.into_iter().map(move |p| {
@@ -119,51 +119,51 @@ impl Translator {
 
                         draw.vertices.extend(image_translate);
                     },
-                    (Prim::String(render_string), _, Some(theme_text)) => {
-                        match draw.font_cache.face(theme_text.face.clone()) {
-                            Ok(face) => {
-                                let render_string = unsafe{ &mut *render_string };
+                    // (Prim::String(render_string), _, Some(theme_text)) => {
+                    //     match draw.font_cache.face(theme_text.face.clone()) {
+                    //         Ok(face) => {
+                    //             let render_string = unsafe{ &mut *render_string };
 
-                                render_string.reshape_glyphs(
-                                    abs_rect,
-                                    |string, face| {
-                                        self.shaper.shape_text(
-                                            string,
-                                            face,
-                                            FaceSize::new(theme_text.face_size, theme_text.face_size),
-                                            dpi,
-                                            &mut self.shaped_text
-                                        ).ok();
-                                        &self.shaped_text
-                                    },
-                                    &theme_text,
-                                    face,
-                                    dpi,
-                                );
+                    //             render_string.reshape_glyphs(
+                    //                 abs_rect,
+                    //                 |string, face| {
+                    //                     self.shaper.shape_text(
+                    //                         string,
+                    //                         face,
+                    //                         FaceSize::new(theme_text.face_size, theme_text.face_size),
+                    //                         dpi,
+                    //                         &mut self.shaped_text
+                    //                     ).ok();
+                    //                     &self.shaped_text
+                    //                 },
+                    //                 &theme_text,
+                    //                 face,
+                    //                 dpi,
+                    //             );
 
-                                let vertex_iter = TextToVertices::new(
-                                    render_string.string_draw_data().unwrap(),
-                                    render_string.highlight_range(),
-                                    match render_string.draw_cursor {
-                                        true => Some(render_string.cursor_pos()),
-                                        false => None,
-                                    },
-                                    render_string.offset,
-                                    parent_clipped,
+                    //             let vertex_iter = TextToVertices::new(
+                    //                 render_string.string_draw_data().unwrap(),
+                    //                 render_string.highlight_range(),
+                    //                 match render_string.draw_cursor {
+                    //                     true => Some(render_string.cursor_pos()),
+                    //                     false => None,
+                    //                 },
+                    //                 render_string.offset,
+                    //                 parent_clipped,
 
-                                    face,
-                                    &mut draw.atlas,
-                                );
-                                draw.vertices.extend(vertex_iter);
-                                if let (Some(rect_px_out), Some(text_rect)) = (prim.rect_px_out, render_string.text_rect()) {
-                                    unsafe{ *rect_px_out = text_rect + abs_rect.min().to_vec() - parent_rect.min().to_vec() };
-                                }
-                            },
-                            Err(_) => {
-                                //TODO: log
-                            }
-                        }
-                    },
+                    //                 face,
+                    //                 &mut draw.atlas,
+                    //             );
+                    //             draw.vertices.extend(vertex_iter);
+                    //             if let (Some(rect_px_out), Some(text_rect)) = (prim.rect_px_out, render_string.text_rect()) {
+                    //                 unsafe{ *rect_px_out = text_rect + abs_rect.min().to_vec() - parent_rect.min().to_vec() };
+                    //             }
+                    //         },
+                    //         Err(_) => {
+                    //             //TODO: log
+                    //         }
+                    //     }
+                    // },
                     (Prim::DirectRender(render_fn), _, _) => {
                         draw.draw_contents();
                         let render_fn = unsafe{ &mut *render_fn };

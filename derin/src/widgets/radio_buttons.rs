@@ -2,25 +2,24 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use derin_core::{
+    LoopFlow,
+    event::{EventOps, WidgetEventSourced, InputState},
+    widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, WidgetId, Widget, Parent},
+    render::{Renderer, WidgetTheme},
+};
 use crate::{
     container::WidgetContainer,
-    core::{
-        LoopFlow,
-        event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange},
-        widget::{MessageTarget, WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, WidgetId, Widget, Parent},
-        render::{RenderFrame, RenderFrameClipped},
-        render::Theme as CoreTheme,
-    },
-    gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame},
     layout::GridLayout,
-    widgets::assistants::ButtonState,
-    widgets::{Contents, ContentsInner},
+    widgets::{
+        Contents,
+        assistants::toggle_button::{Toggle, ToggleBoxTheme, ToggleOnClickHandler},
+    },
 };
 
 use derin_common_types::layout::{SizeBounds, WidgetPos};
 
-use crate::cgmath::Point2;
-use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
+use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 use std::cell::RefCell;
 
 use derin_layout_engine::{GridEngine, UpdateHeapCache, SolveError};
@@ -34,13 +33,22 @@ use derin_layout_engine::{GridEngine, UpdateHeapCache, SolveError};
 /// [`RadioButtonList`]: ./struct.RadioButtonList.html
 #[derive(Debug, Clone)]
 pub struct RadioButton {
-    widget_tag: WidgetTag,
-    rect: BoundBox<D2, i32>,
-    min_size: DimsBox<D2, i32>,
+    toggle: Toggle<RadioButtonToggleHandler, RadioButtonTheme>,
+}
 
-    selected: bool,
-    button_state: ButtonState,
-    contents: ContentsInner,
+#[derive(Debug, Clone, Copy)]
+struct RadioButtonToggleHandler;
+impl ToggleOnClickHandler for RadioButtonToggleHandler {
+    fn on_click(&mut self, checked: &mut bool) {
+        *checked = true;
+        panic!("CALL https://github.com/Osspial/derin/blob/6a92c83b9cfa73024b4216c5d5e1aee74ee513b1/derin/src/widgets/radio_buttons.rs#L184-L187");
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RadioButtonTheme;
+impl ToggleBoxTheme for RadioButtonTheme {
+    const TYPE_NAME: &'static str = "RadioButton::Toggle";
 }
 
 /// A set of radio buttons.
@@ -92,10 +100,9 @@ impl<C, L> RadioButtonList<C, L>
 
     fn on_child_selected(&mut self, child_selected: &RadioButtonSelected) {
         self.buttons.children_mut(|mut child_info| {
-            let mut child_radio_button = child_info.subtype_mut();
-            if child_radio_button.widget_id() != child_selected.0 {
-                child_radio_button.selected = false;
-                child_radio_button.widget_tag.request_redraw();
+            let child_radio_button = child_info.subtype_mut();
+            if child_radio_button.widget_id() != child_selected.0 && child_radio_button.selected() {
+                *child_radio_button.selected_mut() = false;
             }
 
             LoopFlow::Continue
@@ -107,33 +114,27 @@ impl RadioButton {
     /// Creates a new radio button, with the given default selected state and contents.
     pub fn new(selected: bool, contents: Contents) -> RadioButton {
         RadioButton {
-            widget_tag: WidgetTag::new(),
-            rect: BoundBox::new2(0, 0, 0, 0),
-            min_size: DimsBox::new2(0, 0),
-
-            selected,
-            button_state: ButtonState::Normal,
-            contents: contents.to_inner(),
+            toggle: Toggle::new(selected, contents, RadioButtonToggleHandler),
         }
     }
 
+
     /// Retrieves the contents of the radio button.
-    pub fn contents(&self) -> Contents<&str> {
-        self.contents.borrow()
+    pub fn contents(&self) -> &Contents {
+        self.toggle.contents()
     }
 
     /// Retrieves the contents of the radio button, for mutation.
     ///
     /// Calling this function forces the radio button to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
-    pub fn contents_mut(&mut self) -> Contents<&mut String> {
-        self.widget_tag.request_redraw();
-        self.contents.borrow_mut()
+    pub fn contents_mut(&mut self) -> &mut Contents {
+        self.toggle.contents_mut()
     }
 
-    /// Retrieves whether or not the radio button is selected.
+    /// Retrieves whether or not the radio button is checked.
     pub fn selected(&self) -> bool {
-        self.selected
+        self.toggle.selected()
     }
 
     /// Retrieves whether or not the radio button is selected, for mutation.
@@ -141,71 +142,32 @@ impl RadioButton {
     /// Calling this function forces the radio button to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn selected_mut(&mut self) -> &mut bool {
-        self.widget_tag.request_redraw();
-        &mut self.selected
+        self.toggle.selected_mut()
     }
 }
 
 impl Widget for RadioButton {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
-        &self.widget_tag
+        self.toggle.widget_tag()
     }
 
     #[inline]
     fn rect(&self) -> BoundBox<D2, i32> {
-        self.rect
+        self.toggle.rect()
     }
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
-        &mut self.rect
+        self.toggle.rect_mut()
     }
 
     fn size_bounds(&self) -> SizeBounds {
-        SizeBounds::new_min(self.min_size)
+        self.toggle.size_bounds()
     }
 
-    fn on_widget_event(&mut self, event: WidgetEventSourced, input_state: InputState) -> EventOps {
-        use self::WidgetEvent::*;
-        let event = event.unwrap();
-
-        let (mut new_selected, mut new_state) = (self.selected, self.button_state);
-        match event {
-            MouseMove{hover_change: Some(ref change), ..} if input_state.mouse_buttons_down_in_widget.is_empty() => {
-                match change {
-                    MouseHoverChange::Enter => new_state = ButtonState::Hover,
-                    MouseHoverChange::Exit => new_state = ButtonState::Normal,
-                    _ => ()
-                }
-            },
-            MouseDown{..} => new_state = ButtonState::Pressed,
-            MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
-                self.widget_tag.send_message_to(
-                    RadioButtonSelected(self.widget_id()),
-                    MessageTarget::ParentOf(self.widget_id()),
-                );
-                new_selected = true;
-                new_state = ButtonState::Hover;
-            },
-            MouseUp{in_widget: false, ..} => new_state = ButtonState::Normal,
-            GainFocus(_, _) => new_state = ButtonState::Hover,
-            LoseFocus => new_state = ButtonState::Normal,
-            _ => ()
-        };
-
-        if new_selected != self.selected || new_state != self.button_state {
-            self.widget_tag.request_redraw();
-            self.selected = new_selected;
-            self.button_state = new_state;
-        }
-
-
-
-        EventOps {
-            focus: None,
-            bubble: event.default_bubble(),
-        }
+    fn on_widget_event(&mut self, event: WidgetEventSourced, state: InputState) -> EventOps {
+        self.toggle.on_widget_event(event, state)
     }
 }
 
@@ -237,27 +199,9 @@ impl<C, L> Widget for RadioButtonList<C, L>
     fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
         // TODO: PASS FOCUS TO CHILD
 
-        let mut bubble = true;
-        // Un-select any child radio buttons after a new button was selected.
-        if let WidgetEventSourced::Bubble(WidgetEvent::MouseUp{in_widget: true, pressed_in_widget: true, ..}, [child_ident]) = event {
-            bubble = false;
-            let mut state_changed = false;
-            self.buttons.children_mut::<_>(|mut summary| {
-                if summary.ident != *child_ident {
-                    let radio_button = summary.subtype_mut();
-                    if radio_button.selected {
-                        radio_button.widget_tag.request_redraw();
-                    }
-                    state_changed |= radio_button.selected;
-                    radio_button.selected = false;
-                }
-                LoopFlow::Continue
-            });
-        }
-
         EventOps {
             focus: None,
-            bubble,
+            bubble: true,
         }
     }
 }
@@ -270,114 +214,63 @@ impl<C, L> Parent for RadioButtonList<C, L>
         self.buttons.num_children()
     }
 
-    fn framed_child<F: RenderFrame>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, F>> {
+    fn framed_child<R: Renderer>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, R>> {
         self.buttons.framed_child(widget_ident).map(WidgetInfo::erase_subtype)
     }
-    fn framed_child_mut<F: RenderFrame>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, F>> {
+    fn framed_child_mut<R: Renderer>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, R>> {
         self.buttons.framed_child_mut(widget_ident).map(WidgetInfoMut::erase_subtype)
     }
 
-    fn framed_children<'a, F, G>(&'a self, mut for_each: G)
-        where F: RenderFrame,
-              G: FnMut(WidgetInfo<'a, F>) -> LoopFlow
+    fn framed_children<'a, R, G>(&'a self, mut for_each: G)
+        where R: Renderer,
+              G: FnMut(WidgetInfo<'a, R>) -> LoopFlow
     {
         self.buttons.framed_children(|summary| for_each(WidgetInfo::erase_subtype(summary)))
     }
 
-    fn framed_children_mut<'a, F, G>(&'a mut self, mut for_each: G)
-        where F: RenderFrame,
-              G: FnMut(WidgetInfoMut<'a, F>) -> LoopFlow
+    fn framed_children_mut<'a, R, G>(&'a mut self, mut for_each: G)
+        where R: Renderer,
+              G: FnMut(WidgetInfoMut<'a, R>) -> LoopFlow
     {
         self.buttons.framed_children_mut(|summary| for_each(WidgetInfoMut::erase_subtype(summary)))
     }
 
-    fn framed_child_by_index<F: RenderFrame>(&self, index: usize) -> Option<WidgetInfo<'_, F>> {
+    fn framed_child_by_index<R: Renderer>(&self, index: usize) -> Option<WidgetInfo<'_, R>> {
         self.buttons.framed_child_by_index(index).map(WidgetInfo::erase_subtype)
     }
-    fn framed_child_by_index_mut<F: RenderFrame>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, F>> {
+    fn framed_child_by_index_mut<R: Renderer>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, R>> {
         self.buttons.framed_child_by_index_mut(index).map(WidgetInfoMut::erase_subtype)
     }
 }
 
-impl<F> WidgetRender<F> for RadioButton
-    where F: PrimFrame
+impl<R> WidgetRender<R> for RadioButton
+    where R: Renderer,
 {
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
-        let image_str = match (self.selected, self.button_state) {
-            (true, ButtonState::Normal) => "RadioButton::Selected",
-            (true, ButtonState::Hover) => "RadioButton::Selected::Hover",
-            (true, ButtonState::Pressed) => "RadioButton::Selected::Pressed",
-            (false, ButtonState::Normal) => "RadioButton::Empty",
-            (false, ButtonState::Hover) => "RadioButton::Empty::Hover",
-            (false, ButtonState::Pressed) => "RadioButton::Empty::Pressed",
-        };
-        let icon_min_size = frame.theme().widget_theme(image_str).image.map(|b| b.size_bounds.min).unwrap_or(DimsBox::new2(0, 0));
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        WidgetRender::<R>::render(&mut self.toggle, frame)
+    }
 
-        let mut content_rect = BoundBox::new2(0, 0, 0, 0);
-        frame.upload_primitives(Some(
-            ThemedPrim {
-                min: Point2::new(
-                    RelPoint::new(-1.0, 0),
-                    RelPoint::new(-1.0, 0),
-                ),
-                max: Point2::new(
-                    RelPoint::new( 1.0, 0),
-                    RelPoint::new( 1.0, 0),
-                ),
-                ..self.contents.to_prim("RadioButton", Some(&mut content_rect))
-            }
-        ));
+    fn theme_list(&self) -> &[WidgetTheme] {
+        WidgetRender::<R>::theme_list(&self.toggle)
+    }
 
-        let mut icon_rect = BoundBox::new2(0, 0, 0, 0);
-        frame.upload_primitives(Some(
-            match content_rect == BoundBox::new2(0, 0, 0, 0) {
-                true => ThemedPrim {
-                    min: Point2::new(
-                        RelPoint::new(-1.0, 0),
-                        RelPoint::new(-1.0, 0),
-                    ),
-                    max: Point2::new(
-                        RelPoint::new( 1.0, 0),
-                        RelPoint::new( 1.0, 0)
-                    ),
-                    prim: Prim::Image,
-                    theme_path: image_str,
-                    rect_px_out: Some(&mut icon_rect)
-                },
-                false => {
-                    ThemedPrim {
-                        min: Point2::new(
-                            RelPoint::new(-1.0, 0),
-                            RelPoint::new(-1.0, content_rect.min.y),
-                        ),
-                        max: Point2::new(
-                            RelPoint::new( 1.0, 0),
-                            RelPoint::new(-1.0, content_rect.min.y + icon_min_size.height()),
-                        ),
-                        prim: Prim::Image,
-                        theme_path: image_str,
-                        rect_px_out: Some(&mut icon_rect)
-                    }
-                }
-            }
-        ));
-
-        // TODO: MOVE TO update_layout
-        self.min_size = DimsBox::new2(
-            content_rect.width() + icon_rect.width(),
-            icon_min_size.height().max(self.contents.min_size(frame.theme()).height())
-        );
+    fn update_layout(&mut self, l: &mut R::Layout) {
+        WidgetRender::<R>::update_layout(&mut self.toggle, l)
     }
 }
 
-impl<F, C, L> WidgetRender<F> for RadioButtonList<C, L>
-    where F: PrimFrame,
+impl<R, C, L> WidgetRender<R> for RadioButtonList<C, L>
+    where R: Renderer,
           C: WidgetContainer<RadioButton>,
           L: GridLayout
 {
-    fn render(&mut self, _: &mut RenderFrameClipped<F>) {}
+    fn render(&mut self, _: &mut R::SubFrame) { }
 
-    fn update_layout(&mut self, _: &F::Theme) {
+    fn theme_list(&self) -> &[WidgetTheme] {
+        &[]
+    }
+
+    fn update_layout(&mut self, _: &mut R::Layout) {
         #[derive(Default)]
         struct HeapCache {
             update_heap_cache: UpdateHeapCache,

@@ -2,21 +2,51 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{
-    core::{
-        event::{EventOps, InputState, WidgetEvent, WidgetEventSourced, MouseHoverChange},
-        widget::{WidgetTag, WidgetRender, Widget},
-        render::RenderFrameClipped,
-    },
-    gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame},
-    widgets::{
-        Contents, ContentsInner, ToggleHandler,
-        assistants::ButtonState,
-    },
+use derin_core::{
+    event::{EventOps, InputState, WidgetEventSourced},
+    widget::{WidgetTag, WidgetRender, Widget},
+    render::{Renderer, WidgetTheme},
 };
-use crate::cgmath::Point2;
-use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
+use crate::widgets::{
+    Contents,
+    assistants::toggle_button::{Toggle, ToggleBoxTheme, ToggleOnClickHandler},
+};
+use cgmath_geometry::{D2, rect::BoundBox};
 use derin_common_types::layout::SizeBounds;
+
+#[derive(Debug, Clone, Copy)]
+struct CheckBoxTheme;
+impl ToggleBoxTheme for CheckBoxTheme {
+    const TYPE_NAME: &'static str = "CheckBox::Toggle";
+}
+
+impl<H: CheckToggleHandler> ToggleOnClickHandler for H {
+    fn on_click(&mut self, checked: &mut bool) {
+        *checked = !*checked;
+        self.change_state(*checked);
+    }
+}
+
+/// Determines which action, if any, should be taken in response to a button toggle.
+pub trait CheckToggleHandler: 'static {
+    fn change_state(&mut self, enabled: bool);
+}
+
+impl<A: 'static + Clone> CheckToggleHandler for Option<A> {
+    /// Returns the stored action when the toggle is enabled. Otherwise, returns `None`.
+    #[inline]
+    fn change_state(&mut self, enabled: bool) {
+        unimplemented!()
+    }
+}
+
+impl CheckToggleHandler for () {
+    /// Always returns `None`.
+    #[inline]
+    fn change_state(&mut self, _: bool) {
+        unimplemented!()
+    }
+}
 
 
 /// A toggleable box that can be either checked or unchecked.
@@ -24,52 +54,38 @@ use derin_common_types::layout::SizeBounds;
 /// When toggled, calls the [`change_state`] function in the associated handler passed in through the
 /// `new` function.
 ///
-/// [`change_state`]: ./trait.ToggleHandler.html
+/// [`change_state`]: ./trait.CheckToggleHandler.html
 #[derive(Debug, Clone)]
-pub struct CheckBox<H> {
-    widget_tag: WidgetTag,
-    rect: BoundBox<D2, i32>,
-
-    check_rect: BoundBox<D2, i32>,
-    contents: ContentsInner,
-    checked: bool,
-    button_state: ButtonState,
-    handler: H
+pub struct CheckBox<H: CheckToggleHandler> {
+    toggle: Toggle<H, CheckBoxTheme>,
 }
 
-impl<H> CheckBox<H> {
+impl<H: CheckToggleHandler> CheckBox<H> {
     /// Creates a new `CheckBox` with the given checked state, contents, and [toggle handler].
     ///
-    /// [toggle handler]: ./trait.ToggleHandler.html
-    pub fn new(checked: bool, contents: Contents<String>, handler: H) -> CheckBox<H> {
+    /// [toggle handler]: ./trait.CheckToggleHandler.html
+    pub fn new(checked: bool, contents: Contents, handler: H) -> CheckBox<H> {
         CheckBox {
-            widget_tag: WidgetTag::new(),
-            rect: BoundBox::new2(0, 0, 0, 0),
-
-            check_rect: BoundBox::new2(0, 0, 0, 0),
-            contents: contents.to_inner(),
-            button_state: ButtonState::Normal,
-            checked, handler
+            toggle: Toggle::new(checked, contents, handler),
         }
     }
 
     /// Retrieves the contents of the checkbox.
-    pub fn contents(&self) -> Contents<&str> {
-        self.contents.borrow()
+    pub fn contents(&self) -> &Contents {
+        self.toggle.contents()
     }
 
     /// Retrieves the contents of the checkbox, for mutation.
     ///
     /// Calling this function forces the checkbox to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
-    pub fn contents_mut(&mut self) -> Contents<&mut String> {
-        self.widget_tag.request_redraw();
-        self.contents.borrow_mut()
+    pub fn contents_mut(&mut self) -> &mut Contents {
+        self.toggle.contents_mut()
     }
 
     /// Retrieves whether or not the checkbox is checked.
     pub fn checked(&self) -> bool {
-        self.checked
+        self.toggle.selected()
     }
 
     /// Retrieves whether or not the checkbox is checked, for mutation.
@@ -77,118 +93,50 @@ impl<H> CheckBox<H> {
     /// Calling this function forces the checkbox to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
     pub fn checked_mut(&mut self) -> &mut bool {
-        self.widget_tag.request_redraw();
-        &mut self.checked
+        self.toggle.selected_mut()
     }
 }
 
 impl<H> Widget for CheckBox<H>
-    where H: ToggleHandler
+    where H: CheckToggleHandler
 {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
-        &self.widget_tag
+        self.toggle.widget_tag()
     }
 
     #[inline]
     fn rect(&self) -> BoundBox<D2, i32> {
-        self.rect
+        self.toggle.rect()
     }
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
-        &mut self.rect
+        self.toggle.rect_mut()
     }
 
     fn size_bounds(&self) -> SizeBounds {
-        SizeBounds::new_min(self.check_rect.dims())
+        self.toggle.size_bounds()
     }
 
-    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
-        use self::WidgetEvent::*;
-        let event = event.unwrap();
-
-        let (mut new_checked, mut new_state) = (self.checked, self.button_state);
-        match event {
-            MouseMove{hover_change: Some(ref change), ..} => match change {
-                MouseHoverChange::Enter => new_state = ButtonState::Hover,
-                MouseHoverChange::Exit => new_state = ButtonState::Normal,
-                _ => ()
-            },
-            MouseDown{..} => new_state = ButtonState::Pressed,
-            MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
-                if !self.checked {
-                    self.handler.change_state(!self.checked);
-                }
-                new_checked = !self.checked;
-                new_state = ButtonState::Hover;
-            },
-            MouseUp{in_widget: false, ..} => new_state = ButtonState::Normal,
-            GainFocus(_, _) => new_state = ButtonState::Hover,
-            LoseFocus => new_state = ButtonState::Normal,
-            _ => ()
-        };
-
-        if new_checked != self.checked || new_state != self.button_state {
-            self.widget_tag.request_redraw();
-            self.checked = new_checked;
-            self.button_state = new_state;
-        }
-
-
-        EventOps {
-            focus: None,
-            bubble: event.default_bubble(),
-        }
+    fn on_widget_event(&mut self, event: WidgetEventSourced, state: InputState) -> EventOps {
+        self.toggle.on_widget_event(event, state)
     }
 }
 
-impl<F, H> WidgetRender<F> for CheckBox<H>
-    where F: PrimFrame,
-          H: ToggleHandler
+impl<R, H> WidgetRender<R> for CheckBox<H>
+    where R: Renderer,
+          H: CheckToggleHandler,
 {
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
-        let image_str = match (self.checked, self.button_state) {
-            (true, ButtonState::Normal) => "CheckBox::Checked",
-            (true, ButtonState::Hover) => "CheckBox::Checked::Hover",
-            (true, ButtonState::Pressed) => "CheckBox::Checked::Pressed",
-            (false, ButtonState::Normal) => "CheckBox::Empty",
-            (false, ButtonState::Hover) => "CheckBox::Empty::Hover",
-            (false, ButtonState::Pressed) => "CheckBox::Empty::Pressed",
-        };
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        WidgetRender::<R>::render(&mut self.toggle, frame)
+    }
 
-        let mut content_rect = BoundBox::new2(0, 0, 0, 0);
-        frame.upload_primitives(Some(self.contents.to_prim("CheckBox", Some(&mut content_rect))));
+    fn theme_list(&self) -> &[WidgetTheme] {
+        WidgetRender::<R>::theme_list(&self.toggle)
+    }
 
-        frame.upload_primitives(Some(
-            match content_rect == BoundBox::new2(0, 0, 0, 0) {
-                true => ThemedPrim {
-                    min: Point2::new(
-                        RelPoint::new(-1.0, 0),
-                        RelPoint::new(-1.0, 0),
-                    ),
-                    max: Point2::new(
-                        RelPoint::new( 1.0, 0),
-                        RelPoint::new( 1.0, 0)
-                    ),
-                    prim: Prim::Image,
-                    theme_path: image_str,
-                    rect_px_out: Some(&mut self.check_rect)
-                },
-                false => ThemedPrim {
-                    min: Point2::new(
-                        RelPoint::new(-1.0, 0),
-                        RelPoint::new(-1.0, content_rect.min().y),
-                    ),
-                    max: Point2::new(
-                        RelPoint::new( 1.0, 0),
-                        RelPoint::new(-1.0, content_rect.max().y),
-                    ),
-                    prim: Prim::Image,
-                    theme_path: image_str,
-                    rect_px_out: Some(&mut self.check_rect)
-                }
-            }
-        ));
+    fn update_layout(&mut self, l: &mut R::Layout) {
+        WidgetRender::<R>::update_layout(&mut self.toggle, l)
     }
 }

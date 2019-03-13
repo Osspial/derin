@@ -2,13 +2,11 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{
-    core::{
-        LoopFlow,
-        event::{EventOps, WidgetEventSourced, InputState},
-        widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
-        render::{RenderFrame, RenderFrameClipped},
-    },
+use derin_core::{
+    LoopFlow,
+    event::{EventOps, WidgetEventSourced, InputState},
+    widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
+    render::{Renderer, WidgetTheme},
 };
 
 use crate::cgmath::EuclideanSpace;
@@ -81,40 +79,40 @@ impl<W> Parent for Clip<W>
         1
     }
 
-    fn framed_child<F: RenderFrame>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, F>> {
+    fn framed_child<R: Renderer>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, R>> {
         match widget_ident {
             WidgetIdent::Num(0) => Some(WidgetInfo::new(WidgetIdent::Num(0), 0, &self.widget)),
             _ => None
         }
     }
-    fn framed_child_mut<F: RenderFrame>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, F>> {
+    fn framed_child_mut<R: Renderer>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, R>> {
         match widget_ident {
             WidgetIdent::Num(0) => Some(WidgetInfoMut::new(WidgetIdent::Num(0), 0, &mut self.widget)),
             _ => None
         }
     }
 
-    fn framed_children<'a, F, G>(&'a self, mut for_each: G)
-        where F: RenderFrame,
-              G: FnMut(WidgetInfo<'a, F>) -> LoopFlow
+    fn framed_children<'a, R, G>(&'a self, mut for_each: G)
+        where R: Renderer,
+              G: FnMut(WidgetInfo<'a, R>) -> LoopFlow
     {
         let _ = for_each(WidgetInfo::new(WidgetIdent::Num(0), 0, &self.widget));
     }
 
-    fn framed_children_mut<'a, F, G>(&'a mut self, mut for_each: G)
-        where F: RenderFrame,
-              G: FnMut(WidgetInfoMut<'a, F>) -> LoopFlow
+    fn framed_children_mut<'a, R, G>(&'a mut self, mut for_each: G)
+        where R: Renderer,
+              G: FnMut(WidgetInfoMut<'a, R>) -> LoopFlow
     {
         let _ = for_each(WidgetInfoMut::new(WidgetIdent::Num(0), 0, &mut self.widget));
     }
 
-    fn framed_child_by_index<F: RenderFrame>(&self, index: usize) -> Option<WidgetInfo<'_, F>> {
+    fn framed_child_by_index<R: Renderer>(&self, index: usize) -> Option<WidgetInfo<'_, R>> {
         match index {
             0 => Some(WidgetInfo::new(WidgetIdent::Num(0), 0, &self.widget)),
             _ => None
         }
     }
-    fn framed_child_by_index_mut<F: RenderFrame>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, F>> {
+    fn framed_child_by_index_mut<R: Renderer>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, R>> {
         match index {
             0 => Some(WidgetInfoMut::new(WidgetIdent::Num(0), 0, &mut self.widget)),
             _ => None
@@ -122,13 +120,17 @@ impl<W> Parent for Clip<W>
     }
 }
 
-impl<W, F> WidgetRender<F> for Clip<W>
+impl<W, R> WidgetRender<R> for Clip<W>
     where W: Widget,
-          F: RenderFrame
+          R: Renderer
 {
-    fn render(&mut self, _: &mut RenderFrameClipped<F>) {}
+    fn render(&mut self, _: &mut R::SubFrame) { }
 
-    fn update_layout(&mut self, _: &F::Theme) {
+    fn theme_list(&self) -> &[WidgetTheme] {
+        &[]
+    }
+
+    fn update_layout(&mut self, _: &mut R::Layout) {
         let widget_rect = self.widget.rect();
         let size_bounds = self.widget.size_bounds();
 

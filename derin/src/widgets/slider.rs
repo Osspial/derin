@@ -2,19 +2,23 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use std::ops::RangeInclusive;
+use derin_core::{
+    widget::{WidgetTag, WidgetRender, Widget},
+    render::{Renderer, RendererLayout, SubFrame, WidgetTheme},
+};
+use derin_common_types::layout::SizeBounds;
 use crate::{
-    core::{
-        widget::{WidgetTag, WidgetRender, Widget},
-        render::{RenderFrameClipped, Theme},
-    },
     event::{EventOps, WidgetEvent, InputState, MouseButton, WidgetEventSourced},
-    gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
     theme::RescaleRules,
     widgets::assistants::SliderAssist,
 };
 
 use crate::cgmath::Point2;
-use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
+use cgmath_geometry::{
+    Lerp, D2,
+    rect::{BoundBox, DimsBox, GeoBox, OffsetBox}
+};
 
 pub trait SliderHandler: 'static {
     type Action: 'static;
@@ -35,80 +39,103 @@ pub trait SliderHandler: 'static {
 #[derive(Debug, Clone)]
 pub struct Slider<H: SliderHandler> {
     widget_tag: WidgetTag,
-    bounds: BoundBox<D2, i32>,
+    rect: BoundBox<D2, i32>,
+    size_bounds: SizeBounds,
 
-    assist: SliderAssist,
-    handler: H
+    handle: SliderHandle<H>,
+}
+
+#[derive(Debug, Clone)]
+struct SliderHandle<H: SliderHandler> {
+    widget_tag: WidgetTag,
+    rect: BoundBox<D2, i32>,
+    size_bounds: SizeBounds,
+
+    value: f32,
+    step: f32,
+    value_range: RangeInclusive<f32>,
+
+    click_pos: Option<i32>,
+    pixel_range: RangeInclusive<i32>,
+
+    handler: H,
 }
 
 impl<H: SliderHandler> Slider<H> {
     /// Creates a new slider with the given `value`, `step`, `min`, `max`, and action handler.
-    pub fn new(value: f32, step: f32, min: f32, max: f32, handler: H) -> Slider<H> {
+    pub fn new(value: f32, step: f32, value_range: RangeInclusive<f32>, handler: H) -> Slider<H> {
         Slider {
             widget_tag: WidgetTag::new(),
-            bounds: BoundBox::new2(0, 0, 0, 0),
-            assist: SliderAssist {
-                value, step, min, max,
+            rect: BoundBox::new2(0, 0, 0, 0),
+            size_bounds: SizeBounds::default(),
 
-                head_size: 0,
-                bar_rect: BoundBox::new2(0, 0, 0, 0),
-                head_click_pos: None,
-                horizontal: true
+            handle: SliderHandle {
+                widget_tag: WidgetTag::new(),
+                rect: BoundBox::new2(0, 0, 0, 0),
+                size_bounds: SizeBounds::default(),
+
+                value,
+                step,
+                value_range,
+
+                click_pos: None,
+                pixel_range: 0..=0,
+
+                handler,
             },
-            handler
         }
     }
 
-    /// Retrieves the value stored in the slider.
-    #[inline]
-    pub fn value(&self) -> f32 {
-        self.assist.value
-    }
+    // /// Retrieves the value stored in the slider.
+    // #[inline]
+    // pub fn value(&self) -> f32 {
+    //     self.value
+    // }
 
-    /// Retrieves the range of possible values the slider can contain.
-    #[inline]
-    pub fn range(&self) -> (f32, f32) {
-        (self.assist.min, self.assist.max)
-    }
+    // /// Retrieves the range of possible values the slider can contain.
+    // #[inline]
+    // pub fn range(&self) -> (f32, f32) {
+    //     (self.min, self.max)
+    // }
 
-    /// Retrieves the step, to which the value is snapped to.
-    ///
-    /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
-    /// it unless you're actually changing the contents.
-    #[inline]
-    pub fn step(&self) -> f32 {
-        self.assist.step
-    }
+    // /// Retrieves the step, to which the value is snapped to.
+    // ///
+    // /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
+    // /// it unless you're actually changing the contents.
+    // #[inline]
+    // pub fn step(&self) -> f32 {
+    //     self.step
+    // }
 
-    /// Retrieves the value stored in the slider, for mutation.
-    ///
-    /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
-    /// it unless you're actually changing the contents.
-    #[inline]
-    pub fn value_mut(&mut self) -> &mut f32 {
-        self.widget_tag.request_redraw();
-        &mut self.assist.value
-    }
+    // /// Retrieves the value stored in the slider, for mutation.
+    // ///
+    // /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
+    // /// it unless you're actually changing the contents.
+    // #[inline]
+    // pub fn value_mut(&mut self) -> &mut f32 {
+    //     self.widget_tag.request_redraw();
+    //     &mut self.value
+    // }
 
-    /// Retrieves the range of possible values the slider can contain, for mutation.
-    ///
-    /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
-    /// it unless you're actually changing the contents.
-    #[inline]
-    pub fn range_mut(&mut self) -> (&mut f32, &mut f32) {
-        self.widget_tag.request_redraw();
-        (&mut self.assist.min, &mut self.assist.max)
-    }
+    // /// Retrieves the range of possible values the slider can contain, for mutation.
+    // ///
+    // /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
+    // /// it unless you're actually changing the contents.
+    // #[inline]
+    // pub fn range_mut(&mut self) -> (&mut f32, &mut f32) {
+    //     self.widget_tag.request_redraw();
+    //     (&mut self.min, &mut self.max)
+    // }
 
-    /// Retrieves the step, to which the value is snapped to, for mutation.
-    ///
-    /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
-    /// it unless you're actually changing the contents.
-    #[inline]
-    pub fn step_mut(&mut self) -> &mut f32 {
-        self.widget_tag.request_redraw();
-        &mut self.assist.step
-    }
+    // /// Retrieves the step, to which the value is snapped to, for mutation.
+    // ///
+    // /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
+    // /// it unless you're actually changing the contents.
+    // #[inline]
+    // pub fn step_mut(&mut self) -> &mut f32 {
+    //     self.widget_tag.request_redraw();
+    //     &mut self.step
+    // }
 }
 
 impl<H> Widget for Slider<H>
@@ -121,34 +148,94 @@ impl<H> Widget for Slider<H>
 
     #[inline]
     fn rect(&self) -> BoundBox<D2, i32> {
-        self.bounds
+        self.rect
     }
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
-        &mut self.bounds
+        &mut self.rect
+    }
+
+    #[inline]
+    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps {
+        EventOps {
+            focus: None,
+            bubble: true,
+        }
+    }
+}
+
+impl<H> Widget for SliderHandle<H>
+    where H: SliderHandler
+{
+    #[inline]
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
+    }
+
+    #[inline]
+    fn rect(&self) -> BoundBox<D2, i32> {
+        self.rect
+    }
+
+    #[inline]
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
+        &mut self.rect
     }
 
     #[inline]
     fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
         if let WidgetEventSourced::This(ref event) = event {
-            let start_value = self.assist.value;
+            let start_value = self.value;
             match event {
                 WidgetEvent::MouseDown{pos, in_widget: true, button: MouseButton::Left} => {
-                    self.assist.click_head(*pos);
+                    self.click_pos = Some(pos.x);
                     self.widget_tag.request_redraw();
                 },
                 WidgetEvent::MouseMove{new_pos, ..} => {
-                    self.assist.move_head(new_pos.x);
+                    if let Some(click_pos) = self.click_pos {
+                        let mut offset_rect = OffsetBox::from(self.rect);
+                        offset_rect.origin.x += new_pos.x - click_pos;
+
+                        if offset_rect.min().x < *self.pixel_range.start() {
+                            offset_rect.origin.x = *self.pixel_range.start();
+                        }
+                        if offset_rect.max().x > *self.pixel_range.start() {
+                            offset_rect.origin.x = *self.pixel_range.end() - offset_rect.dims.x;
+                        }
+
+                        let bar_len = *self.pixel_range.end() - *self.pixel_range.start();
+
+                        let value_lerp_factor = offset_rect.center().x as f32 / bar_len as f32;
+                        self.value = f32::lerp(*self.value_range.start(), *self.value_range.end(), value_lerp_factor);
+
+                        // Snap the value to the step.
+                        self.value = ((self.value - *self.value_range.start()) / self.step).round() * self.step + *self.value_range.start();
+
+                        // Snap the head to the value
+                        offset_rect.origin.x =
+                            (
+                                (
+                                    (self.value - *self.value_range.start())
+                                    / (*self.value_range.end() - *self.value_range.start())
+                                )
+                                * (bar_len - offset_rect.dims.x) as f32
+                            ) as i32
+                            + *self.pixel_range.start();
+
+                        self.rect = BoundBox::from(offset_rect);
+                    }
                 },
-                WidgetEvent::MouseUp{button: MouseButton::Left, ..} => {
-                    self.assist.head_click_pos = None;
+                WidgetEvent::MouseUp{button: MouseButton::Left, pressed_in_widget: true, ..} => {
+                    self.click_pos = None;
                     self.widget_tag.request_redraw();
                 },
                 _ => ()
             }
-            if self.assist.value != start_value {
-                self.widget_tag.broadcast_message(self.handler.on_move(start_value, self.assist.value));
+            if self.value != start_value {
+                if let Some(message) = self.handler.on_move(start_value, self.value) {
+                    self.widget_tag.broadcast_message(message);
+                }
                 self.widget_tag.request_redraw();
             }
         }
@@ -159,58 +246,41 @@ impl<H> Widget for Slider<H>
     }
 }
 
-impl<F, H> WidgetRender<F> for Slider<H>
-    where F: PrimFrame,
+impl<R, H> WidgetRender<R> for Slider<H>
+    where R: Renderer,
           H: SliderHandler
 {
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
-        self.assist.round_to_step();
-        let bar_margins = match frame.theme().widget_theme("Slider::Bar").image.map(|b| b.rescale) {
-            Some(RescaleRules::Slice(margins)) => margins,
-            _ => Default::default()
-        };
-        let head_rect = frame.theme().widget_theme("Slider::Head").image.map(|h| h.dims).unwrap_or(DimsBox::new2(0, 0));
-        self.assist.head_size = head_rect.width() as i32;
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        frame.render_laid_out_content();
+    }
 
-        frame.upload_primitives(Some(
-            ThemedPrim {
-                theme_path: "Slider::Bar",
-                min: Point2::new(
-                    RelPoint::new(-1.0, 0),
-                    RelPoint::new(-1.0, 0),
-                ),
-                max: Point2::new(
-                    RelPoint::new( 1.0, 0),
-                    RelPoint::new( 1.0, 0)
-                ),
-                prim: Prim::Image,
-                rect_px_out: Some(&mut self.assist.bar_rect)
-            }
-        ).into_iter());
+    fn theme_list(&self) -> &[WidgetTheme] {
+        static THEME: &[WidgetTheme] = &[WidgetTheme::new("Slider")];
+        THEME
+    }
 
-        self.assist.bar_rect.min.x += bar_margins.left as i32;
-        self.assist.bar_rect.max.x -= bar_margins.right as i32;
-        self.assist.bar_rect.min.y += bar_margins.top as i32;
-        self.assist.bar_rect.max.y -= bar_margins.bottom as i32;
-        let bar_rect_center_y = self.assist.bar_rect.center().y;
-        self.assist.bar_rect.min.y = bar_rect_center_y - (head_rect.height() / 2) as i32;
-        self.assist.bar_rect.max.y = bar_rect_center_y + (head_rect.height() / 2) as i32;
+    fn update_layout(&mut self, layout: &mut R::Layout) {
+        let result = layout.finish();
+        self.size_bounds = result.size_bounds;
+        self.handle.pixel_range = result.content_rect.min.x..=result.content_rect.max.x;
+    }
+}
 
-        let head_rect = self.assist.head_rect();
-        frame.upload_primitives(Some(
-            ThemedPrim {
-                theme_path: "Slider::Head",
-                min: Point2::new(
-                    RelPoint::new(-1.0, head_rect.min.x),
-                    RelPoint::new(-1.0, head_rect.min.y),
-                ),
-                max: Point2::new(
-                    RelPoint::new(-1.0, head_rect.max.x),
-                    RelPoint::new(-1.0, head_rect.max.y)
-                ),
-                prim: Prim::Image,
-                rect_px_out: None
-            },
-        ).into_iter());
+impl<R, H> WidgetRender<R> for SliderHandle<H>
+    where R: Renderer,
+          H: SliderHandler
+{
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        frame.render_laid_out_content();
+    }
+
+    fn theme_list(&self) -> &[WidgetTheme] {
+        static THEME: &[WidgetTheme] = &[WidgetTheme::new("Slider::Handle")];
+        THEME
+    }
+
+    fn update_layout(&mut self, layout: &mut R::Layout) {
+        let result = layout.finish();
+        self.size_bounds = result.size_bounds;
     }
 }

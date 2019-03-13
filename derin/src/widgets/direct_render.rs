@@ -6,7 +6,7 @@ use crate::{
     core::{
         event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
         widget::{WidgetRender, WidgetTag, Widget},
-        render::RenderFrameClipped,
+        render::Renderer,
     },
     gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
 };
@@ -87,11 +87,11 @@ impl<R: DirectRenderState> Widget for DirectRender<R> {
     }
 }
 
-impl<F, R> WidgetRender<F> for DirectRender<R>
-    where F: PrimFrame<DirectRender=R::RenderType>,
+impl<R, R> WidgetRender<R> for DirectRender<R>
+    where R: Renderer<DirectRender=R::RenderType>,
           R: DirectRenderState
 {
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
+    fn render(&mut self, frame: &mut R::SubFrame) {
         let mut draw_fn = |render_type: &mut R::RenderType| self.render_state.render(render_type);
         frame.upload_primitives(Some(ThemedPrim {
             theme_path: "DirectRender",

@@ -2,25 +2,18 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-use crate::{
-    core::{
-        event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange},
-        widget::{WidgetTag, WidgetRender, Widget},
-        render::{RenderFrameClipped, Theme},
-    },
-    gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
-    widgets::{
-        Contents, ContentsInner,
-        assistants::ButtonState,
-    },
+use derin_core::{
+    event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange},
+    widget::{WidgetTag, WidgetRender, Widget},
+    render::{Renderer, RendererLayout, SubFrame, WidgetTheme},
+};
+use crate::widgets::{
+    Contents,
+    assistants::ButtonState,
 };
 
-use crate::cgmath::Point2;
-use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
+use cgmath_geometry::{D2, rect::BoundBox};
 use derin_common_types::layout::SizeBounds;
-
-
-use arrayvec::ArrayVec;
 
 /// Determines which action, if any, should be taken in response to a button press.
 pub trait ButtonHandler: 'static {
@@ -52,36 +45,33 @@ pub struct Button<H> {
     widget_tag: WidgetTag,
     bounds: BoundBox<D2, i32>,
     state: ButtonState,
-    handler: H,
-    contents: ContentsInner,
+    pub handler: H,
+    contents: Contents,
     size_bounds: SizeBounds
 }
 
 impl<H> Button<H> {
     /// Creates a new button with the given contents and
-    pub fn new(contents: Contents<String>, handler: H) -> Button<H> {
+    pub fn new(contents: Contents, handler: H) -> Button<H> {
         Button {
             widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             state: ButtonState::Normal,
             handler,
-            contents: contents.to_inner(),
+            contents,
             size_bounds: SizeBounds::default()
         }
     }
 
-    /// Retrieves the contents of the button.
-    pub fn contents(&self) -> Contents<&str> {
-        self.contents.borrow()
+    pub fn contents(&self) -> &Contents {
+        &self.contents
     }
 
-    /// Retrieves the contents of the button, for mutation.
-    ///
-    /// Calling this function forces the button to be re-drawn, so you're discouraged from calling
-    /// it unless you're actually changing the contents.
-    pub fn contents_mut(&mut self) -> Contents<&mut String> {
-        self.widget_tag.request_redraw();
-        self.contents.borrow_mut()
+    pub fn contents_mut(&mut self) -> &mut Contents {
+        self.widget_tag
+            .request_redraw()
+            .request_relayout();
+        &mut self.contents
     }
 }
 
@@ -141,39 +131,32 @@ impl<H> Widget for Button<H>
     }
 }
 
-impl<F, H> WidgetRender<F> for Button<H>
-    where F: PrimFrame,
+impl<R, H> WidgetRender<R> for Button<H>
+    where R: Renderer,
           H: ButtonHandler
 {
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
-        let image_str = match self.state {
-            ButtonState::Normal    => "Button::Normal",
-            ButtonState::Hover     => "Button::Hover",
-            ButtonState::Pressed   => "Button::Pressed",
-            // ButtonState::Disabled  => "Button::Disabled",
-            // ButtonState::Defaulted => "Button::Defaulted"
-        };
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        frame.render_laid_out_content();
+    }
 
-        frame.upload_primitives(ArrayVec::from([
-            ThemedPrim {
-                theme_path: image_str,
-                min: Point2::new(
-                    RelPoint::new(-1.0, 0),
-                    RelPoint::new(-1.0, 0),
-                ),
-                max: Point2::new(
-                    RelPoint::new( 1.0, 0),
-                    RelPoint::new( 1.0, 0)
-                ),
-                prim: Prim::Image,
-                rect_px_out: None
-            },
-            self.contents.to_prim(image_str, None)
-        ]).into_iter());
+    fn theme_list(&self) -> &[WidgetTheme] {
+        static NORMAL: &[WidgetTheme] = &[WidgetTheme::new_state("Button", "Normal")];
+        static HOVER: &[WidgetTheme] = &[WidgetTheme::new_state("Button", "Hover")];
+        static PRESSED: &[WidgetTheme] = &[WidgetTheme::new_state("Button", "Pressed")];
+        match self.state {
+            ButtonState::Normal => NORMAL,
+            ButtonState::Hover => HOVER,
+            ButtonState::Pressed => PRESSED,
+        }
+    }
 
-        self.size_bounds.min = frame.theme().widget_theme(image_str).image.map(|i| i.min_size()).unwrap_or(DimsBox::new2(0, 0));
-        let render_string_min = self.contents.min_size(frame.theme());
-        self.size_bounds.min.dims.x += render_string_min.width();
-        self.size_bounds.min.dims.y += render_string_min.height();
+    fn update_layout(&mut self, layout: &mut R::Layout) {
+        match self.contents {
+            Contents::Text(ref s) => layout.prepare_string(s),
+            Contents::Icon(ref i) => layout.prepare_icon(i),
+        }
+
+        let result = layout.finish();
+        self.size_bounds = result.size_bounds;
     }
 }

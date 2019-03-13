@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#![feature(range_contains, nll, specialization, try_blocks, get_type_id, never_type)]
+#![feature(range_contains, nll, specialization, try_blocks, never_type)]
 
 use cgmath_geometry::cgmath;
 extern crate derin_common_types;
@@ -36,7 +36,7 @@ use crate::{
     event_translator::EventTranslator,
     timer::{TimerTrigger, TimerTriggerTracker},
     widget::*,
-    render::{Renderer, RenderFrame, RenderFrameClipped},
+    render::{Renderer},
     mbseq::MouseButtonSequenceTrackPos,
     update_state::{UpdateState, UpdateStateCell},
     widget_traverser::{Relation, WidgetPath, WidgetTraverser, WidgetTraverserBase},
@@ -61,9 +61,9 @@ fn vec_remove_element<T: PartialEq>(v: &mut Vec<T>, element: &T) -> Option<T> {
     find_index(v, element).map(|i| v.remove(i))
 }
 
-pub struct Root<N, F>
+pub struct Root<N, R>
     where N: Widget + 'static,
-          F: RenderFrame + 'static
+          R: Renderer + 'static
 {
     // Event handing and dispatch
     event_translator: EventTranslator,
@@ -71,7 +71,7 @@ pub struct Root<N, F>
     // Input State
     input_state: InputState,
 
-    widget_traverser_base: WidgetTraverserBase<F>,
+    widget_traverser_base: WidgetTraverserBase<R>,
 
     timer_tracker: TimerTriggerTracker,
     message_bus: MessageBus,
@@ -79,7 +79,8 @@ pub struct Root<N, F>
 
     // User data
     pub root_widget: N,
-    pub theme: F::Theme,
+    pub theme: R::Theme,
+    pub renderer: R,
 }
 
 struct InputState {
@@ -119,15 +120,15 @@ pub enum LoopFlow {
 }
 
 #[must_use]
-pub struct FrameEventProcessor<'a, F>
-    where F: RenderFrame + 'static
+pub struct FrameEventProcessor<'a, R>
+    where R: Renderer + 'static
 {
     input_state: &'a mut InputState,
     event_translator: &'a mut EventTranslator,
     timer_tracker: &'a mut TimerTriggerTracker,
     message_bus: &'a mut MessageBus,
     update_state: Rc<UpdateStateCell>,
-    widget_traverser: WidgetTraverser<'a, F>,
+    widget_traverser: WidgetTraverser<'a, R>,
 }
 
 #[must_use]
@@ -151,12 +152,12 @@ impl InputState {
     }
 }
 
-impl<N, F> Root<N, F>
+impl<N, R> Root<N, R>
     where N: Widget,
-          F: RenderFrame
+          R: Renderer
 {
     #[inline]
-    pub fn new(mut root_widget: N, theme: F::Theme, dims: DimsBox<D2, u32>) -> Root<N, F> {
+    pub fn new(mut root_widget: N, theme: R::Theme, renderer: R, dims: DimsBox<D2, u32>) -> Root<N, R> {
         // TODO: DRAW ROOT AND DO INITIAL LAYOUT
         *root_widget.rect_mut() = dims.cast().unwrap_or(DimsBox::max_value()).into();
         let message_bus = MessageBus::new();
@@ -171,11 +172,11 @@ impl<N, F> Root<N, F>
             update_state: UpdateState::new(&message_bus),
             message_bus,
 
-            root_widget, theme,
+            root_widget, theme, renderer,
         }
     }
 
-    pub fn start_frame(&mut self) -> FrameEventProcessor<'_, F> {
+    pub fn start_frame(&mut self) -> FrameEventProcessor<'_, R> {
         FrameEventProcessor {
             input_state: &mut self.input_state,
             event_translator: &mut self.event_translator,
@@ -215,7 +216,7 @@ impl<N, F> Root<N, F>
                 };
 
                 let old_widget_rect = widget.rect();
-                widget.update_layout(&self.theme);
+                self.renderer.layout(widget.widget_id(), |layout| widget.update_layout(layout));
                 let size_bounds = widget.size_bounds();
                 let new_widget_rect = widget.rect();
                 let widget_dims = new_widget_rect.dims();
@@ -268,13 +269,11 @@ impl<N, F> Root<N, F>
         root_widget.size_bounds()
     }
 
-    pub fn redraw<R>(&mut self, renderer: &mut R)
-        where R: Renderer<Frame=F>
-    {
+    pub fn redraw(&mut self) {
         let root_rect = self.root_widget.rect();
         let new_dims = root_rect.dims().cast::<u32>().unwrap_or(DimsBox::new2(0, 0));
-        if new_dims != renderer.dims() {
-            renderer.resized(new_dims);
+        if new_dims != self.renderer.dims() {
+            self.renderer.resized(new_dims);
         }
 
         let Root {
@@ -282,6 +281,7 @@ impl<N, F> Root<N, F>
             ref mut widget_traverser_base,
             ref mut root_widget,
             ref theme,
+            ref mut renderer,
             ..
         } = *self;
 
@@ -293,31 +293,29 @@ impl<N, F> Root<N, F>
             update_state_ref.reset_global_update();
             drop(update_state_ref);
 
+            renderer.start_frame(theme);
             let window_rect = renderer.dims();
             let window_rect = BoundBox::new2(0, 0, window_rect.width() as i32, window_rect.height() as i32);
 
-            renderer.render(
-                theme,
-                |frame| {
-                    let mut widget_traverser = widget_traverser_base.with_root_ref(root_widget, update_state.clone());
-                    widget_traverser.crawl_widgets(|mut path| {
-                        let mut render_frame_clipped = RenderFrameClipped {
-                            frame,
-                            transform: path.widget.rect(),
-                            clip: path.widget.clip().unwrap_or(window_rect),
-                            theme: theme
-                        };
-
-                        path.widget.render(&mut render_frame_clipped);
-                    });
-                }
-            );
+            let mut widget_traverser = widget_traverser_base.with_root_ref(root_widget, update_state.clone());
+            widget_traverser.crawl_widgets(|mut path| {
+                renderer.render_subframe(
+                    path.widget.widget_id(),
+                    theme,
+                    path.widget.rect(),
+                    path.widget.clip().unwrap_or(window_rect),
+                    |frame| {
+                        path.widget.render(frame);
+                    }
+                );
+            });
+            renderer.finish_frame(theme);
         }
     }
 }
 
-impl<F> FrameEventProcessor<'_, F>
-    where F: RenderFrame
+impl<R> FrameEventProcessor<'_, R>
+    where R: Renderer
 {
     pub fn process_event(
         &mut self,

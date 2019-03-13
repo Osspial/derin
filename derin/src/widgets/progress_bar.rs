@@ -2,29 +2,35 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+use derin_core::{
+    LoopFlow,
+    widget::{Parent, Widget, WidgetInfo, WidgetInfoMut, WidgetIdent, WidgetTag, WidgetRender},
+    render::{Renderer, RendererLayout, SubFrame, WidgetTheme},
+};
+use derin_common_types::layout::SizeBounds;
 use crate::{
-    core::{
-        widget::{WidgetRender, WidgetTag, Widget},
-        render::RenderFrameClipped,
-    },
     event::{EventOps, WidgetEventSourced, InputState},
-    gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
 };
 
 use crate::cgmath::Point2;
-use cgmath_geometry::{D2, rect::BoundBox};
+use cgmath_geometry::{D2, Lerp, rect::BoundBox};
 
-
-use arrayvec::ArrayVec;
 
 #[derive(Debug, Clone)]
 pub struct ProgressBar {
     widget_tag: WidgetTag,
-    bounds: BoundBox<D2, i32>,
-
+    rect: BoundBox<D2, i32>,
+    size_bounds: SizeBounds,
+    fill: ProgressBarFill,
     value: f32,
     min: f32,
     max: f32,
+}
+
+#[derive(Debug, Clone)]
+struct ProgressBarFill {
+    widget_tag: WidgetTag,
+    rect: BoundBox<D2, i32>,
 }
 
 impl ProgressBar {
@@ -32,7 +38,12 @@ impl ProgressBar {
     pub fn new(value: f32, min: f32, max: f32) -> ProgressBar {
         ProgressBar {
             widget_tag: WidgetTag::new(),
-            bounds: BoundBox::new2(0, 0, 0, 0),
+            rect: BoundBox::new2(0, 0, 0, 0),
+            size_bounds: SizeBounds::default(),
+            fill: ProgressBarFill {
+                widget_tag: WidgetTag::new(),
+                rect: BoundBox::new2(0, 0, 0, 0)
+            },
             value,
             min,
             max
@@ -57,7 +68,7 @@ impl ProgressBar {
     /// it unless you're actually changing the contents.
     #[inline]
     pub fn value_mut(&mut self) -> &mut f32 {
-        self.widget_tag.request_redraw();
+        self.widget_tag.request_relayout().request_redraw();
         &mut self.value
     }
 
@@ -67,7 +78,7 @@ impl ProgressBar {
     /// it unless you're actually changing the contents.
     #[inline]
     pub fn range_mut(&mut self) -> (&mut f32, &mut f32) {
-        self.widget_tag.request_redraw();
+        self.widget_tag.request_relayout().request_redraw();
         (&mut self.min, &mut self.max)
     }
 }
@@ -80,12 +91,17 @@ impl Widget for ProgressBar {
 
     #[inline]
     fn rect(&self) -> BoundBox<D2, i32> {
-        self.bounds
+        self.rect
     }
 
     #[inline]
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
-        &mut self.bounds
+        &mut self.rect
+    }
+
+    #[inline]
+    fn size_bounds(&self) -> SizeBounds {
+        self.size_bounds
     }
 
     #[inline]
@@ -97,38 +113,115 @@ impl Widget for ProgressBar {
     }
 }
 
-impl<F> WidgetRender<F> for ProgressBar
-    where F: PrimFrame
-{
-    fn render(&mut self, frame: &mut RenderFrameClipped<F>) {
-        self.value = self.value.min(self.max).max(self.min);
-        frame.upload_primitives(ArrayVec::from([
-            ThemedPrim {
-                theme_path: "ProgressBar::Background",
-                min: Point2::new(
-                    RelPoint::new(-1.0, 0),
-                    RelPoint::new(-1.0, 0),
-                ),
-                max: Point2::new(
-                    RelPoint::new( 1.0, 0),
-                    RelPoint::new( 1.0, 0)
-                ),
-                prim: Prim::Image,
-                rect_px_out: None
-            },
-            ThemedPrim {
-                theme_path: "ProgressBar::Fill",
-                min: Point2::new(
-                    RelPoint::new(-1.0, 0),
-                    RelPoint::new(-1.0, 0),
-                ),
-                max: Point2::new(
-                    RelPoint::new(-1.0 + (self.value / (self.max-self.min)) * 2.0, 0),
-                    RelPoint::new( 1.0, 0)
-                ),
-                prim: Prim::Image,
-                rect_px_out: None
-            }
-        ]).into_iter());
+impl Widget for ProgressBarFill {
+    #[inline]
+    fn widget_tag(&self) -> &WidgetTag {
+        &self.widget_tag
     }
+
+    #[inline]
+    fn rect(&self) -> BoundBox<D2, i32> {
+        self.rect
+    }
+
+    #[inline]
+    fn rect_mut(&mut self) -> &mut BoundBox<D2, i32> {
+        &mut self.rect
+    }
+
+    #[inline]
+    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps {
+        EventOps {
+            focus: None,
+            bubble: true,
+        }
+    }
+}
+
+impl Parent for ProgressBar {
+    fn num_children(&self) -> usize {
+        1
+    }
+
+    fn framed_child<R: Renderer>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, R>> {
+        match widget_ident {
+            WidgetIdent::Num(0) => Some(WidgetInfo::new(WidgetIdent::Num(0), 0, &self.fill)),
+            _ => None
+        }
+    }
+    fn framed_child_mut<R: Renderer>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, R>> {
+        match widget_ident {
+            WidgetIdent::Num(0) => Some(WidgetInfoMut::new(WidgetIdent::Num(0), 0, &mut self.fill)),
+            _ => None
+        }
+    }
+
+    fn framed_children<'a, R, G>(&'a self, mut for_each: G)
+        where R: Renderer,
+              G: FnMut(WidgetInfo<'a, R>) -> LoopFlow
+    {
+        let _ = for_each(WidgetInfo::new(WidgetIdent::Num(0), 0, &self.fill));
+    }
+
+    fn framed_children_mut<'a, R, G>(&'a mut self, mut for_each: G)
+        where R: Renderer,
+              G: FnMut(WidgetInfoMut<'a, R>) -> LoopFlow
+    {
+        let _ = for_each(WidgetInfoMut::new(WidgetIdent::Num(0), 0, &mut self.fill));
+    }
+
+    fn framed_child_by_index<R: Renderer>(&self, index: usize) -> Option<WidgetInfo<'_, R>> {
+        match index {
+            0 => Some(WidgetInfo::new(WidgetIdent::Num(0), 0, &self.fill)),
+            _ => None
+        }
+    }
+    fn framed_child_by_index_mut<R: Renderer>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, R>> {
+        match index {
+            0 => Some(WidgetInfoMut::new(WidgetIdent::Num(0), 0, &mut self.fill)),
+            _ => None
+        }
+    }
+}
+
+impl<R> WidgetRender<R> for ProgressBar
+    where R: Renderer
+{
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        frame.render_laid_out_content();
+    }
+
+    fn theme_list(&self) -> &[WidgetTheme] {
+        static THEME: &[WidgetTheme] = &[WidgetTheme::new("ProgressBar")];
+        THEME
+    }
+
+    fn update_layout(&mut self, layout: &mut R::Layout) {
+        let result = layout.finish();
+        self.size_bounds = result.size_bounds;
+
+        let lerp_factor = self.value / (self.max-self.min);
+        self.fill.rect = BoundBox {
+                min: result.content_rect.min,
+                max: Point2::new(
+                    i32::lerp(result.content_rect.min.x, result.content_rect.max.x, lerp_factor),
+                    result.content_rect.max.y,
+                ),
+            };
+    }
+}
+
+impl<R> WidgetRender<R> for ProgressBarFill
+    where R: Renderer
+{
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        frame.render_laid_out_content();
+    }
+
+    fn theme_list(&self) -> &[WidgetTheme] {
+        static THEME: &[WidgetTheme] = &[WidgetTheme::new("ProgressBar::Fill")];
+        THEME
+    }
+
+    fn update_layout(&mut self, _: &mut R::Layout) { }
 }

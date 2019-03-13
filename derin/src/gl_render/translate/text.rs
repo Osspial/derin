@@ -44,24 +44,16 @@ pub(in crate::gl_render) struct TextToVertices<'a> {
 }
 
 #[derive(Debug, Clone)]
-pub struct RenderString {
-    pub offset: Vector2<i32>,
-    string: String,
-    min_size: DimsBox<D2, i32>,
-    draw_data: Option<StringDrawData>,
-    pub draw_cursor: bool,
-    cursor_pos: usize,
-    highlight_range: Range<usize>,
-    cursor_target_x_px: Option<i32>,
-}
-
-#[derive(Debug, Clone)]
-pub struct StringDrawData {
+pub struct StringLayoutData {
     shaped_glyphs: Vec<RenderGlyph>,
     text_style: ThemeText,
     dpi: DPI,
     draw_rect: BoundBox<D2, i32>,
-    text_rect: Option<BoundBox<D2, i32>>,
+    text_rect: BoundBox<D2, i32>,
+    // TODO: CAN THIS BE FOLDED INTO text_rect?
+    offset: Vector2<i32>,
+    min_size: DimsBox<D2, i32>,
+    cursor_target_x_px: Option<i32>,
 }
 
 struct GlyphDraw<'a> {
@@ -75,7 +67,7 @@ struct GlyphDraw<'a> {
 
 impl<'a> TextToVertices<'a> {
     pub fn new<'b>(
-        draw_data: &'a StringDrawData,
+        draw_data: &'a StringLayoutData,
         highlight_range: Range<usize>,
         cursor_pos: Option<usize>,
         offset: Vector2<i32>,
@@ -330,200 +322,7 @@ impl<'a> GlyphDraw<'a> {
     }
 }
 
-impl Default for RenderString {
-    #[inline]
-    fn default() -> RenderString {
-        RenderString::new(String::new())
-    }
-}
-
-impl RenderString {
-    pub fn new(string: String) -> RenderString {
-        RenderString {
-            offset: Vector2::new(0, 0),
-            string,
-            min_size: DimsBox::new2(0, 0),
-            draw_data: None,
-            draw_cursor: false,
-            cursor_pos: 0,
-            highlight_range: 0..0,
-            cursor_target_x_px: None,
-        }
-    }
-
-    #[inline]
-    pub fn string(&self) -> &str {
-        &self.string
-    }
-
-    #[inline]
-    pub fn string_mut(&mut self) -> &mut String {
-        if let Some(ref mut draw_data) = self.draw_data {
-            draw_data.shaped_glyphs.clear();
-        }
-        &mut self.string
-    }
-
-    #[inline]
-    pub fn min_size(&self) -> DimsBox<D2, i32> {
-        self.min_size
-    }
-
-    #[inline]
-    pub fn text_rect(&self) -> Option<BoundBox<D2, i32>> {
-        self.draw_data.as_ref().and_then(|d| d.text_rect)
-    }
-
-    pub fn reshape_glyphs<'a, F>(
-        &mut self,
-        rect: BoundBox<D2, i32>,
-        shape_text: F,
-        text_style: &ThemeText,
-        face: &mut Face<Any>,
-        dpi: DPI,
-    ) -> &StringDrawData
-        where F: FnOnce(&str, &mut Face<Any>) -> &'a ShapedBuffer
-    {
-        let use_cached_glyphs: bool;
-        let rect = BoundBox::new2(
-            rect.min.x + text_style.margins.left as i32,
-            rect.min.y + text_style.margins.top as i32,
-            rect.max.x - text_style.margins.right as i32,
-            rect.max.y - text_style.margins.bottom as i32,
-        );
-        match self.draw_data {
-            Some(ref mut draw_data) => {
-                use_cached_glyphs =
-                    draw_data.shaped_glyphs.len() != 0 &&
-                    (text_style, dpi, rect) ==
-                    (&draw_data.text_style, draw_data.dpi, draw_data.draw_rect);
-
-                // Update draw_data contents to reflect new values
-                draw_data.text_style = text_style.clone();
-                draw_data.dpi = dpi;
-                draw_data.draw_rect = rect;
-            },
-            None => {
-                use_cached_glyphs = false;
-                self.draw_data = Some(StringDrawData {
-                    shaped_glyphs: Vec::new(),
-                    text_style: text_style.clone(),
-                    dpi,
-                    draw_rect: rect,
-                    text_rect: None
-                });
-            }
-        }
-
-        let draw_cursor = self.draw_cursor();
-        let draw_data = self.draw_data.as_mut().unwrap();
-        if !use_cached_glyphs {
-            let shaped_buffer = shape_text(&self.string, face);
-            draw_data.shaped_glyphs.clear();
-
-            let shaped_data = shape_glyphs::shape_glyphs(
-                rect,
-                shaped_buffer,
-                text_style,
-                face,
-                dpi,
-                &mut draw_data.shaped_glyphs
-            );
-            draw_data.text_rect = Some(shaped_data.text_rect);
-
-            self.min_size = match text_style.line_wrap {
-                LineWrap::None => {
-                    let mut dims_margins = shaped_data.text_rect.dims();
-                    dims_margins.dims.x += text_style.margins.width() as i32;
-                    dims_margins.dims.y += text_style.margins.height() as i32;
-                    dims_margins
-                },
-                _ => DimsBox::new2(0, 0)
-            };
-        }
-
-        // If the cursor is outside of the draw rectangle, offset the text so that the cursor and
-        // cursor glyph get drawn.
-        if draw_cursor {
-            let (draw_width, draw_height) = (draw_data.draw_rect.width(), draw_data.draw_rect.height());
-
-            // Used to work around ICE
-            fn get_glyph(s: &RenderString, cursor_pos: usize) -> Option<RenderGlyph> {
-                s.glyph_iter().skip_while(|glyph| glyph.str_index != cursor_pos).next()
-            }
-
-            let mut offset = Vector2::new(0, 0);
-            if let Some(cursor_glyph) = get_glyph(self, self.cursor_pos) {
-                let cursor_x = cursor_glyph.highlight_rect.min.x;
-                let cursor_y_start = cursor_glyph.highlight_rect.min.y;
-                let cursor_y_end = cursor_glyph.highlight_rect.max.y;
-
-                offset.x += match () {
-                    _ if cursor_x < 0 => -cursor_x,
-                    _ if draw_width < cursor_x => draw_width - cursor_x - 1,
-                    _ => 0
-                };
-                offset.y += match () {
-                    _ if cursor_y_start < 0 => -cursor_y_start,
-                    _ if draw_height < cursor_y_end => draw_height - cursor_y_end,
-                    _ => 0
-                };
-            }
-
-            self.offset += offset;
-        }
-
-        self.draw_data.as_ref().unwrap()
-    }
-
-    pub fn string_draw_data(&self) -> Option<&StringDrawData> {
-        self.draw_data.as_ref()
-    }
-
-    fn glyph_iter<'a>(&'a self) -> impl 'a + Iterator<Item=RenderGlyph> + DoubleEndedIterator {
-        let glyph_offset = self.offset;
-        let offset_glyph = move |g: RenderGlyph| g.offset(glyph_offset);
-        let empty_iter = [].iter().cloned().chain(None).map(offset_glyph.clone());
-
-        let shaped_glyphs = match self.draw_data {
-            Some(ref draw_data) => &draw_data.shaped_glyphs,
-            None => return empty_iter
-        };
-
-        if let Some(last_glyph) = shaped_glyphs.last().cloned() {
-            let dummy_last_glyph_pos_x = last_glyph.pos.x + last_glyph.highlight_rect.width();
-            let dummy_last_glyph = RenderGlyph {
-                pos: Point2::new(dummy_last_glyph_pos_x, last_glyph.pos.y),
-                highlight_rect: BoundBox::new2(
-                    dummy_last_glyph_pos_x, last_glyph.highlight_rect.min.y,
-                    dummy_last_glyph_pos_x, last_glyph.highlight_rect.min.y + last_glyph.highlight_rect.height()
-                ),
-                str_index: self.string.len(),
-                grapheme_len: 0,
-                glyph_index: None
-            };
-            shaped_glyphs.iter().cloned().chain(Some(dummy_last_glyph)).map(offset_glyph)
-        } else {
-            empty_iter
-        }
-    }
-
-    #[inline]
-    pub fn cursor_pos(&self) -> usize {
-        self.cursor_pos
-    }
-
-    #[inline]
-    pub fn cursor_pos_mut(&mut self) -> &mut usize {
-        self.cursor_target_x_px = None;
-        &mut self.cursor_pos
-    }
-
-    #[inline]
-    pub fn highlight_range(&self) -> Range<usize> {
-        self.highlight_range.clone()
-    }
-
+impl CursorData {
     pub fn move_cursor_vertical(&mut self, dist: isize, expand_selection: bool) {
         let cursor_start_pos = self.cursor_pos;
 
@@ -754,5 +553,116 @@ impl RenderGlyph {
         self.pos += offset;
         self.highlight_rect = self.highlight_rect + offset;
         self
+    }
+}
+
+impl StringLayoutData {
+    pub fn shape_string<'a>(
+        string: &RenderString,
+        rect: BoundBox<D2, i32>,
+        shape_text: impl FnOnce(&str, &mut Face<Any>) -> &'a ShapedBuffer,
+        text_style: &ThemeText,
+        face: &mut Face<Any>,
+        dpi: DPI,
+    ) -> StringLayoutData
+    {
+        let mut data = StringLayoutData {
+            shaped_glyphs: Vec::new(),
+            text_style: text_style.clone(),
+            dpi,
+            draw_rect: rect,
+            // The rect will get filled in after the glyphs are shaped.
+            text_rect: BoundBox::new2(0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF, 0xDEDBEEF),
+        };
+        data.reshape_string(string, rect, shape_text, text_style, face, dpi);
+        data
+    }
+
+    pub fn reshape_string<'a>(
+        &mut self,
+        render_string: &RenderString,
+        rect: BoundBox<D2, i32>,
+        shape_text: impl FnOnce(&str, &mut Face<Any>) -> &'a ShapedBuffer,
+        text_style: &ThemeText,
+        face: &mut Face<Any>,
+        dpi: DPI,
+    )
+    {
+        let rect = BoundBox::new2(
+            rect.min.x + text_style.margins.left as i32,
+            rect.min.y + text_style.margins.top as i32,
+            rect.max.x - text_style.margins.right as i32,
+            rect.max.y - text_style.margins.bottom as i32,
+        );
+
+        // Update draw_data contents to reflect new values
+        self.text_style = text_style.clone();
+        self.dpi = dpi;
+        self.draw_rect = rect;
+
+        let shaped_buffer = shape_text(&render_string.string, face);
+
+        self.shaped_glyphs.clear();
+        let shaped_data = shape_glyphs::shape_glyphs(
+            rect,
+            shaped_buffer,
+            text_style,
+            face,
+            dpi,
+            &mut self.shaped_glyphs
+        );
+        self.text_rect = shaped_data.text_rect;
+
+        self.min_size = match text_style.line_wrap {
+            LineWrap::None => {
+                let mut dims_margins = shaped_data.text_rect.dims();
+                dims_margins.dims.x += text_style.margins.width() as i32;
+                dims_margins.dims.y += text_style.margins.height() as i32;
+                dims_margins
+            },
+            _ => DimsBox::new2(0, 0)
+        };
+
+        // If the cursor is outside of the draw rectangle, offset the text so that the cursor and
+        // cursor glyph get drawn.
+        if render_string.draw_cursor() {
+            let (draw_width, draw_height) = (self.draw_rect.width(), self.draw_rect.height());
+
+            // Used to work around ICE
+            fn get_glyph(s: &RenderString, cursor_pos: usize) -> Option<RenderGlyph> {
+                s.glyph_iter().skip_while(|glyph| glyph.str_index != cursor_pos).next()
+            }
+
+            let mut offset = Vector2::new(0, 0);
+            if let Some(cursor_glyph) = get_glyph(self, self.cursor_pos) {
+                let cursor_x = cursor_glyph.highlight_rect.min.x;
+                let cursor_y_start = cursor_glyph.highlight_rect.min.y;
+                let cursor_y_end = cursor_glyph.highlight_rect.max.y;
+
+                offset.x += match () {
+                    _ if cursor_x < 0 => -cursor_x,
+                    _ if draw_width < cursor_x => draw_width - cursor_x - 1,
+                    _ => 0
+                };
+                offset.y += match () {
+                    _ if cursor_y_start < 0 => -cursor_y_start,
+                    _ if draw_height < cursor_y_end => draw_height - cursor_y_end,
+                    _ => 0
+                };
+            }
+
+            self.offset += offset;
+        }
+
+        self.draw_data.as_ref().unwrap()
+    }
+
+    fn glyph_iter<'a>(&'a self) -> impl 'a + Iterator<Item=RenderGlyph> + DoubleEndedIterator {
+        let glyph_offset = self.offset;
+        let offset_glyph = move |g: RenderGlyph| g.offset(glyph_offset);
+
+        let shaped_glyphs = &self.shaped_glyphs;
+
+        shaped_glyphs.iter().cloned().map(offset_glyph)
     }
 }

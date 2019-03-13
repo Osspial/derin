@@ -8,29 +8,29 @@ use std::{
 };
 use crate::{
     LoopFlow,
-    render::RenderFrame,
+    render::Renderer,
     offset_widget::OffsetWidget,
     update_state::UpdateStateCell,
     widget::WidgetDyn,
 };
 use super::virtual_widget_tree::VirtualWidgetTree;
 
-pub(crate) struct OffsetWidgetScan<'a, F: RenderFrame> {
-    offset_widget: OffsetWidget<'a, F>,
+pub(crate) struct OffsetWidgetScan<'a, R: Renderer> {
+    offset_widget: OffsetWidget<'a, R>,
     virtual_widget_tree: &'a mut VirtualWidgetTree,
     update_state: &'a Rc<UpdateStateCell>,
     scan: bool
 }
 
-impl<'a, F: RenderFrame> Deref for OffsetWidgetScan<'a, F> {
-    type Target = OffsetWidget<'a, F>;
+impl<'a, R: Renderer> Deref for OffsetWidgetScan<'a, R> {
+    type Target = OffsetWidget<'a, R>;
 
     fn deref(&self) -> &Self::Target {
         &self.offset_widget
     }
 }
 
-impl<'a, F: RenderFrame> DerefMut for OffsetWidgetScan<'a, F> {
+impl<'a, R: Renderer> DerefMut for OffsetWidgetScan<'a, R> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.scan = true;
 
@@ -39,7 +39,7 @@ impl<'a, F: RenderFrame> DerefMut for OffsetWidgetScan<'a, F> {
 }
 
 
-impl<F: RenderFrame> Drop for OffsetWidgetScan<'_, F> {
+impl<R: Renderer> Drop for OffsetWidgetScan<'_, R> {
     fn drop(&mut self) {
         if self.scan {
             update_recursive(self.offset_widget.inner(), self.virtual_widget_tree, &self.update_state);
@@ -47,8 +47,8 @@ impl<F: RenderFrame> Drop for OffsetWidgetScan<'_, F> {
     }
 }
 
-impl<F: RenderFrame> OffsetWidgetScan<'_, F> {
-    pub fn new<'a>(offset_widget: OffsetWidget<'a, F>, virtual_widget_tree: &'a mut VirtualWidgetTree, update_state: &'a Rc<UpdateStateCell>) -> OffsetWidgetScan<'a, F> {
+impl<R: Renderer> OffsetWidgetScan<'_, R> {
+    pub fn new<'a>(offset_widget: OffsetWidget<'a, R>, virtual_widget_tree: &'a mut VirtualWidgetTree, update_state: &'a Rc<UpdateStateCell>) -> OffsetWidgetScan<'a, R> {
         OffsetWidgetScan {
             offset_widget,
             virtual_widget_tree,
@@ -62,7 +62,7 @@ impl<F: RenderFrame> OffsetWidgetScan<'_, F> {
     }
 }
 
-pub(crate) fn update_recursive<F: RenderFrame>(widget: &dyn WidgetDyn<F>, tree: &mut VirtualWidgetTree, update_state: &Rc<UpdateStateCell>) {
+pub(crate) fn update_recursive<R: Renderer>(widget: &dyn WidgetDyn<R>, tree: &mut VirtualWidgetTree, update_state: &Rc<UpdateStateCell>) {
     let widget_tag = widget.widget_tag();
     let widget_id = widget_tag.widget_id;
     widget_tag.set_owning_update_state(update_state);

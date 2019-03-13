@@ -49,13 +49,13 @@ extern crate parking_lot;
 extern crate lazy_static;
 
 pub mod container;
-pub mod gl_render;
-mod glutin_window;
+// pub mod gl_render;
+// mod glutin_window;
 pub mod layout;
 pub mod theme;
 pub mod widgets;
 
-pub use crate::glutin_window::{GlutinWindow as Window, WindowConfig};
+// pub use crate::glutin_window::{GlutinWindow as Window, WindowConfig};
 pub use glutin::WindowAttributes;
 pub use crate::core::LoopFlow;
 

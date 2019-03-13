@@ -7,9 +7,11 @@
 //! This module's primary functionality is in the `WidgetContainer` trait, and an implementation
 //! which contains a single widget is provided with the `SingleContainer` struct.
 
-use crate::core::LoopFlow;
-use crate::core::render::RenderFrame;
-use crate::core::widget::{WidgetIdent, WidgetInfo, WidgetInfoMut, WidgetSubtype, Widget};
+use crate::{
+    core::LoopFlow,
+    core::render::Renderer,
+    core::widget::{WidgetIdent, WidgetInfo, WidgetInfoMut, WidgetSubtype, Widget},
+};
 
 /// Designates a struct that contains other widgets.
 ///
@@ -40,19 +42,19 @@ pub trait WidgetContainer<S: ?Sized>: 'static {
 
     /// Perform internal, immutable iteration over each child widget stored within the container,
     /// calling `for_each_child` on each child.
-    fn framed_children<'a, F, G>(&'a self, for_each_child: G)
-        where G: FnMut(WidgetInfo<'a, F, S>) -> LoopFlow,
-              F: RenderFrame;
+    fn framed_children<'a, R, G>(&'a self, for_each_child: G)
+        where G: FnMut(WidgetInfo<'a, R, S>) -> LoopFlow,
+              R: Renderer;
 
     /// Perform internal, mutable iteration over each child widget stored within the container,
     /// calling `for_each_child` on each child.
-    fn framed_children_mut<'a, F, G>(&'a mut self, for_each_child: G)
-        where G: FnMut(WidgetInfoMut<'a, F, S>) -> LoopFlow,
-              F: RenderFrame;
+    fn framed_children_mut<'a, R, G>(&'a mut self, for_each_child: G)
+        where G: FnMut(WidgetInfoMut<'a, R, S>) -> LoopFlow,
+              R: Renderer;
 
     /// Get the child with the specified name.
-    fn framed_child<F>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, F, S>>
-        where F: RenderFrame
+    fn framed_child<R>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, R, S>>
+        where R: Renderer
     {
         let mut summary_opt = None;
         self.framed_children(|summary| {
@@ -67,8 +69,8 @@ pub trait WidgetContainer<S: ?Sized>: 'static {
     }
 
     /// Mutably get the child with the specified name.
-    fn framed_child_mut<F>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, F, S>>
-        where F: RenderFrame
+    fn framed_child_mut<R>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, R, S>>
+        where R: Renderer
     {
         let mut summary_opt = None;
         self.framed_children_mut(|summary| {
@@ -86,8 +88,8 @@ pub trait WidgetContainer<S: ?Sized>: 'static {
     ///
     /// The index of a child is generally assumed to correspond with the order in which the children
     /// are defined within the container.
-    fn framed_child_by_index<F>(&self, mut index: usize) -> Option<WidgetInfo<'_, F, S>>
-        where F: RenderFrame
+    fn framed_child_by_index<R>(&self, mut index: usize) -> Option<WidgetInfo<'_, R, S>>
+        where R: Renderer
     {
         let mut summary_opt = None;
         self.framed_children(|summary| {
@@ -105,8 +107,8 @@ pub trait WidgetContainer<S: ?Sized>: 'static {
     ///
     /// The index of a child is generally assumed to correspond with the order in which the children
     /// are defined within the container.
-    fn framed_child_by_index_mut<F>(&mut self, mut index: usize) -> Option<WidgetInfoMut<'_, F, S>>
-        where F: RenderFrame
+    fn framed_child_by_index_mut<R>(&mut self, mut index: usize) -> Option<WidgetInfoMut<'_, R, S>>
+        where R: Renderer
     {
         let mut summary_opt = None;
         self.framed_children_mut(|summary| {
@@ -167,16 +169,16 @@ impl<S, W> WidgetContainer<S> for SingleContainer<W>
     #[inline(always)]
     fn num_children(&self) -> usize {1}
 
-    fn framed_children<'a, F, G>(&'a self, mut for_each_child: G)
-            where G: FnMut(WidgetInfo<'a, F, S>) -> LoopFlow,
-                  F: RenderFrame
+    fn framed_children<'a, R, G>(&'a self, mut for_each_child: G)
+            where G: FnMut(WidgetInfo<'a, R, S>) -> LoopFlow,
+                  R: Renderer
     {
         let _ = for_each_child(WidgetInfo::new(WidgetIdent::Num(0), 0, &self.widget));
     }
 
-    fn framed_children_mut<'a, F, G>(&'a mut self, mut for_each_child: G)
-            where G: FnMut(WidgetInfoMut<'a, F, S>) -> LoopFlow,
-                  F: RenderFrame
+    fn framed_children_mut<'a, R, G>(&'a mut self, mut for_each_child: G)
+            where G: FnMut(WidgetInfoMut<'a, R, S>) -> LoopFlow,
+                  R: Renderer
     {
         let _ = for_each_child(WidgetInfoMut::new(WidgetIdent::Num(0), 0, &mut self.widget));
     }
@@ -191,9 +193,9 @@ impl<S, W> WidgetContainer<S> for Vec<W>
         self.len()
     }
 
-    fn framed_children<'a, F, G>(&'a self, mut for_each_child: G)
-            where G: FnMut(WidgetInfo<'a, F, S>) -> LoopFlow,
-                  F: RenderFrame
+    fn framed_children<'a, R, G>(&'a self, mut for_each_child: G)
+            where G: FnMut(WidgetInfo<'a, R, S>) -> LoopFlow,
+                  R: Renderer
     {
         for (index, widget) in self.iter().enumerate() {
             match for_each_child(WidgetInfo::new(WidgetIdent::Num(index as u32), index, widget)) {
@@ -203,9 +205,9 @@ impl<S, W> WidgetContainer<S> for Vec<W>
         }
     }
 
-    fn framed_children_mut<'a, F, G>(&'a mut self, mut for_each_child: G)
-            where G: FnMut(WidgetInfoMut<'a, F, S>) -> LoopFlow,
-                  F: RenderFrame
+    fn framed_children_mut<'a, R, G>(&'a mut self, mut for_each_child: G)
+            where G: FnMut(WidgetInfoMut<'a, R, S>) -> LoopFlow,
+                  R: Renderer
     {
         for (index, widget) in self.iter_mut().enumerate() {
             match for_each_child(WidgetInfoMut::new(WidgetIdent::Num(index as u32), index, widget)) {
