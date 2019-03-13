@@ -96,7 +96,7 @@ pub trait RendererLayout {
     fn finish(&mut self) -> LayoutResult;
 }
 
-pub trait WidgetTheme {
+pub trait WidgetTheme: 'static {
     type Fallback: WidgetTheme;
 
     fn fallback(self) -> Option<Self::Fallback>;

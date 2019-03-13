@@ -24,6 +24,14 @@ pub struct Label {
     size_bounds: SizeBounds,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct LabelTheme(());
+
+impl WidgetTheme for LabelTheme {
+    type Fallback = !;
+    fn fallback(self) -> Option<!> {None}
+}
+
 impl Label {
     /// Create a new label with the given contents.
     pub fn new(contents: Contents) -> Label {
@@ -85,13 +93,13 @@ impl Widget for Label {
 impl<R> WidgetRenderable<R> for Label
     where R: Renderer
 {
-    fn render(&mut self, frame: &mut R::SubFrame) {
-        frame.render_laid_out_content();
+    type Theme = LabelTheme;
+    fn theme(&self) -> LabelTheme {
+        LabelTheme(())
     }
 
-    fn theme_list(&self) -> &[WidgetTheme] {
-        static THEME: &[WidgetTheme] = &[WidgetTheme::new("Label")];
-        THEME
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        frame.render_laid_out_content();
     }
 
     fn update_layout(&mut self, layout: &mut R::Layout) {

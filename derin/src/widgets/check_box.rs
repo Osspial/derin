@@ -9,45 +9,10 @@ use derin_core::{
 };
 use crate::widgets::{
     Contents,
-    assistants::toggle_button::{Toggle, ToggleBoxTheme, ToggleOnClickHandler},
+    assistants::toggle_button::{Toggle, ToggleOnClickHandler},
 };
 use cgmath_geometry::{D2, rect::BoundBox};
 use derin_common_types::layout::SizeBounds;
-
-#[derive(Debug, Clone, Copy)]
-struct CheckBoxTheme;
-impl ToggleBoxTheme for CheckBoxTheme {
-    const TYPE_NAME: &'static str = "CheckBox::Toggle";
-}
-
-impl<H: CheckToggleHandler> ToggleOnClickHandler for H {
-    fn on_click(&mut self, checked: &mut bool) {
-        *checked = !*checked;
-        self.change_state(*checked);
-    }
-}
-
-/// Determines which action, if any, should be taken in response to a button toggle.
-pub trait CheckToggleHandler: 'static {
-    fn change_state(&mut self, enabled: bool);
-}
-
-impl<A: 'static + Clone> CheckToggleHandler for Option<A> {
-    /// Returns the stored action when the toggle is enabled. Otherwise, returns `None`.
-    #[inline]
-    fn change_state(&mut self, enabled: bool) {
-        unimplemented!()
-    }
-}
-
-impl CheckToggleHandler for () {
-    /// Always returns `None`.
-    #[inline]
-    fn change_state(&mut self, _: bool) {
-        unimplemented!()
-    }
-}
-
 
 /// A toggleable box that can be either checked or unchecked.
 ///
@@ -60,13 +25,22 @@ pub struct CheckBox<H: CheckToggleHandler> {
     toggle: Toggle<H, CheckBoxTheme>,
 }
 
+#[derive(Default, Debug, Clone, Copy)]
+pub struct CheckBoxTheme(());
+
+/// Determines which action, if any, should be taken in response to a button toggle.
+pub trait CheckToggleHandler: 'static {
+    fn change_state(&mut self, enabled: bool);
+}
+
+
 impl<H: CheckToggleHandler> CheckBox<H> {
     /// Creates a new `CheckBox` with the given checked state, contents, and [toggle handler].
     ///
     /// [toggle handler]: ./trait.CheckToggleHandler.html
     pub fn new(checked: bool, contents: Contents, handler: H) -> CheckBox<H> {
         CheckBox {
-            toggle: Toggle::new(checked, contents, handler),
+            toggle: Toggle::new(checked, contents, handler, CheckBoxTheme(())),
         }
     }
 
@@ -128,15 +102,29 @@ impl<R, H> WidgetRenderable<R> for CheckBox<H>
     where R: Renderer,
           H: CheckToggleHandler,
 {
+    type Theme = CheckBoxTheme;
+
+    fn theme(&self) -> CheckBoxTheme {
+        WidgetRenderable::<R>::theme(&self.toggle)
+    }
+
     fn render(&mut self, frame: &mut R::SubFrame) {
         WidgetRenderable::<R>::render(&mut self.toggle, frame)
     }
 
-    fn theme_list(&self) -> &[WidgetTheme] {
-        WidgetRenderable::<R>::theme_list(&self.toggle)
-    }
-
     fn update_layout(&mut self, l: &mut R::Layout) {
         WidgetRenderable::<R>::update_layout(&mut self.toggle, l)
+    }
+}
+
+impl WidgetTheme for CheckBoxTheme {
+    type Fallback = !;
+    fn fallback(self) -> Option<!> {None}
+}
+
+impl<H: CheckToggleHandler> ToggleOnClickHandler for H {
+    fn on_click(&mut self, checked: &mut bool) {
+        *checked = !*checked;
+        self.change_state(*checked);
     }
 }

@@ -1,4 +1,3 @@
-use std::marker::PhantomData;
 use derin_core::{
     LoopFlow,
     event::{EventOps, InputState, WidgetEvent, WidgetEventSourced, MouseHoverChange},
@@ -13,53 +12,49 @@ use crate::cgmath::Point2;
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox, OffsetBox}};
 use derin_common_types::layout::SizeBounds;
 
-pub trait ToggleBoxTheme: 'static {
-    const TYPE_NAME: &'static str;
-    const SELECTED_NORMAL: &'static [WidgetTheme<'static>] = &[WidgetTheme::new_state(Self::TYPE_NAME, "Selected::Normal")];
-    const SELECTED_HOVER: &'static [WidgetTheme<'static>] = &[WidgetTheme::new_state(Self::TYPE_NAME, "Selected::Hover")];
-    const SELECTED_PRESSED: &'static [WidgetTheme<'static>] = &[WidgetTheme::new_state(Self::TYPE_NAME, "Selected::Pressed")];
-    const EMPTY_NORMAL: &'static [WidgetTheme<'static>] = &[WidgetTheme::new_state(Self::TYPE_NAME, "Empty::Normal")];
-    const EMPTY_HOVER: &'static [WidgetTheme<'static>] = &[WidgetTheme::new_state(Self::TYPE_NAME, "Empty::Hover")];
-    const EMPTY_PRESSED: &'static [WidgetTheme<'static>] = &[WidgetTheme::new_state(Self::TYPE_NAME, "Empty::Pressed")];
+#[derive(Debug, Clone)]
+pub struct Toggle<H, T>
+    where H: ToggleOnClickHandler,
+          T: WidgetTheme + Clone,
+{
+    widget_tag: WidgetTag,
+    rect: BoundBox<D2, i32>,
+
+    tbox: ToggleBox,
+    label: Label,
+    handler: H,
+    theme: T,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ToggleBoxTheme {
+    pub selected: bool,
+    pub button_state: ButtonState,
 }
 
 pub trait ToggleOnClickHandler: 'static {
     fn on_click(&mut self, selected: &mut bool);
 }
 
-#[derive(Debug, Clone)]
-pub struct Toggle<H, T>
-    where H: ToggleOnClickHandler,
-          T: ToggleBoxTheme,
-{
-    widget_tag: WidgetTag,
-    rect: BoundBox<D2, i32>,
-
-    tbox: ToggleBox<T>,
-    label: Label,
-    handler: H,
-}
-
 /// Toggle-box rendering assistant. Automatically bubbles all events to the parent.
 #[derive(Debug, Clone)]
-struct ToggleBox<T: ToggleBoxTheme> {
+struct ToggleBox {
     widget_tag: WidgetTag,
     rect: BoundBox<D2, i32>,
     size_bounds: SizeBounds,
 
     selected: bool,
     button_state: ButtonState,
-    _marker: PhantomData<*const T>,
 }
 
 impl<H, T> Toggle<H, T>
     where H: ToggleOnClickHandler,
-          T: ToggleBoxTheme,
+          T: WidgetTheme + Clone,
 {
     /// Creates a new `Toggle` with the given selected state, contents, and [toggle handler].
     ///
     /// [toggle handler]: ./trait.ToggleOnClickHandler.html
-    pub fn new(selected: bool, contents: Contents, handler: H) -> Toggle<H, T> {
+    pub fn new(selected: bool, contents: Contents, handler: H, theme: T) -> Toggle<H, T> {
         Toggle {
             widget_tag: WidgetTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
@@ -71,10 +66,10 @@ impl<H, T> Toggle<H, T>
 
                 selected,
                 button_state: ButtonState::Normal,
-                _marker: PhantomData,
             },
             label: Label::new(contents),
             handler,
+            theme,
         }
     }
 
@@ -111,7 +106,7 @@ impl<H, T> Toggle<H, T>
 
 impl<H, T> Widget for Toggle<H, T>
     where H: ToggleOnClickHandler,
-          T: ToggleBoxTheme,
+          T: WidgetTheme + Clone,
 {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
@@ -183,7 +178,7 @@ impl<H, T> Widget for Toggle<H, T>
 
 impl<H, T> Parent for Toggle<H, T>
     where H: ToggleOnClickHandler,
-          T: ToggleBoxTheme,
+          T: WidgetTheme + Clone,
 {
     fn num_children(&self) -> usize {
         1
@@ -230,7 +225,12 @@ impl<H, T> Parent for Toggle<H, T>
     }
 }
 
-impl<T: ToggleBoxTheme> Widget for ToggleBox<T> {
+impl WidgetTheme for ToggleBoxTheme {
+    type Fallback = !;
+    fn fallback(self) -> Option<!> {None}
+}
+
+impl Widget for ToggleBox {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
         &self.widget_tag
@@ -262,13 +262,14 @@ impl<T: ToggleBoxTheme> Widget for ToggleBox<T> {
 impl<R, H, T> WidgetRenderable<R> for Toggle<H, T>
     where R: Renderer,
           H: ToggleOnClickHandler,
-          T: ToggleBoxTheme,
+          T: WidgetTheme + Clone,
 {
-    fn render(&mut self, _: &mut R::SubFrame) { }
-
-    fn theme_list(&self) -> &[WidgetTheme] {
-        &[]
+    type Theme = T;
+    fn theme(&self) -> T {
+        self.theme.clone()
     }
+
+    fn render(&mut self, _: &mut R::SubFrame) { }
 
     fn update_layout(&mut self, _: &mut R::Layout) {
         let mut tbox_rect_origin = OffsetBox::from(self.tbox.rect);
@@ -284,22 +285,19 @@ impl<R, H, T> WidgetRenderable<R> for Toggle<H, T>
     }
 }
 
-impl<R, T> WidgetRenderable<R> for ToggleBox<T>
+impl<R> WidgetRenderable<R> for ToggleBox
     where R: Renderer,
-          T: ToggleBoxTheme
 {
+    type Theme = ToggleBoxTheme;
+
     fn render(&mut self, frame: &mut R::SubFrame) {
         frame.render_laid_out_content();
     }
 
-    fn theme_list(&self) -> &[WidgetTheme] {
-        match (self.selected, self.button_state) {
-            (true, ButtonState::Normal) => T::SELECTED_NORMAL,
-            (true, ButtonState::Hover) => T::SELECTED_HOVER,
-            (true, ButtonState::Pressed) => T::SELECTED_PRESSED,
-            (false, ButtonState::Normal) => T::EMPTY_NORMAL,
-            (false, ButtonState::Hover) => T::EMPTY_HOVER,
-            (false, ButtonState::Pressed) => T::EMPTY_PRESSED,
+    fn theme(&self) -> ToggleBoxTheme {
+        ToggleBoxTheme {
+            selected: self.selected,
+            button_state: self.button_state,
         }
     }
 

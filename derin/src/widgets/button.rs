@@ -15,25 +15,6 @@ use crate::widgets::{
 use cgmath_geometry::{D2, rect::BoundBox};
 use derin_common_types::layout::SizeBounds;
 
-/// Determines which action, if any, should be taken in response to a button press.
-pub trait ButtonHandler: 'static {
-    fn on_click(&mut self);
-}
-
-impl<A: 'static + Clone> ButtonHandler for Option<A> {
-    #[inline]
-    fn on_click(&mut self) {
-        unimplemented!()
-    }
-}
-
-impl ButtonHandler for () {
-    #[inline]
-    fn on_click(&mut self) {
-        unimplemented!()
-    }
-}
-
 /// A simple push-button.
 ///
 /// When pressed, calls the [`on_click`] function in the associated handler passed in by the `new`
@@ -48,6 +29,16 @@ pub struct Button<H> {
     pub handler: H,
     contents: Contents,
     size_bounds: SizeBounds
+}
+
+/// Determines which action, if any, should be taken in response to a button press.
+pub trait ButtonHandler: 'static {
+    fn on_click(&mut self);
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ButtonTheme {
+    pub state: ButtonState,
 }
 
 impl<H> Button<H> {
@@ -135,19 +126,16 @@ impl<R, H> WidgetRenderable<R> for Button<H>
     where R: Renderer,
           H: ButtonHandler
 {
-    fn render(&mut self, frame: &mut R::SubFrame) {
-        frame.render_laid_out_content();
+    type Theme = ButtonTheme;
+
+    fn theme(&self) -> ButtonTheme {
+        ButtonTheme {
+            state: self.state,
+        }
     }
 
-    fn theme_list(&self) -> &[WidgetTheme] {
-        static NORMAL: &[WidgetTheme] = &[WidgetTheme::new_state("Button", "Normal")];
-        static HOVER: &[WidgetTheme] = &[WidgetTheme::new_state("Button", "Hover")];
-        static PRESSED: &[WidgetTheme] = &[WidgetTheme::new_state("Button", "Pressed")];
-        match self.state {
-            ButtonState::Normal => NORMAL,
-            ButtonState::Hover => HOVER,
-            ButtonState::Pressed => PRESSED,
-        }
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        frame.render_laid_out_content();
     }
 
     fn update_layout(&mut self, layout: &mut R::Layout) {
@@ -158,5 +146,12 @@ impl<R, H> WidgetRenderable<R> for Button<H>
 
         let result = layout.finish();
         self.size_bounds = result.size_bounds;
+    }
+}
+
+impl WidgetTheme for ButtonTheme {
+    type Fallback = !;
+    fn fallback(self) -> Option<!> {
+        None
     }
 }
