@@ -4,7 +4,7 @@
 
 use derin_core::{
     LoopFlow,
-    widget::{Parent, Widget, WidgetInfo, WidgetInfoMut, WidgetIdent, WidgetTag, WidgetRender},
+    widget::{Parent, Widget, WidgetInfo, WidgetInfoMut, WidgetIdent, WidgetTag, WidgetRenderable},
     render::{Renderer, RendererLayout, SubFrame, WidgetTheme},
 };
 use derin_common_types::layout::SizeBounds;
@@ -184,7 +184,7 @@ impl Parent for ProgressBar {
     }
 }
 
-impl<R> WidgetRender<R> for ProgressBar
+impl<R> WidgetRenderable<R> for ProgressBar
     where R: Renderer
 {
     fn render(&mut self, frame: &mut R::SubFrame) {
@@ -211,7 +211,7 @@ impl<R> WidgetRender<R> for ProgressBar
     }
 }
 
-impl<R> WidgetRender<R> for ProgressBarFill
+impl<R> WidgetRenderable<R> for ProgressBarFill
     where R: Renderer
 {
     fn render(&mut self, frame: &mut R::SubFrame) {

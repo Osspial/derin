@@ -35,7 +35,10 @@ use crate::{
     event::{WidgetEvent, WidgetEventSourced},
     event_translator::EventTranslator,
     timer::{TimerTrigger, TimerTriggerTracker},
-    widget::*,
+    widget::{
+        *,
+        dynamic::{RenderError, RenderParameters},
+    },
     render::{Renderer},
     mbseq::MouseButtonSequenceTrackPos,
     update_state::{UpdateState, UpdateStateCell},
@@ -299,15 +302,20 @@ impl<N, R> Root<N, R>
 
             let mut widget_traverser = widget_traverser_base.with_root_ref(root_widget, update_state.clone());
             widget_traverser.crawl_widgets(|mut path| {
-                renderer.render_subframe(
-                    path.widget.widget_id(),
+                let render_parameters = RenderParameters {
+                    renderer,
+                    widget_id: path.widget.widget_id(),
                     theme,
-                    path.widget.rect(),
-                    path.widget.clip().unwrap_or(window_rect),
-                    |frame| {
-                        path.widget.render(frame);
-                    }
-                );
+                    transform: path.widget.rect(),
+                    clip: path.widget.clip().unwrap_or(window_rect),
+                };
+
+                let result = path.widget.render(render_parameters);
+                match result {
+                    Ok(()) => (),
+                    Err(RenderError::ThemeNotSupported) => println!("WARNING: Attempted to render widget but renderer didn't support theme"),
+                    Err(RenderError::RendererNotSupported) => println!("WARNING: Attempted to render widget but widget didn't support renderer"),
+                }
             });
             renderer.finish_frame(theme);
         }

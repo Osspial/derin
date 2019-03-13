@@ -7,8 +7,8 @@
 use crate::{
     LoopFlow,
     event::{EventOps, InputState, WidgetEventSourced},
-    render::{Renderer},
-    widget::{Parent, WidgetIdent, Widget, WidgetRender, WidgetId, WidgetTag, WidgetInfo, WidgetInfoMut},
+    render::{Renderer, WidgetRenderer, WidgetTheme},
+    widget::{Parent, WidgetIdent, Widget, WidgetRenderable, WidgetId, WidgetTag, WidgetInfo, WidgetInfoMut},
 };
 use arrayvec::ArrayVec;
 use std::{
@@ -49,8 +49,8 @@ pub(crate) trait WidgetDyn<R: Renderer>: 'static {
     fn children<'a>(&'a self, for_each: ForEachSummary<WidgetInfo<'a, R>>);
     fn children_mut<'a>(&'a mut self, for_each: ForEachSummary<WidgetInfoMut<'a, R>>);
 
-    // WidgetRender methods
-    fn render(&mut self, frame: &mut R::SubFrame);
+    // WidgetRenderable methods
+    fn render(&mut self, params: RenderParameters<R>) -> Result<(), RenderError>;
     fn update_layout(&mut self, layout: &mut R::Layout);
 
     fn type_id(&self) -> TypeId;
@@ -206,13 +206,13 @@ impl<W, R> WidgetDyn<R> for W
             }
         }
 
-        fn render(&mut self, frame: &mut R::SubFrame) {
-            default => (),
-            specialized(WidgetRender<R>) => self.render(frame)
+        fn render(&mut self, params: RenderParameters<R>) -> Result<(), RenderError> {
+            default => Err(RenderError::RendererNotSupported),
+            specialized(WidgetRenderable<R>) => render_with_theme_or_fallback(self, params)
         }
         fn update_layout(&mut self, layout: &mut R::Layout) {
             default => (),
-            specialized(WidgetRender<R>) => self.update_layout(layout)
+            specialized(WidgetRenderable<R>) => self.update_layout(layout)
         }
     }
 
@@ -310,4 +310,83 @@ pub(crate) fn to_any<W>(widget: &mut W, f: impl FnOnce(&mut Any))
     }
 
     widget.as_widget_sized(f);
+}
+
+pub struct RenderParameters<'a, R: Renderer> {
+    pub renderer: &'a mut R,
+    pub widget_id: WidgetId,
+    pub theme: &'a R::Theme,
+    pub transform: BoundBox<D2, i32>,
+    pub clip: BoundBox<D2, i32>,
+}
+
+#[derive(Debug, Clone)]
+pub enum RenderError {
+    ThemeNotSupported,
+    RendererNotSupported,
+}
+
+/// Given a widget and a renderer, iterate over the widget's primary and fallback themes, and render
+/// the widget with the first theme the renderer supports.
+fn render_with_theme_or_fallback<W, R>(widget: &mut W, render_parameters: RenderParameters<R>) -> Result<(), RenderError>
+    where W: WidgetRenderable<R>,
+          R: Renderer,
+{
+    trait FindFallback<T: WidgetTheme, R>
+        where T: WidgetTheme,
+              R: Renderer,
+    {
+        fn find_fallback<W: WidgetRenderable<R>>(
+            widget: &mut W,
+            widget_theme_parameters: T,
+            render_parameters: RenderParameters<R>
+        ) -> Result<(), RenderError>;
+    }
+    impl<T, R> FindFallback<T, R> for ()
+        where T: WidgetTheme,
+              R: Renderer,
+    {
+        default fn find_fallback<W: WidgetRenderable<R>>(
+            widget: &mut W,
+            widget_theme_parameters: T,
+            render_parameters: RenderParameters<R>
+        ) -> Result<(), RenderError> {
+            if let Some(fallback) = widget_theme_parameters.fallback() {
+                <()>::find_fallback(widget, fallback, render_parameters)
+            } else {
+                Err(RenderError::ThemeNotSupported)
+            }
+        }
+    }
+    impl<T, R> FindFallback<T, R> for ()
+        where T: WidgetTheme,
+              R: WidgetRenderer<T>,
+    {
+        default fn find_fallback<W: WidgetRenderable<R>>(
+            widget: &mut W,
+            widget_theme_parameters: T,
+            render_parameters: RenderParameters<R>
+        ) -> Result<(), RenderError> {
+            let RenderParameters {
+                renderer,
+                widget_id,
+                theme,
+                transform,
+                clip,
+            } = render_parameters;
+
+            renderer.render_widget(
+                widget_id,
+                theme,
+                transform,
+                clip,
+                widget_theme_parameters,
+                |frame| widget.render(frame)
+            );
+
+            Ok(())
+        }
+    }
+
+    <()>::find_fallback(widget, widget.theme(), render_parameters)
 }

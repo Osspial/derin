@@ -6,7 +6,7 @@ use crate::{
     core::{
         LoopFlow,
         event::{EventOps, WidgetEvent, InputState, WidgetEventSourced},
-        widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
+        widget::{WidgetIdent, WidgetRenderable, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
         render::Renderer,
     },
     gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
@@ -225,7 +225,7 @@ impl<W> Parent for ScrollBox<W>
     }
 }
 
-impl<W, R> WidgetRender<R> for ScrollBox<W>
+impl<W, R> WidgetRenderable<R> for ScrollBox<W>
     where W: Widget,
           R: Renderer
 {

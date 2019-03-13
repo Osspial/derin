@@ -5,7 +5,7 @@
 use crate::{
     core::{
         event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
-        widget::{WidgetRender, WidgetTag, Widget},
+        widget::{WidgetRenderable, WidgetTag, Widget},
         render::Renderer,
     },
     gl_render::{ThemedPrim, PrimFrame, RelPoint, Prim},
@@ -87,7 +87,7 @@ impl<R: DirectRenderState> Widget for DirectRender<R> {
     }
 }
 
-impl<R, R> WidgetRender<R> for DirectRender<R>
+impl<R, R> WidgetRenderable<R> for DirectRender<R>
     where R: Renderer<DirectRender=R::RenderType>,
           R: DirectRenderState
 {

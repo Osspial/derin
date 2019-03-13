@@ -4,7 +4,7 @@
 
 use derin_core::{
     event::{EventOps, InputState, WidgetEventSourced},
-    widget::{WidgetTag, WidgetRender, Widget},
+    widget::{WidgetTag, WidgetRenderable, Widget},
     render::{Renderer, WidgetTheme},
 };
 use crate::widgets::{
@@ -124,19 +124,19 @@ impl<H> Widget for CheckBox<H>
     }
 }
 
-impl<R, H> WidgetRender<R> for CheckBox<H>
+impl<R, H> WidgetRenderable<R> for CheckBox<H>
     where R: Renderer,
           H: CheckToggleHandler,
 {
     fn render(&mut self, frame: &mut R::SubFrame) {
-        WidgetRender::<R>::render(&mut self.toggle, frame)
+        WidgetRenderable::<R>::render(&mut self.toggle, frame)
     }
 
     fn theme_list(&self) -> &[WidgetTheme] {
-        WidgetRender::<R>::theme_list(&self.toggle)
+        WidgetRenderable::<R>::theme_list(&self.toggle)
     }
 
     fn update_layout(&mut self, l: &mut R::Layout) {
-        WidgetRender::<R>::update_layout(&mut self.toggle, l)
+        WidgetRenderable::<R>::update_layout(&mut self.toggle, l)
     }
 }

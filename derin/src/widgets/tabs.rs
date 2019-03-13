@@ -7,7 +7,7 @@ use crate::{
     core::{
         LoopFlow,
         event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
-        widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
+        widget::{WidgetIdent, WidgetRenderable, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
         render::Renderer,
     },
     gl_render::{RelPoint, ThemedPrim, Prim, PrimFrame, RenderString},
@@ -281,7 +281,7 @@ impl<W> Parent for TabList<W>
     }
 }
 
-impl<R, W> WidgetRender<R> for TabList<W>
+impl<R, W> WidgetRenderable<R> for TabList<W>
     where R: Renderer,
           W: Widget
 {

@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-mod dynamic;
+pub mod dynamic;
 pub(crate) use dynamic::WidgetDyn;
 pub use crate::{
     message_bus::MessageTarget,
@@ -127,13 +127,12 @@ pub trait Widget: 'static {
     }
 }
 
-pub trait WidgetRender<R: Renderer>: Widget {
+pub trait WidgetRenderable<R: Renderer>: Widget {
+    type Theme: WidgetTheme;
+
+    fn theme(&self) -> Self::Theme;
     fn render(&mut self, frame: &mut R::SubFrame);
     fn update_layout(&mut self, _layout: &mut R::Layout) {}
-    /// A iterator of theming structs, ordered by descending priority. The first struct is the ideal
-    /// theme which the renderer should render the widget with if it supports; the structs after that
-    /// are fallback themes.
-    fn theme_list(&self) -> &[WidgetTheme<'_>];
 }
 
 impl<W> Widget for Box<W>
@@ -286,7 +285,11 @@ impl<W: Widget> WidgetSubtype<W> for dyn Widget {
     }
 }
 
-impl<W: WidgetRender<R>, R: Renderer> WidgetSubtype<W> for dyn WidgetRender<R> {
+impl<W, T, R> WidgetSubtype<W> for dyn WidgetRenderable<R, Theme=T>
+    where W: WidgetRenderable<R, Theme=T>,
+          T: WidgetTheme,
+          R: Renderer,
+{
     fn from_widget(widget: &W) -> &Self {
         widget
     }

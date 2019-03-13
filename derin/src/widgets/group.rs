@@ -5,7 +5,7 @@
 use derin_core::{
     LoopFlow,
     event::{EventOps, WidgetEventSourced, InputState},
-    widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
+    widget::{WidgetIdent, WidgetRenderable, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
     render::{Renderer, SubFrame, WidgetTheme},
 };
 use crate::{
@@ -130,7 +130,7 @@ impl<C, L> Parent for Group<C, L>
     }
 }
 
-impl<R, C, L> WidgetRender<R> for Group<C, L>
+impl<R, C, L> WidgetRenderable<R> for Group<C, L>
     where R: Renderer,
           C: WidgetContainer<dyn Widget>,
           L: GridLayout

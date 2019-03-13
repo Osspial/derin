@@ -4,7 +4,7 @@
 
 use derin_core::{
     event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange},
-    widget::{WidgetTag, WidgetRender, Widget},
+    widget::{WidgetTag, WidgetRenderable, Widget},
     render::{Renderer, RendererLayout, SubFrame, WidgetTheme},
 };
 use crate::widgets::{
@@ -131,7 +131,7 @@ impl<H> Widget for Button<H>
     }
 }
 
-impl<R, H> WidgetRender<R> for Button<H>
+impl<R, H> WidgetRenderable<R> for Button<H>
     where R: Renderer,
           H: ButtonHandler
 {

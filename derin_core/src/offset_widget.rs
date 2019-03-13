@@ -4,7 +4,10 @@
 
 use crate::{
     {LoopFlow, InputState},
-    widget::{WidgetDyn, WidgetId, WidgetIdent, WidgetTag},
+    widget::{
+        WidgetDyn, WidgetId, WidgetIdent, WidgetTag,
+        dynamic::{RenderParameters, RenderError},
+    },
     event::{InputState as EventInputState, WidgetEventSourced, EventOps},
     render::{Renderer},
 };
@@ -67,8 +70,8 @@ impl<'a, R: Renderer> OffsetWidget<'a, R> {
     pub fn set_rect(&mut self, rect: BoundBox<D2, i32>) {
         *self.widget.rect_mut() = rect - self.offset;
     }
-    pub fn render(&mut self, frame: &mut R::SubFrame) {
-        self.widget.render(frame);
+    pub fn render(&mut self, params: RenderParameters<R>) -> Result<(), RenderError> {
+        self.widget.render(params)
     }
     pub fn on_widget_event(
         &mut self,

@@ -155,7 +155,7 @@ impl Widget for TestWidget {
     }
 }
 
-impl<F: RenderFrame> WidgetRender<F> for TestWidget {
+impl<F: RenderFrame> WidgetRenderable<F> for TestWidget {
     fn render(&mut self, _frame: &mut RenderFrameClipped<F>) {}
 }
 

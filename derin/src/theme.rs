@@ -18,7 +18,6 @@ use std::hash::{Hash, Hasher, BuildHasher};
 use std::collections::hash_map::RandomState;
 
 
-use crate::core::render::Theme as CoreTheme;
 pub use derin_common_types::cursor::CursorIcon;
 
 pub mod color {

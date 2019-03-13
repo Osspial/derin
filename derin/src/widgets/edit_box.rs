@@ -5,7 +5,7 @@
 use derin_core::{
     event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
     timer::{Timer, TimerId},
-    widget::{WidgetTag, WidgetRender, Widget},
+    widget::{WidgetTag, WidgetRenderable, Widget},
     render::{Renderer, RendererLayout, SubFrame, WidgetTheme},
 };
 use crate::widgets::assistants::text_edit::{TextEditAssist, TextEditOps, CursorFlashOp, LineCharFilter};
@@ -95,7 +95,7 @@ impl LineBox {
 
 macro_rules! render {
     ($ty:ty) => {
-        impl<R: Renderer> WidgetRender<R> for $ty {
+        impl<R: Renderer> WidgetRenderable<R> for $ty {
             fn render(&mut self, frame: &mut R::SubFrame) {
                 frame.render_laid_out_content();
             }

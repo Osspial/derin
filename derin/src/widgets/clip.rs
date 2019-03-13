@@ -5,7 +5,7 @@
 use derin_core::{
     LoopFlow,
     event::{EventOps, WidgetEventSourced, InputState},
-    widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
+    widget::{WidgetIdent, WidgetRenderable, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
     render::{Renderer, WidgetTheme},
 };
 
@@ -120,7 +120,7 @@ impl<W> Parent for Clip<W>
     }
 }
 
-impl<W, R> WidgetRender<R> for Clip<W>
+impl<W, R> WidgetRenderable<R> for Clip<W>
     where W: Widget,
           R: Renderer
 {

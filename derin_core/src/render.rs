@@ -25,15 +25,19 @@ pub trait Renderer: 'static {
         layout: impl FnOnce(&mut Self::Layout)
     );
     fn start_frame(&mut self, theme: &Self::Theme);
-    fn render_subframe(
+    fn finish_frame(&mut self, theme: &Self::Theme);
+}
+
+pub trait WidgetRenderer<T: WidgetTheme>: Renderer {
+    fn render_widget(
         &mut self,
         widget_id: WidgetId,
         theme: &Self::Theme,
         transform: BoundBox<D2, i32>,
         clip: BoundBox<D2, i32>,
-        with_frame: impl FnOnce(&mut Self::SubFrame)
+        widget_theme: T,
+        render_widget: impl FnOnce(&mut Self::SubFrame),
     );
-    fn finish_frame(&mut self, theme: &Self::Theme);
 }
 
 pub trait SubFrame {
@@ -77,12 +81,6 @@ pub struct LayoutResult {
     pub content_rect: BoundBox<D2, i32>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct WidgetTheme<'a> {
-    pub typ: &'a str,
-    pub state: Option<&'a str>,
-}
-
 pub trait RendererLayout {
     fn prepare_string(&mut self, string: &str);
     /// Layout the render string and perform any queued cursor operations.
@@ -98,21 +96,17 @@ pub trait RendererLayout {
     fn finish(&mut self) -> LayoutResult;
 }
 
-pub trait Theme {
-    type ThemeValue;
-    fn widget_theme(&self, key: WidgetTheme) -> Self::ThemeValue;
+pub trait WidgetTheme {
+    type Fallback: WidgetTheme;
+
+    fn fallback(self) -> Option<Self::Fallback>;
 }
 
-impl WidgetTheme<'_> {
-    pub const fn new(typ: &str) -> WidgetTheme<'_> {
-        WidgetTheme {
-            typ,
-            state: None,
-        }
-    }
+impl WidgetTheme for ! {
+    type Fallback = !;
 
-    pub const fn new_state<'a>(typ: &'a str, state: &'a str) -> WidgetTheme<'a> {
-        WidgetTheme{ typ, state: Some(state) }
+    fn fallback(self) -> Option<!> {
+        self
     }
 }
 
@@ -130,14 +124,6 @@ impl Renderer for ! {
     ) {unreachable!()}
     fn widget_removed(&mut self, _: WidgetId) {unreachable!()}
     fn start_frame(&mut self, _: &Self::Theme) {unreachable!()}
-    fn render_subframe(
-        &mut self,
-        _: WidgetId,
-        _: &Self::Theme,
-        _: BoundBox<D2, i32>,
-        _: BoundBox<D2, i32>,
-        _: impl FnOnce(&mut Self::SubFrame)
-    ) {unreachable!()}
     fn finish_frame(&mut self, _: &Self::Theme) {unreachable!()}
 }
 

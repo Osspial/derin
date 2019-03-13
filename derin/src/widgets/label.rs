@@ -4,7 +4,7 @@
 
 use derin_core::{
     event::{EventOps, WidgetEventSourced, InputState},
-    widget::{WidgetTag, WidgetRender, Widget},
+    widget::{WidgetTag, WidgetRenderable, Widget},
     render::{Renderer, RendererLayout, SubFrame, WidgetTheme},
 };
 use crate::widgets::Contents;
@@ -82,7 +82,7 @@ impl Widget for Label {
     }
 }
 
-impl<R> WidgetRender<R> for Label
+impl<R> WidgetRenderable<R> for Label
     where R: Renderer
 {
     fn render(&mut self, frame: &mut R::SubFrame) {

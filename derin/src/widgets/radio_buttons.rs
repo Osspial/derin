@@ -5,7 +5,7 @@
 use derin_core::{
     LoopFlow,
     event::{EventOps, WidgetEventSourced, InputState},
-    widget::{WidgetIdent, WidgetRender, WidgetTag, WidgetInfo, WidgetInfoMut, WidgetId, Widget, Parent},
+    widget::{WidgetIdent, WidgetRenderable, WidgetTag, WidgetInfo, WidgetInfoMut, WidgetId, Widget, Parent},
     render::{Renderer, WidgetTheme},
 };
 use crate::{
@@ -243,23 +243,23 @@ impl<C, L> Parent for RadioButtonList<C, L>
     }
 }
 
-impl<R> WidgetRender<R> for RadioButton
+impl<R> WidgetRenderable<R> for RadioButton
     where R: Renderer,
 {
     fn render(&mut self, frame: &mut R::SubFrame) {
-        WidgetRender::<R>::render(&mut self.toggle, frame)
+        WidgetRenderable::<R>::render(&mut self.toggle, frame)
     }
 
     fn theme_list(&self) -> &[WidgetTheme] {
-        WidgetRender::<R>::theme_list(&self.toggle)
+        WidgetRenderable::<R>::theme_list(&self.toggle)
     }
 
     fn update_layout(&mut self, l: &mut R::Layout) {
-        WidgetRender::<R>::update_layout(&mut self.toggle, l)
+        WidgetRenderable::<R>::update_layout(&mut self.toggle, l)
     }
 }
 
-impl<R, C, L> WidgetRender<R> for RadioButtonList<C, L>
+impl<R, C, L> WidgetRenderable<R> for RadioButtonList<C, L>
     where R: Renderer,
           C: WidgetContainer<RadioButton>,
           L: GridLayout

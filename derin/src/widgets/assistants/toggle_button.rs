@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 use derin_core::{
     LoopFlow,
     event::{EventOps, InputState, WidgetEvent, WidgetEventSourced, MouseHoverChange},
-    widget::{Parent, Widget, WidgetInfo, WidgetInfoMut, WidgetIdent, WidgetTag, WidgetRender},
+    widget::{Parent, Widget, WidgetInfo, WidgetInfoMut, WidgetIdent, WidgetTag, WidgetRenderable},
     render::{Renderer, RendererLayout, SubFrame, WidgetTheme},
 };
 use crate::widgets::{
@@ -259,7 +259,7 @@ impl<T: ToggleBoxTheme> Widget for ToggleBox<T> {
     }
 }
 
-impl<R, H, T> WidgetRender<R> for Toggle<H, T>
+impl<R, H, T> WidgetRenderable<R> for Toggle<H, T>
     where R: Renderer,
           H: ToggleOnClickHandler,
           T: ToggleBoxTheme,
@@ -284,7 +284,7 @@ impl<R, H, T> WidgetRender<R> for Toggle<H, T>
     }
 }
 
-impl<R, T> WidgetRender<R> for ToggleBox<T>
+impl<R, T> WidgetRenderable<R> for ToggleBox<T>
     where R: Renderer,
           T: ToggleBoxTheme
 {

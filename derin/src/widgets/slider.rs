@@ -4,7 +4,7 @@
 
 use std::ops::RangeInclusive;
 use derin_core::{
-    widget::{WidgetTag, WidgetRender, Widget},
+    widget::{WidgetTag, WidgetRenderable, Widget},
     render::{Renderer, RendererLayout, SubFrame, WidgetTheme},
 };
 use derin_common_types::layout::SizeBounds;
@@ -246,7 +246,7 @@ impl<H> Widget for SliderHandle<H>
     }
 }
 
-impl<R, H> WidgetRender<R> for Slider<H>
+impl<R, H> WidgetRenderable<R> for Slider<H>
     where R: Renderer,
           H: SliderHandler
 {
@@ -266,7 +266,7 @@ impl<R, H> WidgetRender<R> for Slider<H>
     }
 }
 
-impl<R, H> WidgetRender<R> for SliderHandle<H>
+impl<R, H> WidgetRenderable<R> for SliderHandle<H>
     where R: Renderer,
           H: SliderHandler
 {
