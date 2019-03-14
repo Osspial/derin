@@ -33,6 +33,11 @@ struct ProgressBarFill {
     rect: BoundBox<D2, i32>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ProgressBarTheme(());
+#[derive(Debug, Clone, Default)]
+pub struct ProgressBarFillTheme(());
+
 impl ProgressBar {
     /// Creates a new progress bar with the given `value`, `step`, `min`, `max`, and action handler.
     pub fn new(value: f32, min: f32, max: f32) -> ProgressBar {
@@ -187,13 +192,13 @@ impl Parent for ProgressBar {
 impl<R> WidgetRenderable<R> for ProgressBar
     where R: Renderer
 {
-    fn render(&mut self, frame: &mut R::SubFrame) {
-        frame.render_laid_out_content();
+    type Theme = ProgressBarTheme;
+    fn theme(&self) -> ProgressBarTheme {
+        ProgressBarTheme(())
     }
 
-    fn theme_list(&self) -> &[WidgetTheme] {
-        static THEME: &[WidgetTheme] = &[WidgetTheme::new("ProgressBar")];
-        THEME
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        frame.render_laid_out_content();
     }
 
     fn update_layout(&mut self, layout: &mut R::Layout) {
@@ -214,14 +219,28 @@ impl<R> WidgetRenderable<R> for ProgressBar
 impl<R> WidgetRenderable<R> for ProgressBarFill
     where R: Renderer
 {
+    type Theme = ProgressBarFillTheme;
+    fn theme(&self) -> ProgressBarFillTheme {
+        ProgressBarFillTheme(())
+    }
+
     fn render(&mut self, frame: &mut R::SubFrame) {
         frame.render_laid_out_content();
     }
 
-    fn theme_list(&self) -> &[WidgetTheme] {
-        static THEME: &[WidgetTheme] = &[WidgetTheme::new("ProgressBar::Fill")];
-        THEME
-    }
-
     fn update_layout(&mut self, _: &mut R::Layout) { }
+}
+
+impl WidgetTheme for ProgressBarTheme {
+    type Fallback = !;
+    fn fallback(self) -> Option<!> {
+        None
+    }
+}
+
+impl WidgetTheme for ProgressBarFillTheme {
+    type Fallback = !;
+    fn fallback(self) -> Option<!> {
+        None
+    }
 }

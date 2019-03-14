@@ -6,7 +6,7 @@ use derin_core::{
     LoopFlow,
     event::{EventOps, WidgetEventSourced, InputState},
     widget::{WidgetIdent, WidgetRenderable, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
-    render::{Renderer, WidgetTheme},
+    render::{Renderer, SubFrame, WidgetTheme},
 };
 
 use crate::cgmath::EuclideanSpace;
@@ -19,8 +19,11 @@ use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 pub struct Clip<W> {
     widget_tag: WidgetTag,
     rect: BoundBox<D2, i32>,
-    widget: W
+    widget: W,
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct ClipTheme(());
 
 impl<W> Clip<W> {
     /// Creates a new clip widget.
@@ -28,7 +31,7 @@ impl<W> Clip<W> {
         Clip {
             widget_tag: WidgetTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
-            widget
+            widget,
         }
     }
 
@@ -124,10 +127,14 @@ impl<W, R> WidgetRenderable<R> for Clip<W>
     where W: Widget,
           R: Renderer
 {
-    fn render(&mut self, _: &mut R::SubFrame) { }
+    type Theme = ClipTheme;
 
-    fn theme_list(&self) -> &[WidgetTheme] {
-        &[]
+    fn theme(&self) -> ClipTheme {
+        ClipTheme(())
+    }
+
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        frame.render_laid_out_content();
     }
 
     fn update_layout(&mut self, _: &mut R::Layout) {
@@ -138,5 +145,12 @@ impl<W, R> WidgetRenderable<R> for Clip<W>
         if dims_clipped.dims() != widget_rect.dims() {
             *self.widget.rect_mut() = BoundBox::from(dims_clipped) + widget_rect.min().to_vec();
         }
+    }
+}
+
+impl WidgetTheme for ClipTheme {
+    type Fallback = !;
+    fn fallback(self) -> Option<!> {
+        None
     }
 }

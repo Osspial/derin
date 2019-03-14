@@ -35,6 +35,9 @@ pub struct Group<C, L>
     layout: L
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct GroupTheme(());
+
 impl<C, L> Group<C, L>
     where L: GridLayout
 {
@@ -135,13 +138,14 @@ impl<R, C, L> WidgetRenderable<R> for Group<C, L>
           C: WidgetContainer<dyn Widget>,
           L: GridLayout
 {
-    fn render(&mut self, frame: &mut R::SubFrame) {
-        frame.render_laid_out_content();
+    type Theme = GroupTheme;
+
+    fn theme(&self) -> GroupTheme {
+        GroupTheme(())
     }
 
-    fn theme_list(&self) -> &[WidgetTheme] {
-        static GROUP: &[WidgetTheme] = &[WidgetTheme::new("Group")];
-        GROUP
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        frame.render_laid_out_content();
     }
 
     fn update_layout(&mut self, _: &mut R::Layout) {
@@ -193,5 +197,12 @@ impl<R, C, L> WidgetRenderable<R> for Group<C, L>
 
             hints_vec.clear();
         })
+    }
+}
+
+impl WidgetTheme for GroupTheme {
+    type Fallback = !;
+    fn fallback(self) -> Option<!> {
+        None
     }
 }

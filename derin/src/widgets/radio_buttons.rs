@@ -6,14 +6,14 @@ use derin_core::{
     LoopFlow,
     event::{EventOps, WidgetEventSourced, InputState},
     widget::{WidgetIdent, WidgetRenderable, WidgetTag, WidgetInfo, WidgetInfoMut, WidgetId, Widget, Parent},
-    render::{Renderer, WidgetTheme},
+    render::{Renderer, SubFrame, WidgetTheme},
 };
 use crate::{
     container::WidgetContainer,
     layout::GridLayout,
     widgets::{
         Contents,
-        assistants::toggle_button::{Toggle, ToggleBoxTheme, ToggleOnClickHandler},
+        assistants::toggle_button::{Toggle, ToggleOnClickHandler},
     },
 };
 
@@ -36,6 +36,12 @@ pub struct RadioButton {
     toggle: Toggle<RadioButtonToggleHandler, RadioButtonTheme>,
 }
 
+#[derive(Default, Debug, Clone)]
+pub struct RadioButtonTheme(());
+
+#[derive(Default, Debug, Clone)]
+pub struct RadioButtonListTheme(());
+
 #[derive(Debug, Clone, Copy)]
 struct RadioButtonToggleHandler;
 impl ToggleOnClickHandler for RadioButtonToggleHandler {
@@ -43,12 +49,6 @@ impl ToggleOnClickHandler for RadioButtonToggleHandler {
         *checked = true;
         panic!("CALL https://github.com/Osspial/derin/blob/6a92c83b9cfa73024b4216c5d5e1aee74ee513b1/derin/src/widgets/radio_buttons.rs#L184-L187");
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct RadioButtonTheme;
-impl ToggleBoxTheme for RadioButtonTheme {
-    const TYPE_NAME: &'static str = "RadioButton::Toggle";
 }
 
 /// A set of radio buttons.
@@ -114,7 +114,7 @@ impl RadioButton {
     /// Creates a new radio button, with the given default selected state and contents.
     pub fn new(selected: bool, contents: Contents) -> RadioButton {
         RadioButton {
-            toggle: Toggle::new(selected, contents, RadioButtonToggleHandler),
+            toggle: Toggle::new(selected, contents, RadioButtonToggleHandler, RadioButtonTheme(())),
         }
     }
 
@@ -196,7 +196,7 @@ impl<C, L> Widget for RadioButtonList<C, L>
     }
 
     #[inline]
-    fn on_widget_event(&mut self, event: WidgetEventSourced, _: InputState) -> EventOps {
+    fn on_widget_event(&mut self, _: WidgetEventSourced, _: InputState) -> EventOps {
         // TODO: PASS FOCUS TO CHILD
 
         EventOps {
@@ -246,12 +246,14 @@ impl<C, L> Parent for RadioButtonList<C, L>
 impl<R> WidgetRenderable<R> for RadioButton
     where R: Renderer,
 {
-    fn render(&mut self, frame: &mut R::SubFrame) {
-        WidgetRenderable::<R>::render(&mut self.toggle, frame)
+    type Theme = RadioButtonTheme;
+
+    fn theme(&self) -> RadioButtonTheme {
+        WidgetRenderable::<R>::theme(&self.toggle)
     }
 
-    fn theme_list(&self) -> &[WidgetTheme] {
-        WidgetRenderable::<R>::theme_list(&self.toggle)
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        WidgetRenderable::<R>::render(&mut self.toggle, frame)
     }
 
     fn update_layout(&mut self, l: &mut R::Layout) {
@@ -264,10 +266,14 @@ impl<R, C, L> WidgetRenderable<R> for RadioButtonList<C, L>
           C: WidgetContainer<RadioButton>,
           L: GridLayout
 {
-    fn render(&mut self, _: &mut R::SubFrame) { }
+    type Theme = RadioButtonListTheme;
 
-    fn theme_list(&self) -> &[WidgetTheme] {
-        &[]
+    fn theme(&self) -> RadioButtonListTheme {
+        RadioButtonListTheme(())
+    }
+
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        frame.render_laid_out_content();
     }
 
     fn update_layout(&mut self, _: &mut R::Layout) {
@@ -320,4 +326,14 @@ impl<R, C, L> WidgetRenderable<R> for RadioButtonList<C, L>
             hints_vec.clear();
         })
     }
+}
+
+impl WidgetTheme for RadioButtonTheme {
+    type Fallback = !;
+    fn fallback(self) -> Option<!> {None}
+}
+
+impl WidgetTheme for RadioButtonListTheme {
+    type Fallback = !;
+    fn fallback(self) -> Option<!> {None}
 }

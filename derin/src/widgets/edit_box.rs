@@ -33,6 +33,11 @@ pub struct LineBox {
     flash_timer: Option<TimerId>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct EditBoxTheme(());
+#[derive(Debug, Clone, Default)]
+pub struct LineBoxTheme(());
+
 impl EditBox {
     /// Create a new `EditBox`, containing the included `String` by default.
     pub fn new(string: String) -> EditBox {
@@ -94,15 +99,16 @@ impl LineBox {
 }
 
 macro_rules! render {
-    ($ty:ty) => {
+    ($ty:ty, $theme:ident) => {
         impl<R: Renderer> WidgetRenderable<R> for $ty {
-            fn render(&mut self, frame: &mut R::SubFrame) {
-                frame.render_laid_out_content();
+            type Theme = $theme;
+
+            fn theme(&self) -> $theme {
+                $theme(())
             }
 
-            fn theme_list(&self) -> &[WidgetTheme] {
-                const LABEL: &[WidgetTheme] = &[WidgetTheme::new(stringify!($ty))];
-                LABEL
+            fn render(&mut self, frame: &mut R::SubFrame) {
+                frame.render_laid_out_content();
             }
 
             fn update_layout(&mut self, layout: &mut R::Layout) {
@@ -217,5 +223,19 @@ impl Widget for LineBox {
     event!();
 }
 
-render!(EditBox);
-render!(LineBox);
+render!(EditBox, EditBoxTheme);
+render!(LineBox, LineBoxTheme);
+
+impl WidgetTheme for EditBoxTheme {
+    type Fallback = !;
+    fn fallback(self) -> Option<!> {
+        None
+    }
+}
+
+impl WidgetTheme for LineBoxTheme {
+    type Fallback = !;
+    fn fallback(self) -> Option<!> {
+        None
+    }
+}

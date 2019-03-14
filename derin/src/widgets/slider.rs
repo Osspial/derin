@@ -10,14 +10,11 @@ use derin_core::{
 use derin_common_types::layout::SizeBounds;
 use crate::{
     event::{EventOps, WidgetEvent, InputState, MouseButton, WidgetEventSourced},
-    theme::RescaleRules,
-    widgets::assistants::SliderAssist,
 };
 
-use crate::cgmath::Point2;
 use cgmath_geometry::{
     Lerp, D2,
-    rect::{BoundBox, DimsBox, GeoBox, OffsetBox}
+    rect::{BoundBox, GeoBox, OffsetBox}
 };
 
 pub trait SliderHandler: 'static {
@@ -44,6 +41,11 @@ pub struct Slider<H: SliderHandler> {
 
     handle: SliderHandle<H>,
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct SliderTheme(());
+#[derive(Debug, Clone, Default)]
+pub struct SliderHandleTheme(());
 
 #[derive(Debug, Clone)]
 struct SliderHandle<H: SliderHandler> {
@@ -86,56 +88,56 @@ impl<H: SliderHandler> Slider<H> {
         }
     }
 
-    // /// Retrieves the value stored in the slider.
-    // #[inline]
-    // pub fn value(&self) -> f32 {
-    //     self.value
-    // }
+    /// Retrieves the value stored in the slider.
+    #[inline]
+    pub fn value(&self) -> f32 {
+        self.handle.value
+    }
 
-    // /// Retrieves the range of possible values the slider can contain.
-    // #[inline]
-    // pub fn range(&self) -> (f32, f32) {
-    //     (self.min, self.max)
-    // }
+    /// Retrieves the range of possible values the slider can contain.
+    #[inline]
+    pub fn range(&self) -> RangeInclusive<f32> {
+        self.handle.value_range.clone()
+    }
 
-    // /// Retrieves the step, to which the value is snapped to.
-    // ///
-    // /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
-    // /// it unless you're actually changing the contents.
-    // #[inline]
-    // pub fn step(&self) -> f32 {
-    //     self.step
-    // }
+    /// Retrieves the step, to which the value is snapped to.
+    ///
+    /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
+    /// it unless you're actually changing the contents.
+    #[inline]
+    pub fn step(&self) -> f32 {
+        self.handle.step
+    }
 
-    // /// Retrieves the value stored in the slider, for mutation.
-    // ///
-    // /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
-    // /// it unless you're actually changing the contents.
-    // #[inline]
-    // pub fn value_mut(&mut self) -> &mut f32 {
-    //     self.widget_tag.request_redraw();
-    //     &mut self.value
-    // }
+    /// Retrieves the value stored in the slider, for mutation.
+    ///
+    /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
+    /// it unless you're actually changing the contents.
+    #[inline]
+    pub fn value_mut(&mut self) -> &mut f32 {
+        self.widget_tag.request_redraw().request_relayout();
+        &mut self.handle.value
+    }
 
-    // /// Retrieves the range of possible values the slider can contain, for mutation.
-    // ///
-    // /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
-    // /// it unless you're actually changing the contents.
-    // #[inline]
-    // pub fn range_mut(&mut self) -> (&mut f32, &mut f32) {
-    //     self.widget_tag.request_redraw();
-    //     (&mut self.min, &mut self.max)
-    // }
+    /// Retrieves the range of possible values the slider can contain, for mutation.
+    ///
+    /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
+    /// it unless you're actually changing the contents.
+    #[inline]
+    pub fn range_mut(&mut self) -> &mut RangeInclusive<f32> {
+        self.widget_tag.request_redraw().request_relayout();
+        &mut self.handle.value_range
+    }
 
-    // /// Retrieves the step, to which the value is snapped to, for mutation.
-    // ///
-    // /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
-    // /// it unless you're actually changing the contents.
-    // #[inline]
-    // pub fn step_mut(&mut self) -> &mut f32 {
-    //     self.widget_tag.request_redraw();
-    //     &mut self.step
-    // }
+    /// Retrieves the step, to which the value is snapped to, for mutation.
+    ///
+    /// Calling this function forces the slider to be re-drawn, so you're discouraged from calling
+    /// it unless you're actually changing the contents.
+    #[inline]
+    pub fn step_mut(&mut self) -> &mut f32 {
+        self.widget_tag.request_redraw().request_relayout();
+        &mut self.handle.step
+    }
 }
 
 impl<H> Widget for Slider<H>
@@ -250,13 +252,14 @@ impl<R, H> WidgetRenderable<R> for Slider<H>
     where R: Renderer,
           H: SliderHandler
 {
-    fn render(&mut self, frame: &mut R::SubFrame) {
-        frame.render_laid_out_content();
+    type Theme = SliderTheme;
+
+    fn theme(&self) -> SliderTheme {
+        SliderTheme(())
     }
 
-    fn theme_list(&self) -> &[WidgetTheme] {
-        static THEME: &[WidgetTheme] = &[WidgetTheme::new("Slider")];
-        THEME
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        frame.render_laid_out_content();
     }
 
     fn update_layout(&mut self, layout: &mut R::Layout) {
@@ -270,17 +273,32 @@ impl<R, H> WidgetRenderable<R> for SliderHandle<H>
     where R: Renderer,
           H: SliderHandler
 {
-    fn render(&mut self, frame: &mut R::SubFrame) {
-        frame.render_laid_out_content();
+    type Theme = SliderHandleTheme;
+
+    fn theme(&self) -> SliderHandleTheme {
+        SliderHandleTheme(())
     }
 
-    fn theme_list(&self) -> &[WidgetTheme] {
-        static THEME: &[WidgetTheme] = &[WidgetTheme::new("Slider::Handle")];
-        THEME
+    fn render(&mut self, frame: &mut R::SubFrame) {
+        frame.render_laid_out_content();
     }
 
     fn update_layout(&mut self, layout: &mut R::Layout) {
         let result = layout.finish();
         self.size_bounds = result.size_bounds;
+    }
+}
+
+impl WidgetTheme for SliderTheme {
+    type Fallback = !;
+    fn fallback(self) -> Option<!> {
+        None
+    }
+}
+
+impl WidgetTheme for SliderHandleTheme {
+    type Fallback = !;
+    fn fallback(self) -> Option<!> {
+        None
     }
 }
