@@ -6,7 +6,7 @@ use derin_core::{
     event::{EventOps, WidgetEvent, WidgetEventSourced, InputState},
     timer::{Timer, TimerId},
     widget::{WidgetTag, WidgetRenderable, Widget},
-    render::{Renderer, RendererLayout, SubFrame, WidgetTheme},
+    render::{DisplayEngine, RendererLayout, SubFrame},
 };
 use crate::widgets::assistants::text_edit::{TextEditAssist, TextEditOps, CursorFlashOp, LineCharFilter};
 use cgmath_geometry::{D2, rect::BoundBox};

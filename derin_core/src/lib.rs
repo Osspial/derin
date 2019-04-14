@@ -3,6 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #![feature(range_contains, nll, specialization, try_blocks, never_type)]
+#![feature(core_intrinsics)] // this is used for `type_name`. Should be removed when that's stabilized
 
 use cgmath_geometry::cgmath;
 extern crate derin_common_types;
@@ -35,11 +36,8 @@ use crate::{
     event::{WidgetEvent, WidgetEventSourced},
     event_translator::EventTranslator,
     timer::{TimerTrigger, TimerTriggerTracker},
-    widget::{
-        *,
-        dynamic::{RenderError, RenderParameters},
-    },
-    render::{Renderer},
+    widget::*,
+    render::{DisplayEngine},
     mbseq::MouseButtonSequenceTrackPos,
     update_state::{UpdateState, UpdateStateCell},
     widget_traverser::{Relation, WidgetPath, WidgetTraverser, WidgetTraverserBase},
@@ -64,9 +62,9 @@ fn vec_remove_element<T: PartialEq>(v: &mut Vec<T>, element: &T) -> Option<T> {
     find_index(v, element).map(|i| v.remove(i))
 }
 
-pub struct Root<N, R>
+pub struct Root<N, D>
     where N: Widget + 'static,
-          R: Renderer + 'static
+          for<'d> D: DisplayEngine<'d>
 {
     // Event handing and dispatch
     event_translator: EventTranslator,
@@ -74,7 +72,7 @@ pub struct Root<N, R>
     // Input State
     input_state: InputState,
 
-    widget_traverser_base: WidgetTraverserBase<R>,
+    widget_traverser_base: WidgetTraverserBase<D>,
 
     timer_tracker: TimerTriggerTracker,
     message_bus: MessageBus,
@@ -82,8 +80,7 @@ pub struct Root<N, R>
 
     // User data
     pub root_widget: N,
-    pub theme: R::Theme,
-    pub renderer: R,
+    pub display_engine: D,
 }
 
 struct InputState {
@@ -123,15 +120,15 @@ pub enum LoopFlow {
 }
 
 #[must_use]
-pub struct FrameEventProcessor<'a, R>
-    where R: Renderer + 'static
+pub struct FrameEventProcessor<'a, D>
+    where for<'d> D: DisplayEngine<'d> + 'static
 {
     input_state: &'a mut InputState,
     event_translator: &'a mut EventTranslator,
     timer_tracker: &'a mut TimerTriggerTracker,
     message_bus: &'a mut MessageBus,
     update_state: Rc<UpdateStateCell>,
-    widget_traverser: WidgetTraverser<'a, R>,
+    widget_traverser: WidgetTraverser<'a, D>,
 }
 
 #[must_use]
@@ -155,12 +152,12 @@ impl InputState {
     }
 }
 
-impl<N, R> Root<N, R>
+impl<N, D> Root<N, D>
     where N: Widget,
-          R: Renderer
+          for<'d> D: DisplayEngine<'d>
 {
     #[inline]
-    pub fn new(mut root_widget: N, theme: R::Theme, renderer: R, dims: DimsBox<D2, u32>) -> Root<N, R> {
+    pub fn new(mut root_widget: N, display_engine: D, dims: DimsBox<D2, u32>) -> Root<N, D> {
         // TODO: DRAW ROOT AND DO INITIAL LAYOUT
         *root_widget.rect_mut() = dims.cast().unwrap_or(DimsBox::max_value()).into();
         let message_bus = MessageBus::new();
@@ -175,11 +172,11 @@ impl<N, R> Root<N, R>
             update_state: UpdateState::new(&message_bus),
             message_bus,
 
-            root_widget, theme, renderer,
+            root_widget, display_engine,
         }
     }
 
-    pub fn start_frame(&mut self) -> FrameEventProcessor<'_, R> {
+    pub fn start_frame(&mut self) -> FrameEventProcessor<'_, D> {
         FrameEventProcessor {
             input_state: &mut self.input_state,
             event_translator: &mut self.event_translator,
@@ -219,7 +216,7 @@ impl<N, R> Root<N, R>
                 };
 
                 let old_widget_rect = widget.rect();
-                self.renderer.layout(widget.widget_id(), |layout| widget.update_layout(layout));
+                widget.update_layout(self.display_engine.layout(widget_id));
                 let size_bounds = widget.size_bounds();
                 let new_widget_rect = widget.rect();
                 let widget_dims = new_widget_rect.dims();
@@ -228,7 +225,7 @@ impl<N, R> Root<N, R>
                 let dims_bounded = size_bounds.bound_rect(widget_dims);
 
                 // If we're doing a global update, all widgets are in the relayout list so we don't
-                // need to queue the part for relayout. Otherwise, queue the parent for relayout if
+                // need to queue the parent for relayout. Otherwise, queue the parent for relayout if
                 // the widget's rect has changed or the widget's dimensions no longer fall in its size
                 // bounds.
                 let parent_needs_relayout =
@@ -275,16 +272,15 @@ impl<N, R> Root<N, R>
     pub fn redraw(&mut self) {
         let root_rect = self.root_widget.rect();
         let new_dims = root_rect.dims().cast::<u32>().unwrap_or(DimsBox::new2(0, 0));
-        if new_dims != self.renderer.dims() {
-            self.renderer.resized(new_dims);
+        if new_dims != self.display_engine.dims() {
+            self.display_engine.resized(new_dims);
         }
 
         let Root {
             ref update_state,
             ref mut widget_traverser_base,
             ref mut root_widget,
-            ref theme,
-            ref mut renderer,
+            ref mut display_engine,
             ..
         } = *self;
 
@@ -296,34 +292,27 @@ impl<N, R> Root<N, R>
             update_state_ref.reset_global_update();
             drop(update_state_ref);
 
-            renderer.start_frame(theme);
-            let window_rect = renderer.dims();
+            display_engine.start_frame();
+            let window_rect = display_engine.dims();
             let window_rect = BoundBox::new2(0, 0, window_rect.width() as i32, window_rect.height() as i32);
 
             let mut widget_traverser = widget_traverser_base.with_root_ref(root_widget, update_state.clone());
             widget_traverser.crawl_widgets(|mut path| {
-                let render_parameters = RenderParameters {
-                    renderer,
-                    widget_id: path.widget.widget_id(),
-                    theme,
-                    transform: path.widget.rect(),
-                    clip: path.widget.clip().unwrap_or(window_rect),
-                };
+                let renderer = display_engine.render(
+                    path.widget.widget_id(),
+                    path.widget.rect(),
+                    path.widget.clip().unwrap_or(window_rect),
+                );
 
-                let result = path.widget.render(render_parameters);
-                match result {
-                    Ok(()) => (),
-                    Err(RenderError::ThemeNotSupported) => println!("WARNING: Attempted to render widget but renderer didn't support theme"),
-                    Err(RenderError::RendererNotSupported) => println!("WARNING: Attempted to render widget but widget didn't support renderer"),
-                }
+                path.widget.render(renderer);
             });
-            renderer.finish_frame(theme);
+            display_engine.finish_frame();
         }
     }
 }
 
-impl<R> FrameEventProcessor<'_, R>
-    where R: Renderer
+impl<D> FrameEventProcessor<'_, D>
+    where for<'d> D: DisplayEngine<'d>
 {
     pub fn process_event(
         &mut self,

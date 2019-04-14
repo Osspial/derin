@@ -5,10 +5,10 @@
 use derin_core::{
     event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange},
     widget::{WidgetTag, WidgetRenderable, Widget},
-    render::{Renderer, RendererLayout, SubFrame, WidgetTheme},
+    render::{DisplayEngine, RendererLayout, SubFrame},
 };
 use crate::widgets::{
-    Contents,
+    Content,
     assistants::ButtonState,
 };
 
@@ -27,7 +27,7 @@ pub struct Button<H> {
     bounds: BoundBox<D2, i32>,
     state: ButtonState,
     pub handler: H,
-    contents: Contents,
+    contents: Content,
     size_bounds: SizeBounds
 }
 
@@ -43,7 +43,7 @@ pub struct ButtonTheme {
 
 impl<H> Button<H> {
     /// Creates a new button with the given contents and
-    pub fn new(contents: Contents, handler: H) -> Button<H> {
+    pub fn new(contents: Content, handler: H) -> Button<H> {
         Button {
             widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
@@ -54,11 +54,11 @@ impl<H> Button<H> {
         }
     }
 
-    pub fn contents(&self) -> &Contents {
+    pub fn contents(&self) -> &Content {
         &self.contents
     }
 
-    pub fn contents_mut(&mut self) -> &mut Contents {
+    pub fn contents_mut(&mut self) -> &mut Content {
         self.widget_tag
             .request_redraw()
             .request_relayout();
@@ -140,8 +140,8 @@ impl<R, H> WidgetRenderable<R> for Button<H>
 
     fn update_layout(&mut self, layout: &mut R::Layout) {
         match self.contents {
-            Contents::Text(ref s) => layout.prepare_string(s),
-            Contents::Icon(ref i) => layout.prepare_icon(i),
+            Content::Text(ref s) => layout.prepare_string(s),
+            Content::Icon(ref i) => layout.prepare_icon(i),
         }
 
         let result = layout.finish();

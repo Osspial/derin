@@ -8,7 +8,7 @@ extern crate derin_macros;
 
 use derin::{Window, WindowConfig, LoopFlow};
 use derin::layout::{Margins, LayoutHorizontal};
-use derin::widgets::{Button, Group, Label, Contents};
+use derin::widgets::{Button, Group, Label, Content};
 use derin::geometry::rect::DimsBox;
 
 #[derive(WidgetContainer)]
@@ -23,9 +23,9 @@ fn main() {
     let mut value = 0;
     let counter_ui = Group::new(
         Counter {
-            increment: Button::new(Contents::Text("Increment".to_string()), Some(1)),
-            decrement: Button::new(Contents::Text("Decrement".to_string()), Some(-1)),
-            label: Label::new(Contents::Text(value.to_string()))
+            increment: Button::new(Content::Text("Increment".to_string()), Some(1)),
+            decrement: Button::new(Content::Text("Decrement".to_string()), Some(-1)),
+            label: Label::new(Content::Text(value.to_string()))
         },
         LayoutHorizontal::new(Margins::new(8, 8, 8, 8), Default::default())
     );

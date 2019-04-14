@@ -13,7 +13,7 @@ use crate::{
     LoopFlow,
     event::{WidgetEventSourced, EventOps, InputState},
     message_bus::{WidgetMessageKey, WidgetMessageFn},
-    render::{Renderer, WidgetTheme},
+    render::DisplayEngine,
     timer::{TimerId, Timer},
     update_state::{UpdateStateShared, UpdateStateCell},
 };
@@ -127,12 +127,16 @@ pub trait Widget: 'static {
     }
 }
 
-pub trait WidgetRenderable<R: Renderer>: Widget {
-    type Theme: WidgetTheme;
+pub trait WidgetRenderable<D>: Widget
+    where for<'d> D: DisplayEngine<'d>
+{
+    fn render(&mut self, renderer: <D as DisplayEngine<'_>>::Renderer);
+    fn update_layout(&mut self, layout: <D as DisplayEngine<'_>>::Layout);
 
-    fn theme(&self) -> Self::Theme;
-    fn render(&mut self, frame: &mut R::SubFrame);
-    fn update_layout(&mut self, _layout: &mut R::Layout) {}
+    /// The type name. This must be formatted as a Rust type path.
+    fn type_name(&self) -> &'static str {
+        unsafe { std::intrinsics::type_name::<Self>() }
+    }
 }
 
 impl<W> Widget for Box<W>
@@ -165,18 +169,24 @@ impl<W> Widget for Box<W>
     }
 }
 
-pub struct WidgetInfo<'a, R: Renderer, S: ?Sized=Widget> {
+pub struct WidgetInfo<'a, D, S=Widget>
+    where for<'d> D: DisplayEngine<'d>,
+          S: ?Sized
+{
     pub ident: WidgetIdent,
     pub index: usize,
-    pub(crate) widget: &'a WidgetDyn<R>,
-    to_secondary: fn(&'_ WidgetDyn<R>) -> &'_ S,
+    pub(crate) widget: &'a WidgetDyn<D>,
+    to_secondary: fn(&'_ WidgetDyn<D>) -> &'_ S,
 }
 
-pub struct WidgetInfoMut<'a, R: Renderer, S: ?Sized=Widget> {
+pub struct WidgetInfoMut<'a, D, S=Widget>
+    where for<'d> D: DisplayEngine<'d>,
+          S: ?Sized
+{
     pub ident: WidgetIdent,
     pub index: usize,
-    pub(crate) widget: &'a mut WidgetDyn<R>,
-    to_secondary: fn(Reference<'_, WidgetDyn<R>>) -> Reference<'_, S>
+    pub(crate) widget: &'a mut WidgetDyn<D>,
+    to_secondary: fn(Reference<'_, WidgetDyn<D>>) -> Reference<'_, S>
 }
 
 enum Reference<'a, T: ?Sized> {
@@ -196,24 +206,28 @@ impl<'a, T: ?Sized> Reference<'a, T> {
 pub trait Parent: Widget {
     fn num_children(&self) -> usize;
 
-    fn framed_child<R: Renderer>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, R>>
-        where Self: Sized;
-    fn framed_child_mut<R: Renderer>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, R>>
-        where Self: Sized;
-
-    fn framed_child_by_index<R: Renderer>(&self, index: usize) -> Option<WidgetInfo<'_, R>>
-        where Self: Sized;
-    fn framed_child_by_index_mut<R: Renderer>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, R>>
-        where Self: Sized;
-
-    fn framed_children<'a, R, G>(&'a self, for_each: G)
+    fn framed_child<D>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, D>>
         where Self: Sized,
-              R: Renderer,
-              G: FnMut(WidgetInfo<'a, R>) -> LoopFlow;
-    fn framed_children_mut<'a, R, G>(&'a mut self, for_each: G)
+              for<'d> D: DisplayEngine<'d>;
+    fn framed_child_mut<D>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, D>>
         where Self: Sized,
-              R: Renderer,
-              G: FnMut(WidgetInfoMut<'a, R>) -> LoopFlow;
+              for<'d> D: DisplayEngine<'d>;
+
+    fn framed_child_by_index<D>(&self, index: usize) -> Option<WidgetInfo<'_, D>>
+        where Self: Sized,
+              for<'d> D: DisplayEngine<'d>;
+    fn framed_child_by_index_mut<D>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, D>>
+        where Self: Sized,
+              for<'d> D: DisplayEngine<'d>;
+
+    fn framed_children<'a, D, G>(&'a self, for_each: G)
+        where Self: Sized,
+              for<'d> D: DisplayEngine<'d>,
+              G: FnMut(WidgetInfo<'a, D>) -> LoopFlow;
+    fn framed_children_mut<'a, D, G>(&'a mut self, for_each: G)
+        where Self: Sized,
+              for<'d> D: DisplayEngine<'d>,
+              G: FnMut(WidgetInfoMut<'a, D>) -> LoopFlow;
 
     // Ideally all these functions should be callable by `dyn Parent` and automatically implemented
     // with `default impl` (see RFC 1210) but that hasn't been implemented yet in rustc.
@@ -285,10 +299,9 @@ impl<W: Widget> WidgetSubtype<W> for dyn Widget {
     }
 }
 
-impl<W, T, R> WidgetSubtype<W> for dyn WidgetRenderable<R, Theme=T>
-    where W: WidgetRenderable<R, Theme=T>,
-          T: WidgetTheme,
-          R: Renderer,
+impl<W, D> WidgetSubtype<W> for dyn WidgetRenderable<D>
+    where W: WidgetRenderable<D>,
+          for<'d> D: DisplayEngine<'d>,
 {
     fn from_widget(widget: &W) -> &Self {
         widget
@@ -307,15 +320,15 @@ impl<W: Parent> WidgetSubtype<W> for dyn Parent {
     }
 }
 
-impl<'a, R, S> WidgetInfo<'a, R, S>
-    where R: Renderer,
+impl<'a, D, S> WidgetInfo<'a, D, S>
+    where for<'d> D: DisplayEngine<'d>,
           S: ?Sized
 {
     pub fn new<W>(
         ident: WidgetIdent,
         index: usize,
         widget: &'a W
-    ) -> WidgetInfo<'a, R, S>
+    ) -> WidgetInfo<'a, D, S>
         where W: Widget,
               S: WidgetSubtype<W>
     {
@@ -325,7 +338,7 @@ impl<'a, R, S> WidgetInfo<'a, R, S>
             widget: WidgetDyn::new(widget),
             to_secondary: |r| {
                 if r.type_id() == TypeId::of::<W>() {
-                    S::from_widget(unsafe{ &*(r as *const WidgetDyn<R> as *const W) })
+                    S::from_widget(unsafe{ &*(r as *const WidgetDyn<D> as *const W) })
                 } else {
                     panic!("widget type replaced")
                 }
@@ -341,7 +354,7 @@ impl<'a, R, S> WidgetInfo<'a, R, S>
         self.borrow()
     }
 
-    pub fn erase_subtype(self) -> WidgetInfo<'a, R> {
+    pub fn erase_subtype(self) -> WidgetInfo<'a, D> {
         WidgetInfo {
             ident: self.ident,
             index: self.index,
@@ -353,11 +366,11 @@ impl<'a, R, S> WidgetInfo<'a, R, S>
     }
 }
 
-impl<'a, R, S> WidgetInfoMut<'a, R, S>
-    where R: Renderer,
+impl<'a, D, S> WidgetInfoMut<'a, D, S>
+    where for<'d> D: DisplayEngine<'d>,
           S: ?Sized
 {
-    pub fn new<W>(ident: WidgetIdent, index: usize, widget: &'a mut W) -> WidgetInfoMut<'a, R, S>
+    pub fn new<W>(ident: WidgetIdent, index: usize, widget: &'a mut W) -> WidgetInfoMut<'a, D, S>
         where W: Widget,
               S: WidgetSubtype<W>
     {
@@ -369,9 +382,9 @@ impl<'a, R, S> WidgetInfoMut<'a, R, S>
                 if r.as_ref().type_id() == TypeId::of::<W>() {
                     match r {
                         Reference::Ref(r) =>
-                            Reference::Ref(S::from_widget(unsafe{ &*(r as *const WidgetDyn<R> as *const W) })),
+                            Reference::Ref(S::from_widget(unsafe{ &*(r as *const WidgetDyn<D> as *const W) })),
                         Reference::Mut(r) =>
-                            Reference::Mut(S::from_widget_mut(unsafe{ &mut *(r as *mut WidgetDyn<R> as *mut W) }))
+                            Reference::Mut(S::from_widget_mut(unsafe{ &mut *(r as *mut WidgetDyn<D> as *mut W) }))
                     }
                 } else {
                     panic!("widget type replaced")
@@ -396,7 +409,7 @@ impl<'a, R, S> WidgetInfoMut<'a, R, S>
         self.borrow_mut()
     }
 
-    pub fn erase_subtype(self) -> WidgetInfoMut<'a, R> {
+    pub fn erase_subtype(self) -> WidgetInfoMut<'a, D> {
         WidgetInfoMut {
             ident: self.ident,
             index: self.index,
@@ -409,8 +422,8 @@ impl<'a, R, S> WidgetInfoMut<'a, R, S>
     }
 }
 
-impl<'a, R, S:> Borrow<S> for WidgetInfo<'a, R, S>
-    where R: Renderer,
+impl<'a, D, S:> Borrow<S> for WidgetInfo<'a, D, S>
+    where for<'d> D: DisplayEngine<'d>,
           S: ?Sized
 {
     fn borrow(&self) -> &S {
@@ -418,8 +431,8 @@ impl<'a, R, S:> Borrow<S> for WidgetInfo<'a, R, S>
     }
 }
 
-impl<'a, R, S> Borrow<S> for WidgetInfoMut<'a, R, S>
-    where R: Renderer,
+impl<'a, D, S> Borrow<S> for WidgetInfoMut<'a, D, S>
+    where for<'d> D: DisplayEngine<'d>,
           S: ?Sized
 {
     fn borrow(&self) -> &S {
@@ -430,8 +443,8 @@ impl<'a, R, S> Borrow<S> for WidgetInfoMut<'a, R, S>
     }
 }
 
-impl<'a, R, S> BorrowMut<S> for WidgetInfoMut<'a, R, S>
-    where R: Renderer,
+impl<'a, D, S> BorrowMut<S> for WidgetInfoMut<'a, D, S>
+    where for<'d> D: DisplayEngine<'d>,
           S: ?Sized
 {
     fn borrow_mut(&mut self) -> &mut S {

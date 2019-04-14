@@ -5,7 +5,7 @@
 use std::ops::RangeInclusive;
 use derin_core::{
     widget::{WidgetTag, WidgetRenderable, Widget},
-    render::{Renderer, RendererLayout, SubFrame, WidgetTheme},
+    render::{DisplayEngine, RendererLayout, SubFrame},
 };
 use derin_common_types::layout::SizeBounds;
 use crate::{

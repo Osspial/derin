@@ -5,10 +5,10 @@
 use derin_core::{
     event::{EventOps, InputState, WidgetEventSourced},
     widget::{WidgetTag, WidgetRenderable, Widget},
-    render::{Renderer, WidgetTheme},
+    render::{DisplayEngine},
 };
 use crate::widgets::{
-    Contents,
+    Content,
     assistants::toggle_button::{Toggle, ToggleOnClickHandler},
 };
 use cgmath_geometry::{D2, rect::BoundBox};
@@ -38,14 +38,14 @@ impl<H: CheckToggleHandler> CheckBox<H> {
     /// Creates a new `CheckBox` with the given checked state, contents, and [toggle handler].
     ///
     /// [toggle handler]: ./trait.CheckToggleHandler.html
-    pub fn new(checked: bool, contents: Contents, handler: H) -> CheckBox<H> {
+    pub fn new(checked: bool, contents: Content, handler: H) -> CheckBox<H> {
         CheckBox {
             toggle: Toggle::new(checked, contents, handler, CheckBoxTheme(())),
         }
     }
 
     /// Retrieves the contents of the checkbox.
-    pub fn contents(&self) -> &Contents {
+    pub fn contents(&self) -> &Content {
         self.toggle.contents()
     }
 
@@ -53,7 +53,7 @@ impl<H: CheckToggleHandler> CheckBox<H> {
     ///
     /// Calling this function forces the checkbox to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
-    pub fn contents_mut(&mut self) -> &mut Contents {
+    pub fn contents_mut(&mut self) -> &mut Content {
         self.toggle.contents_mut()
     }
 

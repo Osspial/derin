@@ -8,7 +8,7 @@ extern crate png;
 use derin::{LoopFlow, Window, WindowConfig};
 use derin::layout::{Align, Align2, Margins, SizeBounds, LayoutHorizontal};
 use derin::container::SingleContainer;
-use derin::widgets::{Contents, Group, Label};
+use derin::widgets::{Content, Group, Label};
 use derin::theme::{ThemeWidget, Image, RescaleRules};
 use derin::theme::color::Rgba;
 use derin::geometry::rect::DimsBox;
@@ -17,7 +17,7 @@ use std::rc::Rc;
 
 fn main() {
     let group = Group::new(
-        SingleContainer::new(Label::new(Contents::Image("AddIcon".to_string()))),
+        SingleContainer::new(Label::new(Content::Image("AddIcon".to_string()))),
         LayoutHorizontal::new(Margins::new(8, 8, 8, 8), Default::default())
     );
     let mut theme = derin::theme::Theme::default();

@@ -11,7 +11,7 @@ pub(crate) use self::{
     widget_stack::{WidgetPath, OffsetWidgetPath},
 };
 use crate::{
-    render::Renderer,
+    render::DisplayEngine,
     widget::{WidgetDyn, WidgetId, WidgetIdent},
     update_state::UpdateStateCell,
 };
@@ -21,7 +21,7 @@ use self::{
     virtual_widget_tree::{WidgetInsertError, VirtualWidgetTree}
 };
 
-pub(crate) type OffsetWidgetScanPath<'a, R> = WidgetPath<'a, OffsetWidgetScan<'a, R>>;
+pub(crate) type OffsetWidgetScanPath<'a, D> = WidgetPath<'a, OffsetWidgetScan<'a, D>>;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Relation {
@@ -32,19 +32,23 @@ pub enum Relation {
     ChildIndex(usize)
 }
 
-pub(crate) struct WidgetTraverserBase<R: Renderer> {
-    stack_cache: WidgetStackCache<R>,
+pub(crate) struct WidgetTraverserBase<D>
+    where for<'d> D: DisplayEngine<'d>
+{
+    stack_cache: WidgetStackCache<D>,
     virtual_widget_tree: VirtualWidgetTree,
 }
 
-pub(crate) struct WidgetTraverser<'a, R: Renderer> {
-    stack: WidgetStack<'a, R>,
+pub(crate) struct WidgetTraverser<'a, D>
+    where for<'d> D: DisplayEngine<'d>
+{
+    stack: WidgetStack<'a, D>,
     virtual_widget_tree: &'a mut VirtualWidgetTree,
     update_state: Rc<UpdateStateCell>,
 }
 
-impl<R> WidgetTraverserBase<R>
-    where R: Renderer
+impl<D> WidgetTraverserBase<D>
+    where for<'d> D: DisplayEngine<'d>
 {
     pub fn new(root_id: WidgetId) -> Self {
         WidgetTraverserBase {
@@ -53,7 +57,7 @@ impl<R> WidgetTraverserBase<R>
         }
     }
 
-    pub fn with_root_ref<'a>(&'a mut self, root: &'a mut dyn WidgetDyn<R>, update_state: Rc<UpdateStateCell>) -> WidgetTraverser<'a, R> {
+    pub fn with_root_ref<'a>(&'a mut self, root: &'a mut dyn WidgetDyn<D>, update_state: Rc<UpdateStateCell>) -> WidgetTraverser<'a, D> {
         // This isn't a necessary limitation with the code, but the current code assumes this assertion
         // holds.
         assert_eq!(root.widget_id(), self.virtual_widget_tree.root_id());
@@ -66,10 +70,10 @@ impl<R> WidgetTraverserBase<R>
     }
 }
 
-impl<R> WidgetTraverser<'_, R>
-    where R: Renderer
+impl<D> WidgetTraverser<'_, D>
+    where for<'d> D: DisplayEngine<'d>
 {
-    pub fn get_widget(&mut self, id: WidgetId) -> Option<OffsetWidgetScanPath<'_, R>> {
+    pub fn get_widget(&mut self, id: WidgetId) -> Option<OffsetWidgetScanPath<'_, D>> {
         // Move the stack top to the desired widget.
         match self.get_widget_with_tree(id) {
             Some(_) => (),
@@ -88,7 +92,7 @@ impl<R> WidgetTraverser<'_, R>
         Some(stack.top_mut().map(move |w| OffsetWidgetScan::new(w, virtual_widget_tree, update_state)))
     }
 
-    pub fn get_widget_relation(&mut self, id: WidgetId, relation: Relation) -> Option<OffsetWidgetScanPath<'_, R>> {
+    pub fn get_widget_relation(&mut self, id: WidgetId, relation: Relation) -> Option<OffsetWidgetScanPath<'_, D>> {
         let relation_id = match relation {
             Relation::Parent => {
                 self.virtual_widget_tree.parent(id).ok()?
@@ -107,7 +111,7 @@ impl<R> WidgetTraverser<'_, R>
         self.get_widget(relation_id)
     }
 
-    fn get_widget_with_tree(&mut self, id: WidgetId) -> Option<OffsetWidgetPath<'_, R>> {
+    fn get_widget_with_tree(&mut self, id: WidgetId) -> Option<OffsetWidgetPath<'_, D>> {
         self.stack.move_to_path_rev(self.virtual_widget_tree.path_reversed(id)?)
     }
 
@@ -148,7 +152,7 @@ impl<R> WidgetTraverser<'_, R>
 
     /// Crawl over all widgets in the tree. Any operations performed on the widget *should not*
     /// modify the structure of the child widgets.
-    pub fn crawl_widgets(&mut self, mut for_each: impl FnMut(OffsetWidgetPath<'_, R>)) {
+    pub fn crawl_widgets(&mut self, mut for_each: impl FnMut(OffsetWidgetPath<'_, D>)) {
         let stack = &mut self.stack;
 
         stack.truncate(1);
@@ -176,7 +180,7 @@ impl<R> WidgetTraverser<'_, R>
         }
     }
 
-    pub fn crawl_widget_children(&mut self, parent: WidgetId, mut for_each: impl FnMut(OffsetWidgetPath<'_, R>)) {
+    pub fn crawl_widget_children(&mut self, parent: WidgetId, mut for_each: impl FnMut(OffsetWidgetPath<'_, D>)) {
         if let None = self.get_widget_with_tree(parent) {
             return;
         }
@@ -222,10 +226,10 @@ impl<R> WidgetTraverser<'_, R>
     }
 }
 
-impl<R> WidgetTraverser<'_, R>
-    where R: Renderer
+impl<D> WidgetTraverser<'_, D>
+    where for<'d> D: DisplayEngine<'d>
 {
-    fn scan_for_widget(&mut self, widget_id: WidgetId) -> Option<OffsetWidgetPath<R>> {
+    fn scan_for_widget(&mut self, widget_id: WidgetId) -> Option<OffsetWidgetPath<D>> {
         let stack = &mut self.stack;
 
         stack.truncate(1);

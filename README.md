@@ -26,7 +26,7 @@ directory.
 extern crate derin;
 
 use derin::{Window, WindowConfig, LoopFlow};
-use derin::widgets::{Button, Contents};
+use derin::widgets::{Button, Content};
 use derin::geometry::DimsBox;
 
 fn main() {
@@ -42,7 +42,7 @@ fn main() {
         },
         // Create a button that displays "Hello World" to the user, and passes `print_string`
         // to the UI's action loop.
-        Button::new(Contents::Text("Hello, World!".to_string()), Some(print_string)),
+        Button::new(Content::Text("Hello, World!".to_string()), Some(print_string)),
         // Set the theme to the default theme.
         derin::theme::Theme::default()
     ).unwrap() };

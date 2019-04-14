@@ -6,7 +6,7 @@ use std::mem;
 
 use crate::{
     offset_widget::OffsetWidget,
-    render::Renderer,
+    render::DisplayEngine,
     widget::{WidgetDyn, WidgetId, WidgetIdent, WidgetInfoMut, ROOT_IDENT},
     widget_traverser::virtual_widget_tree::PathRevItem,
 };
@@ -16,14 +16,18 @@ use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 
 // TODO: GET CODE REVIEWED FOR SAFETY
 
-struct StackElement<R: Renderer> {
-    widget: *mut (WidgetDyn<R>),
+struct StackElement<D>
+    where for<'d> D: DisplayEngine<'d>
+{
+    widget: *mut (WidgetDyn<D>),
     rectangles: Option<ElementRects>,
     index: usize,
     widget_id: WidgetId
 }
 
-impl<R: Renderer> std::fmt::Debug for StackElement<R> {
+impl<D> std::fmt::Debug for StackElement<D>
+    where for<'d> D: DisplayEngine<'d>
+{
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         f.debug_struct("StackElement")
             .field("rectangles", &self.rectangles)
@@ -39,19 +43,23 @@ struct ElementRects {
     bounds_clipped: Option<BoundBox<D2, i32>>
 }
 
-pub(crate) struct WidgetStackCache<R: Renderer> {
-    vec: Vec<StackElement<R>>,
+pub(crate) struct WidgetStackCache<D>
+    where for<'d> D: DisplayEngine<'d>
+{
+    vec: Vec<StackElement<D>>,
     ident_vec: Vec<WidgetIdent>
 }
 
-pub(crate) struct WidgetStack<'a, R: 'a + Renderer> {
-    vec: &'a mut Vec<StackElement<R>>,
+pub(crate) struct WidgetStack<'a, D>
+    where for<'d> D: DisplayEngine<'d>
+{
+    vec: &'a mut Vec<StackElement<D>>,
     ident_vec: &'a mut Vec<WidgetIdent>,
     clip_rect: Option<BoundBox<D2, i32>>,
     top_parent_offset: Vector2<i32>,
 }
 
-pub(crate) type OffsetWidgetPath<'a, R> = WidgetPath<'a, OffsetWidget<'a, R>>;
+pub(crate) type OffsetWidgetPath<'a, D> = WidgetPath<'a, OffsetWidget<'a, D>>;
 
 pub(crate) struct WidgetPath<'a, W> {
     pub widget: W,
@@ -60,15 +68,17 @@ pub(crate) struct WidgetPath<'a, W> {
     pub widget_id: WidgetId
 }
 
-impl<R: Renderer> WidgetStackCache<R> {
-    pub fn new() -> WidgetStackCache<R> {
+impl<D> WidgetStackCache<D>
+    where for<'d> D: DisplayEngine<'d>
+{
+    pub fn new() -> WidgetStackCache<D> {
         WidgetStackCache {
             vec: Vec::new(),
             ident_vec: Vec::new(),
         }
     }
 
-    pub fn use_cache<'a>(&'a mut self, widget: &mut WidgetDyn<R>) -> WidgetStack<'a, R> {
+    pub fn use_cache<'a>(&'a mut self, widget: &mut WidgetDyn<D>) -> WidgetStack<'a, D> {
         let mut cache_swap = Vec::new();
         mem::swap(&mut cache_swap, &mut self.vec);
 
@@ -92,9 +102,11 @@ impl<R: Renderer> WidgetStackCache<R> {
     }
 }
 
-impl<'a, R: Renderer> WidgetStack<'a, R> {
+impl<'a, D> WidgetStack<'a, D>
+    where for<'d> D: DisplayEngine<'d>
+{
     #[inline]
-    pub fn top(&self) -> WidgetPath<'_, &'_ WidgetDyn<R>> {
+    pub fn top(&self) -> WidgetPath<'_, &'_ WidgetDyn<D>> {
         let (widget, widget_id) = self.vec.last().map(|n| unsafe{ (&*n.widget, n.widget_id) }).unwrap();
         WidgetPath {
             widget: widget,
@@ -105,7 +117,7 @@ impl<'a, R: Renderer> WidgetStack<'a, R> {
     }
 
     #[inline]
-    pub fn top_mut(&mut self) -> OffsetWidgetPath<R> {
+    pub fn top_mut(&mut self) -> OffsetWidgetPath<D> {
         let (widget, widget_id) = self.vec.last_mut().map(|n| unsafe{ (&mut *n.widget, n.widget_id) }).unwrap();
         OffsetWidgetPath {
             widget: OffsetWidget::new(widget, self.top_parent_offset, self.clip_rect),
@@ -167,7 +179,7 @@ impl<'a, R: Renderer> WidgetStack<'a, R> {
     }
 
     #[inline]
-    pub fn widgets(&self) -> impl '_ + Iterator<Item=WidgetPath<'_, &'_ WidgetDyn<R>>> + DoubleEndedIterator + ExactSizeIterator {
+    pub fn widgets(&self) -> impl '_ + Iterator<Item=WidgetPath<'_, &'_ WidgetDyn<D>>> + DoubleEndedIterator + ExactSizeIterator {
         let path = &self.ident_vec[..];
         self.vec.iter().enumerate().map(move |(i, n)| WidgetPath {
             widget: unsafe{ &*n.widget },
@@ -184,8 +196,8 @@ impl<'a, R: Renderer> WidgetStack<'a, R> {
     // }
 
     #[inline]
-    pub fn try_push<G>(&mut self, with_top: G) -> Option<OffsetWidgetPath<'_, R>>
-        where G: FnOnce(&'_ mut dyn WidgetDyn<R>) -> Option<WidgetInfoMut<R>>
+    pub fn try_push<G>(&mut self, with_top: G) -> Option<OffsetWidgetPath<'_, D>>
+        where G: FnOnce(&'_ mut dyn WidgetDyn<D>) -> Option<WidgetInfoMut<D>>
     {
         let mut old_top = self.top_mut();
         let top_rect = old_top.widget.rect();
@@ -198,7 +210,7 @@ impl<'a, R: Renderer> WidgetStack<'a, R> {
             let new_top_index = new_top_summary.index;
             let new_top_ident = new_top_summary.ident.clone();
 
-            assert_ne!(new_top_widget, self.top_mut().widget.inner_mut() as *mut WidgetDyn<R>);
+            assert_ne!(new_top_widget, self.top_mut().widget.inner_mut() as *mut WidgetDyn<D>);
             {
                 let old_top = self.vec.last_mut().unwrap();
                 let top_clip = self.clip_rect.and_then(|r| r.intersect_rect(top_rect));
@@ -224,7 +236,7 @@ impl<'a, R: Renderer> WidgetStack<'a, R> {
         }
     }
 
-    pub fn move_to_path_rev(&mut self, path_rev: impl Iterator<Item=PathRevItem> + ExactSizeIterator) -> Option<OffsetWidgetPath<'_, R>> {
+    pub fn move_to_path_rev(&mut self, path_rev: impl Iterator<Item=PathRevItem> + ExactSizeIterator) -> Option<OffsetWidgetPath<'_, D>> {
         let new_path_len = path_rev.len();
         self.ident_vec.resize(new_path_len, WidgetIdent::Num(0));
 
@@ -291,7 +303,7 @@ impl<'a, R: Renderer> WidgetStack<'a, R> {
     }
 
     #[inline]
-    pub fn pop(&mut self) -> Option<&mut WidgetDyn<R>> {
+    pub fn pop(&mut self) -> Option<&mut WidgetDyn<D>> {
         // Ensure the base is never popped
         if self.vec.len() == 1 {
             return None;

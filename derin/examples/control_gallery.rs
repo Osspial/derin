@@ -48,17 +48,17 @@ impl SliderHandler for SliderH {
 fn main() {
     let group = Group::new(
         BasicContainer {
-            button: Button::new(Contents::Text("New Button".to_string()), Some(GalleryEvent::NewButton)),
+            button: Button::new(Content::Text("New Button".to_string()), Some(GalleryEvent::NewButton)),
             nested: ScrollBox::new(Group::new(
                 NestedContainer {
-                    label: Label::new(Contents::Text("Nested Container".to_string())),
+                    label: Label::new(Content::Text("Nested Container".to_string())),
                     slider: Slider::new(0.0, 1.0, 0.0, 100.0, SliderH),
                     progress_bar: ProgressBar::new(0.0, 0.0, 100.0),
-                    check_box: CheckBox::new(true, Contents::Text("Checkable".to_string()), Some(GalleryEvent::Checked)),
+                    check_box: CheckBox::new(true, Content::Text("Checkable".to_string()), Some(GalleryEvent::Checked)),
                     radio_buttons: RadioButtonList::new(
                         vec![
-                            RadioButton::new(true, Contents::Text("Radio 1".to_string())),
-                            RadioButton::new(false, Contents::Text("Radio 2".to_string()))
+                            RadioButton::new(true, Content::Text("Radio 1".to_string())),
+                            RadioButton::new(false, Content::Text("Radio 2".to_string()))
                         ],
                         LayoutVertical::new(Margins::new(0, 2, 0, 8), Default::default())
                     ),
@@ -68,8 +68,8 @@ fn main() {
                 LayoutVertical::new(Margins::new(8, 8, 8, 8), Default::default())
             )),
             tabs: TabList::new(vec![
-                TabPage::new("Tab 1".to_string(), Button::new(Contents::Text("Tab 1".to_string()), None)),
-                TabPage::new("Tab No.2".to_string(), Button::new(Contents::Text("Tab 2".to_string()), None)),
+                TabPage::new("Tab 1".to_string(), Button::new(Content::Text("Tab 1".to_string()), None)),
+                TabPage::new("Tab No.2".to_string(), Button::new(Content::Text("Tab 2".to_string()), None)),
             ])
         },
         LayoutHorizontal::new(Margins::new(8, 8, 8, 8), Default::default())

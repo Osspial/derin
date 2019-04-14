@@ -1,0 +1,11 @@
+[package]
+name = "derin_display_engines"
+version = "0.1.0"
+authors = ["Osspial <osspial@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+derin_core = {path = "../derin_core"}
+derin_common_types = {path = "../derin_common_types"}
+serde = {version = "1", features = ["derive"]}
+cgmath-geometry = {git = "https://github.com/Osspial/cgmath-geometry.git"}

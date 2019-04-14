@@ -2,10 +2,10 @@ use derin_core::{
     LoopFlow,
     event::{EventOps, InputState, WidgetEvent, WidgetEventSourced, MouseHoverChange},
     widget::{Parent, Widget, WidgetInfo, WidgetInfoMut, WidgetIdent, WidgetTag, WidgetRenderable},
-    render::{Renderer, RendererLayout, SubFrame, WidgetTheme},
+    render::{DisplayEngine, RendererLayout, SubFrame},
 };
 use crate::widgets::{
-    Contents, Label,
+    Content, Label,
     assistants::ButtonState,
 };
 use crate::cgmath::Point2;
@@ -54,7 +54,7 @@ impl<H, T> Toggle<H, T>
     /// Creates a new `Toggle` with the given selected state, contents, and [toggle handler].
     ///
     /// [toggle handler]: ./trait.ToggleOnClickHandler.html
-    pub fn new(selected: bool, contents: Contents, handler: H, theme: T) -> Toggle<H, T> {
+    pub fn new(selected: bool, contents: Content, handler: H, theme: T) -> Toggle<H, T> {
         Toggle {
             widget_tag: WidgetTag::new(),
             rect: BoundBox::new2(0, 0, 0, 0),
@@ -74,7 +74,7 @@ impl<H, T> Toggle<H, T>
     }
 
     /// Retrieves the contents of the toggle.
-    pub fn contents(&self) -> &Contents {
+    pub fn contents(&self) -> &Content {
         self.label.contents()
     }
 
@@ -82,7 +82,7 @@ impl<H, T> Toggle<H, T>
     ///
     /// Calling this function forces the toggle to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
-    pub fn contents_mut(&mut self) -> &mut Contents {
+    pub fn contents_mut(&mut self) -> &mut Content {
         self.label.contents_mut()
     }
 

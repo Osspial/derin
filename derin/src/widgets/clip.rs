@@ -6,7 +6,7 @@ use derin_core::{
     LoopFlow,
     event::{EventOps, WidgetEventSourced, InputState},
     widget::{WidgetIdent, WidgetRenderable, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
-    render::{Renderer, SubFrame, WidgetTheme},
+    render::{DisplayEngine, SubFrame},
 };
 
 use crate::cgmath::EuclideanSpace;

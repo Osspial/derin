@@ -5,9 +5,10 @@
 use derin_core::{
     event::{EventOps, WidgetEventSourced, InputState},
     widget::{WidgetTag, WidgetRenderable, Widget},
-    render::{Renderer, RendererLayout, SubFrame, WidgetTheme},
+    render::DisplayEngine
 };
-use crate::widgets::Contents;
+use derin_display_engines::{LayoutContent, RenderContent};
+use crate::widgets::Content;
 
 use cgmath_geometry::{D2, rect::BoundBox};
 use derin_common_types::layout::SizeBounds;
@@ -20,12 +21,15 @@ use derin_common_types::layout::SizeBounds;
 pub struct Label {
     widget_tag: WidgetTag,
     bounds: BoundBox<D2, i32>,
-    contents: Contents,
+    contents: Content,
     size_bounds: SizeBounds,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct LabelTheme(());
+#[non_exhaustive]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct LabelContent<'a> {
+    pub contents: &'a Content,
+}
 
 impl WidgetTheme for LabelTheme {
     type Fallback = !;
@@ -34,7 +38,7 @@ impl WidgetTheme for LabelTheme {
 
 impl Label {
     /// Create a new label with the given contents.
-    pub fn new(contents: Contents) -> Label {
+    pub fn new(contents: Content) -> Label {
         Label {
             widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
@@ -44,7 +48,7 @@ impl Label {
     }
 
     /// Retrieves the contents of the label.
-    pub fn contents(&self) -> &Contents {
+    pub fn contents(&self) -> &Content {
         &self.contents
     }
 
@@ -52,7 +56,7 @@ impl Label {
     ///
     /// Calling this function forces the label to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
-    pub fn contents_mut(&mut self) -> &mut Contents {
+    pub fn contents_mut(&mut self) -> &mut Content {
         self.widget_tag
             .request_redraw()
             .request_relayout();
@@ -90,22 +94,22 @@ impl Widget for Label {
     }
 }
 
-impl<R> WidgetRenderable<R> for Label
-    where R: Renderer
+impl<D> WidgetRenderable<D> for Label
+    where D: DisplayEngine,
+          D::Renderer: RenderContent,
+          D::Layout: LayoutContent,
 {
-    type Theme = LabelTheme;
-    fn theme(&self) -> LabelTheme {
-        LabelTheme(())
-    }
-
     fn render(&mut self, frame: &mut R::SubFrame) {
         frame.render_laid_out_content();
     }
 
     fn update_layout(&mut self, layout: &mut R::Layout) {
+        let content = LabelContent {
+
+        }
         match self.contents {
-            Contents::Text(ref s) => layout.prepare_string(s),
-            Contents::Icon(ref i) => layout.prepare_icon(i),
+            Content::Text(ref s) => layout.prepare_string(s),
+            Content::Icon(ref i) => layout.prepare_icon(i),
         }
 
         let result = layout.finish();

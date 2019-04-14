@@ -19,8 +19,8 @@ use std::{
 /// `UpdateState` handle that gets stored in a `WidgetTag`. Used to access and modify global update
 /// state.
 #[derive(Debug)]
-pub(crate) enum UpdateStateShared<R = Weak<UpdateStateCell>> {
-    Occupied(R),
+pub(crate) enum UpdateStateShared<D = Weak<UpdateStateCell>> {
+    Occupied(D),
     Vacant(UpdateStateVacant)
 }
 
@@ -92,8 +92,8 @@ impl UpdateStateShared {
     /// Try to upgrade the `Weak` reference to a full `Rc`. If the `Weak` points to something that
     /// no longer exists (because the primary `UpdateState` was dropped), change self to `Vacant`
     /// and return `Vacant`.
-    fn upgrade<R>(&mut self, f: impl FnOnce(&mut UpdateStateShared<Rc<UpdateStateCell>>) -> R) -> R {
-        let ret: R;
+    fn upgrade<D>(&mut self, f: impl FnOnce(&mut UpdateStateShared<Rc<UpdateStateCell>>) -> D) -> D {
+        let ret: D;
 
         match self {
             UpdateStateShared::Vacant(ref mut v) => {

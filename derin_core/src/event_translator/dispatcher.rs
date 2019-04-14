@@ -5,7 +5,7 @@
 use crate::{
     cgmath::Point2,
     event::{FocusChange, FocusSource, WidgetEvent},
-    render::Renderer,
+    render::DisplayEngine,
     widget::{WidgetId, WidgetIdent},
     widget_traverser::{Relation, WidgetTraverser, OffsetWidgetScanPath},
 };
@@ -59,12 +59,12 @@ impl EventDispatcher {
         )
     }
 
-    pub fn dispatch_events<R>(
+    pub fn dispatch_events<D>(
         &mut self,
-        widget_traverser: &mut WidgetTraverser<R>,
-        mut f: impl FnMut(&mut Self, OffsetWidgetScanPath<R>, DispatchableEvent)
+        widget_traverser: &mut WidgetTraverser<D>,
+        mut f: impl FnMut(&mut Self, OffsetWidgetScanPath<D>, DispatchableEvent)
     )
-        where R: Renderer
+        where for<'d> D: DisplayEngine<'d>
     {
         while let Some((destination, event)) = self.events.pop_front() {
             let widget_opt = {

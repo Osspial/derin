@@ -8,7 +8,7 @@ use crate::{
     WindowEvent, InputState, LoopFlow,
     cgmath::{Vector2},
     event::{EventOps, FocusChange, FocusSource, MouseHoverChange, WidgetEvent, WidgetEventSourced},
-    render::Renderer,
+    render::DisplayEngine,
     widget_traverser::{Relation, WidgetTraverser, OffsetWidgetScanPath},
     update_state::{UpdateStateCell},
     offset_widget::OffsetWidget,
@@ -22,10 +22,10 @@ pub(crate) struct EventTranslator
     inner: TranslatorInner
 }
 
-pub(crate) struct TranslatorActive<'a, 'b, R>
-    where R: Renderer + 'static
+pub(crate) struct TranslatorActive<'a, 'b, D>
+    where for<'d> D: DisplayEngine<'d>
 {
-    widget_traverser: &'a mut WidgetTraverser<'b, R>,
+    widget_traverser: &'a mut WidgetTraverser<'b, D>,
     inner: &'a mut TranslatorInner,
     input_state: &'a mut InputState,
     update_state: Rc<UpdateStateCell>,
@@ -45,12 +45,14 @@ impl EventTranslator
         }
     }
 
-    pub fn with_data<'a, 'b, R: Renderer>(
+    pub fn with_data<'a, 'b, D>(
         &'a mut self,
-        widget_traverser: &'a mut WidgetTraverser<'b, R>,
+        widget_traverser: &'a mut WidgetTraverser<'b, D>,
         input_state: &'a mut InputState,
         update_state: Rc<UpdateStateCell>,
-    ) -> TranslatorActive<'a, 'b, R> {
+    ) -> TranslatorActive<'a, 'b, D>
+        where for<'d> D: DisplayEngine<'d>
+    {
         TranslatorActive {
             widget_traverser,
             inner: &mut self.inner,
@@ -60,8 +62,8 @@ impl EventTranslator
     }
 }
 
-impl<R> TranslatorActive<'_, '_, R>
-    where R: Renderer + 'static
+impl<D> TranslatorActive<'_, '_, D>
+    where for<'d> D: DisplayEngine<'d> + 'static
 {
     pub fn translate_window_event(&mut self, window_event: WindowEvent) {
         use self::WindowEvent::*;
@@ -351,7 +353,7 @@ impl<R> TranslatorActive<'_, '_, R>
                         };
                         let (contains_new, contains_old) = (widget_rect.contains(new_pos), widget_rect.contains(old_pos));
 
-                        let mut send_exiting_from_child = |widget: &mut OffsetWidget<'_, R>, in_widget| {
+                        let mut send_exiting_from_child = |widget: &mut OffsetWidget<'_, D>, in_widget| {
                             if let Some(child_ident) = exiting_from_child.clone() {
                                 perform_event_ops(widget.on_widget_event(
                                     WidgetEventSourced::This(WidgetEvent::MouseMove {

@@ -7,7 +7,7 @@
 use crate::{
     LoopFlow,
     event::{EventOps, InputState, WidgetEventSourced},
-    render::{Renderer, WidgetRenderer, WidgetTheme},
+    render::DisplayEngine,
     widget::{Parent, WidgetIdent, Widget, WidgetRenderable, WidgetId, WidgetTag, WidgetInfo, WidgetInfoMut},
 };
 use arrayvec::ArrayVec;
@@ -25,7 +25,9 @@ const CHILD_BATCH_SIZE: usize = 24;
 pub type ForEachSummary<'a, W> = &'a mut FnMut(ArrayVec<[W; CHILD_BATCH_SIZE]>) -> LoopFlow;
 
 /// Trait used internally to aid with dynamic dispatch.
-pub(crate) trait WidgetDyn<R: Renderer>: 'static {
+pub(crate) trait WidgetDyn<D>: 'static
+    where for<'d> D: DisplayEngine<'d>
+{
     fn widget_tag(&self) -> &WidgetTag;
     fn widget_id(&self) -> WidgetId;
 
@@ -42,16 +44,16 @@ pub(crate) trait WidgetDyn<R: Renderer>: 'static {
 
     // Parent methods
     fn num_children(&self) -> usize;
-    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, R>>;
-    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, R>>;
-    fn child_by_index(&self, index: usize) -> Option<WidgetInfo<'_, R>>;
-    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetInfoMut<'_, R>>;
-    fn children<'a>(&'a self, for_each: ForEachSummary<WidgetInfo<'a, R>>);
-    fn children_mut<'a>(&'a mut self, for_each: ForEachSummary<WidgetInfoMut<'a, R>>);
+    fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, D>>;
+    fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, D>>;
+    fn child_by_index(&self, index: usize) -> Option<WidgetInfo<'_, D>>;
+    fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetInfoMut<'_, D>>;
+    fn children<'a>(&'a self, for_each: ForEachSummary<WidgetInfo<'a, D>>);
+    fn children_mut<'a>(&'a mut self, for_each: ForEachSummary<WidgetInfoMut<'a, D>>);
 
     // WidgetRenderable methods
-    fn render(&mut self, params: RenderParameters<R>) -> Result<(), RenderError>;
-    fn update_layout(&mut self, layout: &mut R::Layout);
+    fn render(&mut self, renderer: <D as DisplayEngine<'_>>::Renderer);
+    fn update_layout(&mut self, layout: <D as DisplayEngine<'_>>::Layout);
 
     fn type_id(&self) -> TypeId;
     fn to_widget(&self) -> &Widget;
@@ -59,10 +61,10 @@ pub(crate) trait WidgetDyn<R: Renderer>: 'static {
 }
 
 macro_rules! isolate_params {
-    ($fn:ident(&               $self:ident $(, $ident:ident: $ty:ty)*)) => (<Self as TypeMatch<R>>::$fn($self, $($ident),*));
-    ($fn:ident(&mut            $self:ident $(, $ident:ident: $ty:ty)*)) => (<Self as TypeMatch<R>>::$fn($self, $($ident),*));
-    ($fn:ident(&$($lt:tt)?     $self:ident $(, $ident:ident: $ty:ty)*)) => (<Self as TypeMatch<R>>::$fn($self, $($ident),*));
-    ($fn:ident(&$($lt:tt)? mut $self:ident $(, $ident:ident: $ty:ty)*)) => (<Self as TypeMatch<R>>::$fn($self, $($ident),*));
+    ($fn:ident(&               $self:ident $(, $ident:ident: $ty:ty)*)) => (<Self as TypeMatch<D>>::$fn($self, $($ident),*));
+    ($fn:ident(&mut            $self:ident $(, $ident:ident: $ty:ty)*)) => (<Self as TypeMatch<D>>::$fn($self, $($ident),*));
+    ($fn:ident(&$($lt:tt)?     $self:ident $(, $ident:ident: $ty:ty)*)) => (<Self as TypeMatch<D>>::$fn($self, $($ident),*));
+    ($fn:ident(&$($lt:tt)? mut $self:ident $(, $ident:ident: $ty:ty)*)) => (<Self as TypeMatch<D>>::$fn($self, $($ident),*));
 }
 
 macro_rules! type_match {
@@ -75,13 +77,13 @@ macro_rules! type_match {
         )+
     ) => {$(
         fn $fn$(<$($generic),*>)?($($param)*) $(-> $ret)? {
-            trait TypeMatch<R>
-                where R: Renderer
+            trait TypeMatch<D>
+                where for<'d> D: DisplayEngine<'d>
             {
                 fn type_match$(<$($generic),*>)?($($param)*) $(-> $ret)?;
             }
-            impl<R, W> TypeMatch<R> for W
-                where R: Renderer
+            impl<D, W> TypeMatch<D> for W
+                where for<'d> D: DisplayEngine<'d>
             {
                 #[inline(always)]
                 #[allow(unused_variables)]
@@ -89,8 +91,8 @@ macro_rules! type_match {
                     $default
                 }
             }
-            impl<R, W> TypeMatch<R> for W
-                where R: Renderer,
+            impl<D, W> TypeMatch<D> for W
+                where for<'d> D: DisplayEngine<'d>,
                       W: $($bounds)+
             {
                 #[inline(always)]
@@ -104,9 +106,9 @@ macro_rules! type_match {
     )+};
 }
 
-impl<W, R> WidgetDyn<R> for W
+impl<W, D> WidgetDyn<D> for W
     where W: Widget,
-          R: Renderer
+          for<'d> D: DisplayEngine<'d>
 {
     fn widget_tag(&self) -> &WidgetTag {
         <Self as Widget>::widget_tag(self)
@@ -137,28 +139,28 @@ impl<W, R> WidgetDyn<R> for W
             default => 0,
             specialized(Parent) => <Self as Parent>::num_children(self)
         }
-        fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, R>> {
+        fn child(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, D>> {
             default => None,
-            specialized(Parent) => <Self as Parent>::framed_child::<R>(self, widget_ident)
+            specialized(Parent) => <Self as Parent>::framed_child::<D>(self, widget_ident)
         }
-        fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, R>> {
+        fn child_mut(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, D>> {
             default => None,
-            specialized(Parent) => <Self as Parent>::framed_child_mut::<R>(self, widget_ident)
+            specialized(Parent) => <Self as Parent>::framed_child_mut::<D>(self, widget_ident)
         }
-        fn child_by_index(&self, index: usize) -> Option<WidgetInfo<'_, R>> {
+        fn child_by_index(&self, index: usize) -> Option<WidgetInfo<'_, D>> {
             default => None,
-            specialized(Parent) => <Self as Parent>::framed_child_by_index::<R>(self, index)
+            specialized(Parent) => <Self as Parent>::framed_child_by_index::<D>(self, index)
         }
-        fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetInfoMut<'_, R>> {
+        fn child_by_index_mut(&mut self, index: usize) -> Option<WidgetInfoMut<'_, D>> {
             default => None,
-            specialized(Parent) => <Self as Parent>::framed_child_by_index_mut::<R>(self, index)
+            specialized(Parent) => <Self as Parent>::framed_child_by_index_mut::<D>(self, index)
         }
-        fn children<'a>(&'a self, for_each: ForEachSummary<WidgetInfo<'a, R>>) {
+        fn children<'a>(&'a self, for_each: ForEachSummary<WidgetInfo<'a, D>>) {
             default => (),
             specialized(Parent) => {
                 let mut child_avec: ArrayVec<[_; CHILD_BATCH_SIZE]> = ArrayVec::new();
 
-                <Self as Parent>::framed_children::<R, _>(self, |summary| {
+                <Self as Parent>::framed_children::<D, _>(self, |summary| {
                     match child_avec.try_push(summary) {
                         Ok(()) => (),
                         Err(caperr) => {
@@ -179,12 +181,12 @@ impl<W, R> WidgetDyn<R> for W
                 }
             }
         }
-        fn children_mut<'a>(&'a mut self, for_each: ForEachSummary<WidgetInfoMut<'a, R>>) {
+        fn children_mut<'a>(&'a mut self, for_each: ForEachSummary<WidgetInfoMut<'a, D>>) {
             default => (),
             specialized(Parent) => {
                 let mut child_avec: ArrayVec<[_; CHILD_BATCH_SIZE]> = ArrayVec::new();
 
-                <Self as Parent>::framed_children_mut::<R, _>(self, |summary| {
+                <Self as Parent>::framed_children_mut::<D, _>(self, |summary| {
                     match child_avec.try_push(summary) {
                         Ok(()) => (),
                         Err(caperr) => {
@@ -206,13 +208,13 @@ impl<W, R> WidgetDyn<R> for W
             }
         }
 
-        fn render(&mut self, params: RenderParameters<R>) -> Result<(), RenderError> {
-            default => Err(RenderError::RendererNotSupported),
-            specialized(WidgetRenderable<R>) => render_with_theme_or_fallback(self, params)
-        }
-        fn update_layout(&mut self, layout: &mut R::Layout) {
+        fn render(&mut self, renderer: <D as DisplayEngine<'_>>::Renderer) {
             default => (),
-            specialized(WidgetRenderable<R>) => self.update_layout(layout)
+            specialized(WidgetRenderable<D>) => self.render(renderer)
+        }
+        fn update_layout(&mut self, layout: <D as DisplayEngine<'_>>::Layout) {
+            default => (),
+            specialized(WidgetRenderable<D>) => self.update_layout(layout)
         }
     }
 
@@ -229,29 +231,29 @@ impl<W, R> WidgetDyn<R> for W
     }
 }
 
-impl<R> dyn WidgetDyn<R>
-    where R: Renderer
+impl<D> dyn WidgetDyn<D>
+    where for<'d> D: DisplayEngine<'d>
 {
-    pub(crate) fn new<W: Widget>(widget: &W) -> &'_ WidgetDyn<R> {
-        trait AsWidget<'a, R>
-            where R: Renderer
+    pub(crate) fn new<W: Widget>(widget: &W) -> &'_ WidgetDyn<D> {
+        trait AsWidget<'a, D>
+            where for<'d> D: DisplayEngine<'d>
         {
-            fn as_widget_dyn(self) -> &'a WidgetDyn<R>;
+            fn as_widget_dyn(self) -> &'a WidgetDyn<D>;
         }
-        impl<'a, R, W> AsWidget<'a, R> for &'a W
-            where R: Renderer,
-                  W: WidgetDyn<R>
+        impl<'a, D, W> AsWidget<'a, D> for &'a W
+            where for<'d> D: DisplayEngine<'d>,
+                  W: WidgetDyn<D>
         {
             #[inline(always)]
-            fn as_widget_dyn(self) -> &'a WidgetDyn<R> {
+            fn as_widget_dyn(self) -> &'a WidgetDyn<D> {
                 self
             }
         }
-        impl<'a, R> AsWidget<'a, R> for &'a WidgetDyn<R>
-            where R: Renderer
+        impl<'a, D> AsWidget<'a, D> for &'a WidgetDyn<D>
+            where for<'d> D: DisplayEngine<'d>
         {
             #[inline(always)]
-            fn as_widget_dyn(self) -> &'a WidgetDyn<R> {
+            fn as_widget_dyn(self) -> &'a WidgetDyn<D> {
                 self
             }
         }
@@ -259,26 +261,26 @@ impl<R> dyn WidgetDyn<R>
         widget.as_widget_dyn()
     }
 
-    pub(crate) fn new_mut<W: Widget>(widget: &mut W) -> &'_ mut WidgetDyn<R> {
-        trait AsWidget<'a, R>
-            where R: Renderer
+    pub(crate) fn new_mut<W: Widget>(widget: &mut W) -> &'_ mut WidgetDyn<D> {
+        trait AsWidget<'a, D>
+            where for<'d> D: DisplayEngine<'d>
         {
-            fn as_widget_dyn(self) -> &'a mut WidgetDyn<R>;
+            fn as_widget_dyn(self) -> &'a mut WidgetDyn<D>;
         }
-        impl<'a, R, W> AsWidget<'a, R> for &'a mut W
-            where R: Renderer,
-                  W: WidgetDyn<R>
+        impl<'a, D, W> AsWidget<'a, D> for &'a mut W
+            where for<'d> D: DisplayEngine<'d>,
+                  W: WidgetDyn<D>
         {
             #[inline(always)]
-            fn as_widget_dyn(self) -> &'a mut WidgetDyn<R> {
+            fn as_widget_dyn(self) -> &'a mut WidgetDyn<D> {
                 self
             }
         }
-        impl<'a, R> AsWidget<'a, R> for &'a mut WidgetDyn<R>
-            where R: Renderer
+        impl<'a, D> AsWidget<'a, D> for &'a mut WidgetDyn<D>
+            where for<'d> D: DisplayEngine<'d>
         {
             #[inline(always)]
-            fn as_widget_dyn(self) -> &'a mut WidgetDyn<R> {
+            fn as_widget_dyn(self) -> &'a mut WidgetDyn<D> {
                 self
             }
         }
@@ -310,83 +312,4 @@ pub(crate) fn to_any<W>(widget: &mut W, f: impl FnOnce(&mut Any))
     }
 
     widget.as_widget_sized(f);
-}
-
-pub struct RenderParameters<'a, R: Renderer> {
-    pub renderer: &'a mut R,
-    pub widget_id: WidgetId,
-    pub theme: &'a R::Theme,
-    pub transform: BoundBox<D2, i32>,
-    pub clip: BoundBox<D2, i32>,
-}
-
-#[derive(Debug, Clone)]
-pub enum RenderError {
-    ThemeNotSupported,
-    RendererNotSupported,
-}
-
-/// Given a widget and a renderer, iterate over the widget's primary and fallback themes, and render
-/// the widget with the first theme the renderer supports.
-fn render_with_theme_or_fallback<W, R>(widget: &mut W, render_parameters: RenderParameters<R>) -> Result<(), RenderError>
-    where W: WidgetRenderable<R>,
-          R: Renderer,
-{
-    trait FindFallback<T: WidgetTheme, R>
-        where T: WidgetTheme,
-              R: Renderer,
-    {
-        fn find_fallback<W: WidgetRenderable<R>>(
-            widget: &mut W,
-            widget_theme_parameters: T,
-            render_parameters: RenderParameters<R>
-        ) -> Result<(), RenderError>;
-    }
-    impl<T, R> FindFallback<T, R> for ()
-        where T: WidgetTheme,
-              R: Renderer,
-    {
-        default fn find_fallback<W: WidgetRenderable<R>>(
-            widget: &mut W,
-            widget_theme_parameters: T,
-            render_parameters: RenderParameters<R>
-        ) -> Result<(), RenderError> {
-            if let Some(fallback) = widget_theme_parameters.fallback() {
-                <()>::find_fallback(widget, fallback, render_parameters)
-            } else {
-                Err(RenderError::ThemeNotSupported)
-            }
-        }
-    }
-    impl<T, R> FindFallback<T, R> for ()
-        where T: WidgetTheme,
-              R: WidgetRenderer<T>,
-    {
-        default fn find_fallback<W: WidgetRenderable<R>>(
-            widget: &mut W,
-            widget_theme_parameters: T,
-            render_parameters: RenderParameters<R>
-        ) -> Result<(), RenderError> {
-            let RenderParameters {
-                renderer,
-                widget_id,
-                theme,
-                transform,
-                clip,
-            } = render_parameters;
-
-            renderer.render_widget(
-                widget_id,
-                theme,
-                transform,
-                clip,
-                widget_theme_parameters,
-                |frame| widget.render(frame)
-            );
-
-            Ok(())
-        }
-    }
-
-    <()>::find_fallback(widget, widget.theme(), render_parameters)
 }

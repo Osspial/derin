@@ -6,13 +6,13 @@ use derin_core::{
     LoopFlow,
     event::{EventOps, WidgetEventSourced, InputState},
     widget::{WidgetIdent, WidgetRenderable, WidgetTag, WidgetInfo, WidgetInfoMut, WidgetId, Widget, Parent},
-    render::{Renderer, SubFrame, WidgetTheme},
+    render::{DisplayEngine, SubFrame},
 };
 use crate::{
     container::WidgetContainer,
     layout::GridLayout,
     widgets::{
-        Contents,
+        Content,
         assistants::toggle_button::{Toggle, ToggleOnClickHandler},
     },
 };
@@ -112,7 +112,7 @@ impl<C, L> RadioButtonList<C, L>
 
 impl RadioButton {
     /// Creates a new radio button, with the given default selected state and contents.
-    pub fn new(selected: bool, contents: Contents) -> RadioButton {
+    pub fn new(selected: bool, contents: Content) -> RadioButton {
         RadioButton {
             toggle: Toggle::new(selected, contents, RadioButtonToggleHandler, RadioButtonTheme(())),
         }
@@ -120,7 +120,7 @@ impl RadioButton {
 
 
     /// Retrieves the contents of the radio button.
-    pub fn contents(&self) -> &Contents {
+    pub fn contents(&self) -> &Content {
         self.toggle.contents()
     }
 
@@ -128,7 +128,7 @@ impl RadioButton {
     ///
     /// Calling this function forces the radio button to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
-    pub fn contents_mut(&mut self) -> &mut Contents {
+    pub fn contents_mut(&mut self) -> &mut Content {
         self.toggle.contents_mut()
     }
 
