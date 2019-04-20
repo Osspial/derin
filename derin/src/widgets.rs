@@ -5,13 +5,13 @@
 //! The core set of widgets provided by Derin to create GUIs.
 
 #[macro_use]
-// pub mod assistants;
-// mod button;
+pub mod assistants;
+pub mod button;
 // mod check_box;
 // mod clip;
 // mod direct_render;
 // mod edit_box;
-// mod group;
+pub mod group;
 pub mod label;
 // mod progress_bar;
 // mod radio_buttons;
@@ -19,12 +19,14 @@ pub mod label;
 // mod slider;
 // mod tabs;
 
-// pub use self::button::*;
+#[doc(inline)]
+pub use self::button::Button;
 // pub use self::check_box::*;
 // pub use self::clip::*;
 // pub use self::direct_render::*;
 // pub use self::edit_box::*;
-// pub use self::group::*;
+#[doc(inline)]
+pub use self::group::Group;
 #[doc(inline)]
 pub use self::label::Label;
 // pub use self::progress_bar::*;

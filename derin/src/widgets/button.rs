@@ -3,14 +3,14 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use derin_core::{
+    LoopFlow,
     event::{EventOps, WidgetEvent, WidgetEventSourced, InputState, MouseHoverChange},
-    widget::{WidgetTag, WidgetRenderable, Widget},
-    render::{DisplayEngine, RendererLayout, SubFrame},
+    widget::{MessageTarget, Parent, WidgetTag, WidgetRenderable, WidgetIdent, WidgetInfo, WidgetInfoMut, Widget},
+    render::DisplayEngine,
 };
-use crate::widgets::{
-    Content,
-    assistants::ButtonState,
-};
+use derin_display_engines::{Content, LayoutContent, RenderContent};
+use crate::widgets::assistants::ButtonState;
+use serde::Serialize;
 
 use cgmath_geometry::{D2, rect::BoundBox};
 use derin_common_types::layout::SizeBounds;
@@ -22,52 +22,97 @@ use derin_common_types::layout::SizeBounds;
 ///
 /// [`on_click`]: ./trait.ButtonHandler.html#tymethod.on_click
 #[derive(Debug, Clone)]
-pub struct Button<H> {
+pub struct Button<L: Widget> {
     widget_tag: WidgetTag,
     bounds: BoundBox<D2, i32>,
     state: ButtonState,
-    pub handler: H,
-    contents: Content,
-    size_bounds: SizeBounds
+    label: L,
+    size_bounds: SizeBounds,
 }
 
-/// Determines which action, if any, should be taken in response to a button press.
-pub trait ButtonHandler: 'static {
-    fn on_click(&mut self);
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct ButtonTheme {
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct ButtonContent {
     pub state: ButtonState,
 }
 
-impl<H> Button<H> {
+#[derive(Debug, Clone)]
+pub struct ButtonClickMessage {_marker: ()}
+
+impl Content for ButtonContent {}
+
+impl<L: Widget> Button<L> {
     /// Creates a new button with the given contents and
-    pub fn new(contents: Content, handler: H) -> Button<H> {
+    pub fn new(label: L) -> Button<L> {
         Button {
             widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
             state: ButtonState::Normal,
-            handler,
-            contents,
-            size_bounds: SizeBounds::default()
+            label,
+            size_bounds: SizeBounds::default(),
         }
     }
 
-    pub fn contents(&self) -> &Content {
-        &self.contents
+    // TODO: LABEL MODIFICAITON FUNCTIONS
+}
+
+impl<L> Parent for Button<L>
+    where L: Widget
+{
+    fn num_children(&self) -> usize {
+        1
     }
 
-    pub fn contents_mut(&mut self) -> &mut Content {
-        self.widget_tag
-            .request_redraw()
-            .request_relayout();
-        &mut self.contents
+    fn framed_child<D>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, D>>
+        where for<'d> D: DisplayEngine<'d>
+    {
+        match widget_ident {
+            WidgetIdent::Num(0) => Some(WidgetInfo::new(WidgetIdent::Num(0), 0, &self.label)),
+            _ => None
+        }
+    }
+    fn framed_child_mut<D>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, D>>
+        where for<'d> D: DisplayEngine<'d>
+    {
+        match widget_ident {
+            WidgetIdent::Num(0) => Some(WidgetInfoMut::new(WidgetIdent::Num(0), 0, &mut self.label)),
+            _ => None
+        }
+    }
+
+    fn framed_children<'a, D, G>(&'a self, mut for_each: G)
+        where for<'d> D: DisplayEngine<'d>,
+              G: FnMut(WidgetInfo<'a, D>) -> LoopFlow
+    {
+        let _ = for_each(WidgetInfo::new(WidgetIdent::Num(0), 0, &self.label));
+    }
+
+    fn framed_children_mut<'a, D, G>(&'a mut self, mut for_each: G)
+        where for<'d> D: DisplayEngine<'d>,
+              G: FnMut(WidgetInfoMut<'a, D>) -> LoopFlow
+    {
+        let _ = for_each(WidgetInfoMut::new(WidgetIdent::Num(0), 0, &mut self.label));
+    }
+
+    fn framed_child_by_index<D>(&self, index: usize) -> Option<WidgetInfo<'_, D>>
+        where for<'d> D: DisplayEngine<'d>,
+    {
+        match index {
+            0 => Some(WidgetInfo::new(WidgetIdent::Num(0), 0, &self.label)),
+            _ => None
+        }
+    }
+    fn framed_child_by_index_mut<D>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, D>>
+        where for<'d> D: DisplayEngine<'d>,
+    {
+        match index {
+            0 => Some(WidgetInfoMut::new(WidgetIdent::Num(0), 0, &mut self.label)),
+            _ => None
+        }
     }
 }
 
-impl<H> Widget for Button<H>
-    where H: ButtonHandler
+impl<L> Widget for Button<L>
+    where L: Widget
 {
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
@@ -100,7 +145,10 @@ impl<H> Widget for Button<H>
             },
             MouseDown{..} => ButtonState::Pressed,
             MouseUp{in_widget: true, pressed_in_widget: true, ..} => {
-                self.handler.on_click();
+                self.widget_tag.send_message_to(
+                    ButtonClickMessage{_marker: ()},
+                    MessageTarget::Widget(self.widget_id()),
+                );
                 ButtonState::Hover
             },
             MouseUp{in_widget: false, ..} => ButtonState::Normal,
@@ -122,36 +170,24 @@ impl<H> Widget for Button<H>
     }
 }
 
-impl<R, H> WidgetRenderable<R> for Button<H>
-    where R: Renderer,
-          H: ButtonHandler
+impl<D, L> WidgetRenderable<D> for Button<L>
+    where for<'d> D: DisplayEngine<'d>,
+          for<'d> <D as DisplayEngine<'d>>::Renderer: RenderContent<'d>,
+          for<'d> <D as DisplayEngine<'d>>::Layout: LayoutContent<'d>,
+          L: Widget,
 {
-    type Theme = ButtonTheme;
-
-    fn theme(&self) -> ButtonTheme {
-        ButtonTheme {
-            state: self.state,
-        }
-    }
-
-    fn render(&mut self, frame: &mut R::SubFrame) {
+    fn render(&mut self, frame: <D as DisplayEngine<'_>>::Renderer) {
         frame.render_laid_out_content();
     }
 
-    fn update_layout(&mut self, layout: &mut R::Layout) {
-        match self.contents {
-            Content::Text(ref s) => layout.prepare_string(s),
-            Content::Icon(ref i) => layout.prepare_icon(i),
-        }
+    fn update_layout(&mut self, layout: <D as DisplayEngine<'_>>::Layout) {
+        let content = ButtonContent {
+            state: self.state,
+        };
 
-        let result = layout.finish();
+        let result = layout.layout_content(&content);
         self.size_bounds = result.size_bounds;
-    }
-}
-
-impl WidgetTheme for ButtonTheme {
-    type Fallback = !;
-    fn fallback(self) -> Option<!> {
-        None
+        self.size_bounds.min.dims += self.label.size_bounds().min.dims;
+        *self.label.rect_mut() = result.content_rect;
     }
 }

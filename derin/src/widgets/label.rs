@@ -5,63 +5,56 @@
 use derin_core::{
     event::{EventOps, WidgetEventSourced, InputState},
     widget::{WidgetTag, WidgetRenderable, Widget},
-    render::DisplayEngine
+    render::DisplayEngine,
 };
-use derin_display_engines::{LayoutContent, RenderContent};
-use crate::widgets::Content;
+use derin_display_engines::{Content, LayoutContent, RenderContent};
+use serde::Serialize;
 
 use cgmath_geometry::{D2, rect::BoundBox};
 use derin_common_types::layout::SizeBounds;
 
 
 /// A simple, non-interactive label.
-///
-/// Can display text or an image, depending on what's in `contents`.
 #[derive(Debug, Clone)]
 pub struct Label {
     widget_tag: WidgetTag,
     bounds: BoundBox<D2, i32>,
-    contents: Content,
+    string: String,
     size_bounds: SizeBounds,
 }
 
-#[non_exhaustive]
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LabelContent<'a> {
-    pub contents: &'a Content,
+    pub string: &'a str,
 }
-
-impl WidgetTheme for LabelTheme {
-    type Fallback = !;
-    fn fallback(self) -> Option<!> {None}
-}
+impl<'a> Content for LabelContent<'a> {}
 
 impl Label {
-    /// Create a new label with the given contents.
-    pub fn new(contents: Content) -> Label {
+    /// Create a new label with the given string.
+    pub fn new(string: String) -> Label {
         Label {
             widget_tag: WidgetTag::new(),
             bounds: BoundBox::new2(0, 0, 0, 0),
-            contents,
+            string,
             size_bounds: SizeBounds::default(),
         }
     }
 
-    /// Retrieves the contents of the label.
-    pub fn contents(&self) -> &Content {
-        &self.contents
+    /// Retrieves the string in the label.
+    pub fn string(&self) -> &str {
+        &self.string
     }
 
-    /// Retrieves the contents of the label, for mutation.
+    /// Retrieves the string in the label, for mutation.
     ///
     /// Calling this function forces the label to be re-drawn, so you're discouraged from calling
     /// it unless you're actually changing the contents.
-    pub fn contents_mut(&mut self) -> &mut Content {
+    pub fn string_mut(&mut self) -> &mut String {
         self.widget_tag
             .request_redraw()
             .request_relayout();
 
-        &mut self.contents
+        &mut self.string
     }
 }
 
@@ -95,24 +88,20 @@ impl Widget for Label {
 }
 
 impl<D> WidgetRenderable<D> for Label
-    where D: DisplayEngine,
-          D::Renderer: RenderContent,
-          D::Layout: LayoutContent,
+    where for<'d> D: DisplayEngine<'d>,
+          for<'d> <D as DisplayEngine<'d>>::Renderer: RenderContent<'d>,
+          for<'d> <D as DisplayEngine<'d>>::Layout: LayoutContent<'d>,
 {
-    fn render(&mut self, frame: &mut R::SubFrame) {
+    fn render(&mut self, frame: <D as DisplayEngine<'_>>::Renderer) {
         frame.render_laid_out_content();
     }
 
-    fn update_layout(&mut self, layout: &mut R::Layout) {
+    fn update_layout(&mut self, layout: <D as DisplayEngine<'_>>::Layout) {
         let content = LabelContent {
+            string: &self.string,
+        };
 
-        }
-        match self.contents {
-            Content::Text(ref s) => layout.prepare_string(s),
-            Content::Icon(ref i) => layout.prepare_icon(i),
-        }
-
-        let result = layout.finish();
+        let result = layout.layout_content(&content);
         self.size_bounds = result.size_bounds;
     }
 }

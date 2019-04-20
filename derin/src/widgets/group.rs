@@ -6,15 +6,16 @@ use derin_core::{
     LoopFlow,
     event::{EventOps, WidgetEventSourced, InputState},
     widget::{WidgetIdent, WidgetRenderable, WidgetTag, WidgetInfo, WidgetInfoMut, Widget, Parent},
-    render::{DisplayEngine, SubFrame},
+    render::DisplayEngine,
 };
+use derin_display_engines::{LayoutContent, RenderContent};
 use crate::{
     container::WidgetContainer,
     layout::GridLayout,
 };
 
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
-use derin_common_types::layout::{SizeBounds, WidgetPos};
+use derin_common_types::layout::{Margins, SizeBounds, WidgetPos};
 
 use std::cell::RefCell;
 
@@ -34,9 +35,6 @@ pub struct Group<C, L>
     container: C,
     layout: L
 }
-
-#[derive(Debug, Clone, Default)]
-pub struct GroupTheme(());
 
 impl<C, L> Group<C, L>
     where L: GridLayout
@@ -104,51 +102,57 @@ impl<C, L> Parent for Group<C, L>
         self.container.num_children()
     }
 
-    fn framed_child<R: Renderer>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, R>> {
+    fn framed_child<D>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, D>>
+        where for<'d> D: DisplayEngine<'d>
+    {
         self.container.framed_child(widget_ident).map(WidgetInfo::erase_subtype)
     }
-    fn framed_child_mut<R: Renderer>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, R>> {
+    fn framed_child_mut<D>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, D>>
+        where for<'d> D: DisplayEngine<'d>
+    {
         self.container.framed_child_mut(widget_ident).map(WidgetInfoMut::erase_subtype)
     }
 
-    fn framed_children<'a, R, G>(&'a self, mut for_each: G)
-        where R: Renderer,
-              G: FnMut(WidgetInfo<'a, R>) -> LoopFlow
+    fn framed_children<'a, D, G>(&'a self, mut for_each: G)
+        where for<'d> D: DisplayEngine<'d>,
+              G: FnMut(WidgetInfo<'a, D>) -> LoopFlow
     {
         self.container.framed_children(|summary| for_each(WidgetInfo::erase_subtype(summary)))
     }
 
-    fn framed_children_mut<'a, R, G>(&'a mut self, mut for_each: G)
-        where R: Renderer,
-              G: FnMut(WidgetInfoMut<'a, R>) -> LoopFlow
+    fn framed_children_mut<'a, D, G>(&'a mut self, mut for_each: G)
+        where for<'d> D: DisplayEngine<'d>,
+              G: FnMut(WidgetInfoMut<'a, D>) -> LoopFlow
     {
         self.container.framed_children_mut(|summary| for_each(WidgetInfoMut::erase_subtype(summary)))
     }
 
-    fn framed_child_by_index<R: Renderer>(&self, index: usize) -> Option<WidgetInfo<'_, R>> {
+    fn framed_child_by_index<D>(&self, index: usize) -> Option<WidgetInfo<'_, D>>
+        where for<'d> D: DisplayEngine<'d>,
+    {
         self.container.framed_child_by_index(index).map(WidgetInfo::erase_subtype)
     }
-    fn framed_child_by_index_mut<R: Renderer>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, R>> {
+    fn framed_child_by_index_mut<D>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, D>>
+        where for<'d> D: DisplayEngine<'d>,
+    {
         self.container.framed_child_by_index_mut(index).map(WidgetInfoMut::erase_subtype)
     }
 }
 
-impl<R, C, L> WidgetRenderable<R> for Group<C, L>
-    where R: Renderer,
+impl<D, C, L> WidgetRenderable<D> for Group<C, L>
+    where for<'d> D: DisplayEngine<'d>,
+          for<'d> <D as DisplayEngine<'d>>::Renderer: RenderContent<'d>,
+          for<'d> <D as DisplayEngine<'d>>::Layout: LayoutContent<'d>,
           C: WidgetContainer<dyn Widget>,
-          L: GridLayout
+          L: GridLayout,
 {
-    type Theme = GroupTheme;
-
-    fn theme(&self) -> GroupTheme {
-        GroupTheme(())
-    }
-
-    fn render(&mut self, frame: &mut R::SubFrame) {
+    fn render(&mut self, frame: <D as DisplayEngine<'_>>::Renderer) {
         frame.render_laid_out_content();
     }
 
-    fn update_layout(&mut self, _: &mut R::Layout) {
+    fn update_layout(&mut self, layout: <D as DisplayEngine<'_>>::Layout) {
+        let result = layout.layout_content(&());
+
         #[derive(Default)]
         struct HeapCache {
             update_heap_cache: UpdateHeapCache,
@@ -182,6 +186,12 @@ impl<R, C, L> WidgetRenderable<R> for Group<C, L>
                 LoopFlow::Continue
             });
 
+            self.layout_engine.grid_margins = Margins {
+                left: result.content_rect.min.x,
+                top: result.content_rect.min.y,
+                right: result.content_rect.max.x,
+                bottom: result.content_rect.max.y,
+            };
             self.layout_engine.desired_size = DimsBox::new2(self.bounds.width(), self.bounds.height());
             self.layout_engine.set_grid_size(self.layout.grid_size(num_children));
             self.layout_engine.update_engine(hints_vec, rects_vec, update_heap_cache);
@@ -197,12 +207,5 @@ impl<R, C, L> WidgetRenderable<R> for Group<C, L>
 
             hints_vec.clear();
         })
-    }
-}
-
-impl WidgetTheme for GroupTheme {
-    type Fallback = !;
-    fn fallback(self) -> Option<!> {
-        None
     }
 }

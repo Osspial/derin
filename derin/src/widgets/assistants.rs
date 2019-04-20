@@ -2,13 +2,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-mod slider;
-pub mod text_edit;
-pub mod toggle_button;
+use serde::{Serialize, Deserialize};
 
-pub use self::slider::*;
+// mod slider;
+// pub mod text_edit;
+// pub mod toggle_button;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+// pub use self::slider::*;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum ButtonState {
     Normal,
     Hover,
