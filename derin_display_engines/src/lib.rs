@@ -1,3 +1,6 @@
+pub mod rect_render;
+pub mod theme;
+
 use cgmath_geometry::{
     D2,
     rect::BoundBox,
@@ -16,20 +19,16 @@ pub trait LayoutContent<'a> {
 }
 
 pub trait LayoutString<'a>: LayoutContent<'a> {
-    /// Given a [`Content`] struct and a reference to a string inside that [`Content`] struct, lay
-    /// out each of the string's [`GraphemeCluster`]s and append them to to the `grapheme_clusters`
-    /// buffer.
+    /// Given a [`Content`] struct, lay out each of the [`Content`]'s string's [`GraphemeCluster`]s
+    //// and append them to to the `grapheme_clusters` buffer.
     ///
     /// This is useful for text edit boxes, which must know the exact pixel location of each
     /// grapheme cluster on the screen in order to perform certain editing operations.
     ///
-    /// # Panics
-    /// This function will panic if the `string` parameter does not *exactly* reference a string
-    /// inside the `content` struct.
+    /// If the [`Content`]'s string is `None`, this does nothing.
     fn layout_string<C: Content>(
         &mut self,
         content: &C,
-        string: &str,
         grapheme_clusters: &mut Vec<GraphemeCluster>
     );
 }
@@ -52,13 +51,17 @@ pub struct GraphemeCluster {
     pub selection_rect: BoundBox<D2, i32>,
 }
 
-pub trait Content: Serialize {}
+pub trait Content: Serialize {
+    fn string(&self) -> Option<EditString<'_>> {
+        None
+    }
+}
 impl Content for () {}
 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EditString {
-    pub string: String,
+pub struct EditString<'s> {
+    pub string: &'s str,
     pub draw_cursor: bool,
     pub cursor_pos: usize,
     pub highlight_range: Range<usize>,
@@ -71,10 +74,10 @@ pub struct LayoutResult {
     pub content_rect: BoundBox<D2, i32>,
 }
 
-impl Default for EditString {
-    fn default() -> EditString {
+impl<'s> Default for EditString<'s> {
+    fn default() -> EditString<'s> {
         EditString {
-            string: String::new(),
+            string: "",
             draw_cursor: false,
             cursor_pos: 0,
             highlight_range: 0..0,

@@ -30,21 +30,18 @@ pub struct Image {
     pub pixels: Vec<Rgba<u8>>,
     pub dims: DimsBox<D2, u32>,
     pub rescale: RescaleRules,
-    pub size_bounds: SizeBounds
+    pub size_bounds: SizeBounds,
 }
 
 /// The algorithm used to rescale an image.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RescaleRules {
-    /// Rescale the image by uniformily stretching it out, from its edges.
+    /// Rescale the image by uniformly stretching it out, from its edges.
     Stretch,
-    /// Similar to stretch, but begins sampling image half a pixel away from the border. Can
-    /// eliminate border artifacts in some scenarios.
-    StretchOnPixelCenter,
     /// Perform nine-slicing on the provided image, stretching out the center of the image while
     /// keeping the borders of the image a constant size.
     Slice(Margins<u16>),
-    Align(Align2)
+    Align(Align2),
 }
 
 /// The algorithm used to determine where line breaks occur in text.
@@ -52,8 +49,10 @@ pub enum RescaleRules {
 pub enum LineWrap {
     /// Disallow all line breaks, including explicit ones (such as from `'\n'`).
     None,
+    /// Only allow explicit line breaks.
+    Explicit,
     /// Allow line breaks at break points, as defined by [UAX #14](https://unicode.org/reports/tr14/).
-    Normal
+    Normal,
 }
 
 /// Collection of information used to determine how to render text in a widget.
@@ -75,10 +74,8 @@ pub struct ThemeText {
     pub tab_size: u32,
     /// The horizontal and vertical justification of the text.
     pub justify: Align2,
-    /// The number of pixels on the sides of a draw box in which text shouldn't be drawn.
-    pub margins: Margins<u16>,
     /// The line wrapping algorithm.
-    pub line_wrap: LineWrap
+    pub line_wrap: LineWrap,
 }
 
 /// The text style and image used to draw a widget with a given style.
@@ -93,7 +90,7 @@ pub struct ThemeWidget {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ThemeFace {
     Path(ThemeFacePath),
-    Buffer(ThemeFaceBuffer)
+    Buffer(ThemeFaceBuffer),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -111,7 +108,7 @@ pub struct ThemeFaceBuffer {
 }
 
 pub struct Theme {
-    map: HashMap<String, ThemeWidget>
+    map: HashMap<String, ThemeWidget>,
 }
 
 

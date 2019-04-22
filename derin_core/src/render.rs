@@ -25,7 +25,7 @@ pub trait DisplayEngine<'d>: 'static {
     fn dims(&self) -> DimsBox<D2, u32>;
     fn widget_removed(&mut self, widget_id: WidgetId);
 
-    fn layout(&'d mut self, widget_id: WidgetId) -> Self::Layout;
+    fn layout(&'d mut self, widget_id: WidgetId, dims: DimsBox<D2, i32>) -> Self::Layout;
     fn start_frame(&mut self);
     fn render(&'d mut self, widget_id: WidgetId, transform: BoundBox<D2, i32>, clip: BoundBox<D2, i32>) -> Self::Renderer;
     fn finish_frame(&mut self);
@@ -39,7 +39,7 @@ impl<'d> DisplayEngine<'d> for ! {
     fn dims(&self) -> DimsBox<D2, u32> {unreachable!()}
     fn widget_removed(&mut self, _: WidgetId) {unreachable!()}
 
-    fn layout(&'d mut self, _: WidgetId) -> ! {*self}
+    fn layout(&'d mut self, _: WidgetId, _: DimsBox<D2, i32>) -> ! {*self}
     fn start_frame(&mut self) {unreachable!()}
     fn render(&'d mut self, _: WidgetId, _: BoundBox<D2, i32>, _: BoundBox<D2, i32>) -> ! {*self}
     fn finish_frame(&mut self) {unreachable!()}

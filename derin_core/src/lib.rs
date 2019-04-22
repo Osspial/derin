@@ -6,6 +6,7 @@
 #![feature(core_intrinsics)] // this is used for `type_name`. Should be removed when that's stabilized
 
 use cgmath_geometry::cgmath;
+#[macro_use]
 extern crate derin_common_types;
 
 #[macro_use]
@@ -216,7 +217,7 @@ impl<N, D> Root<N, D>
                 };
 
                 let old_widget_rect = widget.rect();
-                widget.update_layout(self.display_engine.layout(widget_id));
+                widget.update_layout(self.display_engine.layout(widget_id, old_widget_rect.dims()));
                 let size_bounds = widget.size_bounds();
                 let new_widget_rect = widget.rect();
                 let widget_dims = new_widget_rect.dims();
