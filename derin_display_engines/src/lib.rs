@@ -1,5 +1,13 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+#![feature(try_blocks)]
+
 pub mod rect_render;
 pub mod theme;
+
+use cgmath_geometry::cgmath;
 
 use cgmath_geometry::{
     D2,
@@ -20,7 +28,7 @@ pub trait LayoutContent<'a> {
 
 pub trait LayoutString<'a>: LayoutContent<'a> {
     /// Given a [`Content`] struct, lay out each of the [`Content`]'s string's [`GraphemeCluster`]s
-    //// and append them to to the `grapheme_clusters` buffer.
+    /// and append them to to the `grapheme_clusters` buffer.
     ///
     /// This is useful for text edit boxes, which must know the exact pixel location of each
     /// grapheme cluster on the screen in order to perform certain editing operations.

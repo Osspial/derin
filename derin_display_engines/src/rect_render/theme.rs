@@ -1,7 +1,10 @@
-use cgmath_geometry::{D2, rect::DimsBox};
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
 use derin_common_types::{
     id,
-    layout::{Align2, Margins, SizeBounds}
+    layout::{Align2, Margins}
 };
 
 
@@ -20,12 +23,10 @@ pub struct Color {
     pub a: u8,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ImageMeta {
-    pub id: ImageId,
-    pub dims: DimsBox<D2, u32>,
-    pub rescale: RescaleRules,
-    pub size_bounds: SizeBounds,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ImageStyle {
+    pub image_margins: Margins<u16>,
+    pub image: ImageId,
 }
 
 /// The algorithm used to rescale an image.
@@ -51,15 +52,26 @@ pub enum LineWrap {
 }
 
 /// Collection of information used to determine how to render text in a widget.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ThemeText {
-    pub face: FontFaceId,
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextStyle {
+    pub text_margins: Margins<u16>,
+    pub render: TextRenderStyle,
+    pub layout: TextLayoutStyle,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextRenderStyle {
     /// The color to draw text.
     pub color: Color,
     /// The color of the highlight when highlighting text.
     pub highlight_bg_color: Color,
     /// The color of highlighted text.
     pub highlight_text_color: Color,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextLayoutStyle {
+    pub face: FontFaceId,
     /// The size of the text being drawn, in 64ths of a [point].
     ///
     /// [point]: https://en.wikipedia.org/wiki/Point_(typography)
@@ -74,8 +86,8 @@ pub struct ThemeText {
 
 /// The text style and image used to draw a widget with a given style.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ThemeWidget {
-    pub text: ThemeText,
-    pub image: Option<ImageMeta>,
+pub struct WidgetStyle {
     pub content_margins: Margins<u16>,
+    pub text: TextStyle,
+    pub image: Option<ImageStyle>,
 }

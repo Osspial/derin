@@ -1,4 +1,5 @@
 target
-Cargo.lock
+# Cargo.lock with git deps is a bad idea
+# Cargo.lock
 derin_atlas/skyline_atlas.bmp
 .vscode/*

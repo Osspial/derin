@@ -1,33 +1,19 @@
-use crate::theme::{ThemeText, LineWrap};
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+use super::{Glyph, FaceMetrics};
+use crate::rect_render::theme::{TextLayoutStyle, LineWrap};
 
 use crate::cgmath::{EuclideanSpace, ElementWise, Point2, Vector2};
-use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
+use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 
-use glyphydog::{ShapedBuffer, ShapedGlyph, Face, FaceSize, DPI, LoadFlags};
 use derin_common_types::layout::Align;
 
 use itertools::Itertools;
 use std::vec;
-use std::any::Any;
 
 use unicode_segmentation::UnicodeSegmentation;
-
-pub fn shape_glyphs(
-    rect: BoundBox<D2, i32>,
-    shaped_text: &ShapedBuffer,
-    text_style: &ThemeText,
-    face: &mut Face<Any>,
-    dpi: DPI,
-    glyphs_out: &mut Vec<RenderGlyph>,
-) -> ShapedGlyphsData
-{
-    let mut glyph_iter = GlyphIter::new(rect, shaped_text, text_style, face, dpi);
-    glyphs_out.extend(&mut glyph_iter);
-    ShapedGlyphsData {
-        text_rect: glyph_iter.text_rect.unwrap_or(BoundBox::new2(0, 0, 0, 0,)),
-    }
-}
-
 
 #[derive(Debug, Clone, Copy)]
 pub struct ShapedGlyphsData {
@@ -49,7 +35,20 @@ pub struct RenderGlyph {
     pub glyph_index: Option<u32>,
 }
 
-struct GlyphIter {
+pub struct GlyphIterBuilder {
+    rect: DimsBox<D2, i32>,
+    text_style: TextLayoutStyle,
+    face_metrics: FaceMetrics,
+    glyph_items: Vec<GlyphItem>,
+    run: Run,
+    line_advance: i32,
+    num_lines: i32,
+    line_insert_index: usize,
+    run_insert_index: usize,
+    ends_with_newline: bool,
+}
+
+pub struct GlyphIter {
     glyph_items: vec::IntoIter<GlyphItem>,
     v_advance: i32,
     line_start_x: i32,
@@ -85,7 +84,7 @@ struct GlyphIter {
 enum GlyphItem {
     /// A single shaped glyph. Location is relative to word start.
     Glyph {
-        glyph: ShapedGlyph,
+        glyph: Glyph,
         grapheme_len: usize,
     },
     /// A sequence of renderable glyphs.
@@ -98,7 +97,7 @@ enum GlyphItem {
         glyph_count: u32,
         advance: i32
     },
-    WhitespaceGlyph(ShapedGlyph),
+    WhitespaceGlyph(Glyph),
     /// Dictates where a new line starts. Contains the horizontal advance of the line,
     /// not including any trailing whitespace.
     Line {
@@ -128,232 +127,220 @@ struct Run {
     ends_line: bool
 }
 
-impl GlyphIter {
-    fn new(
-        rect: BoundBox<D2, i32>,
-        shaped_text: &ShapedBuffer,
-        text_style: &ThemeText,
-        face: &mut Face<Any>,
-        dpi: DPI,
-    ) -> GlyphIter
+impl GlyphIterBuilder {
+    pub fn new(
+        rect: DimsBox<D2, i32>,
+        text_style: TextLayoutStyle,
+        face_metrics: FaceMetrics,
+    ) -> GlyphIterBuilder
     {
-        // TODO: CACHE HEAP ALLOC
-        let mut glyph_items = Vec::new();
-        let mut segment_index = 0;
+        GlyphIterBuilder {
+            rect,
+            text_style,
+            face_metrics,
 
-        // Compute the tab advance from the tab size and space advance. Used for tab stops.
-        let tab_advance = {
-            let space_glyph_index = face.char_index(' ');
-            let space_glyph_advance = (face.glyph_advance(
-                space_glyph_index,
-                FaceSize::new(text_style.face_size, text_style.face_size),
-                dpi,
-                LoadFlags::empty()
-            ).unwrap() + (1 << 15)) >> 16;
+            glyph_items: Vec::new(),
+            run: Run::default(),
+            line_advance: 0,
+            num_lines: 0,
+            line_insert_index: 0,
+            run_insert_index: 0,
+            ends_with_newline: false
+        }
+    }
 
-            space_glyph_advance * text_style.tab_size as i32
+    pub fn add_segment(&mut self, text: &str, str_offset: usize, hard_break: bool, glyphs: impl Iterator<Item=Glyph>) {
+        // Create an iterator over every glyph in the segment.
+        let mut glyphs = {
+            let glyph_with_char = |glyph: Glyph| (glyph, text[glyph.str_index..].chars().next().unwrap());
+            glyphs.map(glyph_with_char).peekable()
         };
+        // Contains information about the segment's advances. How it's handled depends on where the line breaks.
+        let mut segment_run = Run::default();
+        // The number of `Word` and `Whitespace` items in the segment.
+        let mut segment_item_count = 0;
+        let mut trailing_newline_glyph = None;
 
-        // Initialize the run data and line data.
-        let mut run = Run::default();
-        let (mut line_advance, mut num_lines) = (0, 0);
-        // The places where a `Line` or `Run` should be inserted into `glyph_items`.
-        let (mut line_insert_index, mut run_insert_index) = (glyph_items.len(), glyph_items.len());
-        let mut ends_with_newline = false;
+        // Loop over the glyphs, alternating between inserting renderable glyphs and
+        // whitespace. First half handles renderable, second half whitespace.
+        'segment_glyphs: while glyphs.peek().is_some() {
+            // Add sequence of renderable glyphs.
 
-        while let Some(segment) = shaped_text.get_segment(segment_index) {
-            // Create an iterator over every glyph in the segment.
-            let mut glyphs = {
-                let glyph_with_char = |glyph: ShapedGlyph| (glyph, segment.text[glyph.word_str_index..].chars().next().unwrap());
-                segment.shaped_glyphs.iter().cloned().map(glyph_with_char).peekable()
-            };
-            // Contains information about the segment's advances. How it's handled depends on where the line breaks.
-            let mut segment_run = Run::default();
-            // The number of `Word` and `Whitespace` items in the segment.
-            let mut segment_item_count = 0;
-            let mut trailing_newline_glyph = None;
+            let word_insert_index = self.glyph_items.len();
+            let (mut glyph_count, mut word_advance) = (0, 0);
 
-            // Loop over the glyphs, alternating between inserting renderable glyphs and
-            // whitespace. First half handles renderable, second half whitespace.
-            'segment_glyphs: while glyphs.peek().is_some() {
-                // Add sequence of renderable glyphs.
+            // Continue taking glyphs until we hit whitespace.
+            for (mut glyph, _) in glyphs.peeking_take_while(|&(_, c)| !c.is_whitespace()) {
+                glyph_count += 1;
+                word_advance += glyph.advance.x;
+                let segment_str_index = glyph.str_index;
+                glyph.str_index += str_offset;
+                self.glyph_items.push(GlyphItem::Glyph {
+                    glyph,
+                    grapheme_len: text[segment_str_index..].graphemes(true).next().unwrap().len(),
+                });
+            }
+            // If there are glyphs to add, insert a `Word` and increment the advances.
+            if glyph_count > 0 {
+                segment_run.trailing_whitespace = 0;
 
-                let word_insert_index = glyph_items.len();
-                let (mut glyph_count, mut word_advance) = (0, 0);
+                segment_item_count += glyph_count as usize;
+                self.line_advance += word_advance;
+                segment_run.glyph_advance += word_advance;
+                self.glyph_items.insert(word_insert_index, GlyphItem::Word{ glyph_count, advance: word_advance });
+            }
 
-                // Continue taking glyphs until we hit whitespace.
-                for (glyph, _) in glyphs.peeking_take_while(|&(_, c)| !c.is_whitespace()) {
-                    glyph_count += 1;
-                    word_advance += glyph.advance.x;
-                    glyph_items.push(GlyphItem::Glyph {
-                        glyph,
-                        grapheme_len: segment.text[glyph.word_str_index..].graphemes(true).next().unwrap().len(),
-                    });
-                }
-                // If there are glyphs to add, insert a `Word` and increment the advances.
-                if glyph_count > 0 {
-                    segment_run.trailing_whitespace = 0;
+            // Add sequence of whitespace characters.
 
-                    segment_item_count += glyph_count as usize;
-                    line_advance += word_advance;
-                    segment_run.glyph_advance += word_advance;
-                    glyph_items.insert(word_insert_index, GlyphItem::Word{ glyph_count, advance: word_advance });
-                }
-
-                // Add sequence of whitespace characters.
-
-                let mut whitespace_advance = 0;
-                let mut whitespace_glyph_count = 0;
-                let mut whitespace_insert_index = glyph_items.len();
-                macro_rules! push_whitespace {
-                    () => {{
-                        if whitespace_advance == 0 {
-                            line_advance += whitespace_advance;
-                            segment_run = segment_run.append_run(Run::tail_whitespace(whitespace_advance));
-                            glyph_items.insert(
-                                whitespace_insert_index,
-                                GlyphItem::Whitespace {
-                                    glyph_count: whitespace_glyph_count,
-                                    advance: whitespace_advance
-                                }
-                            );
-                            segment_item_count += 1;
-                            #[allow(unused_assignments)]
-                            {
-                                whitespace_advance = 0;
-                                whitespace_glyph_count = 0;
-                                whitespace_insert_index = glyph_items.len();
+            let mut whitespace_advance = 0;
+            let mut whitespace_glyph_count = 0;
+            let mut whitespace_insert_index = self.glyph_items.len();
+            macro_rules! push_whitespace {
+                () => {{
+                    if whitespace_advance == 0 {
+                        self.line_advance += whitespace_advance;
+                        segment_run = segment_run.append_run(Run::tail_whitespace(whitespace_advance));
+                        self.glyph_items.insert(
+                            whitespace_insert_index,
+                            GlyphItem::Whitespace {
+                                glyph_count: whitespace_glyph_count,
+                                advance: whitespace_advance
                             }
+                        );
+                        segment_item_count += 1;
+                        #[allow(unused_assignments)]
+                        {
+                            whitespace_advance = 0;
+                            whitespace_glyph_count = 0;
+                            whitespace_insert_index = self.glyph_items.len();
                         }
-                    }}
-                }
-
-                for (mut glyph, c) in glyphs.peeking_take_while(|&(_, c)| c.is_whitespace()) {
-                    match c {
-                        // If the whitespace is a tab, push all the accumulated whitespace, begin a
-                        // new run and mark off the old run.
-                        '\t' => {
-                            push_whitespace!();
-
-                            // Move the advance to the next tab stop.
-                            line_advance = ((line_advance/tab_advance) + 1) * tab_advance;
-                            // If the last thing in `glyph_items` is a tab, then we're in a sequence of `Tab`s
-                            // and the `Run` was already inserted by the first tab.
-                            match glyph_items.last() {
-                                Some(&GlyphItem::Tab{..}) => (),
-                                _ => glyph_items.insert(run_insert_index, GlyphItem::Run(run.append_run(segment_run)))
-                            }
-                            glyph_items.push(GlyphItem::Tab{ str_index: glyph.str_index });
-                            run = Run::default();
-                            segment_run = Run::default();
-                            run_insert_index = glyph_items.len();
-                        },
-                        '\r' |
-                        '\n' => {
-                            glyph.advance.x = 0;
-                            trailing_newline_glyph = Some(glyph);
-
-                            push_whitespace!();
-                            break 'segment_glyphs;
-                        }
-                        _ => {
-                            whitespace_glyph_count += 1;
-                            segment_item_count += 1;
-                            glyph_items.push(GlyphItem::WhitespaceGlyph(glyph));
-                            whitespace_advance += glyph.advance.x
-                        },
                     }
-                }
-
-                push_whitespace!();
+                }}
             }
 
-            // If the segment hasn't moved the cursor beyond the line's length, append it to the run.
-            if line_advance <= rect.width() as i32 || text_style.line_wrap == LineWrap::None {
-                run = run.append_run(segment_run);
-            }
+            for (mut glyph, c) in glyphs.peeking_take_while(|&(_, c)| c.is_whitespace()) {
+                glyph.str_index += str_offset;
+                match c {
+                    // If the whitespace is a tab, push all the accumulated whitespace, begin a
+                    // new self.run and mark off the old self.run.
+                    '\t' => {
+                        push_whitespace!();
 
-            let is_hard_break = segment.break_type.is_hard_break();
-            if (is_hard_break || line_advance > rect.width() as i32) && text_style.line_wrap != LineWrap::None {
-                glyph_items.insert(run_insert_index, GlyphItem::Run(run.ends_line()));
-
-                num_lines += 1;
-                match line_advance > rect.width() as i32 {
-                    // Happens if the last segment ran over the rectangle length.
-                    true => {
-                        line_advance -= run.trailing_whitespace + segment_run.advance();
-                        glyph_items.insert(line_insert_index, GlyphItem::Line{ advance: line_advance, hard_break: is_hard_break });
-
-                        line_advance = segment_run.advance();
-                        run = segment_run;
-
-                        let insert_index = glyph_items.len() - segment_item_count - 1;
-                        line_insert_index = insert_index;
-                        run_insert_index = insert_index;
+                        // Move the advance to the next tab stop.
+                        self.line_advance = ((self.line_advance/self.face_metrics.tab_advance) + 1) * self.face_metrics.tab_advance;
+                        // If the last thing in `self.glyph_items` is a tab, then we're in a sequence of `Tab`s
+                        // and the `Run` was already inserted by the first tab.
+                        match self.glyph_items.last() {
+                            Some(&GlyphItem::Tab{..}) => (),
+                            _ => self.glyph_items.insert(self.run_insert_index, GlyphItem::Run(self.run.append_run(segment_run)))
+                        }
+                        self.glyph_items.push(GlyphItem::Tab{ str_index: glyph.str_index });
+                        self.run = Run::default();
+                        segment_run = Run::default();
+                        self.run_insert_index = self.glyph_items.len();
                     },
-                    // Happens if we've hit a hard break and the last segment isn't overflowing the rectangle.
-                    false => {
-                        line_advance -= run.trailing_whitespace;
-                        glyph_items.insert(line_insert_index, GlyphItem::Line{ advance: line_advance, hard_break: is_hard_break });
+                    '\r' |
+                    '\n' => {
+                        glyph.advance.x = 0;
+                        trailing_newline_glyph = Some(glyph);
 
-                        line_advance = 0;
-                        run = Run::default();
-
-                        line_insert_index = glyph_items.len();
-                        run_insert_index = glyph_items.len();
+                        push_whitespace!();
+                        break 'segment_glyphs;
                     }
-                }
-
-                if let Some(glyph) = trailing_newline_glyph {
-                    glyph_items.push(
-                        GlyphItem::Whitespace {
-                            glyph_count: 0,
-                            advance: 0
-                        }
-                    );
-                    glyph_items.push(GlyphItem::WhitespaceGlyph(glyph));
-                    ends_with_newline = true;
-                } else {
-                    ends_with_newline = false;
+                    _ => {
+                        whitespace_glyph_count += 1;
+                        segment_item_count += 1;
+                        self.glyph_items.push(GlyphItem::WhitespaceGlyph(glyph));
+                        whitespace_advance += glyph.advance.x
+                    },
                 }
             }
 
-            segment_index += 1;
+            push_whitespace!();
         }
 
-        if run != Run::default() || ends_with_newline {
-            glyph_items.insert(run_insert_index, GlyphItem::Run(run));
-        }
-        if line_advance != 0 || ends_with_newline {
-            glyph_items.insert(line_insert_index, GlyphItem::Line{ advance: line_advance, hard_break: true });
-            num_lines += 1;
+        // If the segment hasn't moved the cursor beyond the line's length, append it to the self.run.
+        if self.line_advance <= self.rect.width() as i32 || self.text_style.line_wrap == LineWrap::None {
+            self.run = self.run.append_run(segment_run);
         }
 
-        let face_size = FaceSize::new(text_style.face_size, text_style.face_size);
+        let is_hard_break = hard_break;
+        if (is_hard_break || self.line_advance > self.rect.width() as i32) && self.text_style.line_wrap != LineWrap::None {
+            self.glyph_items.insert(self.run_insert_index, GlyphItem::Run(self.run.ends_line()));
 
-        let font_metrics = face.metrics_sized(face_size, dpi).unwrap();
-        let line_height = (font_metrics.height / 64) as i32;
-        let (ascender, descender) = ((font_metrics.ascender / 64) as i32, (font_metrics.descender / 64) as i32);
+            self.num_lines += 1;
+            match self.line_advance > self.rect.width() as i32 {
+                // Happens if the last segment ran over the rectangle length.
+                true => {
+                    self.line_advance -= self.run.trailing_whitespace + segment_run.advance();
+                    self.glyph_items.insert(self.line_insert_index, GlyphItem::Line{ advance: self.line_advance, hard_break: is_hard_break });
 
-        let v_advance = match text_style.justify.y {
-            Align::Stretch => (rect.height() / (num_lines + 1)) as i32,
+                    self.line_advance = segment_run.advance();
+                    self.run = segment_run;
+
+                    let insert_index = self.glyph_items.len() - segment_item_count - 1;
+                    self.line_insert_index = insert_index;
+                    self.run_insert_index = insert_index;
+                },
+                // Happens if we've hit a hard break and the last segment isn't overflowing the rectangle.
+                false => {
+                    self.line_advance -= self.run.trailing_whitespace;
+                    self.glyph_items.insert(self.line_insert_index, GlyphItem::Line{ advance: self.line_advance, hard_break: is_hard_break });
+
+                    self.line_advance = 0;
+                    self.run = Run::default();
+
+                    self.line_insert_index = self.glyph_items.len();
+                    self.run_insert_index = self.glyph_items.len();
+                }
+            }
+
+            if let Some(glyph) = trailing_newline_glyph {
+                self.glyph_items.push(
+                    GlyphItem::Whitespace {
+                        glyph_count: 0,
+                        advance: 0
+                    }
+                );
+                self.glyph_items.push(GlyphItem::WhitespaceGlyph(glyph));
+                self.ends_with_newline = true;
+            } else {
+                self.ends_with_newline = false;
+            }
+        }
+    }
+
+    pub fn build(mut self) -> GlyphIter {
+        if self.run != Run::default() || self.ends_with_newline {
+            self.glyph_items.insert(self.run_insert_index, GlyphItem::Run(self.run));
+        }
+        if self.line_advance != 0 || self.ends_with_newline {
+            self.glyph_items.insert(self.line_insert_index, GlyphItem::Line{ advance: self.line_advance, hard_break: true });
+            self.num_lines += 1;
+        }
+
+        let line_height = (self.face_metrics.line_height / 64) as i32;
+        let (ascender, descender) = ((self.face_metrics.ascender / 64) as i32, (self.face_metrics.descender / 64) as i32);
+
+        let v_advance = match self.text_style.justify.y {
+            Align::Stretch => (self.rect.height() / (self.num_lines + 1)) as i32,
             _ => line_height
         };
 
         GlyphIter {
-            glyph_items: glyph_items.into_iter(),
+            glyph_items: self.glyph_items.into_iter(),
             v_advance,
             cursor: Vector2 {
                 x: 0,
-                y: match text_style.justify.y {
-                    Align::Center => (rect.height() as i32 - (line_height * num_lines as i32)) / 2,
-                    Align::End => rect.height() as i32 - (line_height * num_lines as i32),
+                y: match self.text_style.justify.y {
+                    Align::Center => (self.rect.height() as i32 - (line_height * self.num_lines as i32)) / 2,
+                    Align::End => self.rect.height() as i32 - (line_height * self.num_lines as i32),
                     _ => 0
                 }
             },
             line_start_x: 0,
             run_start_x: 0,
-            x_justify: text_style.justify.x,
+            x_justify: self.text_style.justify.x,
             active_run: Run::default(),
             whitespace_overflower: OverflowAdd::default(),
 
@@ -362,8 +349,16 @@ impl GlyphIter {
             text_rect: None,
 
             on_hard_break: false,
-            tab_advance,
-            bounds_width: rect.width() as i32,
+            tab_advance: self.face_metrics.tab_advance,
+            bounds_width: self.rect.width() as i32,
+        }
+    }
+}
+
+impl GlyphIter {
+    pub fn shaped_data(&self) -> ShapedGlyphsData {
+        ShapedGlyphsData {
+            text_rect: self.text_rect.unwrap_or(BoundBox::new2(0, 0, 0, 0)),
         }
     }
 

@@ -148,7 +148,7 @@ impl Iterator for ImageSlicer {
                 rect: BoundBox::new(raster_00, raster_11),
                 fill: RectFill::Image {
                     image_id,
-                    rect: BoundBox::new(sample_00, sample_11),
+                    subrect: BoundBox::new(sample_00, sample_11),
                 }
             }),
             // □■□
@@ -158,7 +158,7 @@ impl Iterator for ImageSlicer {
                 rect: BoundBox::new(raster_01 + zr, raster_12 + zl),
                 fill: RectFill::Image {
                     image_id,
-                    rect: BoundBox::new(sample_01 + zr, sample_12 + zl),
+                    subrect: BoundBox::new(sample_01 + zr, sample_12 + zl),
                 }
             }),
             // □□■
@@ -168,7 +168,7 @@ impl Iterator for ImageSlicer {
                 rect: BoundBox::new(raster_02, raster_13),
                 fill: RectFill::Image {
                     image_id,
-                    rect: BoundBox::new(sample_02, sample_13),
+                    subrect: BoundBox::new(sample_02, sample_13),
                 }
             }),
             // □□□
@@ -178,7 +178,7 @@ impl Iterator for ImageSlicer {
                 rect: BoundBox::new(raster_12 + dz, raster_23 + uz),
                 fill: RectFill::Image {
                     image_id,
-                    rect: BoundBox::new(sample_12 + dz, sample_23 + uz),
+                    subrect: BoundBox::new(sample_12 + dz, sample_23 + uz),
                 }
             }),
             // □□□
@@ -188,7 +188,7 @@ impl Iterator for ImageSlicer {
                 rect: BoundBox::new(raster_22, raster_33),
                 fill: RectFill::Image {
                     image_id,
-                    rect: BoundBox::new(sample_22, sample_33),
+                    subrect: BoundBox::new(sample_22, sample_33),
                 }
             }),
             // □□□
@@ -198,7 +198,7 @@ impl Iterator for ImageSlicer {
                 rect: BoundBox::new(raster_21 + zr, raster_32 + zl),
                 fill: RectFill::Image {
                     image_id,
-                    rect: BoundBox::new(sample_21 + zr, sample_32 + zl),
+                    subrect: BoundBox::new(sample_21 + zr, sample_32 + zl),
                 },
             }),
             // □□□
@@ -208,7 +208,7 @@ impl Iterator for ImageSlicer {
                 rect: BoundBox::new(raster_20, raster_31),
                 fill: RectFill::Image {
                     image_id,
-                    rect: BoundBox::new(sample_20, sample_31),
+                    subrect: BoundBox::new(sample_20, sample_31),
                 },
             }),
             // □□□
@@ -218,7 +218,7 @@ impl Iterator for ImageSlicer {
                 rect: BoundBox::new(raster_10 + dz, raster_21 + uz),
                 fill: RectFill::Image {
                     image_id,
-                    rect: BoundBox::new(sample_10 + dz, sample_21 + uz),
+                    subrect: BoundBox::new(sample_10 + dz, sample_21 + uz),
                 },
             }),
             // □□□
@@ -228,7 +228,7 @@ impl Iterator for ImageSlicer {
                 rect: BoundBox::new(raster_11 + dr, raster_22 + ul),
                 fill: RectFill::Image {
                     image_id,
-                    rect: BoundBox::new(sample_11 + dr, sample_22 + ul),
+                    subrect: BoundBox::new(sample_11 + dr, sample_22 + ul),
                 }
             }),
             9 => None,
@@ -413,7 +413,7 @@ mod tests {
                     rect: raster[&'0'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'0'],
+                        subrect: sample[&'0'],
                     }
                 },
                 // □■□
@@ -423,7 +423,7 @@ mod tests {
                     rect: raster[&'1'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'1'],
+                        subrect: sample[&'1'],
                     }
                 },
                 // □□■
@@ -433,7 +433,7 @@ mod tests {
                     rect: raster[&'2'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'2'],
+                        subrect: sample[&'2'],
                     }
                 },
                 // □□□
@@ -443,7 +443,7 @@ mod tests {
                     rect: raster[&'3'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'3'],
+                        subrect: sample[&'3'],
                     }
                 },
                 // □□□
@@ -453,7 +453,7 @@ mod tests {
                     rect: raster[&'4'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'4'],
+                        subrect: sample[&'4'],
                     }
                 },
                 // □□□
@@ -463,7 +463,7 @@ mod tests {
                     rect: raster[&'5'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'5'],
+                        subrect: sample[&'5'],
                     }
                 },
                 // □□□
@@ -473,7 +473,7 @@ mod tests {
                     rect: raster[&'6'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'6'],
+                        subrect: sample[&'6'],
                     }
                 },
                 // □□□
@@ -483,7 +483,7 @@ mod tests {
                     rect: raster[&'7'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'7'],
+                        subrect: sample[&'7'],
                     }
                 },
                 // □□□
@@ -493,7 +493,7 @@ mod tests {
                     rect: raster[&'8'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'8'],
+                        subrect: sample[&'8'],
                     }
                 },
             ],
@@ -539,7 +539,7 @@ mod tests {
                     rect: raster[&'0'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'0'],
+                        subrect: sample[&'0'],
                     }
                 },
             ]
@@ -591,7 +591,7 @@ mod tests {
                     rect: raster[&'0'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'0'],
+                        subrect: sample[&'0'],
                     }
                 },
                 // □□□
@@ -601,7 +601,7 @@ mod tests {
                     rect: raster[&'1'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'1'],
+                        subrect: sample[&'1'],
                     }
                 },
             ]
@@ -652,7 +652,7 @@ mod tests {
                     rect: raster[&'0'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'0'],
+                        subrect: sample[&'0'],
                     }
                 },
                 // □□□
@@ -662,7 +662,7 @@ mod tests {
                     rect: raster[&'1'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'1'],
+                        subrect: sample[&'1'],
                     }
                 },
             ]
@@ -714,7 +714,7 @@ mod tests {
                     rect: raster[&'0'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'0'],
+                        subrect: sample[&'0'],
                     }
                 },
                 // □□□
@@ -724,7 +724,7 @@ mod tests {
                     rect: raster[&'1'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'1'],
+                        subrect: sample[&'1'],
                     }
                 },
             ]
@@ -775,7 +775,7 @@ mod tests {
                     rect: raster[&'0'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'0'],
+                        subrect: sample[&'0'],
                     }
                 },
                 // □□□
@@ -785,7 +785,7 @@ mod tests {
                     rect: raster[&'1'],
                     fill: RectFill::Image {
                         image_id,
-                        rect: sample[&'1'],
+                        subrect: sample[&'1'],
                     }
                 },
             ]

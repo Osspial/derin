@@ -16,8 +16,6 @@ arrayvec = "0.4"
 glutin = "0.13"
 derin_atlas = {path = "../derin_atlas"}
 glyphydog = {git = "https://github.com/Osspial/glyphydog.git"}
-itertools = "0.7"
-unicode-segmentation = "1.2"
 clipboard = "0.4"
 png = "0.11"
 parking_lot = "0.5"
