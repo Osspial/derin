@@ -7,7 +7,7 @@
 use crate::{
     LoopFlow,
     event::{EventOps, InputState, WidgetEventSourced},
-    render::DisplayEngine,
+    render::{DisplayEngine, DisplayEngineLayoutRender},
     widget::{Parent, WidgetIdent, Widget, WidgetRenderable, WidgetId, WidgetTag, WidgetInfo, WidgetInfoMut},
 };
 use arrayvec::ArrayVec;
@@ -26,7 +26,7 @@ pub type ForEachSummary<'a, W> = &'a mut FnMut(ArrayVec<[W; CHILD_BATCH_SIZE]>) 
 
 /// Trait used internally to aid with dynamic dispatch.
 pub(crate) trait WidgetDyn<D>: 'static
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     fn widget_tag(&self) -> &WidgetTag;
     fn widget_id(&self) -> WidgetId;
@@ -52,8 +52,8 @@ pub(crate) trait WidgetDyn<D>: 'static
     fn children_mut<'a>(&'a mut self, for_each: ForEachSummary<WidgetInfoMut<'a, D>>);
 
     // WidgetRenderable methods
-    fn render(&mut self, renderer: <D as DisplayEngine<'_>>::Renderer);
-    fn update_layout(&mut self, layout: <D as DisplayEngine<'_>>::Layout);
+    fn render(&mut self, renderer: <D as DisplayEngineLayoutRender<'_>>::Renderer);
+    fn update_layout(&mut self, layout: <D as DisplayEngineLayoutRender<'_>>::Layout);
 
     fn type_id(&self) -> TypeId;
     fn to_widget(&self) -> &Widget;
@@ -78,12 +78,12 @@ macro_rules! type_match {
     ) => {$(
         fn $fn$(<$($generic),*>)?($($param)*) $(-> $ret)? {
             trait TypeMatch<D>
-                where for<'d> D: DisplayEngine<'d>
+                where D: DisplayEngine
             {
                 fn type_match$(<$($generic),*>)?($($param)*) $(-> $ret)?;
             }
             impl<D, W> TypeMatch<D> for W
-                where for<'d> D: DisplayEngine<'d>
+                where D: DisplayEngine
             {
                 #[inline(always)]
                 #[allow(unused_variables)]
@@ -92,7 +92,7 @@ macro_rules! type_match {
                 }
             }
             impl<D, W> TypeMatch<D> for W
-                where for<'d> D: DisplayEngine<'d>,
+                where D: DisplayEngine,
                       W: $($bounds)+
             {
                 #[inline(always)]
@@ -108,7 +108,7 @@ macro_rules! type_match {
 
 impl<W, D> WidgetDyn<D> for W
     where W: Widget,
-          for<'d> D: DisplayEngine<'d>
+          D: DisplayEngine
 {
     fn widget_tag(&self) -> &WidgetTag {
         <Self as Widget>::widget_tag(self)
@@ -208,11 +208,11 @@ impl<W, D> WidgetDyn<D> for W
             }
         }
 
-        fn render(&mut self, renderer: <D as DisplayEngine<'_>>::Renderer) {
+        fn render(&mut self, renderer: <D as DisplayEngineLayoutRender<'_>>::Renderer) {
             default => (),
             specialized(WidgetRenderable<D>) => self.render(renderer)
         }
-        fn update_layout(&mut self, layout: <D as DisplayEngine<'_>>::Layout) {
+        fn update_layout(&mut self, layout: <D as DisplayEngineLayoutRender<'_>>::Layout) {
             default => (),
             specialized(WidgetRenderable<D>) => self.update_layout(layout)
         }
@@ -232,16 +232,16 @@ impl<W, D> WidgetDyn<D> for W
 }
 
 impl<D> dyn WidgetDyn<D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     pub(crate) fn new<W: Widget>(widget: &W) -> &'_ WidgetDyn<D> {
         trait AsWidget<'a, D>
-            where for<'d> D: DisplayEngine<'d>
+            where D: DisplayEngine
         {
             fn as_widget_dyn(self) -> &'a WidgetDyn<D>;
         }
         impl<'a, D, W> AsWidget<'a, D> for &'a W
-            where for<'d> D: DisplayEngine<'d>,
+            where D: DisplayEngine,
                   W: WidgetDyn<D>
         {
             #[inline(always)]
@@ -250,7 +250,7 @@ impl<D> dyn WidgetDyn<D>
             }
         }
         impl<'a, D> AsWidget<'a, D> for &'a WidgetDyn<D>
-            where for<'d> D: DisplayEngine<'d>
+            where D: DisplayEngine
         {
             #[inline(always)]
             fn as_widget_dyn(self) -> &'a WidgetDyn<D> {
@@ -263,12 +263,12 @@ impl<D> dyn WidgetDyn<D>
 
     pub(crate) fn new_mut<W: Widget>(widget: &mut W) -> &'_ mut WidgetDyn<D> {
         trait AsWidget<'a, D>
-            where for<'d> D: DisplayEngine<'d>
+            where D: DisplayEngine
         {
             fn as_widget_dyn(self) -> &'a mut WidgetDyn<D>;
         }
         impl<'a, D, W> AsWidget<'a, D> for &'a mut W
-            where for<'d> D: DisplayEngine<'d>,
+            where D: DisplayEngine,
                   W: WidgetDyn<D>
         {
             #[inline(always)]
@@ -277,7 +277,7 @@ impl<D> dyn WidgetDyn<D>
             }
         }
         impl<'a, D> AsWidget<'a, D> for &'a mut WidgetDyn<D>
-            where for<'d> D: DisplayEngine<'d>
+            where D: DisplayEngine
         {
             #[inline(always)]
             fn as_widget_dyn(self) -> &'a mut WidgetDyn<D> {

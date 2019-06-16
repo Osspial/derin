@@ -6,7 +6,7 @@ use crate::{
     {LoopFlow, InputState},
     widget::{WidgetDyn, WidgetId, WidgetIdent, WidgetTag},
     event::{InputState as EventInputState, WidgetEventSourced, EventOps},
-    render::{DisplayEngine},
+    render::{DisplayEngine, DisplayEngineLayoutRender},
 };
 
 use derin_common_types::layout::SizeBounds;
@@ -19,7 +19,7 @@ use arrayvec::ArrayVec;
 pub(crate) struct OffsetWidget<'a, D>
     // Commented out to allow for Drop hack in `offset_widget_scan`
     // TODO: FIX WHEN rust-lang/#59497 lands
-    // where for<'d> D: DisplayEngine<'d>
+    // where D: DisplayEngine
 {
     widget: &'a mut WidgetDyn<D>,
     offset: Vector2<i32>,
@@ -27,7 +27,7 @@ pub(crate) struct OffsetWidget<'a, D>
 }
 
 pub(crate) struct OffsetWidgetInfo<'a, D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     pub ident: WidgetIdent,
     pub index: usize,
@@ -35,7 +35,7 @@ pub(crate) struct OffsetWidgetInfo<'a, D>
 }
 
 impl<'a, D> OffsetWidget<'a, D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     #[inline]
     pub fn new(widget: &'a mut WidgetDyn<D>, offset: Vector2<i32>, clip: Option<BoundBox<D2, i32>>) -> OffsetWidget<'a, D> {
@@ -75,7 +75,7 @@ impl<'a, D> OffsetWidget<'a, D>
     pub fn set_rect(&mut self, rect: BoundBox<D2, i32>) {
         *self.widget.rect_mut() = rect - self.offset;
     }
-    pub fn render(&mut self, renderer: <D as DisplayEngine<'_>>::Renderer) {
+    pub fn render(&mut self, renderer: <D as DisplayEngineLayoutRender<'_>>::Renderer) {
         self.widget.render(renderer)
     }
     pub fn on_widget_event(
@@ -123,7 +123,7 @@ impl<'a, D> OffsetWidget<'a, D>
     // pub fn num_children(&self) -> usize {
     //     self.widget.num_children()
     // }
-    pub fn update_layout(&mut self, layout: <D as DisplayEngine<'_>>::Layout) {
+    pub fn update_layout(&mut self, layout: <D as DisplayEngineLayoutRender<'_>>::Layout) {
         self.widget.update_layout(layout);
     }
 

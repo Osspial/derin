@@ -88,7 +88,7 @@ impl Widget for Label {
 }
 
 impl<D> WidgetRenderable<D> for Label
-    where for<'d> D: DisplayEngine<'d>,
+    where D: DisplayEngine,
           for<'d> <D as DisplayEngine<'d>>::Renderer: RenderContent<'d>,
           for<'d> <D as DisplayEngine<'d>>::Layout: LayoutContent<'d>,
 {

@@ -63,7 +63,7 @@ impl<L> Parent for Button<L>
     }
 
     fn framed_child<D>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, D>>
-        where for<'d> D: DisplayEngine<'d>
+        where D: DisplayEngine
     {
         match widget_ident {
             WidgetIdent::Num(0) => Some(WidgetInfo::new(WidgetIdent::Num(0), 0, &self.label)),
@@ -71,7 +71,7 @@ impl<L> Parent for Button<L>
         }
     }
     fn framed_child_mut<D>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, D>>
-        where for<'d> D: DisplayEngine<'d>
+        where D: DisplayEngine
     {
         match widget_ident {
             WidgetIdent::Num(0) => Some(WidgetInfoMut::new(WidgetIdent::Num(0), 0, &mut self.label)),
@@ -80,21 +80,21 @@ impl<L> Parent for Button<L>
     }
 
     fn framed_children<'a, D, G>(&'a self, mut for_each: G)
-        where for<'d> D: DisplayEngine<'d>,
+        where D: DisplayEngine,
               G: FnMut(WidgetInfo<'a, D>) -> LoopFlow
     {
         let _ = for_each(WidgetInfo::new(WidgetIdent::Num(0), 0, &self.label));
     }
 
     fn framed_children_mut<'a, D, G>(&'a mut self, mut for_each: G)
-        where for<'d> D: DisplayEngine<'d>,
+        where D: DisplayEngine,
               G: FnMut(WidgetInfoMut<'a, D>) -> LoopFlow
     {
         let _ = for_each(WidgetInfoMut::new(WidgetIdent::Num(0), 0, &mut self.label));
     }
 
     fn framed_child_by_index<D>(&self, index: usize) -> Option<WidgetInfo<'_, D>>
-        where for<'d> D: DisplayEngine<'d>,
+        where D: DisplayEngine,
     {
         match index {
             0 => Some(WidgetInfo::new(WidgetIdent::Num(0), 0, &self.label)),
@@ -102,7 +102,7 @@ impl<L> Parent for Button<L>
         }
     }
     fn framed_child_by_index_mut<D>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, D>>
-        where for<'d> D: DisplayEngine<'d>,
+        where D: DisplayEngine,
     {
         match index {
             0 => Some(WidgetInfoMut::new(WidgetIdent::Num(0), 0, &mut self.label)),
@@ -171,7 +171,7 @@ impl<L> Widget for Button<L>
 }
 
 impl<D, L> WidgetRenderable<D> for Button<L>
-    where for<'d> D: DisplayEngine<'d>,
+    where D: DisplayEngine,
           for<'d> <D as DisplayEngine<'d>>::Renderer: RenderContent<'d>,
           for<'d> <D as DisplayEngine<'d>>::Layout: LayoutContent<'d>,
           L: Widget,

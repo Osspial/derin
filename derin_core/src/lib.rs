@@ -65,7 +65,7 @@ fn vec_remove_element<T: PartialEq>(v: &mut Vec<T>, element: &T) -> Option<T> {
 
 pub struct Root<N, D>
     where N: Widget + 'static,
-          for<'d> D: DisplayEngine<'d>
+          D: DisplayEngine
 {
     // Event handing and dispatch
     event_translator: EventTranslator,
@@ -122,7 +122,7 @@ pub enum LoopFlow {
 
 #[must_use]
 pub struct FrameEventProcessor<'a, D>
-    where for<'d> D: DisplayEngine<'d> + 'static
+    where D: DisplayEngine + 'static
 {
     input_state: &'a mut InputState,
     event_translator: &'a mut EventTranslator,
@@ -155,7 +155,7 @@ impl InputState {
 
 impl<N, D> Root<N, D>
     where N: Widget,
-          for<'d> D: DisplayEngine<'d>
+          D: DisplayEngine
 {
     #[inline]
     pub fn new(mut root_widget: N, display_engine: D, dims: DimsBox<D2, u32>) -> Root<N, D> {
@@ -313,7 +313,7 @@ impl<N, D> Root<N, D>
 }
 
 impl<D> FrameEventProcessor<'_, D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     pub fn process_event(
         &mut self,

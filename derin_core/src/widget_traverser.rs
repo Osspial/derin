@@ -33,14 +33,14 @@ pub enum Relation {
 }
 
 pub(crate) struct WidgetTraverserBase<D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     stack_cache: WidgetStackCache<D>,
     virtual_widget_tree: VirtualWidgetTree,
 }
 
 pub(crate) struct WidgetTraverser<'a, D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     stack: WidgetStack<'a, D>,
     virtual_widget_tree: &'a mut VirtualWidgetTree,
@@ -48,7 +48,7 @@ pub(crate) struct WidgetTraverser<'a, D>
 }
 
 impl<D> WidgetTraverserBase<D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     pub fn new(root_id: WidgetId) -> Self {
         WidgetTraverserBase {
@@ -71,7 +71,7 @@ impl<D> WidgetTraverserBase<D>
 }
 
 impl<D> WidgetTraverser<'_, D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     pub fn get_widget(&mut self, id: WidgetId) -> Option<OffsetWidgetScanPath<'_, D>> {
         // Move the stack top to the desired widget.
@@ -227,7 +227,7 @@ impl<D> WidgetTraverser<'_, D>
 }
 
 impl<D> WidgetTraverser<'_, D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     fn scan_for_widget(&mut self, widget_id: WidgetId) -> Option<OffsetWidgetPath<D>> {
         let stack = &mut self.stack;

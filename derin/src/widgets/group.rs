@@ -103,44 +103,44 @@ impl<C, L> Parent for Group<C, L>
     }
 
     fn framed_child<D>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, D>>
-        where for<'d> D: DisplayEngine<'d>
+        where D: DisplayEngine
     {
         self.container.framed_child(widget_ident).map(WidgetInfo::erase_subtype)
     }
     fn framed_child_mut<D>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, D>>
-        where for<'d> D: DisplayEngine<'d>
+        where D: DisplayEngine
     {
         self.container.framed_child_mut(widget_ident).map(WidgetInfoMut::erase_subtype)
     }
 
     fn framed_children<'a, D, G>(&'a self, mut for_each: G)
-        where for<'d> D: DisplayEngine<'d>,
+        where D: DisplayEngine,
               G: FnMut(WidgetInfo<'a, D>) -> LoopFlow
     {
         self.container.framed_children(|summary| for_each(WidgetInfo::erase_subtype(summary)))
     }
 
     fn framed_children_mut<'a, D, G>(&'a mut self, mut for_each: G)
-        where for<'d> D: DisplayEngine<'d>,
+        where D: DisplayEngine,
               G: FnMut(WidgetInfoMut<'a, D>) -> LoopFlow
     {
         self.container.framed_children_mut(|summary| for_each(WidgetInfoMut::erase_subtype(summary)))
     }
 
     fn framed_child_by_index<D>(&self, index: usize) -> Option<WidgetInfo<'_, D>>
-        where for<'d> D: DisplayEngine<'d>,
+        where D: DisplayEngine,
     {
         self.container.framed_child_by_index(index).map(WidgetInfo::erase_subtype)
     }
     fn framed_child_by_index_mut<D>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, D>>
-        where for<'d> D: DisplayEngine<'d>,
+        where D: DisplayEngine,
     {
         self.container.framed_child_by_index_mut(index).map(WidgetInfoMut::erase_subtype)
     }
 }
 
 impl<D, C, L> WidgetRenderable<D> for Group<C, L>
-    where for<'d> D: DisplayEngine<'d>,
+    where D: DisplayEngine,
           for<'d> <D as DisplayEngine<'d>>::Renderer: RenderContent<'d>,
           for<'d> <D as DisplayEngine<'d>>::Layout: LayoutContent<'d>,
           C: WidgetContainer<dyn Widget>,

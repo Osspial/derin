@@ -16,9 +16,7 @@ use crate::{
 use super::virtual_widget_tree::VirtualWidgetTree;
 
 pub(crate) struct OffsetWidgetScan<'a, D>
-    // Commented out to allow for Drop impl
-    // TODO: FIX WHEN rust-lang/#59497 lands
-    // where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     offset_widget: OffsetWidget<'a, D>,
     virtual_widget_tree: &'a mut VirtualWidgetTree,
@@ -27,7 +25,7 @@ pub(crate) struct OffsetWidgetScan<'a, D>
 }
 
 impl<'a, D> Deref for OffsetWidgetScan<'a, D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     type Target = OffsetWidget<'a, D>;
 
@@ -37,7 +35,7 @@ impl<'a, D> Deref for OffsetWidgetScan<'a, D>
 }
 
 impl<'a, D> DerefMut for OffsetWidgetScan<'a, D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.scan = true;
@@ -47,36 +45,16 @@ impl<'a, D> DerefMut for OffsetWidgetScan<'a, D>
 }
 
 
-impl<'a, D> Drop for OffsetWidgetScan<'a, D> {
+impl<'a, D: DisplayEngine> Drop for OffsetWidgetScan<'a, D> {
     fn drop(&mut self) {
-        // Ideally we'd just have a bare `Drop` impl, but `where for` clauses don't work in
-        // `Drop` impls currently. This is waiting on rust-lang/#59497 to fix.
-        trait DropSwitch {
-            fn drop_switch(&mut self);
+        if self.scan {
+            update_recursive(self.offset_widget.inner(), self.virtual_widget_tree, &self.update_state);
         }
-
-        impl<'a, D> DropSwitch for OffsetWidgetScan<'a, D> {
-            default fn drop_switch(&mut self) {
-                unreachable!()
-            }
-        }
-
-        impl<'a, D> DropSwitch for OffsetWidgetScan<'a, D>
-            where for<'d> D: DisplayEngine<'d>
-        {
-            fn drop_switch(&mut self) {
-                if self.scan {
-                    update_recursive(self.offset_widget.inner(), self.virtual_widget_tree, &self.update_state);
-                }
-            }
-        }
-
-        self.drop_switch();
     }
 }
 
 impl<D> OffsetWidgetScan<'_, D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     pub fn new<'a>(offset_widget: OffsetWidget<'a, D>, virtual_widget_tree: &'a mut VirtualWidgetTree, update_state: &'a Rc<UpdateStateCell>) -> OffsetWidgetScan<'a, D> {
         OffsetWidgetScan {
@@ -93,7 +71,7 @@ impl<D> OffsetWidgetScan<'_, D>
 }
 
 pub(crate) fn update_recursive<D>(widget: &dyn WidgetDyn<D>, tree: &mut VirtualWidgetTree, update_state: &Rc<UpdateStateCell>)
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     let widget_tag = widget.widget_tag();
     let widget_id = widget_tag.widget_id;

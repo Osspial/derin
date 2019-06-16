@@ -64,7 +64,7 @@ impl EventDispatcher {
         widget_traverser: &mut WidgetTraverser<D>,
         mut f: impl FnMut(&mut Self, OffsetWidgetScanPath<D>, DispatchableEvent)
     )
-        where for<'d> D: DisplayEngine<'d>
+        where D: DisplayEngine
     {
         while let Some((destination, event)) = self.events.pop_front() {
             let widget_opt = {

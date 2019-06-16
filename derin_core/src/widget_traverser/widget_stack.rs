@@ -17,7 +17,7 @@ use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 // TODO: GET CODE REVIEWED FOR SAFETY
 
 struct StackElement<D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     widget: *mut (WidgetDyn<D>),
     rectangles: Option<ElementRects>,
@@ -26,7 +26,7 @@ struct StackElement<D>
 }
 
 impl<D> std::fmt::Debug for StackElement<D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         f.debug_struct("StackElement")
@@ -44,14 +44,14 @@ struct ElementRects {
 }
 
 pub(crate) struct WidgetStackCache<D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     vec: Vec<StackElement<D>>,
     ident_vec: Vec<WidgetIdent>
 }
 
 pub(crate) struct WidgetStack<'a, D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     vec: &'a mut Vec<StackElement<D>>,
     ident_vec: &'a mut Vec<WidgetIdent>,
@@ -69,7 +69,7 @@ pub(crate) struct WidgetPath<'a, W> {
 }
 
 impl<D> WidgetStackCache<D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     pub fn new() -> WidgetStackCache<D> {
         WidgetStackCache {
@@ -103,7 +103,7 @@ impl<D> WidgetStackCache<D>
 }
 
 impl<'a, D> WidgetStack<'a, D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     #[inline]
     pub fn top(&self) -> WidgetPath<'_, &'_ WidgetDyn<D>> {

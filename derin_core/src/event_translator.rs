@@ -23,7 +23,7 @@ pub(crate) struct EventTranslator
 }
 
 pub(crate) struct TranslatorActive<'a, 'b, D>
-    where for<'d> D: DisplayEngine<'d>
+    where D: DisplayEngine
 {
     widget_traverser: &'a mut WidgetTraverser<'b, D>,
     inner: &'a mut TranslatorInner,
@@ -51,7 +51,7 @@ impl EventTranslator
         input_state: &'a mut InputState,
         update_state: Rc<UpdateStateCell>,
     ) -> TranslatorActive<'a, 'b, D>
-        where for<'d> D: DisplayEngine<'d>
+        where D: DisplayEngine
     {
         TranslatorActive {
             widget_traverser,
@@ -63,7 +63,7 @@ impl EventTranslator
 }
 
 impl<D> TranslatorActive<'_, '_, D>
-    where for<'d> D: DisplayEngine<'d> + 'static
+    where D: DisplayEngine + 'static
 {
     pub fn translate_window_event(&mut self, window_event: WindowEvent) {
         use self::WindowEvent::*;

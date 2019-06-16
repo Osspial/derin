@@ -44,17 +44,17 @@ pub trait WidgetContainer<S: ?Sized>: 'static {
     /// calling `for_each_child` on each child.
     fn framed_children<'a, D, G>(&'a self, for_each_child: G)
         where G: FnMut(WidgetInfo<'a, D, S>) -> LoopFlow,
-              for<'d> D: DisplayEngine<'d>;
+              D: DisplayEngine;
 
     /// Perform internal, mutable iteration over each child widget stored within the container,
     /// calling `for_each_child` on each child.
     fn framed_children_mut<'a, D, G>(&'a mut self, for_each_child: G)
         where G: FnMut(WidgetInfoMut<'a, D, S>) -> LoopFlow,
-              for<'d> D: DisplayEngine<'d>;
+              D: DisplayEngine;
 
     /// Get the child with the specified name.
     fn framed_child<D>(&self, widget_ident: WidgetIdent) -> Option<WidgetInfo<'_, D, S>>
-        where for<'d> D: DisplayEngine<'d>,
+        where D: DisplayEngine,
     {
         let mut summary_opt = None;
         self.framed_children(|summary| {
@@ -70,7 +70,7 @@ pub trait WidgetContainer<S: ?Sized>: 'static {
 
     /// Mutably get the child with the specified name.
     fn framed_child_mut<D>(&mut self, widget_ident: WidgetIdent) -> Option<WidgetInfoMut<'_, D, S>>
-        where for<'d> D: DisplayEngine<'d>,
+        where D: DisplayEngine,
     {
         let mut summary_opt = None;
         self.framed_children_mut(|summary| {
@@ -89,7 +89,7 @@ pub trait WidgetContainer<S: ?Sized>: 'static {
     /// The index of a child is generally assumed to correspond with the order in which the children
     /// are defined within the container.
     fn framed_child_by_index<D>(&self, mut index: usize) -> Option<WidgetInfo<'_, D, S>>
-        where for<'d> D: DisplayEngine<'d>,
+        where D: DisplayEngine,
     {
         let mut summary_opt = None;
         self.framed_children(|summary| {
@@ -108,7 +108,7 @@ pub trait WidgetContainer<S: ?Sized>: 'static {
     /// The index of a child is generally assumed to correspond with the order in which the children
     /// are defined within the container.
     fn framed_child_by_index_mut<D>(&mut self, mut index: usize) -> Option<WidgetInfoMut<'_, D, S>>
-        where for<'d> D: DisplayEngine<'d>,
+        where D: DisplayEngine,
     {
         let mut summary_opt = None;
         self.framed_children_mut(|summary| {
@@ -171,14 +171,14 @@ impl<S, W> WidgetContainer<S> for SingleContainer<W>
 
     fn framed_children<'a, D, G>(&'a self, mut for_each_child: G)
             where G: FnMut(WidgetInfo<'a, D, S>) -> LoopFlow,
-                  for<'d> D: DisplayEngine<'d>,
+                  D: DisplayEngine,
     {
         let _ = for_each_child(WidgetInfo::new(WidgetIdent::Num(0), 0, &self.widget));
     }
 
     fn framed_children_mut<'a, D, G>(&'a mut self, mut for_each_child: G)
             where G: FnMut(WidgetInfoMut<'a, D, S>) -> LoopFlow,
-                  for<'d> D: DisplayEngine<'d>,
+                  D: DisplayEngine,
     {
         let _ = for_each_child(WidgetInfoMut::new(WidgetIdent::Num(0), 0, &mut self.widget));
     }
@@ -195,7 +195,7 @@ impl<S, W> WidgetContainer<S> for Vec<W>
 
     fn framed_children<'a, D, G>(&'a self, mut for_each_child: G)
             where G: FnMut(WidgetInfo<'a, D, S>) -> LoopFlow,
-                  for<'d> D: DisplayEngine<'d>,
+                  D: DisplayEngine,
     {
         for (index, widget) in self.iter().enumerate() {
             match for_each_child(WidgetInfo::new(WidgetIdent::Num(index as u32), index, widget)) {
@@ -207,7 +207,7 @@ impl<S, W> WidgetContainer<S> for Vec<W>
 
     fn framed_children_mut<'a, D, G>(&'a mut self, mut for_each_child: G)
             where G: FnMut(WidgetInfoMut<'a, D, S>) -> LoopFlow,
-                  for<'d> D: DisplayEngine<'d>,
+                  D: DisplayEngine,
     {
         for (index, widget) in self.iter_mut().enumerate() {
             match for_each_child(WidgetInfoMut::new(WidgetIdent::Num(index as u32), index, widget)) {
