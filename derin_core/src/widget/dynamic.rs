@@ -22,7 +22,7 @@ use derin_common_types::layout::SizeBounds;
 
 const CHILD_BATCH_SIZE: usize = 24;
 
-pub type ForEachSummary<'a, W> = &'a mut FnMut(ArrayVec<[W; CHILD_BATCH_SIZE]>) -> LoopFlow;
+pub type ForEachSummary<'a, W> = &'a mut dyn FnMut(ArrayVec<[W; CHILD_BATCH_SIZE]>) -> LoopFlow;
 
 /// Trait used internally to aid with dynamic dispatch.
 pub(crate) trait WidgetDyn<D>: 'static
@@ -40,7 +40,7 @@ pub(crate) trait WidgetDyn<D>: 'static
     ) -> EventOps;
 
     fn size_bounds(&self) -> SizeBounds;
-    fn dispatch_message(&mut self, message: &Any);
+    fn dispatch_message(&mut self, message: &dyn Any);
 
     // Parent methods
     fn num_children(&self) -> usize;
@@ -56,8 +56,8 @@ pub(crate) trait WidgetDyn<D>: 'static
     fn update_layout(&mut self, layout: <D as DisplayEngineLayoutRender<'_>>::Layout);
 
     fn type_id(&self) -> TypeId;
-    fn to_widget(&self) -> &Widget;
-    fn to_widget_mut(&mut self) -> &mut Widget;
+    fn to_widget(&self) -> &dyn Widget;
+    fn to_widget_mut(&mut self) -> &mut dyn Widget;
 }
 
 macro_rules! isolate_params {
@@ -130,7 +130,7 @@ impl<W, D> WidgetDyn<D> for W
     fn size_bounds(&self) -> SizeBounds {
         <Self as Widget>::size_bounds(self)
     }
-    fn dispatch_message(&mut self, message: &Any) {
+    fn dispatch_message(&mut self, message: &dyn Any) {
         <Self as Widget>::dispatch_message(self, message)
     }
 
@@ -222,11 +222,11 @@ impl<W, D> WidgetDyn<D> for W
         TypeId::of::<W>()
     }
 
-    fn to_widget(&self) -> &Widget {
+    fn to_widget(&self) -> &dyn Widget {
         self
     }
 
-    fn to_widget_mut(&mut self) -> &mut Widget {
+    fn to_widget_mut(&mut self) -> &mut dyn Widget {
         self
     }
 }
@@ -234,26 +234,26 @@ impl<W, D> WidgetDyn<D> for W
 impl<D> dyn WidgetDyn<D>
     where D: DisplayEngine
 {
-    pub(crate) fn new<W: Widget>(widget: &W) -> &'_ WidgetDyn<D> {
+    pub(crate) fn new<W: Widget>(widget: &W) -> &'_ dyn WidgetDyn<D> {
         trait AsWidget<'a, D>
             where D: DisplayEngine
         {
-            fn as_widget_dyn(self) -> &'a WidgetDyn<D>;
+            fn as_widget_dyn(self) -> &'a dyn WidgetDyn<D>;
         }
         impl<'a, D, W> AsWidget<'a, D> for &'a W
             where D: DisplayEngine,
                   W: WidgetDyn<D>
         {
             #[inline(always)]
-            fn as_widget_dyn(self) -> &'a WidgetDyn<D> {
+            fn as_widget_dyn(self) -> &'a dyn WidgetDyn<D> {
                 self
             }
         }
-        impl<'a, D> AsWidget<'a, D> for &'a WidgetDyn<D>
+        impl<'a, D> AsWidget<'a, D> for &'a dyn WidgetDyn<D>
             where D: DisplayEngine
         {
             #[inline(always)]
-            fn as_widget_dyn(self) -> &'a WidgetDyn<D> {
+            fn as_widget_dyn(self) -> &'a dyn WidgetDyn<D> {
                 self
             }
         }
@@ -261,26 +261,26 @@ impl<D> dyn WidgetDyn<D>
         widget.as_widget_dyn()
     }
 
-    pub(crate) fn new_mut<W: Widget>(widget: &mut W) -> &'_ mut WidgetDyn<D> {
+    pub(crate) fn new_mut<W: Widget>(widget: &mut W) -> &'_ mut dyn WidgetDyn<D> {
         trait AsWidget<'a, D>
             where D: DisplayEngine
         {
-            fn as_widget_dyn(self) -> &'a mut WidgetDyn<D>;
+            fn as_widget_dyn(self) -> &'a mut dyn WidgetDyn<D>;
         }
         impl<'a, D, W> AsWidget<'a, D> for &'a mut W
             where D: DisplayEngine,
                   W: WidgetDyn<D>
         {
             #[inline(always)]
-            fn as_widget_dyn(self) -> &'a mut WidgetDyn<D> {
+            fn as_widget_dyn(self) -> &'a mut dyn WidgetDyn<D> {
                 self
             }
         }
-        impl<'a, D> AsWidget<'a, D> for &'a mut WidgetDyn<D>
+        impl<'a, D> AsWidget<'a, D> for &'a mut dyn WidgetDyn<D>
             where D: DisplayEngine
         {
             #[inline(always)]
-            fn as_widget_dyn(self) -> &'a mut WidgetDyn<D> {
+            fn as_widget_dyn(self) -> &'a mut dyn WidgetDyn<D> {
                 self
             }
         }
@@ -290,23 +290,23 @@ impl<D> dyn WidgetDyn<D>
 }
 
 
-pub(crate) fn to_any<W>(widget: &mut W, f: impl FnOnce(&mut Any))
+pub(crate) fn to_any<W>(widget: &mut W, f: impl FnOnce(&mut dyn Any))
     where W: Widget + ?Sized
 {
     trait AsWidgetDyn {
-        fn as_widget_sized<G: FnOnce(&mut Any)>(&mut self, f: G);
+        fn as_widget_sized<G: FnOnce(&mut dyn Any)>(&mut self, f: G);
     }
     impl<W> AsWidgetDyn for W
         where W: Widget + ?Sized
     {
-        default fn as_widget_sized<G: FnOnce(&mut Any)>(&mut self, _f: G) {
+        default fn as_widget_sized<G: FnOnce(&mut dyn Any)>(&mut self, _f: G) {
             panic!("Invalid")
         }
     }
     impl<W> AsWidgetDyn for W
         where W: Widget
     {
-        fn as_widget_sized<G: FnOnce(&mut Any)>(&mut self, f: G) {
+        fn as_widget_sized<G: FnOnce(&mut dyn Any)>(&mut self, f: G) {
             f(self);
         }
     }

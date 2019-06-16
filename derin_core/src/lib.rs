@@ -2,7 +2,7 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#![feature(range_contains, nll, specialization, try_blocks, never_type)]
+#![feature(nll, specialization, try_blocks, never_type)]
 #![feature(core_intrinsics)] // this is used for `type_name`. Should be removed when that's stabilized
 
 use cgmath_geometry::cgmath;

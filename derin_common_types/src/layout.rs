@@ -4,7 +4,7 @@
 
 use crate::Px;
 use num_traits::Bounded;
-use crate::cgmath::Point2;
+
 use cgmath_geometry::{D2, rect::{DimsBox, GeoBox}};
 use std::ops::{Add, Range, RangeFrom, RangeFull, RangeTo};
 

@@ -2,15 +2,13 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#![feature(splice)]
-
 use cgmath_geometry::cgmath;
 extern crate cgmath_geometry;
 
 use std::{cmp, mem};
 use std::ops::Range;
 
-use crate::cgmath::{EuclideanSpace, Point2, Vector2};
+use crate::cgmath::{EuclideanSpace, Vector2};
 use cgmath_geometry::{D2, rect::{DimsBox, OffsetBox, GeoBox}};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -58,7 +58,7 @@ pub(crate) struct TestLayout {}
 pub(crate) struct TestRenderer {}
 
 impl DisplayEngine for TestDisplayEngine {
-    fn resized(&mut self, new_size: DimsBox<D2, u32>) {}
+    fn resized(&mut self, _new_size: DimsBox<D2, u32>) {}
     fn dims(&self) -> DimsBox<D2, u32> {DimsBox::new2(512, 512)}
     fn widget_removed(&mut self, _: WidgetId) {}
 
@@ -118,7 +118,7 @@ impl Widget for TestWidget {
     fn on_widget_event(
         &mut self,
         event: WidgetEventSourced,
-        input_state: InputState,
+        _input_state: InputState,
     ) -> EventOps {
         let (event, source_child) = match event {
             WidgetEventSourced::This(event) => (event, &[][..]),
@@ -351,11 +351,11 @@ mod tests {
             };
         }
 
-        assert_eq!((&tree as &Widget).widget_id(), root);
-        assert_eq!((&tree as &Widget).rect(), BoundBox::new2(0, 0, 500, 500));
+        assert_eq!((&tree as &dyn Widget).widget_id(), root);
+        assert_eq!((&tree as &dyn Widget).rect(), BoundBox::new2(0, 0, 500, 500));
 
         let left_widget = check_child_widget(&tree, 0, WidgetIdent::new_str("left"), left, BoundBox::new2(10, 10, 240, 490));
-        let right_widget = check_child_widget(&tree, 1, WidgetIdent::new_str("right"), right, BoundBox::new2(260, 10, 490, 490));
+        let _right_widget = check_child_widget(&tree, 1, WidgetIdent::new_str("right"), right, BoundBox::new2(260, 10, 490, 490));
 
         check_child_widget(left_widget, 0, WidgetIdent::new_str("tl"), tl, BoundBox::new2(10, 10, 220, 230));
         check_child_widget(left_widget, 1, WidgetIdent::new_str("bl"), bl, BoundBox::new2(10, 250, 220, 470));

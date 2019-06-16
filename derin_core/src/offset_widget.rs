@@ -21,7 +21,7 @@ pub(crate) struct OffsetWidget<'a, D>
     // TODO: FIX WHEN rust-lang/#59497 lands
     // where D: DisplayEngine
 {
-    widget: &'a mut WidgetDyn<D>,
+    widget: &'a mut dyn WidgetDyn<D>,
     offset: Vector2<i32>,
     clip: Option<BoundBox<D2, i32>>,
 }
@@ -38,7 +38,7 @@ impl<'a, D> OffsetWidget<'a, D>
     where D: DisplayEngine
 {
     #[inline]
-    pub fn new(widget: &'a mut WidgetDyn<D>, offset: Vector2<i32>, clip: Option<BoundBox<D2, i32>>) -> OffsetWidget<'a, D> {
+    pub fn new(widget: &'a mut dyn WidgetDyn<D>, offset: Vector2<i32>, clip: Option<BoundBox<D2, i32>>) -> OffsetWidget<'a, D> {
         OffsetWidget {
             widget,
             offset,
@@ -47,12 +47,12 @@ impl<'a, D> OffsetWidget<'a, D>
     }
 
     #[inline]
-    pub fn inner(&self) -> &WidgetDyn<D> {
+    pub fn inner(&self) -> &dyn WidgetDyn<D> {
         self.widget
     }
 
     #[inline]
-    pub fn inner_mut(&mut self) -> &mut WidgetDyn<D> {
+    pub fn inner_mut(&mut self) -> &mut dyn WidgetDyn<D> {
         self.widget
     }
 
@@ -98,7 +98,7 @@ impl<'a, D> OffsetWidget<'a, D>
                 down.down_pos -= offset;
                 down
             }).collect();
-        let mbdin_array: ArrayVec<[(); 5]> = ArrayVec::new(); //TODO: GET ACTUAL VALUES
+        let _mbdin_array: ArrayVec<[(); 5]> = ArrayVec::new(); //TODO: GET ACTUAL VALUES
 
         let input_state = EventInputState {
             mouse_pos: mouse_pos.map(|p| p - offset),

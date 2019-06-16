@@ -442,7 +442,7 @@ mod tests {
             tv
         }
 
-        fn shrink(&self) -> Box<Iterator<Item=TrackVec<A>>> {
+        fn shrink(&self) -> Box<dyn Iterator<Item=TrackVec<A>>> {
             struct TrackVecShrinker<A: Arbitrary> {
                 source: TrackVec<A>,
                 index: usize

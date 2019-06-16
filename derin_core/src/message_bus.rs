@@ -9,8 +9,8 @@ use std::{
     sync::mpsc::{self, Sender, Receiver},
 };
 
-pub type Message = Box<Any>;
-pub type WidgetMessageFn = Box<FnMut(&mut Any, &Any)>;
+pub type Message = Box<dyn Any>;
+pub type WidgetMessageFn = Box<dyn FnMut(&mut dyn Any, &dyn Any)>;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct WidgetMessageKey {
@@ -29,7 +29,7 @@ impl WidgetMessageKey {
         }
     }
 
-    pub fn from_dyn_message<W>(message: &Any) -> WidgetMessageKey
+    pub fn from_dyn_message<W>(message: &dyn Any) -> WidgetMessageKey
         where W: 'static + ?Sized
     {
         WidgetMessageKey {

@@ -19,7 +19,7 @@ use cgmath_geometry::{D2, rect::{BoundBox, GeoBox}};
 struct StackElement<D>
     where D: DisplayEngine
 {
-    widget: *mut (WidgetDyn<D>),
+    widget: *mut (dyn WidgetDyn<D>),
     rectangles: Option<ElementRects>,
     index: usize,
     widget_id: WidgetId
@@ -78,7 +78,7 @@ impl<D> WidgetStackCache<D>
         }
     }
 
-    pub fn use_cache<'a>(&'a mut self, widget: &mut WidgetDyn<D>) -> WidgetStack<'a, D> {
+    pub fn use_cache<'a>(&'a mut self, widget: &mut dyn WidgetDyn<D>) -> WidgetStack<'a, D> {
         let mut cache_swap = Vec::new();
         mem::swap(&mut cache_swap, &mut self.vec);
 
@@ -106,7 +106,7 @@ impl<'a, D> WidgetStack<'a, D>
     where D: DisplayEngine
 {
     #[inline]
-    pub fn top(&self) -> WidgetPath<'_, &'_ WidgetDyn<D>> {
+    pub fn top(&self) -> WidgetPath<'_, &'_ dyn WidgetDyn<D>> {
         let (widget, widget_id) = self.vec.last().map(|n| unsafe{ (&*n.widget, n.widget_id) }).unwrap();
         WidgetPath {
             widget: widget,
@@ -179,7 +179,7 @@ impl<'a, D> WidgetStack<'a, D>
     }
 
     #[inline]
-    pub fn widgets(&self) -> impl '_ + Iterator<Item=WidgetPath<'_, &'_ WidgetDyn<D>>> + DoubleEndedIterator + ExactSizeIterator {
+    pub fn widgets(&self) -> impl '_ + Iterator<Item=WidgetPath<'_, &'_ dyn WidgetDyn<D>>> + DoubleEndedIterator + ExactSizeIterator {
         let path = &self.ident_vec[..];
         self.vec.iter().enumerate().map(move |(i, n)| WidgetPath {
             widget: unsafe{ &*n.widget },
@@ -210,7 +210,7 @@ impl<'a, D> WidgetStack<'a, D>
             let new_top_index = new_top_summary.index;
             let new_top_ident = new_top_summary.ident.clone();
 
-            assert_ne!(new_top_widget, self.top_mut().widget.inner_mut() as *mut WidgetDyn<D>);
+            assert_ne!(new_top_widget, self.top_mut().widget.inner_mut() as *mut dyn WidgetDyn<D>);
             {
                 let old_top = self.vec.last_mut().unwrap();
                 let top_clip = self.clip_rect.and_then(|r| r.intersect_rect(top_rect));
@@ -303,7 +303,7 @@ impl<'a, D> WidgetStack<'a, D>
     }
 
     #[inline]
-    pub fn pop(&mut self) -> Option<&mut WidgetDyn<D>> {
+    pub fn pop(&mut self) -> Option<&mut dyn WidgetDyn<D>> {
         // Ensure the base is never popped
         if self.vec.len() == 1 {
             return None;

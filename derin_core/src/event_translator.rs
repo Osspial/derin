@@ -293,7 +293,7 @@ impl<D> TranslatorActive<'_, '_, D>
                 let mut perform_event_ops = |ops| {
                     let EventOps {
                         focus,
-                        bubble,
+                        bubble: _,
                     } = ops;
                     if let Some(focus) = focus {
                         let of = widget_id;

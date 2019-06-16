@@ -96,7 +96,7 @@ pub trait Widget: 'static {
     }
 
     #[doc(hidden)]
-    fn dispatch_message(&mut self, message: &Any) {
+    fn dispatch_message(&mut self, message: &dyn Any) {
         let message_key = WidgetMessageKey::from_dyn_message::<Self>(message);
 
         // We have to pull the `message_fns` list out of the widget tag so that we can pass self
@@ -164,29 +164,29 @@ impl<W> Widget for Box<W>
         W::size_bounds(self)
     }
 
-    fn dispatch_message(&mut self, message: &Any) {
+    fn dispatch_message(&mut self, message: &dyn Any) {
         W::dispatch_message(self, message)
     }
 }
 
-pub struct WidgetInfo<'a, D, S=Widget>
+pub struct WidgetInfo<'a, D, S=dyn Widget>
     where D: DisplayEngine,
           S: ?Sized
 {
     pub ident: WidgetIdent,
     pub index: usize,
-    pub(crate) widget: &'a WidgetDyn<D>,
-    to_secondary: fn(&'_ WidgetDyn<D>) -> &'_ S,
+    pub(crate) widget: &'a dyn WidgetDyn<D>,
+    to_secondary: fn(&'_ dyn WidgetDyn<D>) -> &'_ S,
 }
 
-pub struct WidgetInfoMut<'a, D, S=Widget>
+pub struct WidgetInfoMut<'a, D, S=dyn Widget>
     where D: DisplayEngine,
           S: ?Sized
 {
     pub ident: WidgetIdent,
     pub index: usize,
-    pub(crate) widget: &'a mut WidgetDyn<D>,
-    to_secondary: fn(Reference<'_, WidgetDyn<D>>) -> Reference<'_, S>
+    pub(crate) widget: &'a mut dyn WidgetDyn<D>,
+    to_secondary: fn(Reference<'_, dyn WidgetDyn<D>>) -> Reference<'_, S>
 }
 
 enum Reference<'a, T: ?Sized> {
@@ -338,7 +338,7 @@ impl<'a, D, S> WidgetInfo<'a, D, S>
             widget: WidgetDyn::new(widget),
             to_secondary: |r| {
                 if r.type_id() == TypeId::of::<W>() {
-                    S::from_widget(unsafe{ &*(r as *const WidgetDyn<D> as *const W) })
+                    S::from_widget(unsafe{ &*(r as *const dyn WidgetDyn<D> as *const W) })
                 } else {
                     panic!("widget type replaced")
                 }
@@ -346,7 +346,7 @@ impl<'a, D, S> WidgetInfo<'a, D, S>
         }
     }
 
-    pub fn widget(&self) -> &Widget {
+    pub fn widget(&self) -> &dyn Widget {
         self.widget.to_widget()
     }
 
@@ -382,9 +382,9 @@ impl<'a, D, S> WidgetInfoMut<'a, D, S>
                 if r.as_ref().type_id() == TypeId::of::<W>() {
                     match r {
                         Reference::Ref(r) =>
-                            Reference::Ref(S::from_widget(unsafe{ &*(r as *const WidgetDyn<D> as *const W) })),
+                            Reference::Ref(S::from_widget(unsafe{ &*(r as *const dyn WidgetDyn<D> as *const W) })),
                         Reference::Mut(r) =>
-                            Reference::Mut(S::from_widget_mut(unsafe{ &mut *(r as *mut WidgetDyn<D> as *mut W) }))
+                            Reference::Mut(S::from_widget_mut(unsafe{ &mut *(r as *mut dyn WidgetDyn<D> as *mut W) }))
                     }
                 } else {
                     panic!("widget type replaced")
@@ -393,11 +393,11 @@ impl<'a, D, S> WidgetInfoMut<'a, D, S>
         }
     }
 
-    pub fn widget(&self) -> &Widget {
+    pub fn widget(&self) -> &dyn Widget {
         self.widget.to_widget()
     }
 
-    pub fn widget_mut(&mut self) -> &mut Widget {
+    pub fn widget_mut(&mut self) -> &mut dyn Widget {
         self.widget.to_widget_mut()
     }
 
@@ -508,7 +508,7 @@ impl WidgetTag {
     {
         self.update_state.get_mut().request_update_messages(self.widget_id);
 
-        let f: Box<FnMut(&mut Any, &Any)> = Box::new(move |widget_any, message_any| {
+        let f: Box<dyn FnMut(&mut dyn Any, &dyn Any)> = Box::new(move |widget_any, message_any| {
             let widget = widget_any.downcast_mut::<W>().expect("Passed bad widget type to message fn");
             let message = message_any.downcast_ref::<A>().expect("Passed bad message type to message fn");
             f(widget, message);

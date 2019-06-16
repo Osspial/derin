@@ -135,7 +135,7 @@ impl VirtualWidgetTree {
             let node = occ.remove();
 
             // Remove the widget from the parent's child list and remove any trailing `None`s.
-            let mut parent_children = &mut self.get_widget_node_mut(node.parent_id).unwrap().1;
+            let parent_children = &mut self.get_widget_node_mut(node.parent_id).unwrap().1;
             crate::vec_remove_element(parent_children, &Some(widget_id));
             while let Some(None) = parent_children.last() {
                 parent_children.pop();
