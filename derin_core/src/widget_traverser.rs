@@ -294,7 +294,7 @@ mod tests {
     use super::*;
     use crate::{
         message_bus::MessageBus,
-        test_helpers::TestRenderFrame,
+        test_helpers::TestDisplayEngine,
         update_state::UpdateState,
     };
     use cgmath_geometry::rect::BoundBox;
@@ -315,7 +315,7 @@ mod tests {
             };
         }
 
-        let mut traverser_base: WidgetTraverserBase<TestRenderFrame> = WidgetTraverserBase::new(root);
+        let mut traverser_base: WidgetTraverserBase<TestDisplayEngine> = WidgetTraverserBase::new(root);
         let message_bus = MessageBus::new();
         let update_state = UpdateState::new(&message_bus);
         let mut traverser = traverser_base.with_root_ref(&mut tree, update_state.clone());
@@ -357,7 +357,7 @@ mod tests {
         }
 
         for _ in 0..1000 {
-            let mut traverser_base: WidgetTraverserBase<TestRenderFrame> = WidgetTraverserBase::new(root);
+            let mut traverser_base: WidgetTraverserBase<TestDisplayEngine> = WidgetTraverserBase::new(root);
             let message_bus = MessageBus::new();
             let update_state = UpdateState::new(&message_bus);
             let mut traverser = traverser_base.with_root_ref(&mut tree, update_state.clone());
@@ -414,7 +414,7 @@ mod tests {
             };
         }
 
-        let mut traverser_base: WidgetTraverserBase<TestRenderFrame> = WidgetTraverserBase::new(root);
+        let mut traverser_base: WidgetTraverserBase<TestDisplayEngine> = WidgetTraverserBase::new(root);
         let message_bus = MessageBus::new();
         let update_state = UpdateState::new(&message_bus);
         let mut traverser = traverser_base.with_root_ref(&mut tree, update_state.clone());

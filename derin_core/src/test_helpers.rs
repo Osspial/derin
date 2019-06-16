@@ -5,12 +5,12 @@
 use crate::{
     LoopFlow,
     event::{EventOps, FocusChange, InputState, WidgetEvent, WidgetEventSourced},
-    render::{RenderFrameClipped, RenderFrame, Theme},
+    render::{DisplayEngine, DisplayEngineLayoutRender},
     widget::*,
 };
 use cgmath_geometry::{
     D2,
-    rect::BoundBox,
+    rect::{BoundBox, DimsBox},
 };
 use derin_common_types::{
     buttons::Key,
@@ -51,15 +51,31 @@ pub(crate) struct TestEvent {
 }
 
 #[derive(Default)]
-pub(crate) struct TestRenderFrame {}
+pub(crate) struct TestDisplayEngine {}
 #[derive(Default)]
-pub(crate) struct TestTheme {}
+pub(crate) struct TestLayout {}
+#[derive(Default)]
+pub(crate) struct TestRenderer {}
 
-impl Theme for TestTheme {
-    type Key = ();
-    type ThemeValue = ();
+impl DisplayEngine for TestDisplayEngine {
+    fn resized(&mut self, new_size: DimsBox<D2, u32>) {}
+    fn dims(&self) -> DimsBox<D2, u32> {DimsBox::new2(512, 512)}
+    fn widget_removed(&mut self, _: WidgetId) {}
 
-    fn widget_theme(&self, key: &()) {}
+    fn start_frame(&mut self) {}
+    fn finish_frame(&mut self) {}
+}
+
+impl<'d> DisplayEngineLayoutRender<'d> for TestDisplayEngine {
+    type Layout = TestLayout;
+    type Renderer = TestRenderer;
+
+    fn layout(&'d mut self, _: WidgetId, _: DimsBox<D2, i32>) -> Self::Layout {
+        TestLayout {}
+    }
+    fn render(&'d mut self, _: WidgetId, _: BoundBox<D2, i32>, _: BoundBox<D2, i32>) -> Self::Renderer {
+        TestRenderer {}
+    }
 }
 
 impl EventList {
@@ -84,21 +100,6 @@ impl Drop for EventList {
             assert_eq!(None, self.events.borrow_mut().next());
         }
     }
-}
-
-impl RenderFrame for TestRenderFrame {
-    type Theme = TestTheme;
-    type Primitive = ();
-
-    fn upload_primitives<I>(
-        &mut self,
-        _theme: &TestTheme,
-        _transform: BoundBox<D2, i32>,
-        _clip: BoundBox<D2, i32>,
-        _prim_iter: I
-    )
-        where I: Iterator<Item=()>
-    {}
 }
 
 impl Widget for TestWidget {
@@ -155,8 +156,9 @@ impl Widget for TestWidget {
     }
 }
 
-impl<F: RenderFrame> WidgetRenderable<F> for TestWidget {
-    fn render(&mut self, _frame: &mut RenderFrameClipped<F>) {}
+impl<D: DisplayEngine> WidgetRenderable<D> for TestWidget {
+    fn render(&mut self, _: <D as DisplayEngineLayoutRender<'_>>::Renderer) {}
+    fn update_layout(&mut self, _: <D as DisplayEngineLayoutRender<'_>>::Layout) {}
 }
 
 impl Parent for TestWidget {
@@ -164,31 +166,31 @@ impl Parent for TestWidget {
         self.children.as_ref().map(|c| c.len()).unwrap_or(0)
     }
 
-    fn framed_child<F: RenderFrame>(&self, ident: WidgetIdent) -> Option<WidgetInfo<'_, F>> {
+    fn framed_child<D: DisplayEngine>(&self, ident: WidgetIdent) -> Option<WidgetInfo<'_, D>> {
         self.children.as_ref()
             .and_then(|c| c.get_full(&ident))
             .map(|(index, _, widget)| WidgetInfo::new(ident, index, widget))
     }
-    fn framed_child_mut<F: RenderFrame>(&mut self, ident: WidgetIdent) -> Option<WidgetInfoMut<'_, F>> {
+    fn framed_child_mut<D: DisplayEngine>(&mut self, ident: WidgetIdent) -> Option<WidgetInfoMut<'_, D>> {
         self.children.as_mut()
             .and_then(|c| c.get_full_mut(&ident))
             .map(|(index, _, widget)| WidgetInfoMut::new(ident, index, widget))
     }
 
-    fn framed_child_by_index<F: RenderFrame>(&self, index: usize) -> Option<WidgetInfo<'_, F>> {
+    fn framed_child_by_index<D: DisplayEngine>(&self, index: usize) -> Option<WidgetInfo<'_, D>> {
         self.children.as_ref()
             .and_then(|c| c.get_index(index))
             .map(|(ident, widget)| WidgetInfo::new(ident.clone(), index, widget))
     }
-    fn framed_child_by_index_mut<F: RenderFrame>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, F>> {
+    fn framed_child_by_index_mut<D: DisplayEngine>(&mut self, index: usize) -> Option<WidgetInfoMut<'_, D>> {
         self.children.as_mut()
             .and_then(|c| c.get_index_mut(index))
             .map(|(ident, widget)| WidgetInfoMut::new(ident.clone(), index, widget))
     }
 
-    fn framed_children<'a, F, G>(&'a self, mut for_each: G)
-        where F: RenderFrame,
-              G: FnMut(WidgetInfo<'a, F>) -> LoopFlow
+    fn framed_children<'a, D, G>(&'a self, mut for_each: G)
+        where D: DisplayEngine,
+              G: FnMut(WidgetInfo<'a, D>) -> LoopFlow
     {
         for (index, (ident, widget)) in self.children.as_ref().into_iter().flat_map(|c| c.iter().enumerate()) {
             let flow = for_each(WidgetInfo::new(ident.clone(), index, widget));
@@ -197,9 +199,9 @@ impl Parent for TestWidget {
             }
         }
     }
-    fn framed_children_mut<'a, F, G>(&'a mut self, mut for_each: G)
-        where F: RenderFrame,
-              G: FnMut(WidgetInfoMut<'a, F>) -> LoopFlow
+    fn framed_children_mut<'a, D, G>(&'a mut self, mut for_each: G)
+        where D: DisplayEngine,
+              G: FnMut(WidgetInfoMut<'a, D>) -> LoopFlow
     {
         for (index, (ident, widget)) in self.children.as_mut().into_iter().flat_map(|c| c.iter_mut().enumerate()) {
             let flow = for_each(WidgetInfoMut::new(ident.clone(), index, widget));
@@ -310,12 +312,12 @@ mod tests {
     use crate::widget::WidgetDyn;
 
     fn check_child_widget(
-        parent: &dyn WidgetDyn<TestRenderFrame>,
+        parent: &dyn WidgetDyn<TestDisplayEngine>,
         index: usize,
         ident: WidgetIdent,
         id: WidgetId,
         rect: BoundBox<D2, i32>,
-    ) -> &dyn WidgetDyn<TestRenderFrame> {
+    ) -> &dyn WidgetDyn<TestDisplayEngine> {
         let summary_by_ident = parent.child(ident.clone()).expect(&format!("Could not find child by ident: {} {:?}", index, ident));
         let summary_by_index = parent.child_by_index(index).expect(&format!("Could not find child by index: {} {:?}", index, ident));
 
