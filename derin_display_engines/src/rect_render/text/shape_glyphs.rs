@@ -20,7 +20,7 @@ pub struct ShapedGlyphsData {
     pub text_rect: BoundBox<D2, i32>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct RenderGlyph {
     /// The glyph's position relative to the top-left corner of the text box.
     pub pos: Point2<i32>,

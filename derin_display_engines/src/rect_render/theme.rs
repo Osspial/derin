@@ -23,23 +23,6 @@ pub struct Color {
     pub a: u8,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ImageStyle {
-    pub image_margins: Margins<u16>,
-    pub image: ImageId,
-}
-
-/// The algorithm used to rescale an image.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum RescaleRules {
-    /// Rescale the image by uniformly stretching it out, from its edges.
-    Stretch,
-    /// Perform nine-slicing on the provided image, stretching out the center of the image while
-    /// keeping the borders of the image a constant size.
-    Slice(Margins<u16>),
-    Align(Align2),
-}
-
 /// The algorithm used to determine where line breaks occur in text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum LineWrap {
@@ -52,14 +35,14 @@ pub enum LineWrap {
 }
 
 /// Collection of information used to determine how to render text in a widget.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TextStyle {
-    pub text_margins: Margins<u16>,
+    pub text_margins: Margins<i32>,
     pub render: TextRenderStyle,
     pub layout: TextLayoutStyle,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TextRenderStyle {
     /// The color to draw text.
     pub color: Color,
@@ -69,7 +52,7 @@ pub struct TextRenderStyle {
     pub highlight_text_color: Color,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TextLayoutStyle {
     pub face: FontFaceId,
     /// The size of the text being drawn, in 64ths of a [point].
@@ -85,9 +68,9 @@ pub struct TextLayoutStyle {
 }
 
 /// The text style and image used to draw a widget with a given style.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WidgetStyle {
-    pub content_margins: Margins<u16>,
+    pub background: Option<ImageId>,
     pub text: TextStyle,
-    pub image: Option<ImageStyle>,
+    pub content_margins: Margins<i32>,
 }

@@ -20,16 +20,16 @@ use xi_unicode::LineBreakIterator;
 
 
 // you can think of this as a secretarial version of koh the face stealer.
-pub trait FaceManager<'a> {
+pub trait FaceManager: for<'a> FaceManagerGlyphs<'a> {
     type Face: Face;
-    type GlyphIter: 'a + Iterator<Item=Glyph>;
 
-    fn face(&mut self, face_id: FontFaceId) -> Self::Face;
-    fn shape_text(&'a mut self, text: &str, face_size: u32, face_id: FontFaceId) -> Self::GlyphIter;
+    fn face(&mut self, face_id: FontFaceId) -> &mut Self::Face;
+    fn glyph_image(&mut self, color: Color, face: FontFaceId, face_size: u32, dpi: u32, glyph_index: u32) -> (ImageId, BoundBox<D2, i32>);
 }
 
-pub trait GlyphRenderer {
-    fn glyph_image(&mut self, color: Color, face: FontFaceId, face_size: u32, dpi: u32, glyph_index: u32) -> (ImageId, BoundBox<D2, i32>);
+pub trait FaceManagerGlyphs<'a> {
+    type GlyphIter: 'a + Iterator<Item=Glyph>;
+    fn shape_text(&'a mut self, text: &str, face_size: u32, face_id: FontFaceId) -> Self::GlyphIter;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -56,7 +56,7 @@ pub struct FaceMetrics {
     pub cursor_width: i32,
 }
 
-pub struct TextToRects<'a, G: GlyphRenderer> {
+pub struct TextToRects<'a, G: FaceManager> {
     glyph_slice_index: usize,
     layout_data: &'a StringLayoutData,
     highlight_range: Range<usize>,
@@ -68,10 +68,10 @@ pub struct TextToRects<'a, G: GlyphRenderer> {
 
     render_style: TextRenderStyle,
 
-    glyph_renderer: &'a mut G,
+    face_manager: &'a mut G,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StringLayoutData {
     shaped_glyphs: Vec<RenderGlyph>,
     dpi: u32,
@@ -88,7 +88,7 @@ impl StringLayoutData {
         layout_style: TextLayoutStyle,
         face_manager: &mut F,
     ) -> StringLayoutData
-        where for<'a> F: FaceManager<'a>
+        where F: FaceManager
     {
         let face_metrics = face_manager.face(layout_style.face)
             .metrics(layout_style.face_size, dpi);
@@ -123,17 +123,15 @@ impl StringLayoutData {
     }
 }
 
-impl<'a, G: GlyphRenderer> TextToRects<'a, G> {
-    pub fn new<F>(
+impl<'a, G: FaceManager> TextToRects<'a, G> {
+    pub fn new(
         layout_data: &'a StringLayoutData,
         highlight_range: Range<usize>,
         cursor_pos: Option<usize>,
         render_style: TextRenderStyle,
 
-        face_manager: &mut F,
-        glyph_renderer: &'a mut G,
+        face_manager: &'a mut G,
     ) -> TextToRects<'a, G>
-        where for<'f> F: FaceManager<'f>
     {
         let face_metrics = face_manager.face(layout_data.layout_style.face)
             .metrics(layout_data.layout_style.face_size, layout_data.dpi);
@@ -151,12 +149,12 @@ impl<'a, G: GlyphRenderer> TextToRects<'a, G> {
 
             render_style,
 
-            glyph_renderer,
+            face_manager,
         }
     }
 }
 
-impl<'a, G: GlyphRenderer> Iterator for TextToRects<'a, G> {
+impl<'a, G: FaceManager> Iterator for TextToRects<'a, G> {
     type Item = Rect;
 
     fn next(&mut self) -> Option<Rect> {
@@ -169,7 +167,7 @@ impl<'a, G: GlyphRenderer> Iterator for TextToRects<'a, G> {
             font_descender,
             cursor_width,
             render_style,
-            ref mut glyph_renderer,
+            ref mut face_manager,
         } = *self;
 
         macro_rules! get_glyph_slice {
@@ -265,7 +263,7 @@ impl<'a, G: GlyphRenderer> Iterator for TextToRects<'a, G> {
             false => render_style.highlight_text_color,
         };
         let glyph_image = next_glyph.glyph_index.map(|glyph_index|
-            glyph_renderer.glyph_image(
+            face_manager.glyph_image(
                 glyph_color,
                 layout_data.layout_style.face,
                 layout_data.layout_style.face_size,

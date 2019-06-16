@@ -18,7 +18,7 @@ pub struct ImageSlicer {
 }
 
 impl ImageSlicer {
-    pub fn new(image_id: ImageId, image_dims: DimsBox<D2, i32>, rect: BoundBox<D2, i32>, margins: Margins<i32>) -> ImageSlicer {
+    pub fn new(image_id: ImageId, rect: BoundBox<D2, i32>, image_dims: DimsBox<D2, i32>, margins: Margins<i32>) -> ImageSlicer {
         ImageSlicer {
             image_id,
             image_dims,
@@ -249,113 +249,7 @@ impl Iterator for ImageSlicer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::hash_map::{Entry, HashMap};
-
-    /// Turns a string representation of rectangles into a `HashMap` of rectangles.
-    ///
-    /// The user provides a string with several alphanumeric characters. Each rectangle
-    /// is created by looking at all alphanumeric characters, finding matching top-left
-    /// and lower-right corner characters, then setting the `min` and `max` coordinates
-    /// based the locations of those characters.
-    ///
-    /// All non-alphanumeric characters are ignored, making them useful as guides.
-    ///
-    /// Any unpaired characters will be represented as 0x0 rectangles. Note that the
-    /// following rectangle is 1x1, not 2x2:
-    ///
-    /// ```text
-    /// 0+
-    /// +0
-    /// ```
-    fn rects_from_string(s: &str, first_alphanumeric_is_origin: bool) -> HashMap<char, BoundBox<D2, i32>> {
-        let mut rects = HashMap::new();
-        let mut offset_set = !first_alphanumeric_is_origin;
-        let mut offset = Vector2::new(0, 0);
-
-        for (y, line) in s.lines().enumerate() {
-            let y = y as i32;
-
-            for (x, c) in line.chars().enumerate().filter(|&(_, c)| c.is_alphanumeric()) {
-                let x = x as i32;
-
-                if !offset_set {
-                    offset = Vector2::new(-x, -y);
-                    offset_set = true;
-                }
-
-                match rects.entry(c) {
-                    Entry::Vacant(v) => {v.insert(BoundBox::new2(x, y, x, y) + offset);},
-                    Entry::Occupied(ref mut o) if o.get().min == o.get().max => {
-                        let o = o.get_mut();
-                        o.max = Point2::new(x, y) + offset;
-                        let min = Point2::new(i32::min(o.min.x, o.max.x), i32::min(o.min.y, o.max.y));
-                        let max = Point2::new(i32::max(o.min.x, o.max.x), i32::max(o.min.y, o.max.y));
-                        o.min = min;
-                        o.max = max;
-                    },
-                    Entry::Occupied(_) => panic!("Attempted to set lower-right corner of rect {} twice", c),
-                }
-            }
-        }
-
-        rects
-    }
-
-    #[test]
-    fn test_rects_from_string() {
-        // 0x0 square
-        let s = "
-        0
-        ";
-        let mut rects = HashMap::new();
-        rects.insert('0', BoundBox::new2(8, 1, 8, 1));
-        assert_eq!(rects, rects_from_string(s, false));
-        assert_eq!((0, 0), (rects[&'0'].width(), rects[&'0'].height()));
-
-        // 1x1 square
-        let s = "
-        0+
-        +0
-        ";
-        let mut rects = HashMap::new();
-        rects.insert('0', BoundBox::new2(8, 1, 9, 2));
-        assert_eq!(rects, rects_from_string(s, false));
-        assert_eq!((1, 1), (rects[&'0'].width(), rects[&'0'].height()));
-
-        // 1x1 square
-        let s = "
-        0+
-        +0
-        ";
-        let mut rects = HashMap::new();
-        rects.insert('0', BoundBox::new2(0, 0, 1, 1));
-        assert_eq!(rects, rects_from_string(s, true));
-        assert_eq!((1, 1), (rects[&'0'].width(), rects[&'0'].height()));
-
-        // 1x1 square
-        let s = "
-        +0
-        0+
-        ";
-        let mut rects = HashMap::new();
-        rects.insert('0', BoundBox::new2(8, 1, 9, 2));
-        assert_eq!(rects, rects_from_string(s, false));
-        assert_eq!((1, 1), (rects[&'0'].width(), rects[&'0'].height()));
-
-        let s = "
-            o
-                      2---+
-             +++    0 + 0 1
-             ----     |   |   1
-              ||||    +---2
-        ";
-        let mut rects = HashMap::new();
-        rects.insert('o', BoundBox::new2(0, 0, 0, 0));
-        rects.insert('0', BoundBox::new2(8, 2, 12, 2));
-        rects.insert('1', BoundBox::new2(14, 2, 18, 3));
-        rects.insert('2', BoundBox::new2(10, 1, 14, 4));
-        assert_eq!(rects, rects_from_string(s, true));
-    }
+    use crate::tests::rects_from_string;
 
     #[test]
     fn simple_nine_slice() {
@@ -398,8 +292,8 @@ mod tests {
         let margins = Margins::new(4, 4, 3, 2);
         let slicer = ImageSlicer::new(
                 image_id,
-                image_dims,
                 raster_rect,
+                image_dims,
                 margins
             );
 
@@ -524,8 +418,8 @@ mod tests {
         let margins = Margins::new(0, 0, 0, 0);
         let slicer = ImageSlicer::new(
                 image_id,
-                image_dims,
                 raster_rect,
+                image_dims,
                 margins
             );
 
@@ -576,8 +470,8 @@ mod tests {
         let margins = Margins::new(2, 0, 0, 0);
         let slicer = ImageSlicer::new(
                 image_id,
-                image_dims,
                 raster_rect,
+                image_dims,
                 margins
             );
 
@@ -637,8 +531,8 @@ mod tests {
         let margins = Margins::new(0, 2, 0, 0);
         let slicer = ImageSlicer::new(
                 image_id,
-                image_dims,
                 raster_rect,
+                image_dims,
                 margins
             );
 
@@ -699,8 +593,8 @@ mod tests {
         let margins = Margins::new(0, 0, 2, 0);
         let slicer = ImageSlicer::new(
                 image_id,
-                image_dims,
                 raster_rect,
+                image_dims,
                 margins
             );
 
@@ -760,8 +654,8 @@ mod tests {
         let margins = Margins::new(0, 0, 0, 2);
         let slicer = ImageSlicer::new(
                 image_id,
-                image_dims,
                 raster_rect,
+                image_dims,
                 margins
             );
 
