@@ -17,6 +17,7 @@ arrayvec = "0.4"
 itertools = "0.7"
 fnv = "1"
 smallvec = {version = "0.6", features = ["std", "union"]}
+named_type = "0.2"
 
 [dev-dependencies]
 indexmap = "1"

@@ -3,7 +3,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #![feature(nll, specialization, try_blocks, never_type)]
-#![feature(core_intrinsics)] // this is used for `type_name`. Should be removed when that's stabilized
 
 use cgmath_geometry::cgmath;
 #[macro_use]

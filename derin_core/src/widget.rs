@@ -127,16 +127,11 @@ pub trait Widget: 'static {
     }
 }
 
-pub trait WidgetRenderable<D>: Widget
+pub trait WidgetRenderable<D>: Widget + named_type::NamedType
     where D: DisplayEngine
 {
     fn render(&mut self, renderer: <D as DisplayEngineLayoutRender<'_>>::Renderer);
     fn update_layout(&mut self, layout: <D as DisplayEngineLayoutRender<'_>>::Layout);
-
-    /// The type name. This must be formatted as a Rust type path.
-    fn type_name(&self) -> &'static str {
-        unsafe { std::intrinsics::type_name::<Self>() }
-    }
 }
 
 impl<W> Widget for Box<W>
