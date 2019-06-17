@@ -51,6 +51,7 @@ pub trait LayoutString<'a>: LayoutContent<'a> {
 /// are made out of multiple individual `char`s, such as the 🤷🏽‍♀️ emoji: it's made out of separate
 /// `'🤷'`, `'🏽'`, `'‍'` (zero width joiner), and `'♀️'` unicode characters, which get combined
 /// together by the font into a single grapheme cluster that gets displayed to the user.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GraphemeCluster {
     /// The byte range in the source string used to construct this grapheme cluster.
     pub range: Range<usize>,

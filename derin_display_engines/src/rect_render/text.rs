@@ -5,9 +5,12 @@
 mod shape_glyphs;
 
 use shape_glyphs::{GlyphIterBuilder, RenderGlyph};
-use crate::rect_render::{
-    Rect, RectFill,
-    theme::{TextLayoutStyle, TextRenderStyle, LineWrap, FontFaceId, ImageId, Color},
+use crate::{
+    GraphemeCluster,
+    rect_render::{
+        Rect, RectFill,
+        theme::{TextLayoutStyle, TextRenderStyle, LineWrap, FontFaceId, ImageId, Color},
+    },
 };
 
 use crate::cgmath::{EuclideanSpace, Point2, Vector2};
@@ -17,6 +20,7 @@ use derin_common_types::layout::Align;
 
 use std::ops::Range;
 use xi_unicode::LineBreakIterator;
+use itertools::Itertools;
 
 
 // you can think of this as a secretarial version of koh the face stealer.
@@ -121,6 +125,24 @@ impl StringLayoutData {
             LineWrap::Normal => None,
         }
     }
+
+    pub fn grapheme_clusters(&self) -> impl '_ + Iterator<Item=GraphemeCluster> {
+        glyphs_to_grapheme_clusters(self.shaped_glyphs.iter().cloned())
+    }
+}
+
+fn glyphs_to_grapheme_clusters(iter: impl Iterator<Item=RenderGlyph>) -> impl Iterator<Item=GraphemeCluster> {
+    iter.map(|glyph| GraphemeCluster {
+            range: glyph.str_index..glyph.str_index + glyph.grapheme_len,
+            selection_rect: glyph.highlight_rect
+        })
+        .coalesce(|acc, glyph1| match acc.range == glyph1.range {
+            true => Ok(GraphemeCluster {
+                range: acc.range,
+                selection_rect: BoundBox::new(acc.selection_rect.min, glyph1.selection_rect.max),
+            }),
+            false => Err((acc, glyph1)),
+        })
 }
 
 impl<'a, G: FaceManager> TextToRects<'a, G> {
@@ -287,5 +309,59 @@ impl<'a, G: FaceManager> Iterator for TextToRects<'a, G> {
         }
 
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tests::rects_from_string;
+    use std::char;
+
+    #[test]
+    fn tets_glyphs_to_grapheme_clusters() {
+        let clusters = "
+            a-+b--+c-Ad---+
+            +-aA--b+-c+---d
+                e-+f--+
+                +-e+--f
+        ";
+        let clusters = rects_from_string(clusters, true);
+        let cluster_ranges = [0, 1, 3, 4, 6, 7, 8, 10].iter().cloned()
+            .tuple_windows()
+            .map(|(a, b)| a..b)
+            .collect::<Vec<_>>();
+
+        let gen_glyph = |i: usize, c: char| {
+            RenderGlyph {
+                pos: clusters[&c].min,
+                highlight_rect: clusters[&c],
+                str_index: cluster_ranges[i].start,
+                grapheme_len: cluster_ranges[i].len(),
+                glyph_index: None,
+            }
+        };
+
+        let glyphs = vec![
+            gen_glyph(0, 'a'),
+            gen_glyph(1, 'b'),
+            gen_glyph(1, 'c'),
+            gen_glyph(2, 'd'),
+            gen_glyph(3, 'e'),
+            gen_glyph(4, 'f'),
+        ];
+
+        let gen_cluster = |i: usize| {
+            let c = char::from_digit(i as u32, 10).unwrap();
+            GraphemeCluster {
+                range: cluster_ranges[i].clone(),
+                selection_rect: clusters[&c],
+            }
+        };
+
+        assert_eq!(
+            (0..=5).map(gen_cluster).collect::<Vec<_>>(),
+            glyphs_to_grapheme_clusters(glyphs.into_iter()).collect::<Vec<_>>()
+        );
     }
 }
