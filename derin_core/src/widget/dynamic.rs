@@ -31,6 +31,8 @@ pub(crate) trait WidgetDyn<D>: 'static
     fn widget_tag(&self) -> &WidgetTag;
     fn widget_id(&self) -> WidgetId;
 
+    fn widget_type(&self) -> &'static str;
+
     fn rect(&self) -> BoundBox<D2, i32>;
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32>;
     fn on_widget_event(
@@ -115,6 +117,10 @@ impl<W, D> WidgetDyn<D> for W
     }
     fn widget_id(&self) -> WidgetId {
         <Self as Widget>::widget_id(self)
+    }
+
+    fn widget_type(&self) -> &'static str {
+        <Self as Widget>::widget_type(self)
     }
 
     fn rect(&self) -> BoundBox<D2, i32> {

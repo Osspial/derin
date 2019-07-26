@@ -107,6 +107,10 @@ impl Widget for TestWidget {
         &self.widget_tag
     }
 
+    fn widget_type(&self) -> &'static str {
+        "derin_core::test_helpers::TestWidget"
+    }
+
     fn rect(&self) -> BoundBox<D2, i32> {
         self.rect
     }

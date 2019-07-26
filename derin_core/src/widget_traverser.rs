@@ -271,7 +271,7 @@ impl<D> WidgetTraverser<'_, D>
                 widget_id,
                 ..
             } = self.stack.top();
-            match self.virtual_widget_tree.insert(parent.widget_id, widget_id, index, path.last().unwrap().clone()) {
+            match self.virtual_widget_tree.insert(parent.widget_id, widget_id, index, path.last().unwrap().clone().ident) {
                 Ok(()) => (),
                 Err(WidgetInsertError::ParentNotInTree) => {
                     for (parent, widget) in self.stack.widgets().zip(self.stack.widgets().skip(1)) {
@@ -279,7 +279,7 @@ impl<D> WidgetTraverser<'_, D>
                             parent.widget_id,
                             widget.widget_id,
                             widget.index,
-                            widget.path.last().unwrap().clone()
+                            widget.path.last().unwrap().clone().ident,
                         ).ok();
                     }
                 },

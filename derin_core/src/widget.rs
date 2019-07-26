@@ -54,6 +54,13 @@ pub struct WidgetTag {
     pub(crate) timers: FnvHashMap<TimerId, Timer>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct WidgetPathEntry {
+    pub widget_id: WidgetId,
+    pub ident: WidgetIdent,
+    pub type_name: &'static str,
+}
+
 impl fmt::Debug for WidgetTag {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         f.debug_tuple("WidgetTag")
@@ -82,6 +89,8 @@ pub trait Widget: 'static {
     fn widget_id(&self) -> WidgetId {
         self.widget_tag().widget_id
     }
+
+    fn widget_type(&self) -> &'static str;
 
     fn rect(&self) -> BoundBox<D2, i32>;
     fn rect_mut(&mut self) -> &mut BoundBox<D2, i32>;
@@ -127,7 +136,7 @@ pub trait Widget: 'static {
     }
 }
 
-pub trait WidgetRenderable<D>: Widget + named_type::NamedType
+pub trait WidgetRenderable<D>: Widget
     where D: DisplayEngine
 {
     fn render(&mut self, renderer: <D as DisplayEngineLayoutRender<'_>>::Renderer);
@@ -140,6 +149,9 @@ impl<W> Widget for Box<W>
     #[inline]
     fn widget_tag(&self) -> &WidgetTag {
         W::widget_tag(self)
+    }
+    fn widget_type(&self) -> &'static str {
+        W::widget_type(self)
     }
     fn rect(&self) -> BoundBox<D2, i32> {
         W::rect(self)

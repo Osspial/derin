@@ -82,10 +82,14 @@ macro_rules! id {
             pub fn new() -> $Name {
                 use std::sync::atomic::{AtomicUsize, Ordering};
 
-                static ID_COUNTER: AtomicUsize = AtomicUsize::new(1);
+                static ID_COUNTER: AtomicUsize = AtomicUsize::new(2);
                 let id = ID_COUNTER.fetch_add(1, Ordering::SeqCst) as u32;
 
                 $Name(std::num::NonZeroU32::new(id as u32).unwrap())
+            }
+
+            pub fn dummy() -> $Name {
+                $Name(std::num::NonZeroU32::new(1).unwrap())
             }
 
             pub fn to_u32(self) -> u32 {

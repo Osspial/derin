@@ -210,13 +210,13 @@ impl<N, D> Root<N, D>
             for i in 0..valid_len {
                 let widget_id = relayout_widgets[i];
 
-                let WidgetPath{mut widget, ..} = match widget_traverser.get_widget(widget_id) {
+                let WidgetPath{mut widget, path, ..} = match widget_traverser.get_widget(widget_id) {
                     Some(widget) => widget,
                     None => continue
                 };
 
                 let old_widget_rect = widget.rect();
-                widget.update_layout(self.display_engine.layout(widget_id, old_widget_rect.dims()));
+                widget.update_layout(self.display_engine.layout(widget_id, path, old_widget_rect.dims()));
                 let size_bounds = widget.size_bounds();
                 let new_widget_rect = widget.rect();
                 let widget_dims = new_widget_rect.dims();

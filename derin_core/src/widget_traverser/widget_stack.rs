@@ -7,7 +7,7 @@ use std::mem;
 use crate::{
     offset_widget::OffsetWidget,
     render::DisplayEngine,
-    widget::{WidgetDyn, WidgetId, WidgetIdent, WidgetInfoMut, ROOT_IDENT},
+    widget::{WidgetDyn, WidgetId, WidgetIdent, WidgetInfoMut, WidgetPathEntry, ROOT_IDENT},
     widget_traverser::virtual_widget_tree::PathRevItem,
 };
 
@@ -22,7 +22,6 @@ struct StackElement<D>
     widget: *mut (dyn WidgetDyn<D>),
     rectangles: Option<ElementRects>,
     index: usize,
-    widget_id: WidgetId
 }
 
 impl<D> std::fmt::Debug for StackElement<D>
@@ -32,7 +31,6 @@ impl<D> std::fmt::Debug for StackElement<D>
         f.debug_struct("StackElement")
             .field("rectangles", &self.rectangles)
             .field("index", &self.index)
-            .field("widget_id", &self.widget_id)
             .finish()
     }
 }
@@ -47,14 +45,14 @@ pub(crate) struct WidgetStackCache<D>
     where D: DisplayEngine
 {
     vec: Vec<StackElement<D>>,
-    ident_vec: Vec<WidgetIdent>
+    path_vec: Vec<WidgetPathEntry>
 }
 
 pub(crate) struct WidgetStack<'a, D>
     where D: DisplayEngine
 {
     vec: &'a mut Vec<StackElement<D>>,
-    ident_vec: &'a mut Vec<WidgetIdent>,
+    path_vec: &'a mut Vec<WidgetPathEntry>,
     clip_rect: Option<BoundBox<D2, i32>>,
     top_parent_offset: Vector2<i32>,
 }
@@ -63,7 +61,7 @@ pub(crate) type OffsetWidgetPath<'a, D> = WidgetPath<'a, OffsetWidget<'a, D>>;
 
 pub(crate) struct WidgetPath<'a, W> {
     pub widget: W,
-    pub path: &'a [WidgetIdent],
+    pub path: &'a [WidgetPathEntry],
     pub index: usize,
     pub widget_id: WidgetId
 }
@@ -74,7 +72,7 @@ impl<D> WidgetStackCache<D>
     pub fn new() -> WidgetStackCache<D> {
         WidgetStackCache {
             vec: Vec::new(),
-            ident_vec: Vec::new(),
+            path_vec: Vec::new(),
         }
     }
 
@@ -83,19 +81,22 @@ impl<D> WidgetStackCache<D>
         mem::swap(&mut cache_swap, &mut self.vec);
 
         self.vec.clear();
-        self.ident_vec.clear();
+        self.path_vec.clear();
 
         self.vec.push(StackElement {
-            widget_id: widget.widget_id(),
             widget,
             rectangles: None,
             index: 0,
         });
-        self.ident_vec.push(ROOT_IDENT);
+        self.path_vec.push(WidgetPathEntry {
+            widget_id: widget.widget_id(),
+            ident: ROOT_IDENT,
+            type_name: widget.widget_type(),
+        });
 
         WidgetStack {
             vec: &mut self.vec,
-            ident_vec: &mut self.ident_vec,
+            path_vec: &mut self.path_vec,
             clip_rect: Some(BoundBox::new(Point2::new(0, 0), Point2::max_value())),
             top_parent_offset: Vector2::new(0, 0),
         }
@@ -107,29 +108,29 @@ impl<'a, D> WidgetStack<'a, D>
 {
     #[inline]
     pub fn top(&self) -> WidgetPath<'_, &'_ dyn WidgetDyn<D>> {
-        let (widget, widget_id) = self.vec.last().map(|n| unsafe{ (&*n.widget, n.widget_id) }).unwrap();
+        let widget = self.vec.last().map(|n| unsafe{ &*n.widget }).unwrap();
         WidgetPath {
             widget: widget,
-            path: &self.ident_vec,
+            path: &self.path_vec,
             index: self.top_index(),
-            widget_id
+            widget_id: self.path_vec.last().unwrap().widget_id,
         }
     }
 
     #[inline]
     pub fn top_mut(&mut self) -> OffsetWidgetPath<D> {
-        let (widget, widget_id) = self.vec.last_mut().map(|n| unsafe{ (&mut *n.widget, n.widget_id) }).unwrap();
+        let widget = self.vec.last().map(|n| unsafe{ &mut *n.widget }).unwrap();
         OffsetWidgetPath {
             widget: OffsetWidget::new(widget, self.top_parent_offset, self.clip_rect),
-            path: &self.ident_vec,
+            path: &self.path_vec,
             index: self.top_index(),
-            widget_id
+            widget_id: self.path_vec.last().unwrap().widget_id,
         }
     }
 
     // #[inline]
     // pub fn top_ident(&self) -> WidgetIdent {
-    //     self.ident_vec.last().cloned().unwrap()
+    //     self.path_vec.last().cloned().unwrap()
     // }
 
     #[inline]
@@ -139,7 +140,7 @@ impl<'a, D> WidgetStack<'a, D>
 
     #[inline]
     pub fn top_id(&self) -> WidgetId {
-        self.vec.last().unwrap().widget_id
+        self.path_vec.last().unwrap().widget_id
     }
 
     // pub fn top_parent_offset(&self) -> Vector2<i32> {
@@ -161,7 +162,7 @@ impl<'a, D> WidgetStack<'a, D>
 
         self.vec.truncate(len);
         self.vec.last_mut().unwrap().rectangles = None;
-        self.ident_vec.truncate(len);
+        self.path_vec.truncate(len);
         self.truncate_offset_and_clip(len);
     }
 
@@ -180,19 +181,19 @@ impl<'a, D> WidgetStack<'a, D>
 
     #[inline]
     pub fn widgets(&self) -> impl '_ + Iterator<Item=WidgetPath<'_, &'_ dyn WidgetDyn<D>>> + DoubleEndedIterator + ExactSizeIterator {
-        let path = &self.ident_vec[..];
+        let path = &self.path_vec[..];
         self.vec.iter().enumerate().map(move |(i, n)| WidgetPath {
             widget: unsafe{ &*n.widget },
             path: &path[..i],
             index: n.index,
-            widget_id: n.widget_id,
+            widget_id: path[i].widget_id,
         })
     }
 
     // #[inline]
     // pub fn path(&self) -> &[WidgetIdent] {
-    //     debug_assert_eq!(self.ident_vec.len(), self.vec.len());
-    //     &self.ident_vec
+    //     debug_assert_eq!(self.path_vec.len(), self.vec.len());
+    //     &self.path_vec
     // }
 
     #[inline]
@@ -206,6 +207,7 @@ impl<'a, D> WidgetStack<'a, D>
 
         if let Some(new_top_summary) = new_top_opt {
             let new_top_id = new_top_summary.widget.widget_id();
+            let new_top_type = new_top_summary.widget.widget_type();
             let new_top_widget = new_top_summary.widget as *mut _;
             let new_top_index = new_top_summary.index;
             let new_top_ident = new_top_summary.ident.clone();
@@ -223,13 +225,16 @@ impl<'a, D> WidgetStack<'a, D>
                 self.top_parent_offset = top_rect.min().to_vec();
             }
 
-            self.vec.push(StackElement {
+            self.path_vec.push(WidgetPathEntry {
                 widget_id: new_top_id,
+                ident: new_top_ident,
+                type_name: new_top_type,
+            });
+            self.vec.push(StackElement {
                 widget: new_top_widget,
                 rectangles: None,
                 index: new_top_index
             });
-            self.ident_vec.push(new_top_ident);
             Some(self.top_mut())
         } else {
             None
@@ -237,20 +242,26 @@ impl<'a, D> WidgetStack<'a, D>
     }
 
     pub fn move_to_path_rev(&mut self, path_rev: impl Iterator<Item=PathRevItem> + ExactSizeIterator) -> Option<OffsetWidgetPath<'_, D>> {
+        let dummy_type_name = "~~dummy~~";
+
         let new_path_len = path_rev.len();
-        self.ident_vec.resize(new_path_len, WidgetIdent::Num(0));
+        self.path_vec.resize(new_path_len, WidgetPathEntry {
+            widget_id: WidgetId::dummy(),
+            ident: WidgetIdent::Num(0),
+            type_name: dummy_type_name,
+        });
 
         let mut path_rev = path_rev.peekable();
         let target_widget_id = path_rev.peek().expect("Requires path with len >= 1").id;
 
         let mut diverge_index = 0;
         for (i, path_item) in path_rev.enumerate().map(|(i, item)| (new_path_len - (i + 1), item)) {
-            if Some(path_item.id) == self.vec.get(i).map(|e| e.widget_id) {
+            if Some(path_item.id) == self.path_vec.get(i).map(|e| e.widget_id) {
                 diverge_index = i + 1;
                 break;
             }
 
-            self.ident_vec[i] = path_item.ident;
+            self.path_vec[i].ident = path_item.ident;
         }
 
         self.vec.truncate(diverge_index);
@@ -258,7 +269,7 @@ impl<'a, D> WidgetStack<'a, D>
         self.truncate_offset_and_clip(diverge_index);
 
         let new_widget = try {
-            while self.vec.len() < self.ident_vec.len() {
+            while self.vec.len() < self.path_vec.len() {
                 let i = self.vec.len() - 1;
                 let top = &mut self.vec[i];
                 let top_widget = unsafe{ &mut *top.widget };
@@ -276,27 +287,47 @@ impl<'a, D> WidgetStack<'a, D>
                 }
 
                 let new_top = top_widget
-                    .child_mut(self.ident_vec[i + 1].clone())?;
+                    .child_mut(self.path_vec[i + 1].ident.clone())?;
+                self.path_vec[i + 1].widget_id = new_top.widget.widget_id();
+                self.path_vec[i + 1].type_name = new_top.widget.widget_type();
                 self.vec.push(StackElement {
-                    widget_id: new_top.widget.widget_id(),
                     widget: new_top.widget as *mut _,
                     rectangles: None,
                     index: new_top.index,
                 });
             }
-            assert_eq!(self.vec.len(), self.ident_vec.len());
+            assert_eq!(self.vec.len(), self.path_vec.len());
 
             Some(())
         };
 
+        macro_rules! assert_path_well_formed {
+            () => {{
+                // Assert that the path doesn't contain any dummy symbols.
+                debug_assert!(
+                    !self.path_vec.iter().find(|w| {
+                        let WidgetPathEntry {
+                            widget_id,
+                            type_name,
+                            ident: _,
+                        } = w;
+                        *widget_id == WidgetId::dummy() || *type_name == dummy_type_name
+                    }).is_some(),
+                    "{:#?}", self.path_vec,
+                );
+            }};
+        }
+
         match new_widget {
             Some(_) => {
                 assert_eq!(target_widget_id, self.top_id());
+                assert_path_well_formed!();
                 Some(self.top_mut())
             },
             None => {
                 self.vec.last_mut().unwrap().rectangles = None;
                 self.truncate(self.vec.len());
+                assert_path_well_formed!();
                 None
             }
         }
@@ -310,7 +341,7 @@ impl<'a, D> WidgetStack<'a, D>
         }
 
         let popped = self.vec.pop().map(|n| unsafe{ &mut *n.widget }).unwrap();
-        self.ident_vec.pop();
+        self.path_vec.pop();
         let last_mut = self.vec.last_mut().unwrap();
         last_mut.rectangles = None;
         match self.vec.get(self.vec.len().wrapping_sub(2)).map(|e| e.rectangles.expect("Bad widget bounds stack")) {

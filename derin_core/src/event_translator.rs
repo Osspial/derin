@@ -297,7 +297,7 @@ impl<D> TranslatorActive<'_, '_, D>
                     } = ops;
                     if let Some(focus) = focus {
                         let of = widget_id;
-                        let ident = widget_ident.clone();
+                        let ident = widget_ident.clone().ident;
                         let destination_source_opt = {
                             match focus.clone() {
                                 FocusChange::Next => Some((
@@ -439,7 +439,7 @@ impl<D> TranslatorActive<'_, '_, D>
                                     EventDestination::Relation(widget_id, Relation::Parent),
                                     DispatchableEvent::MouseMove {
                                         old_pos, new_pos,
-                                        exiting_from_child: Some(path.last().cloned().unwrap()),
+                                        exiting_from_child: Some(path.last().cloned().unwrap().ident),
                                     }
                                 );
                             }
