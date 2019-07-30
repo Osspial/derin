@@ -216,7 +216,7 @@ impl<N, D> Root<N, D>
                 };
 
                 let old_widget_rect = widget.rect();
-                widget.update_layout(self.display_engine.layout(widget_id, path, old_widget_rect.dims()));
+                widget.update_layout(self.display_engine.layout(path, old_widget_rect.dims()));
                 let size_bounds = widget.size_bounds();
                 let new_widget_rect = widget.rect();
                 let widget_dims = new_widget_rect.dims();
@@ -300,7 +300,7 @@ impl<N, D> Root<N, D>
             widget_traverser.crawl_widgets(|mut path| {
                 let renderer = display_engine.render(
                     path.widget.widget_id(),
-                    path.widget.rect(),
+                    path.widget.rect().min,
                     path.widget.clip().unwrap_or(window_rect),
                 );
 

@@ -1,7 +1,8 @@
 use crate::Content;
-use derin_core::widget::{WidgetIdent, WidgetId, WidgetPathEntry};
+use derin_core::widget::{WidgetId, WidgetPathEntry};
 
-pub trait Theme<T> {
+pub trait Theme {
+    type Style;
     fn set_widget_content<C: Content>(&mut self, path: &[WidgetPathEntry], content: &C);
-    fn theme(&self, widget_id: WidgetId) -> T;
+    fn style(&self, widget_id: WidgetId) -> Self::Style;
 }

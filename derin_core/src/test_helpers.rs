@@ -9,6 +9,7 @@ use crate::{
     widget::*,
 };
 use cgmath_geometry::{
+    cgmath::Point2,
     D2,
     rect::{BoundBox, DimsBox},
 };
@@ -70,10 +71,10 @@ impl<'d> DisplayEngineLayoutRender<'d> for TestDisplayEngine {
     type Layout = TestLayout;
     type Renderer = TestRenderer;
 
-    fn layout(&'d mut self, _: WidgetId, _: &[WidgetPathEntry], _: DimsBox<D2, i32>) -> Self::Layout {
+    fn layout(&'d mut self, _: &[WidgetPathEntry], _: DimsBox<D2, i32>) -> Self::Layout {
         TestLayout {}
     }
-    fn render(&'d mut self, _: WidgetId, _: BoundBox<D2, i32>, _: BoundBox<D2, i32>) -> Self::Renderer {
+    fn render(&'d mut self, _: WidgetId, _: Point2<i32>, _: BoundBox<D2, i32>) -> Self::Renderer {
         TestRenderer {}
     }
 }

@@ -5,6 +5,7 @@
 use crate::widget::{WidgetId, WidgetPathEntry};
 use cgmath_geometry::{
     D2,
+    cgmath::Point2,
     rect::{BoundBox, DimsBox},
 };
 
@@ -24,16 +25,16 @@ pub trait DisplayEngineLayoutRender<'d> {
     type Layout: 'd;
     type Renderer: 'd;
 
-    fn layout(&'d mut self, widget_id: WidgetId, path: &[WidgetPathEntry], dims: DimsBox<D2, i32>) -> Self::Layout;
-    fn render(&'d mut self, widget_id: WidgetId, transform: BoundBox<D2, i32>, clip: BoundBox<D2, i32>) -> Self::Renderer;
+    fn layout(&'d mut self, path: &[WidgetPathEntry], dims: DimsBox<D2, i32>) -> Self::Layout;
+    fn render(&'d mut self, widget_id: WidgetId, pos: Point2<i32>, clip: BoundBox<D2, i32>) -> Self::Renderer;
 }
 
 impl<'d> DisplayEngineLayoutRender<'d> for ! {
     type Renderer = !;
     type Layout = !;
 
-    fn layout(&'d mut self, _: WidgetId, path: &[WidgetPathEntry], _: DimsBox<D2, i32>) -> ! {*self}
-    fn render(&'d mut self, _: WidgetId, _: BoundBox<D2, i32>, _: BoundBox<D2, i32>) -> ! {*self}
+    fn layout(&'d mut self, path: &[WidgetPathEntry], _: DimsBox<D2, i32>) -> ! {*self}
+    fn render(&'d mut self, _: WidgetId, _: Point2<i32>, _: BoundBox<D2, i32>) -> ! {*self}
 }
 
 impl DisplayEngine for ! {

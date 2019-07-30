@@ -136,11 +136,16 @@ pub trait Widget: 'static {
     }
 }
 
+/// # The widget rendering process
+/// Rendering happens in two stages:
+/// 1. `derin_core` calls `update_layout` on widgets as necessary until the entire widget tree has
+///    solidified its layout
+/// 2. `derin_core` calls `render` on the entire widget tree.
 pub trait WidgetRenderable<D>: Widget
     where D: DisplayEngine
 {
-    fn render(&mut self, renderer: <D as DisplayEngineLayoutRender<'_>>::Renderer);
     fn update_layout(&mut self, layout: <D as DisplayEngineLayoutRender<'_>>::Layout);
+    fn render(&mut self, renderer: <D as DisplayEngineLayoutRender<'_>>::Renderer);
 }
 
 impl<W> Widget for Box<W>
