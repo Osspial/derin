@@ -4,8 +4,9 @@
 
 #![feature(try_blocks)]
 
-pub mod rect_render;
+pub mod rect_layout;
 pub mod theme;
+pub mod triangle_render;
 
 use cgmath_geometry::cgmath;
 

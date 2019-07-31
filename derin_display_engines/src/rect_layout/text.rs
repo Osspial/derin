@@ -7,7 +7,7 @@ mod shape_glyphs;
 use shape_glyphs::{GlyphIterBuilder, RenderGlyph};
 use crate::{
     GraphemeCluster,
-    rect_render::{
+    rect_layout::{
         Rect, RectFill,
         theme::{TextLayoutStyle, TextRenderStyle, LineWrap, FontFaceId, ImageId, Color},
     },

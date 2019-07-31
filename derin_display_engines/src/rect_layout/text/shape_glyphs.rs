@@ -3,7 +3,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 use super::{Glyph, FaceMetrics};
-use crate::rect_render::theme::{TextLayoutStyle, LineWrap};
+use crate::rect_layout::theme::{TextLayoutStyle, LineWrap};
 
 use crate::cgmath::{EuclideanSpace, ElementWise, Point2, Vector2};
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
