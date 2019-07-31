@@ -4,6 +4,7 @@
 
 #![feature(try_blocks)]
 
+pub mod gullery_display_engine;
 pub mod rect_layout;
 pub mod rect_to_triangles;
 pub mod theme;
@@ -23,11 +24,11 @@ pub trait RenderContent<'a> {
 }
 
 /// Lay out content to render with `RenderContent`.
-pub trait LayoutContent<'a> {
+pub trait LayoutContent {
     fn layout_content<C: Content>(self, content: &C) -> LayoutResult;
 }
 
-pub trait LayoutString<'a>: LayoutContent<'a> {
+pub trait LayoutString: LayoutContent {
     /// Given a [`Content`] struct, lay out each of the [`Content`]'s string's [`GraphemeCluster`]s
     /// and append them to to the `grapheme_clusters` buffer.
     ///
