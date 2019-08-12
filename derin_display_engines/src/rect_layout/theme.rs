@@ -4,7 +4,7 @@
 
 use derin_common_types::{
     id,
-    layout::{Align2, Margins}
+    layout::{Align2, Margins, SizeBounds}
 };
 
 
@@ -37,7 +37,7 @@ pub enum LineWrap {
 /// Collection of information used to determine how to render text in a widget.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct TextStyle {
-    pub text_margins: Margins<i32>,
+    pub margins: Margins<i32>,
     pub render: TextRenderStyle,
     pub layout: TextLayoutStyle,
 }
@@ -73,4 +73,5 @@ pub struct WidgetStyle {
     pub background: Option<ImageId>,
     pub text: TextStyle,
     pub content_margins: Margins<i32>,
+    pub size_bounds: SizeBounds,
 }

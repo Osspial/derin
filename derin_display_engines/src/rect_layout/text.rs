@@ -24,7 +24,7 @@ use itertools::Itertools;
 
 
 // you can think of this as a secretarial version of koh the face stealer.
-pub trait FaceManager: for<'a> FaceManagerGlyphs<'a> {
+pub trait FaceManager: 'static + for<'a> FaceManagerGlyphs<'a> {
     type Face: Face;
 
     fn face(&mut self, face_id: FontFaceId) -> &mut Self::Face;

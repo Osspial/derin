@@ -6,7 +6,7 @@ mod image_slice;
 pub mod text;
 pub mod theme;
 
-use derin_common_types::layout::{Margins, Align2, Align};
+use derin_common_types::layout::{Margins, Align2, Align, SizeBounds};
 use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use crate::cgmath::{Point2, Vector2, EuclideanSpace};
 use crate::EditStringDecorations;
@@ -39,10 +39,16 @@ enum ImageLaidOut {
     Image(Rect),
 }
 
+pub trait ImageManager: 'static {
+    fn image_layout(&mut self, image_id: ImageId) -> ImageLayout;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ImagePositioning {
+pub struct ImageLayout {
     pub rescale: RescaleRules,
     pub dims: DimsBox<D2, i32>,
+    pub size_bounds: SizeBounds,
+    pub margins: Margins<i32>,
 }
 
 /// The algorithm used to rescale an image.
@@ -60,7 +66,8 @@ pub enum RescaleRules {
 pub struct ImageLayoutData {
     pub image_id: ImageId,
     pub rect: BoundBox<D2, i32>,
-    pub positioning: ImagePositioning,
+    pub rescale: RescaleRules,
+    pub dims: DimsBox<D2, i32>,
 }
 
 #[derive(Debug, Clone)]
@@ -87,10 +94,8 @@ pub fn layout_widget_rects<'a>(
         let ImageLayoutData {
             image_id,
             rect,
-            positioning: ImagePositioning {
-                rescale,
-                dims,
-            },
+            rescale,
+            dims,
         } = image?;
 
         let image_laid_out = match rescale {

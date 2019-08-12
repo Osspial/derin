@@ -5,7 +5,7 @@
 use crate::Px;
 use num_traits::Bounded;
 
-use cgmath_geometry::{D2, rect::{DimsBox, GeoBox}};
+use cgmath_geometry::{D2, rect::{BoundBox, DimsBox, GeoBox}};
 use std::ops::{Add, Range, RangeFrom, RangeFull, RangeTo};
 
 pub type Tr = u32;
@@ -188,6 +188,28 @@ impl SizeBounds {
 
         desired_size
     }
+
+    pub fn union(self, other: SizeBounds) -> Option<SizeBounds> {
+        let no_overlap = self.max.width()  < other.min.width()  ||
+                         self.max.height() < other.min.height() ||
+                         self.min.width()  > other.max.width()  ||
+                         self.min.height() > other.max.height();
+
+        if no_overlap {
+            return None;
+        }
+
+        Some(SizeBounds {
+            min: DimsBox::new2(
+                Ord::max(self.min.width(), other.min.width()),
+                Ord::max(self.min.height(), other.min.height()),
+            ),
+            max: DimsBox::new2(
+                Ord::min(self.max.width(), other.max.width()),
+                Ord::min(self.max.height(), other.max.height()),
+            ),
+        })
+    }
 }
 
 impl Default for SizeBounds {
@@ -230,5 +252,47 @@ impl<T> Margins<T>
     #[inline(always)]
     pub fn height(self) -> T {
         self.top + self.bottom
+    }
+
+    pub fn apply(self, mut rect: BoundBox<D2, T>) -> BoundBox<D2, T>
+        where T: cgmath_geometry::BaseScalarGeom
+    {
+        rect.min.x = rect.min.x + self.left;
+        rect.min.y = rect.min.y + self.top;
+        rect.max.x = rect.max.x - self.right;
+        rect.max.y = rect.max.y - self.bottom;
+        rect
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn size_bounds_union() {
+        let [r0, r1, r2, r3] = [
+            DimsBox::new2(2, 2),
+            DimsBox::new2(4, 4),
+            DimsBox::new2(6, 6),
+            DimsBox::new2(8, 8),
+            // who who do do we we appreciate appreciate
+        ];
+
+        let test_union = |a: SizeBounds, b: SizeBounds, result: Option<SizeBounds>| {
+            assert_eq!(a.union(b), result);
+            assert_eq!(b.union(a), result);
+        };
+
+        let sb = |min, max| SizeBounds::new(min, max);
+
+        // a contains b
+        test_union(sb(r0, r3), sb(r1, r2), Some(sb(r1, r2)));
+
+        // a partially overlaps b
+        test_union(sb(r0, r2), sb(r1, r3), Some(sb(r1, r2)));
+
+        // a and b overlap at a single point
+        test_union(sb(r0, r1), sb(r1, r2), Some(sb(r1, r1)));
     }
 }

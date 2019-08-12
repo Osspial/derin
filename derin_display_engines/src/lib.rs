@@ -15,6 +15,7 @@ use cgmath_geometry::{
     D2,
     rect::BoundBox,
 };
+use cgmath::Vector2;
 use derin_common_types::layout::SizeBounds;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
@@ -70,10 +71,11 @@ pub trait Content: Serialize {
 impl Content for () {}
 
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderString<'s> {
     pub string: &'s str,
     pub decorations: EditStringDecorations,
+    pub offset: Vector2<i32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,6 +96,16 @@ impl Default for EditStringDecorations {
         EditStringDecorations {
             cursor_pos: None,
             highlight_range: 0..0,
+        }
+    }
+}
+
+impl Default for RenderString<'_> {
+    fn default() -> RenderString<'static> {
+        RenderString {
+            string: "",
+            decorations: EditStringDecorations::default(),
+            offset: Vector2::new(0, 0),
         }
     }
 }
