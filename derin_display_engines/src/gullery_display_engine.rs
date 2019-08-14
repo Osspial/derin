@@ -31,19 +31,26 @@ use glutin::{
 };
 use gullery::{
     ContextState,
-    framebuffer::FramebufferDefault,
+    framebuffer::{Framebuffer, FramebufferDefault},
     texture::Texture,
-    image_format::SRgba,
+    image_format::{Rgba, SRgba},
 };
 use std::{
     collections::HashMap,
     rc::Rc,
 };
 
-pub trait FaceRasterizer: FaceManager + for<'a> FaceRasterizerRasterize<'a> { }
-pub trait FaceRasterizerRasterize<'a> {
+pub trait FaceRasterizer: FaceManager + for<'a> Rasterizer<'a> { }
+pub trait ImageRasterizer: ImageManager + for<'a> Rasterizer<'a> { }
+pub trait Rasterizer<'a> {
     type PixelIter: 'a + Iterator<Item=Color>;
-    fn rasterize_glyph(&'a mut self, glyph_image: ImageId) -> Option<(DimsBox<D2, u32>, Self::PixelIter)>;
+    fn rasterize(&'a mut self, image: ImageId) -> Option<(DimsBox<D2, u32>, Self::PixelIter)>;
+}
+
+struct Vertex {
+    pixel: Point2<u16>,
+    texture: u8,
+    texture_coordinate: Point2<u16>,
 }
 
 pub struct GulleryDisplayEngine<T, F, I>
@@ -57,6 +64,8 @@ pub struct GulleryDisplayEngine<T, F, I>
     window: ContextWrapper<PossiblyCurrent, Window>,
     context_state: Rc<ContextState>,
     framebuffer: FramebufferDefault,
+    vertex_buffer: Buffer<Vertex>,
+    index_buffer: Buffer<u16>,
     textures: HashMap<ImageId, Texture<D2, SRgba>>,
     widget_rects: HashMap<WidgetId, Vec<Rect>>,
 }
@@ -86,7 +95,9 @@ impl<T, F, I> DisplayEngine for GulleryDisplayEngine<T, F, I>
     fn widget_removed(&mut self, widget_id: WidgetId) {
         self.widget_rects.remove(&widget_id);
     }
-    fn start_frame(&mut self) {}
+    fn start_frame(&mut self) {
+        self.framebuffer.clear_color_all(Rgba::new(0.0, 0.0, 0.0, 1.0));
+    }
     fn finish_frame(&mut self) {}
 }
 impl<'d, T, F, I> DisplayEngineLayoutRender<'d> for GulleryDisplayEngine<T, F, I>
