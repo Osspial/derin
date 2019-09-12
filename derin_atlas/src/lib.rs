@@ -24,7 +24,7 @@ struct HeightRange {
 pub struct SkylineAtlas<P: Copy> {
     background_color: P,
     dims: DimsBox<D2, u32>,
-    pixels: Vec<P>,
+    pixels: Box<[P]>,
     heights: Vec<HeightRange>,
     max_used_height: u32
 }
@@ -49,7 +49,7 @@ impl<P: Copy> SkylineAtlas<P> {
 
         SkylineAtlas {
             background_color, dims,
-            pixels: vec![background_color; (dims.width() * dims.height()) as usize],
+            pixels: vec![background_color; (dims.width() * dims.height()) as usize].into_boxed_slice(),
             heights: vec![base_range],
             max_used_height: 0
         }
@@ -143,7 +143,7 @@ impl<P: Copy> SkylineAtlas<P> {
         assert!(self.dims.height() - free_height <= dims.height());
         assert!(self.dims.width() - free_width <= dims.width());
 
-        let mut pixel_swap = vec![background_color; (dims.width() * dims.height()) as usize];
+        let mut pixel_swap = vec![background_color; (dims.width() * dims.height()) as usize].into_boxed_slice();
         mem::swap(&mut pixel_swap, &mut self.pixels);
 
         let old_dims = self.dims;
@@ -243,7 +243,7 @@ impl<P: Copy> SkylineAtlas<P> {
         });
 
         if let Some(bgc) = background_color {
-            for pixel in &mut self.pixels {
+            for pixel in &mut *self.pixels {
                 *pixel = bgc;
             }
         }
@@ -253,7 +253,7 @@ impl<P: Copy> SkylineAtlas<P> {
     pub fn compact<'a, I>(&mut self, rects: I)
         where I: IntoIterator<Item=&'a mut OffsetBox<D2, u32>>
     {
-        let mut old_pixels = vec![self.background_color; self.pixels.len()];
+        let mut old_pixels = vec![self.background_color; self.pixels.len()].into_boxed_slice();
         mem::swap(&mut old_pixels, &mut self.pixels);
         let old_heights = self.heights.clone();
 
