@@ -19,6 +19,7 @@ struct HeightRange {
     height: u32
 }
 
+/// A basic texture atlas using the skyline insertion algorithm.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkylineAtlas<P: Copy> {
     background_color: P,
@@ -37,6 +38,7 @@ struct InsertOver {
 }
 
 impl<P: Copy> SkylineAtlas<P> {
+    /// Create a new skyline atlas, clearing the background color to P.
     #[inline]
     pub fn new(background_color: P, dims: DimsBox<D2, u32>) -> SkylineAtlas<P> {
         let base_range = HeightRange {
@@ -53,11 +55,13 @@ impl<P: Copy> SkylineAtlas<P> {
         }
     }
 
+    /// Get the raw pixel data stored in the atlas.
     #[inline]
     pub fn pixels(&self) -> &[P] {
         &self.pixels
     }
 
+    /// Get the 2D dimensions of the pixel array.
     #[inline]
     pub fn dims(&self) -> DimsBox<D2, u32> {
         self.dims
@@ -122,6 +126,11 @@ impl<P: Copy> SkylineAtlas<P> {
         Some(best_range)
     }
 
+    /// Resize the image atlas.
+    ///
+    /// This preserves image data when possible.
+    ///
+    /// TODO: WHAT DOES THIS DO WHEN ONE OF THE NEW AXES IS SMALLER THAN THE OLD AXIS?
     pub fn set_dims(&mut self, background_color: P, dims: DimsBox<D2, u32>) {
         let free_width = {
             let last_height = self.heights.last().unwrap();
@@ -178,10 +187,23 @@ impl<P: Copy> SkylineAtlas<P> {
         OffsetBox::from(image_dims) + insert_offset
     }
 
-    pub fn add_image(&mut self, image_dims: DimsBox<D2, u32>, image_view: OffsetBox<D2, u32>, image_data: &[P]) -> Option<OffsetBox<D2, u32>> {
+    /// Add a new image to the atlas.
+    ///
+    /// Returns the image's rectangle in the atlas, if the atlas had space for the image.
+    #[must_use]
+    pub fn add_image(&mut self, image_dims: DimsBox<D2, u32>, image_data: &[P]) -> Option<OffsetBox<D2, u32>> {
+        self.add_image_view(image_dims, image_dims.into(), image_data)
+    }
+
+    /// Add a new sub-image to the atlas.
+    ///
+    /// Returns the image's rectangle in the atlas, if the atlas had space for the image.
+    #[must_use]
+    pub fn add_image_view(&mut self, image_dims: DimsBox<D2, u32>, image_view: OffsetBox<D2, u32>, image_data: &[P]) -> Option<OffsetBox<D2, u32>> {
         self.add_image_rows(image_view.dims(), rows_from_image(image_dims, image_view, image_data)).ok()
     }
 
+    #[must_use]
     pub fn add_image_rows<'a, I>(&mut self, image_dims: DimsBox<D2, u32>, image_data: I) -> Result<OffsetBox<D2, u32>, I>
         where I: IntoIterator<Item=&'a [P]>,
               P: 'a
@@ -196,6 +218,7 @@ impl<P: Copy> SkylineAtlas<P> {
         }
     }
 
+    #[must_use]
     pub fn add_image_pixels<'a, I, J>(&mut self, image_dims: DimsBox<D2, u32>, image_data: I) -> Result<OffsetBox<D2, u32>, I>
         where I: IntoIterator<Item=J>,
               J: IntoIterator<Item=P>
@@ -210,6 +233,7 @@ impl<P: Copy> SkylineAtlas<P> {
         }
     }
 
+    /// Clear the atlas image to the given background color.
     pub fn clear(&mut self, background_color: Option<P>) {
         self.heights.clear();
         self.heights.push(HeightRange {
@@ -225,6 +249,7 @@ impl<P: Copy> SkylineAtlas<P> {
         }
     }
 
+    /// Compact the atlas, based on the image rectangle data provided in the `rects` iter.
     pub fn compact<'a, I>(&mut self, rects: I)
         where I: IntoIterator<Item=&'a mut OffsetBox<D2, u32>>
     {
@@ -295,6 +320,7 @@ impl<P: Copy> SkylineAtlas<P> {
         }
     }
 
+    /// Directly blit image data onto the atlas.
     pub fn blit(&mut self, image_dims: DimsBox<D2, u32>, image_view: OffsetBox<D2, u32>, write_offset: Vector2<u32>, image_data: &[P]) {
         blit(
             rows_from_image(image_dims, image_view, image_data), image_view.dims(),
