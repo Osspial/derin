@@ -4,6 +4,9 @@
 
 #![feature(try_blocks)]
 
+#[macro_use]
+extern crate gullery_macros;
+
 pub mod gullery_display_engine;
 pub mod rect_layout;
 pub mod rect_to_triangles;
@@ -20,7 +23,7 @@ use derin_common_types::layout::SizeBounds;
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 
-pub trait RenderContent<'a> {
+pub trait RenderContent {
     fn render_laid_out_content(self);
 }
 

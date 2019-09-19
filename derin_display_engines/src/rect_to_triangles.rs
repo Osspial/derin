@@ -20,6 +20,14 @@ pub struct ColorVertex {
     pub color: Color,
 }
 
+/// A rect comprised of individual vertices.
+///
+/// Vertices are laid out as follows:
+/// ```text
+/// 0---1
+/// |   |
+/// 2---3
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VertexRect {
     Color([ColorVertex; 4]),
@@ -46,6 +54,13 @@ impl VertexRect {
 
     pub fn indices_counterclockwise_offset(offset: u16) -> [u16; 6] {
         array_offset(offset, Self::INDICES_COUNTERCLOCKWISE)
+    }
+
+    pub fn image_id(self) -> Option<ImageId> {
+        match self {
+            VertexRect::Color(_) => None,
+            VertexRect::Texture{image_id, ..} => Some(image_id),
+        }
     }
 
     pub fn map_color<V>(self, mut map_color: impl FnMut(ColorVertex) -> V) -> Result<[V; 4], VertexRect> {
@@ -139,6 +154,7 @@ impl From<Rect> for VertexRect {
     }
 }
 
+#[inline(always)]
 fn array_offset(offset: u16, mut array: [u16; 6]) -> [u16; 6] {
     for i in &mut array {
         *i += offset;

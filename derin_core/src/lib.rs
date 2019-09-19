@@ -302,6 +302,7 @@ impl<N, D> Root<N, D>
                     path.widget.widget_id(),
                     path.widget.rect().min,
                     path.widget.clip().unwrap_or(window_rect),
+                    (path.path.len() - 1) as u16,
                 );
 
                 path.widget.render(renderer);

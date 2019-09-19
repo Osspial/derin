@@ -75,3 +75,60 @@ pub struct WidgetStyle {
     pub content_margins: Margins<i32>,
     pub size_bounds: SizeBounds,
 }
+
+impl Color {
+    #[inline(always)]
+    pub const fn new(r: u8, g: u8, b: u8, a: u8) -> Color {
+        Color{ r, g, b, a }
+    }
+
+    #[inline(always)]
+    fn size() -> usize {
+        use std::mem;
+        let size = mem::size_of::<Self>() / mem::size_of::<u8>();
+        assert_eq!(0, mem::size_of::<Self>() % mem::size_of::<u8>());
+        size
+    }
+
+    #[inline(always)]
+    pub fn from_raw_slice(raw: &[u8]) -> &[Self] {
+        let size = Self::size();
+        assert_eq!(
+            0,
+            raw.len() % size,
+            "raw slice length not multiple of {}",
+            size
+        );
+        unsafe { ::std::slice::from_raw_parts(raw.as_ptr() as *const Self, raw.len() / size) }
+    }
+
+    #[inline(always)]
+    pub fn from_raw_slice_mut(raw: &mut [u8]) -> &mut [Self] {
+        let size = Self::size();
+        assert_eq!(
+            0,
+            raw.len() % size,
+            "raw slice length not multiple of {}",
+            size
+        );
+        unsafe {
+            ::std::slice::from_raw_parts_mut(raw.as_mut_ptr() as *mut Self, raw.len() / size)
+        }
+    }
+
+    #[inline(always)]
+    pub fn to_raw_slice(slice: &[Self]) -> &[u8] {
+        let size = Self::size();
+        unsafe {
+            ::std::slice::from_raw_parts(slice.as_ptr() as *const u8, slice.len() * size)
+        }
+    }
+
+    #[inline(always)]
+    pub fn to_raw_slice_mut(slice: &mut [Self]) -> &mut [u8] {
+        let size = Self::size();
+        unsafe {
+            ::std::slice::from_raw_parts_mut(slice.as_mut_ptr() as *mut u8, slice.len() * size)
+        }
+    }
+}

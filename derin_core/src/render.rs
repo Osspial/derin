@@ -26,7 +26,7 @@ pub trait DisplayEngineLayoutRender<'d> {
     type Renderer: 'd;
 
     fn layout(&'d mut self, path: &'d [WidgetPathEntry], dims: DimsBox<D2, i32>) -> Self::Layout;
-    fn render(&'d mut self, widget_id: WidgetId, pos: Point2<i32>, clip: BoundBox<D2, i32>) -> Self::Renderer;
+    fn render(&'d mut self, widget_id: WidgetId, pos: Point2<i32>, clip: BoundBox<D2, i32>, depth: u16) -> Self::Renderer;
 }
 
 impl<'d> DisplayEngineLayoutRender<'d> for ! {
@@ -34,7 +34,7 @@ impl<'d> DisplayEngineLayoutRender<'d> for ! {
     type Layout = !;
 
     fn layout(&'d mut self, path: &'d [WidgetPathEntry], _: DimsBox<D2, i32>) -> ! {*self}
-    fn render(&'d mut self, _: WidgetId, _: Point2<i32>, _: BoundBox<D2, i32>) -> ! {*self}
+    fn render(&'d mut self, _: WidgetId, _: Point2<i32>, _: BoundBox<D2, i32>, depth: u16) -> ! {*self}
 }
 
 impl DisplayEngine for ! {
