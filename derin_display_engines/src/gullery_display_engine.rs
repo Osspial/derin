@@ -8,6 +8,7 @@ use crate::{
     LayoutContent,
     LayoutResult,
     RenderContent,
+    HasLifetimeIterator,
     rect_layout::{
         self,
         Rect,
@@ -55,9 +56,6 @@ use std::{
     iter,
 };
 
-pub trait HasLifetimeIterator<'a, Item> {
-    type Iter: 'a + Iterator<Item=Item>;
-}
 pub trait FaceRasterizer: FaceManager + for<'a> HasLifetimeIterator<'a, Color> {
     fn rasterize(&mut self, image: ImageId) -> Option<(DimsBox<CD2, u32>, <Self as HasLifetimeIterator<'_, Color>>::Iter)>;
 }

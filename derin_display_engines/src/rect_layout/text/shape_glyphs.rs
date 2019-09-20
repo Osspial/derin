@@ -160,6 +160,7 @@ impl GlyphIterBuilder {
         // The number of `Word` and `Whitespace` items in the segment.
         let mut segment_item_count = 0;
         let mut trailing_newline_glyph = None;
+        let tab_advance = self.face_metrics.space_advance * self.text_style.tab_size as i32;
 
         // Loop over the glyphs, alternating between inserting renderable glyphs and
         // whitespace. First half handles renderable, second half whitespace.
@@ -227,7 +228,7 @@ impl GlyphIterBuilder {
                         push_whitespace!();
 
                         // Move the advance to the next tab stop.
-                        self.line_advance = ((self.line_advance/self.face_metrics.tab_advance) + 1) * self.face_metrics.tab_advance;
+                        self.line_advance = ((self.line_advance/tab_advance) + 1) * tab_advance;
                         // If the last thing in `self.glyph_items` is a tab, then we're in a sequence of `Tab`s
                         // and the `Run` was already inserted by the first tab.
                         match self.glyph_items.last() {
@@ -349,7 +350,7 @@ impl GlyphIterBuilder {
             text_rect: None,
 
             on_hard_break: false,
-            tab_advance: self.face_metrics.tab_advance,
+            tab_advance: self.face_metrics.space_advance * self.text_style.tab_size as i32,
             bounds_width: self.rect.width() as i32,
         }
     }

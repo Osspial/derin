@@ -7,6 +7,7 @@
 #[macro_use]
 extern crate gullery_macros;
 
+pub mod font_kit_face_manager;
 pub mod gullery_display_engine;
 pub mod rect_layout;
 pub mod rect_to_triangles;
@@ -72,6 +73,10 @@ pub trait Content: Serialize {
     }
 }
 impl Content for () {}
+
+pub trait HasLifetimeIterator<'a, Item> {
+    type Iter: 'a + Iterator<Item=Item>;
+}
 
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

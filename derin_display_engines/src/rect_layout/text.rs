@@ -7,6 +7,7 @@ mod shape_glyphs;
 use shape_glyphs::{GlyphIterBuilder, RenderGlyph};
 use crate::{
     GraphemeCluster,
+    HasLifetimeIterator,
     rect_layout::{
         Rect, RectFill,
         theme::{TextLayoutStyle, TextRenderStyle, LineWrap, FontFaceId, ImageId, Color},
@@ -24,16 +25,14 @@ use itertools::Itertools;
 
 
 // you can think of this as a secretarial version of koh the face stealer.
-pub trait FaceManager: 'static + for<'a> FaceManagerGlyphs<'a> {
-    type Face: Face;
+pub trait FaceManager: 'static + for<'a> HasLifetimeIterator<'a, Glyph> {
+    type FaceQuery;
 
-    fn face(&mut self, face_id: FontFaceId) -> &mut Self::Face;
-    fn glyph_image(&mut self, color: Color, face: FontFaceId, face_size: u32, dpi: u32, glyph_index: u32) -> (ImageId, BoundBox<D2, i32>);
-}
-
-pub trait FaceManagerGlyphs<'a> {
-    type GlyphIter: 'a + Iterator<Item=Glyph>;
-    fn shape_text(&'a mut self, text: &str, face_size: u32, face_id: FontFaceId) -> Self::GlyphIter;
+    fn query_face(&mut self, face_query: Self::FaceQuery) -> Option<FontFaceId>;
+    fn query_face_best_match(&mut self, face_query: &[Self::FaceQuery]) -> Option<FontFaceId>;
+    fn face_metrics(&mut self, face_id: FontFaceId, face_size: u32, dpi: u32) -> FaceMetrics;
+    fn glyph_image(&mut self, face: FontFaceId, face_size: u32, dpi: u32, glyph_index: u32, color: Color) -> (ImageId, BoundBox<D2, i32>);
+    fn shape_text<'a>(&'a mut self, face_id: FontFaceId, face_size: u32, text: &str) -> <Self as HasLifetimeIterator<'a, Glyph>>::Iter;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,11 +43,6 @@ pub struct Glyph {
     pub str_index: usize,
 }
 
-pub trait Face {
-    fn char_index(&mut self, c: char) -> u32;
-    fn metrics(&mut self, face_size: u32, dpi: u32) -> FaceMetrics;
-}
-
 /// A face's metrics.
 ///
 /// All values are in 16.16 format.
@@ -56,7 +50,7 @@ pub struct FaceMetrics {
     pub line_height: i32,
     pub ascender: i32,
     pub descender: i32,
-    pub tab_advance: i32,
+    pub space_advance: i32,
     pub cursor_width: i32,
 }
 
@@ -94,13 +88,12 @@ impl StringLayoutData {
     ) -> StringLayoutData
         where F: FaceManager
     {
-        let face_metrics = face_manager.face(layout_style.face)
-            .metrics(layout_style.face_size, dpi);
+        let face_metrics = face_manager.face_metrics(layout_style.face, layout_style.face_size, dpi);
         let mut iter_builder = GlyphIterBuilder::new(dims, layout_style, face_metrics);
         let mut last_index = 0;
         for (break_index, hard_break) in LineBreakIterator::new(text) {
             let s = &text[last_index..break_index];
-            let glyphs = face_manager.shape_text(s, layout_style.face_size, layout_style.face);
+            let glyphs = face_manager.shape_text(layout_style.face, layout_style.face_size, s);
             iter_builder.add_segment(s, last_index, hard_break, glyphs);
             last_index = break_index;
         }
@@ -155,8 +148,7 @@ impl<'a, G: FaceManager> TextToRects<'a, G> {
         face_manager: &'a mut G,
     ) -> TextToRects<'a, G>
     {
-        let face_metrics = face_manager.face(layout_data.layout_style.face)
-            .metrics(layout_data.layout_style.face_size, layout_data.dpi);
+        let face_metrics = face_manager.face_metrics(layout_data.layout_style.face, layout_data.layout_style.face_size, layout_data.dpi);
 
         TextToRects {
             glyph_slice_index: 0,
@@ -286,11 +278,11 @@ impl<'a, G: FaceManager> Iterator for TextToRects<'a, G> {
         };
         let glyph_image = next_glyph.glyph_index.map(|glyph_index|
             face_manager.glyph_image(
-                glyph_color,
                 layout_data.layout_style.face,
                 layout_data.layout_style.face_size,
                 layout_data.dpi,
-                glyph_index
+                glyph_index,
+                glyph_color,
             )
         );
         let glyph_rect_opt = glyph_image.map(|(image, rect)|
