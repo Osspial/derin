@@ -10,6 +10,7 @@ use std::ops::Range;
 
 use crate::cgmath::{EuclideanSpace, Vector2};
 use cgmath_geometry::{D2, rect::{DimsBox, OffsetBox, GeoBox}};
+use itertools::Itertools;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct HeightRange {
@@ -27,6 +28,12 @@ pub struct SkylineAtlas<P: Copy> {
     pixels: Box<[P]>,
     heights: Vec<HeightRange>,
     max_used_height: u32
+}
+
+pub struct AddImageDeferred<'a, P: Copy> {
+    image_dims: DimsBox<D2, u32>,
+    insert_over: InsertOver,
+    atlas: &'a mut SkylineAtlas<P>
 }
 
 #[derive(Debug, Clone)]
@@ -219,9 +226,8 @@ impl<P: Copy> SkylineAtlas<P> {
     }
 
     #[must_use]
-    pub fn add_image_pixels<'a, I, J>(&mut self, image_dims: DimsBox<D2, u32>, image_data: I) -> Result<OffsetBox<D2, u32>, I>
-        where I: IntoIterator<Item=J>,
-              J: IntoIterator<Item=P>
+    pub fn add_image_pixels<'a, I>(&mut self, image_dims: DimsBox<D2, u32>, image_data: I) -> Result<OffsetBox<D2, u32>, I>
+        where I: IntoIterator<Item=P>,
     {
         match self.calc_insert_over(image_dims) {
             Some(range) =>{
@@ -231,6 +237,16 @@ impl<P: Copy> SkylineAtlas<P> {
             },
             None => Err(image_data)
         }
+    }
+
+    #[must_use]
+    pub fn add_image_deferred(&mut self, image_dims: DimsBox<D2, u32>) -> Option<AddImageDeferred<'_, P>> {
+        self.calc_insert_over(image_dims)
+            .map(move |insert_over| AddImageDeferred {
+                image_dims,
+                insert_over,
+                atlas: self,
+            })
     }
 
     /// Clear the atlas image to the given background color.
@@ -335,11 +351,31 @@ impl<P: Copy> SkylineAtlas<P> {
         blit(image_data, image_dims, &mut self.pixels, self.dims, write_offset);
     }
 
-    pub fn blit_pixels<'a, I, J>(&mut self, image_dims: DimsBox<D2, u32>, write_offset: Vector2<u32>, image_data: I)
-        where I: IntoIterator<Item=J>,
-              J: IntoIterator<Item=P>
+    pub fn blit_pixels<'a, I>(&mut self, image_dims: DimsBox<D2, u32>, write_offset: Vector2<u32>, image_data: I)
+        where I: IntoIterator<Item=P>,
     {
         blit_pixels(image_data, image_dims, &mut self.pixels, self.dims, write_offset);
+    }
+}
+
+impl<P: Copy> AddImageDeferred<'_, P> {
+    #[must_use]
+    pub fn add_image_rows<'a, I>(self, image_data: I) -> OffsetBox<D2, u32>
+        where I: IntoIterator<Item=&'a [P]>,
+              P: 'a
+    {
+        let insert_rect = self.atlas.insert_over(self.insert_over, self.image_dims);
+        self.atlas.blit_rows(self.image_dims, insert_rect.min().to_vec(), image_data);
+        insert_rect
+    }
+
+    #[must_use]
+    pub fn add_image_pixels<'a, I>(self, image_data: I) -> OffsetBox<D2, u32>
+        where I: IntoIterator<Item=P>,
+    {
+        let insert_rect = self.atlas.insert_over(self.insert_over, self.image_dims);
+        self.atlas.blit_pixels(self.image_dims, insert_rect.min().to_vec(), image_data);
+        insert_rect
     }
 }
 
@@ -378,15 +414,14 @@ fn blit<'a, P: 'a + Copy, I: IntoIterator<Item=&'a [P]>>(
     assert_eq!(src_dims, DimsBox::new2(width, height));
 }
 
-fn blit_pixels<'a, P, I, J>(
+fn blit_pixels<'a, P, I>(
     src: I, src_dims: DimsBox<D2, u32>,
     dst: &mut [P], dst_dims: DimsBox<D2, u32>, dst_offset: Vector2<u32>
 )
-    where I: IntoIterator<Item=J>,
-          J: IntoIterator<Item=P>
+    where I: IntoIterator<Item=P>,
 {
     let (mut width, mut height) = (src_dims.width(), 0);
-    for (row_num, src_row) in src.into_iter().enumerate() {
+    for (row_num, src_row) in src.into_iter().chunks(src_dims.width() as usize).into_iter().enumerate() {
         let dst_row_num = row_num + dst_offset.y as usize;
         let dst_slice_offset = dst_row_num * dst_dims.width() as usize;
         let dst_row = &mut dst[dst_slice_offset..dst_slice_offset + dst_dims.width() as usize];
