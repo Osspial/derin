@@ -1,13 +1,15 @@
 use crate::{
     HasLifetimeIterator,
+    gullery_display_engine::FaceRasterizer,
     rect_layout::{
         text::{FaceManager, FaceMetrics, Glyph},
         theme::{Color, FontFaceId, ImageId},
     }
 };
-use cgmath_geometry::{D2, rect::BoundBox};
+use crate::cgmath::{Point2, Vector2};
+use cgmath_geometry::{D2, rect::{BoundBox, GeoBox, DimsBox}};
 use font_kit::{
-    canvas::RasterizationOptions,
+    canvas::{Canvas, Format, RasterizationOptions},
     family_name::FamilyName,
     hinting::HintingOptions,
     loader::FontTransform,
@@ -15,14 +17,15 @@ use font_kit::{
     properties::Properties,
     source::SystemSource,
 };
-use std::collections::HashMap;
-use euclid::default::Point2D;
+use std::{cmp, collections::HashMap};
+use euclid::default::{Point2D, Size2D};
 
 pub struct FontKitFaceManager {
     source: SystemSource,
     font_cache: HashMap<FontFaceId, Font>,
     map_glyph_image_id: HashMap<GlyphProperties, (ImageId, BoundBox<D2, i32>)>,
     map_image_id_glyph: HashMap<ImageId, (GlyphProperties, BoundBox<D2, i32>)>,
+    canvas: Canvas,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -137,15 +140,96 @@ impl FaceManager for FontKitFaceManager {
     }
     fn shape_text<'a>(
         &'a mut self,
-        face_id: FontFaceId,
+        face: FontFaceId,
         face_size: u32,
-        text: &str
+        dpi: u32,
+        text: &'a str
     ) -> <Self as HasLifetimeIterator<'a, Glyph>>::Iter
     {
-        unimplemented!()
+        // TODO: REPLACE WITH HARFBUZZ
+        let px_per_em = calculate_px_per_em(face_size, dpi);
+        let face = self.font_cache.get(&face);
+        ShapeTextGlyphIter {
+            cursor: 0,
+            px_per_em,
+            face,
+            char_indices: text.char_indices(),
+        }
     }
 }
 
 impl<'a> HasLifetimeIterator<'a, Glyph> for FontKitFaceManager {
-    type Iter = std::iter::Once<Glyph>;
+    type Iter = ShapeTextGlyphIter<'a>;
 }
+
+impl FaceRasterizer for FontKitFaceManager {
+    fn rasterize(&mut self, image: ImageId) -> Option<(DimsBox<D2, u32>, GlyphRasterizeIter<'_>)> {
+        let (glyph_properties, bounds) = self.map_image_id_glyph.get(&image)?;
+        let face = self.font_cache.get(&glyph_properties.face)?;
+        let glyph_width = bounds.width() as u32;
+        let glyph_height = bounds.height() as u32;
+        if self.canvas.size.width < glyph_width || self.canvas.size.height < glyph_height {
+            self.canvas = Canvas::new(
+                &Size2D::new(
+                    cmp::max(glyph_width, self.canvas.size.width),
+                    cmp::max(glyph_height, self.canvas.size.height),
+                ),
+                Format::A8,
+            );
+        }
+
+        let px_per_em = px_16_16_to_f32(glyph_properties.size_16_16);
+        face.rasterize_glyph(
+            &mut self.canvas,
+            glyph_properties.glyph_index,
+            px_per_em,
+            &FontTransform::new(0., 0., 0., 0.),
+            &Point2D::new(0., 0.),
+            HintingOptions::Full(px_per_em),
+            RasterizationOptions::GrayscaleAa
+        ).ok()?;
+
+        Some((DimsBox::new2(glyph_width, glyph_height), self.canvas.pixels.iter().cloned().map(|v| Color::new(v, v, v, v)))) // terry cavanagh game prototype
+    }
+}
+
+impl<'a> HasLifetimeIterator<'a, Color> for FontKitFaceManager {
+    type Iter = GlyphRasterizeIter<'a>;
+}
+
+pub struct ShapeTextGlyphIter<'a> {
+    cursor: i32,
+    px_per_em: f32,
+    face: Option<&'a Font>,
+    char_indices: std::str::CharIndices<'a>,
+}
+
+impl<'a> Iterator for ShapeTextGlyphIter<'a> {
+    type Item = Glyph;
+
+    fn next(&mut self) -> Option<Glyph> {
+        let (str_index, char) = self.char_indices.next()?;
+        let glyph_index = self.face?.glyph_for_char(char).unwrap_or(0);
+        let bounds = self.face?.raster_bounds(
+                glyph_index,
+                self.px_per_em,
+                &FontTransform::new(0., 0., 0., 0.),
+                &Point2D::new(0., 0.),
+                HintingOptions::Full(self.px_per_em),
+                RasterizationOptions::GrayscaleAa
+            )
+            .map(|r| BoundBox::new2(r.min_x(), r.min_y(), r.max_x(), r.max_y()))
+            .unwrap_or(BoundBox::new2(0, 0, 0, 0));
+        let pos = Point2::new(self.cursor, 0);
+        let advance = Vector2::new(bounds.width(), 0);
+        self.cursor += advance.x;
+        Some(Glyph {
+            glyph_index,
+            advance,
+            pos,
+            str_index,
+        })
+    }
+}
+
+pub type GlyphRasterizeIter<'a> = impl 'a + Iterator<Item=Color>;

@@ -152,7 +152,7 @@ mod tests {
         message_bus.messages_send.send(MessageTargeted {
             message: Box::new(MessageA),
             target: None
-        });
+        }).unwrap();
         assert_recv!(
             MessageTarget::Widget(a),
             MessageTarget::Widget(b),
@@ -163,7 +163,7 @@ mod tests {
         message_bus.messages_send.send(MessageTargeted {
             message: Box::new(MessageB),
             target: None
-        });
+        }).unwrap();
         assert_recv!(
             MessageTarget::Widget(a),
             MessageTarget::Widget(b),
@@ -173,7 +173,7 @@ mod tests {
         message_bus.messages_send.send(MessageTargeted {
             message: Box::new(MessageA),
             target: Some(MessageTarget::Widget(a))
-        });
+        }).unwrap();
         assert_recv!(
             MessageTarget::Widget(a),
         );
@@ -181,7 +181,7 @@ mod tests {
         message_bus.messages_send.send(MessageTargeted {
             message: Box::new(MessageA),
             target: Some(MessageTarget::ChildrenOf(a))
-        });
+        }).unwrap();
         assert_recv!(
             MessageTarget::ChildrenOf(a),
         );

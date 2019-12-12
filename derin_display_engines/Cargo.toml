@@ -7,14 +7,17 @@ edition = "2018"
 [dependencies]
 arrayvec = "0.4"
 derin_core = {path = "../derin_core"}
-derin_common_types = {path = "../derin_common_types"}
+derin_atlas = {path = "../derin_atlas"}
+derin_common_types = {path = "../derin_common_types", features = ["serde"]}
 serde = {version = "1", features = ["derive"]}
 cgmath-geometry = {git = "https://github.com/Osspial/cgmath-geometry.git"}
 unicode-segmentation = "1.2"
 itertools = "0.7"
 xi-unicode = "0.1"
 font-kit = "0.4"
-euclid = "0.20"
+euclid = {version = "0.20", features = ["serde"]}
+png = "0.15"
+toml = "0.5"
 
 glutin = "0.22.0-alpha1"
 gullery = {git = "https://github.com/Osspial/gullery.git" }

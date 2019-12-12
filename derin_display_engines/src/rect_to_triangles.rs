@@ -8,15 +8,15 @@ use crate::rect_layout::{
     theme::{Color, ImageId},
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TextureVertex {
-    pub position: Point2<i32>,
+    pub position: Point2<f32>,
     pub texture_coordinate: Point2<i32>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ColorVertex {
-    pub position: Point2<i32>,
+    pub position: Point2<f32>,
     pub color: Color,
 }
 
@@ -28,7 +28,7 @@ pub struct ColorVertex {
 /// |   |
 /// 2---3
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum VertexRect {
     Color([ColorVertex; 4]),
     Texture {
@@ -44,8 +44,39 @@ impl VertexRect {
     pub const INDICES_CLOCKWISE: [u16; 6] = [0, 1, 2, 3, 2, 1];
     pub const INDICES_COUNTERCLOCKWISE: [u16; 6] = [0, 2, 1, 3, 1, 2];
 
-    pub fn from_rect(rect: Rect) -> VertexRect {
-        Self::from(rect)
+    pub fn new_fill(rect: BoundBox<D2, f32>, fill: RectFill) -> VertexRect {
+        let rect_points = [
+            Point2::new(rect.min.x, rect.min.y),
+            Point2::new(rect.max.x, rect.min.y),
+            Point2::new(rect.min.x, rect.max.y),
+            Point2::new(rect.max.x, rect.max.y),
+        ];
+        match fill {
+            RectFill::Color(color) => VertexRect::Color([
+                ColorVertex::new(rect_points[0], color),
+                ColorVertex::new(rect_points[1], color),
+                ColorVertex::new(rect_points[2], color),
+                ColorVertex::new(rect_points[3], color),
+            ]),
+            RectFill::Image{image_id, subrect} => {
+                let texture_points = [
+                    Point2::new(subrect.min.x, subrect.min.y),
+                    Point2::new(subrect.max.x, subrect.min.y),
+                    Point2::new(subrect.min.x, subrect.max.y),
+                    Point2::new(subrect.max.x, subrect.max.y),
+                ];
+                VertexRect::Texture {
+                    image_id,
+                    vertices: [
+                        TextureVertex::new(rect_points[0], texture_points[0]),
+                        TextureVertex::new(rect_points[1], texture_points[1]),
+                        TextureVertex::new(rect_points[2], texture_points[2]),
+                        TextureVertex::new(rect_points[3], texture_points[3]),
+                    ],
+                }
+            },
+        }
+
     }
 
     pub fn indices_clockwise_offset(offset: u16) -> [u16; 6] {
@@ -110,47 +141,20 @@ impl VertexRect {
 }
 
 impl TextureVertex {
-    pub fn new(position: Point2<i32>, texture_coordinate: Point2<i32>) -> TextureVertex {
+    pub fn new(position: Point2<f32>, texture_coordinate: Point2<i32>) -> TextureVertex {
         TextureVertex{ position, texture_coordinate }
     }
 }
 
 impl ColorVertex {
-    pub fn new(position: Point2<i32>, color: Color) -> ColorVertex {
+    pub fn new(position: Point2<f32>, color: Color) -> ColorVertex {
         ColorVertex{ position, color }
     }
 }
 
 impl From<Rect> for VertexRect {
     fn from(rect: Rect) -> VertexRect {
-        let gen_points = |rect: BoundBox<D2, i32>| [
-            Point2::new(rect.min.x, rect.min.y),
-            Point2::new(rect.max.x, rect.min.y),
-            Point2::new(rect.min.x, rect.max.y),
-            Point2::new(rect.max.x, rect.max.y),
-        ];
-
-        let rect_points = gen_points(rect.rect);
-        match rect.fill {
-            RectFill::Color(color) => VertexRect::Color([
-                ColorVertex::new(rect_points[0], color),
-                ColorVertex::new(rect_points[1], color),
-                ColorVertex::new(rect_points[2], color),
-                ColorVertex::new(rect_points[3], color),
-            ]),
-            RectFill::Image{image_id, subrect} => {
-                let texture_points = gen_points(subrect);
-                VertexRect::Texture {
-                    image_id,
-                    vertices: [
-                        TextureVertex::new(rect_points[0], texture_points[0]),
-                        TextureVertex::new(rect_points[1], texture_points[1]),
-                        TextureVertex::new(rect_points[2], texture_points[2]),
-                        TextureVertex::new(rect_points[3], texture_points[3]),
-                    ],
-                }
-            },
-        }
+        VertexRect::new_fill(rect.rect.cast().unwrap(), rect.fill)
     }
 }
 

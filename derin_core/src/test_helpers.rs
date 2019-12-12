@@ -74,7 +74,7 @@ impl<'d> DisplayEngineLayoutRender<'d> for TestDisplayEngine {
     fn layout(&'d mut self, _: &[WidgetPathEntry], _: DimsBox<D2, i32>) -> Self::Layout {
         TestLayout {}
     }
-    fn render(&'d mut self, _: WidgetId, _: Point2<i32>, _: BoundBox<D2, i32>) -> Self::Renderer {
+    fn render(&'d mut self, _: WidgetId, _: Point2<i32>, _: BoundBox<D2, i32>, _: u16) -> Self::Renderer {
         TestRenderer {}
     }
 }

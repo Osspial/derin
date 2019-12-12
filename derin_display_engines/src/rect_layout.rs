@@ -13,6 +13,8 @@ use crate::EditStringDecorations;
 use theme::{Color, ImageId, TextRenderStyle};
 use text::{FaceManager, StringLayoutData, TextToRects};
 use image_slice::ImageSlicer;
+use euclid::default::Size2D;
+use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Rect {
@@ -29,6 +31,15 @@ pub enum RectFill {
     },
 }
 
+impl RectFill {
+    pub fn image_id(&self) -> Option<ImageId> {
+        match *self {
+            RectFill::Color(_) => None,
+            RectFill::Image{image_id, ..} => Some(image_id),
+        }
+    }
+}
+
 struct WidgetRectLayout<'a, F: FaceManager> {
     background: Option<ImageLaidOut>,
     text: Option<RectOffsetClip<TextToRects<'a, F>>>,
@@ -40,19 +51,26 @@ enum ImageLaidOut {
 }
 
 pub trait ImageManager: 'static {
-    fn image_layout(&mut self, image_id: ImageId) -> ImageLayout;
+    type ImagePath: ?Sized;
+    type ResolveImageError;
+    fn resolve_image(&mut self, image_path: &Self::ImagePath) -> Result<ImageId, Self::ResolveImageError>;
+    fn image_layout(&mut self, image_id: ImageId) -> Option<ImageLayout>;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ImageLayout {
+    #[serde(default)]
     pub rescale: RescaleRules,
-    pub dims: DimsBox<D2, i32>,
+    #[serde(default)]
+    pub dims: Size2D<u32>,
+    #[serde(default)]
     pub size_bounds: SizeBounds,
+    #[serde(default)]
     pub margins: Margins<i32>,
 }
 
 /// The algorithm used to rescale an image.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RescaleRules {
     /// Rescale the image by uniformly stretching it out, from its edges.
     Stretch,
@@ -60,6 +78,12 @@ pub enum RescaleRules {
     /// keeping the borders of the image a constant size.
     Slice(Margins<i32>),
     Align(Align2),
+}
+
+impl Default for RescaleRules {
+    fn default() -> RescaleRules {
+        RescaleRules::Stretch
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

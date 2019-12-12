@@ -32,7 +32,7 @@ pub trait FaceManager: 'static + for<'a> HasLifetimeIterator<'a, Glyph> {
     fn query_face_best_match(&mut self, face_query: &[Self::FaceQuery]) -> Option<FontFaceId>;
     fn face_metrics(&mut self, face_id: FontFaceId, face_size: u32, dpi: u32) -> FaceMetrics;
     fn glyph_image(&mut self, face: FontFaceId, face_size: u32, dpi: u32, glyph_index: u32, color: Color) -> (ImageId, BoundBox<D2, i32>);
-    fn shape_text<'a>(&'a mut self, face_id: FontFaceId, face_size: u32, text: &str) -> <Self as HasLifetimeIterator<'a, Glyph>>::Iter;
+    fn shape_text<'a>(&'a mut self, face_id: FontFaceId, face_size: u32, dpi: u32, text: &'a str) -> <Self as HasLifetimeIterator<'a, Glyph>>::Iter;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -93,7 +93,7 @@ impl StringLayoutData {
         let mut last_index = 0;
         for (break_index, hard_break) in LineBreakIterator::new(text) {
             let s = &text[last_index..break_index];
-            let glyphs = face_manager.shape_text(layout_style.face, layout_style.face_size, s);
+            let glyphs = face_manager.shape_text(layout_style.face, dpi, layout_style.face_size, s);
             iter_builder.add_segment(s, last_index, hard_break, glyphs);
             last_index = break_index;
         }

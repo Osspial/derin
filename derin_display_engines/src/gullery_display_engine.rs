@@ -1,7 +1,7 @@
 use cgmath_geometry::{
     D2 as CD2,
     cgmath::Point2,
-    rect::{BoundBox, DimsBox, GeoBox},
+    rect::{BoundBox, DimsBox, GeoBox, OffsetBox},
 };
 use crate::{
     Content,
@@ -12,6 +12,7 @@ use crate::{
     rect_layout::{
         self,
         Rect,
+        RectFill,
         ImageManager,
         ImageLayout,
         ImageLayoutData,
@@ -62,32 +63,34 @@ pub trait FaceRasterizer: FaceManager + for<'a> HasLifetimeIterator<'a, Color> {
 pub trait ImageRasterizer: ImageManager + for<'a> HasLifetimeIterator<'a, Color> {
     fn rasterize(&mut self, image: ImageId) -> Option<(DimsBox<CD2, u32>, <Self as HasLifetimeIterator<'_, Color>>::Iter)>;
 }
-pub trait LayeredImageAtlas: 'static + for<'a> HasLifetimeIterator<'a, &'a [Color]> {
-    fn add_image(&mut self, image: ImageId, dims: DimsBox<CD2, u32>, pixels: impl Iterator<Item=Color>) -> ImageAtlasCoords;
-    fn image_coords(&self, image: ImageId) -> Option<ImageAtlasCoords>;
+pub trait LayeredImageAtlas:
+    'static +
+    for<'a> HasLifetimeIterator<'a, &'a [Color]> +
+    for<'a> HasLifetimeIterator<'a, ImageAtlasRect>
+{
+    fn add_image(&mut self, image: ImageId, dims: DimsBox<CD2, u32>, pixels: impl Iterator<Item=Color>);
+    fn image_coords(&self, image: ImageId) -> Option<Image<<Self as HasLifetimeIterator<'_, ImageAtlasRect>>::Iter>>;
     fn layers(&self) -> <Self as HasLifetimeIterator<'_, &'_ [Color]>>::Iter;
     fn num_layers(&self) -> u16;
     fn layer_dims(&self) -> DimsBox<CD2, u32>;
     fn clean(&mut self);
     fn updated_since_clean(&self) -> bool;
+}
 
-    fn image_coords_or_else<F, I>(&mut self, image: ImageId, or_else: F) -> ImageAtlasCoords
-        where F: FnOnce() -> (DimsBox<CD2, u32>, I),
-              I: Iterator<Item=Color>
-    {
-        match self.image_coords(image) {
-            Some(coords) => coords,
-            None => {
-                let (dims, pixels) = or_else();
-                self.add_image(image, dims, pixels)
-            }
-        }
-    }
+pub struct Image<C: Iterator<Item=ImageAtlasRect>> {
+    pub dims: DimsBox<CD2, u16>,
+    pub atlas_rects: C,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ImageAtlasRect {
+    pub layer: u16,
+    pub layer_subrect: BoundBox<CD2, u16>,
 }
 
 #[derive(Vertex, Debug, Clone, Copy)]
 struct Vertex {
-    pixel: GLVec2<u16>,
+    pixel: GLVec2<f32>,
     depth: GLInt<u16, Normalized>,
     texture_coordinate: GLVec2<u16>,
     texture_layer: u16,
@@ -102,7 +105,7 @@ struct Uniforms<'a> {
 
 const VERTEX_SHADER: &str = r#"
 #version 330
-in uvec2 pixel;
+in vec2 pixel;
 in float depth;
 in uvec2 texture_coordinate;
 in uint texture_layer;
@@ -136,12 +139,6 @@ void main() {
     frag_color = s_color * texture(texture_array, s_texture_coordinate);
 }
 "#;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ImageAtlasCoords {
-    pub layer: u16,
-    pub rect: BoundBox<CD2, u16>,
-}
 
 pub struct GulleryDisplayEngine<T, L, F, I>
     where T: 'static + Theme<Style=WidgetStyle>,
@@ -181,7 +178,7 @@ impl CpuBuffers {
         let vertices_size = base_size;
         let indices_size = base_size * 3 / 2;
         let default_vertex = Vertex {
-            pixel: GLVec2::new(0, 0),
+            pixel: GLVec2::new(0.0, 0.0),
             depth: GLInt::new(0),
             texture_coordinate: GLVec2::new(0, 0),
             texture_layer: 0,
@@ -235,7 +232,7 @@ impl<T, L, F, I> GulleryDisplayEngine<T, L, F, I>
         let widget_rects = HashMap::new();
         let cpu_buffers = CpuBuffers::new_rect_count(256);
 
-        let context_state = unsafe{ ContextState::new(|name| window.get_proc_address(name) ) };
+        let context_state = unsafe{ ContextState::new(|name| window.get_proc_address(name) as _ ) };
         let layer_dims = atlas.layer_dims().dims;
         let texture_array = Texture::with_mip_count(GLVec3::new(layer_dims.x, layer_dims.y, atlas.num_layers() as _), 1, context_state.clone()).unwrap();
         let vao = VertexArrayObject::new(
@@ -468,14 +465,14 @@ impl<'d, T, F, I> LayoutContent for GulleryLayout<'d, T, F, I>
                 dims,
                 size_bounds,
                 margins,
-            } = self.image_rasterizer.image_layout(image_id);
+            } = self.image_rasterizer.image_layout(image_id).unwrap_or_default();
             image_size_bounds = size_bounds;
 
             ImageLayoutData {
                 image_id,
                 rect: margins.apply(self.widget_dims.into()),
                 rescale,
-                dims,
+                dims: DimsBox::new2(dims.width as i32, dims.height as i32),
             }
         };
 
@@ -533,6 +530,16 @@ impl<'d, T, F, I> LayoutContent for GulleryLayout<'d, T, F, I>
 //     }
 // }
 
+fn map_subrect(in_subrect: BoundBox<CD2, u16>, in_dims: DimsBox<CD2, u16>, out_dims: DimsBox<CD2, u16>) -> BoundBox<CD2, f32> {
+    let map = |v, i_dim, o_dim| (v as f32 * o_dim as f32) / (i_dim as f32);
+    BoundBox::new2(
+        map(in_subrect.min.x, in_dims.dims.x, out_dims.dims.x),
+        map(in_subrect.min.y, in_dims.dims.y, out_dims.dims.y),
+        map(in_subrect.max.x, in_dims.dims.x, out_dims.dims.x),
+        map(in_subrect.max.y, in_dims.dims.y, out_dims.dims.y),
+    )
+}
+
 impl<'d, L, F, I> RenderContent for GulleryRenderer<'d, L, F, I>
     where L: LayeredImageAtlas,
           F: FaceRasterizer,
@@ -563,101 +570,127 @@ impl<'d, L, F, I> RenderContent for GulleryRenderer<'d, L, F, I>
                 clip_rect,
             );
         let vertex_rects = global_rects
-            .map(VertexRect::from_rect)
-            .map(|r| (
-                r.image_id().unwrap_or(white_image),
-                r.map_unify(
-                    |color_vertex| Vertex {
-                        pixel: color_vertex.position.cast::<u16>().unwrap().into(),
-                        depth: GLInt::new(depth),
-                        // TODO: FIGURE OUT GAMMA CORRECTION
-                        color: Rgba::new(
-                            color_vertex.color.r,
-                            color_vertex.color.g,
-                            color_vertex.color.b,
-                            color_vertex.color.a
-                        ),
-
-                        texture_layer: 0,
-                        texture_coordinate: GLVec2::new(0, 0),
-                    },
-                    |_, texture_vertex| Vertex {
-                        pixel: texture_vertex.position.cast::<u16>().unwrap().into(),
-                        depth: GLInt::new(depth),
-                        color: Rgba::new(255, 255, 255, 255),
-
-                        texture_layer: 0,
-                        texture_coordinate: GLVec2::new(0, 0),
-                    })))
-            .map(|(image_id, vertices)| (
-                {
-                    let mut atlas = atlas.borrow_mut();
-                    macro_rules! add_image {
-                        () => {{|(dims, pixels)| atlas.add_image(image_id, dims, pixels)}};
-                    }
-                    atlas.image_coords(image_id)
-                        .or_else(|| image_rasterizer.rasterize(image_id).map(add_image!()))
-                        .or_else(|| face_rasterizer.rasterize(image_id).map(add_image!()))
-                        .unwrap_or_else(|| add_image!()(error_image()))
-                },
-                vertices))
-            .map(|(ImageAtlasCoords{layer, rect}, [v0, v1, v2, v3])| [
-                Vertex {
-                    texture_layer: layer,
-                    texture_coordinate: GLVec2::new(rect.min.x, rect.min.y),
-                    ..v0
-                },
-                Vertex {
-                    texture_layer: layer,
-                    texture_coordinate: GLVec2::new(rect.max.x, rect.min.y),
-                    ..v1
-                },
-                Vertex {
-                    texture_layer: layer,
-                    texture_coordinate: GLVec2::new(rect.min.x, rect.max.y),
-                    ..v2
-                },
-                Vertex {
-                    texture_layer: layer,
-                    texture_coordinate: GLVec2::new(rect.max.x, rect.max.y),
-                    ..v3
-                }]);
-
-        for vertices in vertex_rects {
-            if !cpu_buffers.push_rect(vertices) {
-                let atlas = atlas.borrow_mut();
-                if atlas.updated_since_clean() {
-                    let layer_dims = atlas.layer_dims();
-                    let layer_dims = GLVec3::from(layer_dims.dims.extend(1));
-                    for (i, layer) in atlas.layers().enumerate() {
-                        let srgb_color = SRgba::from_raw_slice(Color::to_raw_slice(layer));
-                        texture_array.sub_image(
-                            0,
-                            GLVec3::new(0, 0, i as u32),
-                            layer_dims,
-                            srgb_color
-                        );
+            .map(|r| (r, r.fill.image_id().unwrap_or(white_image)));
+        let mut atlas = atlas.borrow_mut();
+        for (rect, image_id) in vertex_rects {
+            let Image{ dims, atlas_rects } = {
+                if atlas.image_coords(image_id).is_none() {
+                    if let Some((dims, pixels)) = image_rasterizer.rasterize(image_id) {
+                        atlas.add_image(image_id, dims, pixels);
+                    } else if let Some((dims, pixels)) = face_rasterizer.rasterize(image_id) {
+                        atlas.add_image(image_id, dims, pixels);
+                    } else {
+                        let (dims, pixels) = error_image();
+                        atlas.add_image(image_id, dims, pixels);
                     }
                 }
-                vao.vertex_buffer_mut().sub_data(cpu_buffers.vertices.len(), &cpu_buffers.vertices);
-                vao.index_buffer_mut().as_mut().unwrap().sub_data(cpu_buffers.indices.len(), &cpu_buffers.indices);
-                let uniforms = Uniforms {
-                    pos_matrix,
-                    texture_array,
-                };
-                framebuffer.draw(
-                    DrawMode::Triangles,
-                    ..,
-                    vao,
-                    program,
-                    uniforms,
-                    &render_state,
+                atlas.image_coords(image_id).unwrap()
+            };
+            for atlas_rect in atlas_rects {
+                let vertex_rect = VertexRect::new_fill(
+                    map_subrect(atlas_rect.layer_subrect, dims, rect.rect.dims().cast().unwrap()),
+                    RectFill::Image{image_id, subrect: atlas_rect.layer_subrect.cast().unwrap()}
                 );
-
-                cpu_buffers.clear();
-                let _ = cpu_buffers.push_rect(vertices);
+                // TODO: COMVERT vertex_rect INTO VERTICES AND PUSH INTO VERTEX BUFFER
             }
         }
+
+        // let vertex_rects = global_rects
+        //     .map(VertexRect::from_rect)
+        //     .map(|r| (
+        //         r.image_id().unwrap_or(white_image),
+        //         r.map_unify(
+        //             |color_vertex| Vertex {
+        //                 pixel: color_vertex.position.cast::<u16>().unwrap().into(),
+        //                 depth: GLInt::new(depth),
+        //                 // TODO: FIGURE OUT GAMMA CORRECTION
+        //                 color: Rgba::new(
+        //                     color_vertex.color.r,
+        //                     color_vertex.color.g,
+        //                     color_vertex.color.b,
+        //                     color_vertex.color.a
+        //                 ),
+
+        //                 texture_layer: 0,
+        //                 texture_coordinate: GLVec2::new(0, 0),
+        //             },
+        //             |_, texture_vertex| Vertex {
+        //                 pixel: texture_vertex.position.cast::<u16>().unwrap().into(),
+        //                 depth: GLInt::new(depth),
+        //                 color: Rgba::new(255, 255, 255, 255),
+
+        //                 texture_layer: 0,
+        //                 texture_coordinate: GLVec2::new(0, 0),
+        //             })))
+        //     .map(|(image_id, vertices)| (
+        //         {
+        //             let mut atlas = atlas.borrow_mut();
+        //             macro_rules! add_image {
+        //                 () => {{|(dims, pixels)| atlas.add_image(image_id, dims, pixels)}};
+        //             }
+        //             atlas.image_coords(image_id)
+        //                 .or_else(|| image_rasterizer.rasterize(image_id).map(add_image!()))
+        //                 .or_else(|| face_rasterizer.rasterize(image_id).map(add_image!()))
+        //                 .unwrap_or_else(|| add_image!()(error_image()))
+        //         },
+        //         vertices))
+        //     .map(|(ImageAtlasRect{layer, layer_subrect}, [v0, v1, v2, v3])| [
+        //         Vertex {
+        //             texture_layer: layer,
+        //             texture_coordinate: GLVec2::new(layer_subrect.min.x, layer_subrect.min.y),
+        //             ..v0
+        //         },
+        //         Vertex {
+        //             texture_layer: layer,
+        //             texture_coordinate: GLVec2::new(layer_subrect.max.x, layer_subrect.min.y),
+        //             ..v1
+        //         },
+        //         Vertex {
+        //             texture_layer: layer,
+        //             texture_coordinate: GLVec2::new(layer_subrect.min.x, layer_subrect.max.y),
+        //             ..v2
+        //         },
+        //         Vertex {
+        //             texture_layer: layer,
+        //             texture_coordinate: GLVec2::new(layer_subrect.max.x, layer_subrect.max.y),
+        //             ..v3
+        //         }]);
+
+        // for vertices in vertex_rects {
+        //     if !cpu_buffers.push_rect(vertices) {
+        //         let atlas = atlas.borrow_mut();
+        //         if atlas.updated_since_clean() {
+        //             let layer_dims = atlas.layer_dims();
+        //             let layer_dims = GLVec3::from(layer_dims.dims.extend(1));
+        //             for (i, layer) in atlas.layers().enumerate() {
+        //                 let srgb_color = SRgba::from_raw_slice(Color::to_raw_slice(layer));
+        //                 texture_array.sub_image(
+        //                     0,
+        //                     GLVec3::new(0, 0, i as u32),
+        //                     layer_dims,
+        //                     srgb_color
+        //                 );
+        //             }
+        //         }
+        //         vao.vertex_buffer_mut().sub_data(cpu_buffers.vertices.len(), &cpu_buffers.vertices);
+        //         vao.index_buffer_mut().as_mut().unwrap().sub_data(cpu_buffers.indices.len(), &cpu_buffers.indices);
+        //         let uniforms = Uniforms {
+        //             pos_matrix,
+        //             texture_array,
+        //         };
+        //         framebuffer.draw(
+        //             DrawMode::Triangles,
+        //             ..,
+        //             vao,
+        //             program,
+        //             uniforms,
+        //             &render_state,
+        //         );
+
+        //         cpu_buffers.clear();
+        //         let _ = cpu_buffers.push_rect(vertices);
+        //     }
+        // }
     }
 }
 

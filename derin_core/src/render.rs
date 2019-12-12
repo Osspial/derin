@@ -33,8 +33,8 @@ impl<'d> DisplayEngineLayoutRender<'d> for ! {
     type Renderer = !;
     type Layout = !;
 
-    fn layout(&'d mut self, path: &'d [WidgetPathEntry], _: DimsBox<D2, i32>) -> ! {*self}
-    fn render(&'d mut self, _: WidgetId, _: Point2<i32>, _: BoundBox<D2, i32>, depth: u16) -> ! {*self}
+    fn layout(&'d mut self, _: &'d [WidgetPathEntry], _: DimsBox<D2, i32>) -> ! {*self}
+    fn render(&'d mut self, _: WidgetId, _: Point2<i32>, _: BoundBox<D2, i32>, _: u16) -> ! {*self}
 }
 
 impl DisplayEngine for ! {

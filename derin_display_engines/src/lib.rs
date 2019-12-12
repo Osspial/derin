@@ -2,13 +2,15 @@
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#![feature(try_blocks)]
+#![feature(try_blocks, type_alias_impl_trait)]
 
 #[macro_use]
 extern crate gullery_macros;
 
 pub mod font_kit_face_manager;
 pub mod gullery_display_engine;
+pub mod layered_image_atlas;
+pub mod path_image_manager;
 pub mod rect_layout;
 pub mod rect_to_triangles;
 pub mod theme;
