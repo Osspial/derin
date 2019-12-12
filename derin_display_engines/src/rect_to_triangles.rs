@@ -4,7 +4,7 @@ use cgmath_geometry::{
     rect::BoundBox,
 };
 use crate::rect_layout::{
-    Rect, RectFill,
+    Rect, RectFill, ImageRectFill,
     theme::{Color, ImageId},
 };
 
@@ -30,112 +30,168 @@ pub struct ColorVertex {
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum VertexRect {
-    Color([ColorVertex; 4]),
-    Texture {
-        image_id: ImageId,
-        vertices: [TextureVertex; 4]
-    },
+    Color(ColorVertexRect),
+    Texture(TextureVertexRect),
 }
 
-impl VertexRect {
-    // 0-1
-    // |/|
-    // 2-3
-    pub const INDICES_CLOCKWISE: [u16; 6] = [0, 1, 2, 3, 2, 1];
-    pub const INDICES_COUNTERCLOCKWISE: [u16; 6] = [0, 2, 1, 3, 1, 2];
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ColorVertexRect([ColorVertex; 4]);
 
-    pub fn new_fill(rect: BoundBox<D2, f32>, fill: RectFill) -> VertexRect {
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TextureVertexRect {
+    pub image_id: ImageId,
+    pub vertices: [TextureVertex; 4]
+}
+
+// 0-1
+// |/|
+// 2-3
+pub const INDICES_CLOCKWISE: [u16; 6] = [0, 1, 2, 3, 2, 1];
+pub const INDICES_COUNTERCLOCKWISE: [u16; 6] = [0, 2, 1, 3, 1, 2];
+
+pub fn indices_clockwise_offset(offset: u16) -> [u16; 6] {
+    array_offset(offset, INDICES_CLOCKWISE)
+}
+
+pub fn indices_counterclockwise_offset(offset: u16) -> [u16; 6] {
+    array_offset(offset, INDICES_COUNTERCLOCKWISE)
+}
+
+impl ColorVertexRect {
+    pub const INDICES_CLOCKWISE: [u16; 6] = INDICES_CLOCKWISE;
+    pub const INDICES_COUNTERCLOCKWISE: [u16; 6] = INDICES_COUNTERCLOCKWISE;
+
+    pub fn new(rect: BoundBox<D2, f32>, color: Color) -> ColorVertexRect {
         let rect_points = [
             Point2::new(rect.min.x, rect.min.y),
             Point2::new(rect.max.x, rect.min.y),
             Point2::new(rect.min.x, rect.max.y),
             Point2::new(rect.max.x, rect.max.y),
         ];
-        match fill {
-            RectFill::Color(color) => VertexRect::Color([
-                ColorVertex::new(rect_points[0], color),
-                ColorVertex::new(rect_points[1], color),
-                ColorVertex::new(rect_points[2], color),
-                ColorVertex::new(rect_points[3], color),
-            ]),
-            RectFill::Image{image_id, subrect} => {
-                let texture_points = [
-                    Point2::new(subrect.min.x, subrect.min.y),
-                    Point2::new(subrect.max.x, subrect.min.y),
-                    Point2::new(subrect.min.x, subrect.max.y),
-                    Point2::new(subrect.max.x, subrect.max.y),
-                ];
-                VertexRect::Texture {
-                    image_id,
-                    vertices: [
-                        TextureVertex::new(rect_points[0], texture_points[0]),
-                        TextureVertex::new(rect_points[1], texture_points[1]),
-                        TextureVertex::new(rect_points[2], texture_points[2]),
-                        TextureVertex::new(rect_points[3], texture_points[3]),
-                    ],
-                }
-            },
-        }
 
+        ColorVertexRect([
+            ColorVertex::new(rect_points[0], color),
+            ColorVertex::new(rect_points[1], color),
+            ColorVertex::new(rect_points[2], color),
+            ColorVertex::new(rect_points[3], color),
+        ])
     }
 
     pub fn indices_clockwise_offset(offset: u16) -> [u16; 6] {
-        array_offset(offset, Self::INDICES_CLOCKWISE)
+        indices_clockwise_offset(offset)
     }
 
     pub fn indices_counterclockwise_offset(offset: u16) -> [u16; 6] {
-        array_offset(offset, Self::INDICES_COUNTERCLOCKWISE)
+        indices_counterclockwise_offset(offset)
+    }
+
+    pub fn map_to_array<V>(self, mut map: impl FnMut(ColorVertex) -> V) -> [V; 4] {
+        [
+            map(self.0[0]),
+            map(self.0[1]),
+            map(self.0[2]),
+            map(self.0[3]),
+        ]
+    }
+}
+
+impl TextureVertexRect {
+    pub const INDICES_CLOCKWISE: [u16; 6] = INDICES_CLOCKWISE;
+    pub const INDICES_COUNTERCLOCKWISE: [u16; 6] = INDICES_COUNTERCLOCKWISE;
+
+    pub fn new(rect: BoundBox<D2, f32>, fill: ImageRectFill) -> TextureVertexRect {
+        let ImageRectFill{ image_id, subrect } = fill;
+
+        let rect_points = [
+            Point2::new(rect.min.x, rect.min.y),
+            Point2::new(rect.max.x, rect.min.y),
+            Point2::new(rect.min.x, rect.max.y),
+            Point2::new(rect.max.x, rect.max.y),
+        ];
+        let texture_points = [
+            Point2::new(subrect.min.x, subrect.min.y),
+            Point2::new(subrect.max.x, subrect.min.y),
+            Point2::new(subrect.min.x, subrect.max.y),
+            Point2::new(subrect.max.x, subrect.max.y),
+        ];
+
+        TextureVertexRect {
+            image_id,
+            vertices: [
+                TextureVertex::new(rect_points[0], texture_points[0]),
+                TextureVertex::new(rect_points[1], texture_points[1]),
+                TextureVertex::new(rect_points[2], texture_points[2]),
+                TextureVertex::new(rect_points[3], texture_points[3]),
+            ],
+        }
+    }
+
+    pub fn indices_clockwise_offset(offset: u16) -> [u16; 6] {
+        indices_clockwise_offset(offset)
+    }
+
+    pub fn indices_counterclockwise_offset(offset: u16) -> [u16; 6] {
+        indices_counterclockwise_offset(offset)
+    }
+
+    pub fn map_to_array<V>(self, mut map: impl FnMut(TextureVertex, ImageId) -> V) -> [V; 4] {
+        [
+            map(self.vertices[1], self.image_id),
+            map(self.vertices[0], self.image_id),
+            map(self.vertices[2], self.image_id),
+            map(self.vertices[3], self.image_id),
+        ]
+    }
+}
+
+impl VertexRect {
+    pub const INDICES_CLOCKWISE: [u16; 6] = INDICES_CLOCKWISE;
+    pub const INDICES_COUNTERCLOCKWISE: [u16; 6] = INDICES_COUNTERCLOCKWISE;
+
+    pub fn new(rect: BoundBox<D2, f32>, fill: RectFill) -> VertexRect {
+        match fill {
+            RectFill::Color(color) => VertexRect::Color(ColorVertexRect::new(rect, color)),
+            RectFill::Image(fill) => VertexRect::Texture(TextureVertexRect::new(rect, fill)),
+        }
+    }
+
+    pub fn indices_clockwise_offset(offset: u16) -> [u16; 6] {
+        indices_clockwise_offset(offset)
+    }
+
+    pub fn indices_counterclockwise_offset(offset: u16) -> [u16; 6] {
+        indices_counterclockwise_offset(offset)
     }
 
     pub fn image_id(self) -> Option<ImageId> {
         match self {
             VertexRect::Color(_) => None,
-            VertexRect::Texture{image_id, ..} => Some(image_id),
+            VertexRect::Texture(TextureVertexRect {image_id, ..}) => Some(image_id),
         }
     }
 
-    pub fn map_color<V>(self, mut map_color: impl FnMut(ColorVertex) -> V) -> Result<[V; 4], VertexRect> {
+    pub fn map_color_to_array<V>(self, map_color: impl FnMut(ColorVertex) -> V) -> Result<[V; 4], VertexRect> {
         match self {
-            VertexRect::Color(color_verts) => Ok([
-                map_color(color_verts[0]),
-                map_color(color_verts[1]),
-                map_color(color_verts[2]),
-                map_color(color_verts[3]),
-            ]),
+            VertexRect::Color(color_verts) => Ok(color_verts.map_to_array(map_color)),
             VertexRect::Texture{..} => Err(self)
         }
     }
 
-    pub fn map_texture<V>(self, mut map_texture: impl FnMut(ImageId, TextureVertex) -> V) -> Result<[V; 4], VertexRect> {
+    pub fn map_texture_to_array<V>(self, map_texture: impl FnMut(TextureVertex, ImageId) -> V) -> Result<[V; 4], VertexRect> {
         match self {
             VertexRect::Color(_) => Err(self),
-            VertexRect::Texture{image_id, vertices} => Ok([
-                map_texture(image_id, vertices[1]),
-                map_texture(image_id, vertices[0]),
-                map_texture(image_id, vertices[2]),
-                map_texture(image_id, vertices[3]),
-            ]),
+            VertexRect::Texture(tvr) => Ok(tvr.map_to_array(map_texture)),
         }
     }
 
-    pub fn map_unify<V>(
+    pub fn map_unify_to_array<V>(
         self,
-        mut map_color: impl FnMut(ColorVertex) -> V,
-        mut map_texture: impl FnMut(ImageId, TextureVertex) -> V,
+        map_color: impl FnMut(ColorVertex) -> V,
+        map_texture: impl FnMut(TextureVertex, ImageId) -> V,
     ) -> [V; 4] {
         match self {
-            VertexRect::Color(color_verts) => [
-                map_color(color_verts[0]),
-                map_color(color_verts[1]),
-                map_color(color_verts[2]),
-                map_color(color_verts[3]),
-            ],
-            VertexRect::Texture{image_id, vertices} => [
-                map_texture(image_id, vertices[1]),
-                map_texture(image_id, vertices[0]),
-                map_texture(image_id, vertices[2]),
-                map_texture(image_id, vertices[3]),
-            ],
+            VertexRect::Color(color_verts) => color_verts.map_to_array(map_color),
+            VertexRect::Texture(tvr) => tvr.map_to_array(map_texture),
         }
     }
 }
@@ -154,7 +210,7 @@ impl ColorVertex {
 
 impl From<Rect> for VertexRect {
     fn from(rect: Rect) -> VertexRect {
-        VertexRect::new_fill(rect.rect.cast().unwrap(), rect.fill)
+        VertexRect::new(rect.rect.cast().unwrap(), rect.fill)
     }
 }
 

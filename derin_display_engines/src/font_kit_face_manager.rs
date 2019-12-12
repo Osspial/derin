@@ -163,7 +163,7 @@ impl<'a> HasLifetimeIterator<'a, Glyph> for FontKitFaceManager {
 }
 
 impl FaceRasterizer for FontKitFaceManager {
-    fn rasterize(&mut self, image: ImageId) -> Option<(DimsBox<D2, u32>, GlyphRasterizeIter<'_>)> {
+    fn rasterize(&mut self, image: ImageId) -> Option<(DimsBox<D2, u16>, GlyphRasterizeIter<'_>)> {
         let (glyph_properties, bounds) = self.map_image_id_glyph.get(&image)?;
         let face = self.font_cache.get(&glyph_properties.face)?;
         let glyph_width = bounds.width() as u32;
@@ -189,7 +189,7 @@ impl FaceRasterizer for FontKitFaceManager {
             RasterizationOptions::GrayscaleAa
         ).ok()?;
 
-        Some((DimsBox::new2(glyph_width, glyph_height), self.canvas.pixels.iter().cloned().map(|v| Color::new(v, v, v, v)))) // terry cavanagh game prototype
+        Some((DimsBox::new2(glyph_width as u16, glyph_height as u16), self.canvas.pixels.iter().cloned().map(|v| Color::new(v, v, v, v)))) // terry cavanagh game prototype
     }
 }
 

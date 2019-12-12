@@ -86,7 +86,7 @@ impl ImageManager for PathImageManager {
     }
 }
 impl ImageRasterizer for PathImageManager {
-    fn rasterize(&mut self, image: ImageId) -> Option<(DimsBox<D2, u32>, ImageRasterizerIter<'_>)> {
+    fn rasterize(&mut self, image: ImageId) -> Option<(DimsBox<D2, u16>, ImageRasterizerIter<'_>)> {
         self.images
             .get(&image)
             .map(|(image_layout, pixel_buffer)| (

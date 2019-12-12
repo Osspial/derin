@@ -9,7 +9,7 @@ use crate::{
     GraphemeCluster,
     HasLifetimeIterator,
     rect_layout::{
-        Rect, RectFill,
+        Rect, RectFill, ImageRectFill,
         theme::{TextLayoutStyle, TextRenderStyle, LineWrap, FontFaceId, ImageId, Color},
     },
 };
@@ -288,10 +288,10 @@ impl<'a, G: FaceManager> Iterator for TextToRects<'a, G> {
         let glyph_rect_opt = glyph_image.map(|(image, rect)|
             Rect {
                 rect: rect + next_glyph.pos.to_vec(),
-                fill: RectFill::Image {
+                fill: RectFill::Image(ImageRectFill {
                     image_id: image,
                     subrect: rect.dims().into(),
-                }
+                })
             }
         );
 
@@ -310,8 +310,9 @@ mod tests {
     use crate::tests::rects_from_string;
     use std::char;
 
+    /// Tests unification of individual glyphs into sets of grapheme clusters.
     #[test]
-    fn tets_glyphs_to_grapheme_clusters() {
+    fn test_glyphs_to_grapheme_clusters() {
         let clusters = "
             a-+b--+c-Ad---+
             +-aA--b+-c+---d
@@ -319,10 +320,16 @@ mod tests {
                 +-e+--f
         ";
         let clusters = rects_from_string(clusters, true);
-        let cluster_ranges = [0, 1, 3, 4, 6, 7, 8, 10].iter().cloned()
+        let cluster_ranges = [
+            0..1,
+            1..3,
+            3..4,
+            4..5,
+            5..6,
+        ];
+        cluster_ranges.iter().cloned()
             .tuple_windows()
-            .map(|(a, b)| a..b)
-            .collect::<Vec<_>>();
+            .for_each(|(a, b)| assert_eq!(a.end, b.start));
 
         let gen_glyph = |i: usize, c: char| {
             RenderGlyph {
@@ -343,8 +350,7 @@ mod tests {
             gen_glyph(4, 'f'),
         ];
 
-        let gen_cluster = |i: usize| {
-            let c = char::from_digit(i as u32, 10).unwrap();
+        let gen_cluster = |i: usize, c: char| {
             GraphemeCluster {
                 range: cluster_ranges[i].clone(),
                 selection_rect: clusters[&c],
@@ -352,7 +358,13 @@ mod tests {
         };
 
         assert_eq!(
-            (0..=5).map(gen_cluster).collect::<Vec<_>>(),
+            vec![
+                gen_cluster(0, 'a'),
+                gen_cluster(1, 'A'),
+                gen_cluster(2, 'd'),
+                gen_cluster(3, 'e'),
+                gen_cluster(4, 'f'),
+            ],
             glyphs_to_grapheme_clusters(glyphs.into_iter()).collect::<Vec<_>>()
         );
     }

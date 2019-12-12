@@ -25,17 +25,20 @@ pub struct Rect {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RectFill {
     Color(Color),
-    Image {
-        image_id: ImageId,
-        subrect: BoundBox<D2, i32>,
-    },
+    Image(ImageRectFill),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ImageRectFill {
+    pub image_id: ImageId,
+    pub subrect: BoundBox<D2, i32>,
 }
 
 impl RectFill {
     pub fn image_id(&self) -> Option<ImageId> {
         match *self {
             RectFill::Color(_) => None,
-            RectFill::Image{image_id, ..} => Some(image_id),
+            RectFill::Image(irf) => Some(irf.image_id),
         }
     }
 }
@@ -125,10 +128,10 @@ pub fn layout_widget_rects<'a>(
         let image_laid_out = match rescale {
             RescaleRules::Stretch => ImageLaidOut::Image(Rect {
                 rect,
-                fill: RectFill::Image {
+                fill: RectFill::Image(ImageRectFill {
                     image_id,
                     subrect: dims.into(),
-                }
+                })
             }),
             RescaleRules::Slice(margins) => ImageLaidOut::Slice(
                 ImageSlicer::new(
@@ -171,10 +174,10 @@ pub fn layout_widget_rects<'a>(
                 };
                 ImageLaidOut::Image(Rect {
                     rect: BoundBox::new2(min_x, min_y, max_x, max_y),
-                    fill: RectFill::Image {
+                    fill: RectFill::Image(ImageRectFill {
                         image_id,
                         subrect: dims.into(),
-                    }
+                    })
                 })
             }
         };
@@ -271,7 +274,7 @@ impl<R: Iterator<Item=Rect>> Iterator for RectOffsetClip<R> {
 
         match fill {
             RectFill::Color(_) => (),
-            RectFill::Image{image_id: _, ref mut subrect} => {
+            RectFill::Image(ImageRectFill{image_id: _, ref mut subrect}) => {
                 subrect.min += rect.min - rect_unclipped.min;
                 subrect.max += rect.max - rect_unclipped.max;
             }
@@ -320,10 +323,10 @@ mod tests {
 
         let rect = Rect {
             rect: unclipped_rect,
-            fill: RectFill::Image {
+            fill: RectFill::Image(ImageRectFill {
                 image_id,
                 subrect: unclipped_rect,
-            }
+            })
         };
 
         let roc = RectOffsetClip {
@@ -338,10 +341,10 @@ mod tests {
             vec![
                 Rect {
                     rect: clipped_rect,
-                    fill: RectFill::Image {
+                    fill: RectFill::Image(ImageRectFill {
                         image_id,
                         subrect: clipped_subrect
-                    }
+                    })
                 }
             ]
         );
