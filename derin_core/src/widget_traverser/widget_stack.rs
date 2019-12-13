@@ -215,7 +215,7 @@ impl<'a, D> WidgetStack<'a, D>
             assert_ne!(new_top_widget, self.top_mut().widget.inner_mut() as *mut dyn WidgetDyn<D>);
             {
                 let old_top = self.vec.last_mut().unwrap();
-                let top_clip = self.clip_rect.and_then(|r| r.intersect_rect(top_rect));
+                let top_clip = self.clip_rect.and_then(|r| r.intersect_rect(top_rect).overlaps());
 
                 old_top.rectangles = Some(ElementRects {
                     bounds: top_rect,
@@ -276,7 +276,7 @@ impl<'a, D> WidgetStack<'a, D>
 
                 {
                     let top_rect = top_widget.rect() + self.top_parent_offset;
-                    let top_clip = self.clip_rect.and_then(|r| r.intersect_rect(top_rect));
+                    let top_clip = self.clip_rect.and_then(|r| r.intersect_rect(top_rect).overlaps());
 
                     top.rectangles = Some(ElementRects {
                         bounds: top_rect,

@@ -41,7 +41,6 @@ extern crate glutin;
 extern crate arrayvec;
 extern crate glyphydog;
 extern crate itertools;
-extern crate unicode_segmentation;
 extern crate clipboard;
 extern crate png;
 extern crate parking_lot;

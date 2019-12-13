@@ -109,6 +109,7 @@ impl<'a> HasLifetimeIterator<'a, &'a [Color]> for SkylineLayeredImageAtlas {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use itertools::Itertools;
 
     #[test]
     fn test_add_image() {
@@ -143,6 +144,11 @@ mod tests {
         // |              |
         // +--------------+
         let image_rect_long = DimsBox::new2(16, 4);
+        // +------------------------------+
+        // |                              |
+        // |                              |
+        // +------------------------------+
+        let image_rect_very_long = DimsBox::new2(32, 4);
         // +--+
         // |  |
         // |  |
@@ -175,15 +181,15 @@ mod tests {
                 .map(|(id, _, _)| atlas.image_coords(*id).unwrap())
                 .collect::<Vec<_>>();
             for i in 0..images.len() {
+                println!("{:?}", i);
                 let image = images[i];
                 assert_eq!(image_properties[i].1, image.dims);
                 assert_eq!(image_properties[i].2, image.atlas_rects.iter().cloned().map(|r| r.layer).collect::<Vec<_>>());
             }
-            let all_subrects = images.iter().flat_map(|i| i.atlas_rects).map(|i| i.layer_subrect).collect::<Vec<_>>();
-            let rects_permuted =
-                all_subrects.iter().cloned().flat_map(|r0| all_subrects.iter().cloned().map(move |r1| (r0, r1)));
-            for (r0, r1) in rects_permuted {
-                assert!(r0.intersect_rect(r1).is_none());
+            for ((l0, r0), (l1, r1)) in images.iter().flat_map(|i| i.atlas_rects).map(|i| (i.layer, i.layer_subrect)).tuple_combinations() {
+                if l0 == l1 {
+                    assert!(r0.intersect_rect(r1).overlaps().is_none(), "{:?} {:?} {:?}", r0, r1, r0.intersect_rect(r1));
+                }
             }
         };
 
@@ -219,6 +225,24 @@ mod tests {
             (image_ids[9], image_rect_tall, vec![2]),
             (image_ids[10], image_rect_tall, vec![2]),
             (image_ids[11], image_rect_tall, vec![2]),
+        ]);
+
+        atlas.add_image(image_ids[8], image_rect_tall, pixels(image_rect_tall, 0));
+        atlas.add_image(image_ids[9], image_square, pixels(image_square, 1));
+        atlas.add_image(image_ids[10], image_square, pixels(image_square, 2));
+        atlas.add_image(image_ids[11], image_rect_long, pixels(image_rect_long, 3));
+        atlas.add_image(image_ids[12], image_rect_tall, pixels(image_rect_tall, 3));
+        test_images(&atlas, vec![
+            (image_ids[8], image_rect_tall, vec![3]),
+            (image_ids[9], image_square, vec![3]),
+            (image_ids[10], image_square, vec![3]),
+            (image_ids[11], image_rect_long, vec![4]),
+            (image_ids[12], image_rect_tall, vec![3]),
+        ]);
+
+        atlas.add_image(image_ids[13], image_rect_very_long, pixels(image_rect_very_long, 0));
+        test_images(&atlas, vec![
+            (image_ids[13], image_rect_very_long, vec![4, 5]),
         ]);
     }
 }

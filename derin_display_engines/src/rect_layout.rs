@@ -270,7 +270,7 @@ impl<R: Iterator<Item=Rect>> Iterator for RectOffsetClip<R> {
 
         rect = rect + self.offset;
         let rect_unclipped = rect;
-        rect = rect.intersect_rect(self.clip_rect)?;
+        rect = rect.intersect_rect(self.clip_rect).overlaps()?;
 
         match fill {
             RectFill::Color(_) => (),

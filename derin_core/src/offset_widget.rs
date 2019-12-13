@@ -70,7 +70,7 @@ impl<'a, D> OffsetWidget<'a, D>
         self.widget.rect() + self.offset
     }
     pub fn rect_clipped(&self) -> Option<BoundBox<D2, i32>> {
-        self.clip.and_then(|clip_rect| clip_rect.intersect_rect(self.rect()))
+        self.clip.and_then(|clip_rect| clip_rect.intersect_rect(self.rect()).overlaps())
     }
     pub fn set_rect(&mut self, rect: BoundBox<D2, i32>) {
         *self.widget.rect_mut() = rect - self.offset;
