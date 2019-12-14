@@ -20,28 +20,50 @@ fn main() {
 
     let mut rectangles = vec![];
 
+    let mut iteration = 0;
+    let mut output_atlas = |atlas: &SkylineAtlas<_>| {
+        let pixels = atlas.pixels();
+        image::save_buffer(
+            format!("./out/skyline_atlas_{}.bmp", iteration),
+            unsafe{slice::from_raw_parts(pixels.as_ptr() as *const u8, pixels.len() * 4)},
+            512, 512,
+            ColorType::RGBA(8)
+        ).unwrap();
+        iteration += 1;
+    };
+
     for _ in 0..4 {
-        rectangles.push(atlas.add_image(ffx.0, ffx.0.into(), &ffx.1).unwrap());
-        rectangles.push(atlas.add_image(tf.0, tf.0.into(), &tf.1).unwrap());
+        rectangles.push(atlas.add_image(ffx.0, &ffx.1).unwrap());
+        output_atlas(&atlas);
+        rectangles.push(atlas.add_image(tf.0, &tf.1).unwrap());
+        output_atlas(&atlas);
     }
 
-    rectangles.push(atlas.add_image(doge.0, doge.0.into(), &doge.1).unwrap());
-    rectangles.push(atlas.add_image(ffx.0, ffx.0.into(), &ffx.1).unwrap());
-    rectangles.push(atlas.add_image(rust.0, rust.0.into(), &rust.1).unwrap());
-    rectangles.push(atlas.add_image(tf.0, tf.0.into(), &tf.1).unwrap());
-    rectangles.push(atlas.add_image(ffx.0, ffx.0.into(), &ffx.1).unwrap());
+    rectangles.push(atlas.add_image(doge.0, &doge.1).unwrap());
+    output_atlas(&atlas);
+    rectangles.push(atlas.add_image(ffx.0, &ffx.1).unwrap());
+    output_atlas(&atlas);
+    rectangles.push(atlas.add_image(rust.0, &rust.1).unwrap());
+    output_atlas(&atlas);
+    rectangles.push(atlas.add_image(tf.0, &tf.1).unwrap());
+    output_atlas(&atlas);
+    rectangles.push(atlas.add_image(ffx.0, &ffx.1).unwrap());
+    output_atlas(&atlas);
 
-    rectangles.push(atlas.add_image(doge.0, doge.0.into(), &doge.1).unwrap());
-    rectangles.push(atlas.add_image(ffx.0, ffx.0.into(), &ffx.1).unwrap());
-    rectangles.push(atlas.add_image(rust.0, rust.0.into(), &rust.1).unwrap());
-    rectangles.push(atlas.add_image(tf.0, tf.0.into(), &tf.1).unwrap());
-    rectangles.push(atlas.add_image(ffx.0, ffx.0.into(), &ffx.1).unwrap());
+    rectangles.push(atlas.add_image(doge.0, &doge.1).unwrap());
+    output_atlas(&atlas);
+    rectangles.push(atlas.add_image(ffx.0, &ffx.1).unwrap());
+    output_atlas(&atlas);
+    rectangles.push(atlas.add_image(rust.0, &rust.1).unwrap());
+    output_atlas(&atlas);
+    rectangles.push(atlas.add_image(tf.0, &tf.1).unwrap());
+    output_atlas(&atlas);
+    rectangles.push(atlas.add_image(ffx.0, &ffx.1).unwrap());
+    output_atlas(&atlas);
 
     println!();
     atlas.compact(&mut rectangles);
-
-    let pixels = atlas.pixels();
-    image::save_buffer("./skyline_atlas.bmp", unsafe{slice::from_raw_parts(pixels.as_ptr() as *const u8, pixels.len() * 4)}, 512, 512, ColorType::RGBA(8)).unwrap();
+    output_atlas(&atlas);
 }
 
 fn extract_buffer(img: DynamicImage) -> (DimsBox<D2, u32>, Vec<[u8; 4]>) {
