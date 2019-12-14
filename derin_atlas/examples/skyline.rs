@@ -12,7 +12,7 @@ use image::{DynamicImage, ColorType};
 use cgmath_geometry::{D2, rect::DimsBox};
 
 fn main() {
-    let mut atlas = SkylineAtlas::new([0; 4], DimsBox::new2(512, 512));
+    let mut atlas = SkylineAtlas::new(DimsBox::new2(512, 512), [0; 4]);
     let doge = extract_buffer(image::open("test_images/doge.png").unwrap());
     let ffx = extract_buffer(image::open("test_images/ffx.png").unwrap());
     let rust = extract_buffer(image::open("test_images/rust.png").unwrap());
