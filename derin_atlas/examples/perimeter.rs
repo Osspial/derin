@@ -32,9 +32,9 @@ fn main() {
             ColorType::RGBA(8)
         ).unwrap();
 
-        if iteration == 14 {
-            std::thread::sleep_ms(3000);
-        }
+        // if iteration == 5 {
+        //     std::thread::sleep_ms(3000);
+        // }
 
         // image::save_buffer(
         //     format!("./out/perimeter_atlas_edges_{}.bmp", iteration),

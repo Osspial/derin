@@ -16,7 +16,7 @@ pub struct PerimeterAtlas<P: 'static + Copy> {
 
     /// The edges of the internal perimeter.
     ///
-    /// Edges alternate in a Vertical/Horizontal/Vertical/Horizontal pattern. Positive values represent
+    /// Edges alternate in a Horizontal/Vertical/Horizontal/Vertical pattern. Positive values represent
     /// an edge that's moving away from the origin, and negative values represent an edge that's moving
     /// towards the origin.
     edges: Vec<i32>,
@@ -30,7 +30,8 @@ impl<P: Copy> PerimeterAtlas<P> {
         PerimeterAtlas {
             raw: RawAtlas::new(dims, background_color),
             dims,
-            edges: vec![height, width, -height, -width]
+            // edges: vec![height, width, -height, -width]
+            edges: vec![width, height, -width, -height],
         }
     }
 
@@ -70,8 +71,8 @@ impl<P: Copy> PerimeterAtlas<P> {
 
         for (i, [a, b]) in once(first_corner).chain(self.edges.windows(2).map(|w| [w[0], w[1]])).enumerate() {
             let first = match i % 2 {
-                0 => Horizontal,
-                1 => Vertical,
+                0 => Vertical,
+                1 => Horizontal,
                 _ => unreachable!()
             };
             let (v, h) = match first {
@@ -155,17 +156,17 @@ impl<P: Copy> PerimeterAtlas<P> {
         for (i, [a, b]) in once(first_corner).chain(self.edges.windows(2).map(|w| [w[0], w[1]])).enumerate() {
             // println!("{} {} {:?}", a, b, cursor);
             let first = match i % 2 {
-                0 => Horizontal,
-                1 => Vertical,
+                0 => Vertical,
+                1 => Horizontal,
                 _ => unreachable!()
             };
             let (v, h, concave) = match first {
-                Vertical => (a, b, a.signum() == b.signum()),
-                Horizontal => (b, a, a.signum() != b.signum()),
+                Vertical => (a, b, a.signum() != b.signum()),
+                Horizontal => (b, a, a.signum() == b.signum()),
             };
 
-            let vnorm = v.signum();
-            let hnorm = -h.signum();
+            let vnorm = -v.signum();
+            let hnorm = h.signum();
 
             let vabs = v.abs() as u32;
             let habs = h.abs() as u32;
@@ -247,16 +248,16 @@ impl<P: Copy> PerimeterAtlas<P> {
             (Equal, Less) |
             (Equal, Greater) => {
                 insert = false;
-                *self.get_mut(corner - 1) -= insert_array[1];
-                *self.get_mut(corner + 1) += insert_array[1];
+                *self.get_mut(corner - 2) += insert_array[0];
+                *self.get_mut(corner) -= insert_array[0];
             },
 
             // center row
             (Less, Equal) |
             (Greater, Equal) => {
                 insert = false;
-                *self.get_mut(corner - 2) += insert_array[0];
-                *self.get_mut(corner) -= insert_array[0];
+                *self.get_mut(corner - 1) -= insert_array[1];
+                *self.get_mut(corner + 1) += insert_array[1];
             },
 
             // center
@@ -324,11 +325,11 @@ impl<P: Copy> PerimeterAtlas<P> {
         let mut cursor = Point2::new(0, 0);
         let dims = self.dims.dims.cast::<i32>().unwrap();
         println!("\nverifying:");
-        for (v, h) in self.edges.iter().cloned().tuples() {
-            cursor += Vector2::new(0, v);
-            println!("+{:?}\t= {:?}", Vector2::new(0, v), cursor);
+        for (h, v) in self.edges.iter().cloned().tuples() {
             cursor += Vector2::new(h, 0);
             println!("+{:?}\t= {:?}", Vector2::new(h, 0), cursor);
+            cursor += Vector2::new(0, v);
+            println!("+{:?}\t= {:?}", Vector2::new(0, v), cursor);
             assert!(cursor.x >= 0, "{}", cursor.x);
             assert!(cursor.y >= 0, "{}", cursor.y);
             assert!(cursor.x <= dims.x, "{}", cursor.x);
