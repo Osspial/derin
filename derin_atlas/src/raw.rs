@@ -18,6 +18,10 @@ impl<P: Copy> RawAtlas<P> {
         &self.pixels
     }
 
+    pub fn pixels_box(self) -> Box<[P]> {
+        self.pixels
+    }
+
     pub fn blit_slice_iter<'a, I: IntoIterator<Item=&'a [P]>>(
         &mut self,
         atlas_dims: DimsBox<D2, u32>,

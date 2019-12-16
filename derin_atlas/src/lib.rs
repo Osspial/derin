@@ -5,7 +5,10 @@
 extern crate cgmath_geometry;
 use cgmath_geometry::cgmath;
 mod raw;
+pub mod perimeter;
 pub mod skyline;
 
 #[doc(inline)]
 pub use skyline::SkylineAtlas;
+#[doc(inline)]
+pub use perimeter::PerimeterAtlas;
