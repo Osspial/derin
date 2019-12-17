@@ -2,13 +2,20 @@
 // use std::ops::Range;
 
 use crate::cgmath::{EuclideanSpace, Point2, Vector2};
-use cgmath_geometry::{D2, rect::{DimsBox, BoundBox, OffsetBox, GeoBox}};
+use cgmath_geometry::{D2, line::Segment, rect::{DimsBox, BoundBox, OffsetBox, GeoBox}};
 use crate::raw::RawAtlas;
 use itertools::Itertools;
 use std::{
     cmp::{Ordering::{Less, Equal, Greater}, Ord},
     iter::once,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum First {
+    Vertical,
+    Horizontal,
+}
+use First::{Vertical, Horizontal};
 
 pub struct PerimeterAtlas<P: 'static + Copy> {
     raw: RawAtlas<P>,
@@ -20,18 +27,19 @@ pub struct PerimeterAtlas<P: 'static + Copy> {
     /// an edge that's moving away from the origin, and negative values represent an edge that's moving
     /// towards the origin.
     edges: Vec<i32>,
+    edge_origin: Point2<i32>,
 }
 
 impl<P: Copy> PerimeterAtlas<P> {
     pub fn new(dims: DimsBox<D2, u32>, background_color: P) -> PerimeterAtlas<P> {
         let height = dims.height() as i32;
         let width = dims.width() as i32;
-        println!("{:?}", vec![height, width, -height, -width]);
         PerimeterAtlas {
             raw: RawAtlas::new(dims, background_color),
             dims,
             // edges: vec![height, width, -height, -width]
             edges: vec![width, height, -width, -height],
+            edge_origin: Point2::new(0, 0),
         }
     }
 
@@ -55,19 +63,12 @@ impl<P: Copy> PerimeterAtlas<P> {
             })
     }
 
-    pub fn edge_image(&self, back: P, edge: P) -> (DimsBox<D2, u32>, Box<[P]>) {
+    pub fn edge_image(&self, back: P, mut edge: impl FnMut(usize) -> P) -> (DimsBox<D2, u32>, Box<[P]>) {
         let dims = DimsBox::new(self.dims.dims + Vector2::new(1, 1));
         let mut edges_image = RawAtlas::new(dims, back);
 
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum First {
-            Vertical,
-            Horizontal,
-        }
-        use First::{Vertical, Horizontal};
-
         let first_corner = [self.edges[self.edges.len() - 1], self.edges[0]];
-        let mut cursor = Point2::new(0, 0);
+        let mut cursor = self.edge_origin;
 
         for (i, [a, b]) in once(first_corner).chain(self.edges.windows(2).map(|w| [w[0], w[1]])).enumerate() {
             let first = match i % 2 {
@@ -100,12 +101,20 @@ impl<P: Copy> PerimeterAtlas<P> {
                     )
                 )
             };
+            let rect = rect.intersect_rect(dims.cast::<i32>().unwrap().into()).either();
+            let rect = match rect {
+                Some(rect) => rect,
+                None => {
+                    cursor = next_cursor;
+                    continue
+                }
+            };
 
             edges_image.blit_pixel_iter(
                 dims,
-                std::iter::repeat(edge).take(dbg!(rect.width() as usize * rect.height() as usize)),
+                std::iter::repeat(edge(i)).take(rect.width() as usize * rect.height() as usize),
                 rect.dims().cast().unwrap(),
-                rect.origin.to_vec().cast().unwrap(),
+                rect.origin.to_vec().cast().expect(&format!("{:?}", rect)),
             );
 
             cursor = next_cursor;
@@ -115,11 +124,8 @@ impl<P: Copy> PerimeterAtlas<P> {
     }
 
     fn best_corner(&mut self, rect: DimsBox<D2, u32>) -> Option<Vector2<u32>> {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        enum First {
-            Vertical,
-            Horizontal,
-        }
+        assert_ne!(0, rect.width());
+        assert_ne!(0, rect.height());
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         struct Best {
             corner: usize,
@@ -137,9 +143,6 @@ impl<P: Copy> PerimeterAtlas<P> {
             perimeter_added: u32,
             distance_to_edge: u32,
         }
-        use First::{Vertical, Horizontal};
-        println!("\n\n\n");
-        dbg!(rect);
 
         let width = rect.width();
         let height = rect.height();
@@ -151,10 +154,9 @@ impl<P: Copy> PerimeterAtlas<P> {
             distance_to_edge: u32::max_value(),
         };
         let first_corner = [self.edges[self.edges.len() - 1], self.edges[0]];
-        let mut cursor = Point2::new(0, 0);
+        let mut cursor = self.edge_origin;
 
         for (i, [a, b]) in once(first_corner).chain(self.edges.windows(2).map(|w| [w[0], w[1]])).enumerate() {
-            // println!("{} {} {:?}", a, b, cursor);
             let first = match i % 2 {
                 0 => Vertical,
                 1 => Horizontal,
@@ -197,7 +199,9 @@ impl<P: Copy> PerimeterAtlas<P> {
 
             let valid =
                 distance_to_edge >= 0 &&
-                self.points().find(|p| rect.contains_exclusive(*p)).is_none();
+                self.edge_boxes()
+                    .find(|b| b.intersect_rect(rect).overlaps().is_some())
+                    .is_none();
 
             if valid {
                 let perimeter_added = match concave {
@@ -208,10 +212,6 @@ impl<P: Copy> PerimeterAtlas<P> {
                     perimeter_added,
                     distance_to_edge: distance_to_edge as u32,
                 };
-                // println!("{:?}", concave);
-                // println!("{} - {} = {}", height, vabs, height.saturating_sub(vabs));
-                // println!("{} - {} = {}", width, habs, width.saturating_sub(habs));
-                // println!("{} {}", perimeter_added, best_perimeter_added);
                 if sort <= best_sort {
                     best = Some(Best {
                         corner: i,
@@ -234,7 +234,6 @@ impl<P: Copy> PerimeterAtlas<P> {
             }
         }
 
-        dbg!(best);
         let best = best?;
 
         let width = width as i32;
@@ -247,57 +246,89 @@ impl<P: Copy> PerimeterAtlas<P> {
             Vertical => [h_ins, v_ins],
             Horizontal => [v_ins, h_ins],
         };
-
-        dbg!(insert_array);
+        let insert_array_concave = match best.first {
+            Vertical => [-h_ins, v_ins, h_ins, -v_ins],
+            Horizontal => [-v_ins, h_ins, v_ins, -h_ins],
+        };
 
         let h_ord = Ord::cmp(&width, &best.h.abs());
         let v_ord = Ord::cmp(&height, &best.v.abs());
 
         let corner = best.corner as isize;
-        // see onenote sketch for what to do here
-        match dbg!((h_ord, v_ord)) {
-            // four corners of sketch
-            (Less, Less) |
-            (Greater, Less) |
-            (Less, Greater) |
-            (Greater, Greater) => {
-                insert = true;
-                *self.get_mut(corner - 1) -= insert_array[1];
-                *self.get_mut(corner) -= insert_array[0];
-            },
+        if best.concave {
+            // see onenote sketch for what to do here
+            match (h_ord, v_ord, best.first) {
+                // four corners of sketch
+                (Less, Less, _) |
+                (Greater, Less, _) |
+                (Less, Greater, _) |
+                (Greater, Greater, _) => {
+                    insert = true;
+                    *self.get_mut(corner - 1) -= insert_array[1];
+                    *self.get_mut(corner) -= insert_array[0];
+                },
 
-            // center column
-            (Equal, Less) |
-            (Equal, Greater) => {
-                insert = false;
-                *self.get_mut(corner - 2) += insert_array[0];
-                *self.get_mut(corner) -= insert_array[0];
-            },
+                // PERHAPS HORIZONTAL AND VERTICAL HANDLING ARE DIFFERENT FOR THESE? SKETCH IT
+                // center column
+                (Equal, Less, Vertical) |
+                (Equal, Greater, Vertical) => {
+                    insert = false;
+                    *self.get_mut(corner - 1) -= insert_array[1];
+                    *self.get_mut(corner + 1) += insert_array[1];
+                },
+                (Equal, Less, Horizontal) |
+                (Equal, Greater, Horizontal) => {
+                    insert = false;
+                    *self.get_mut(corner - 2) += insert_array[0];
+                    *self.get_mut(corner) -= insert_array[0];
+                },
+                // center row
+                (Less, Equal, Vertical) |
+                (Greater, Equal, Vertical) => {
+                    insert = false;
+                    *self.get_mut(corner - 2) += insert_array[0];
+                    *self.get_mut(corner) -= insert_array[0];
+                },
+                (Less, Equal, Horizontal) |
+                (Greater, Equal, Horizontal) => {
+                    insert = false;
+                    *self.get_mut(corner - 1) -= insert_array[1];
+                    *self.get_mut(corner + 1) += insert_array[1];
+                },
 
-            // center row
-            (Less, Equal) |
-            (Greater, Equal) => {
-                insert = false;
-                *self.get_mut(corner - 1) -= insert_array[1];
-                *self.get_mut(corner + 1) += insert_array[1];
-            },
-
-            // center
-            (Equal, Equal) => {
-                insert = false;
-                *self.get_mut(corner - 2) += insert_array[0];
-                *self.get_mut(corner + 1) += insert_array[1];
-                self.remove_corner(corner as usize);
-            },
+                // center
+                (Equal, Equal, _) => {
+                    insert = false;
+                    *self.get_mut(corner - 2) += insert_array[0];
+                    *self.get_mut(corner + 1) += insert_array[1];
+                    self.remove_corner(corner as usize);
+                },
+            }
+        } else {
+            insert = true;
         }
+
+        println!("{:?},{},{},{},{:?},{:?},{},{}", best.first, best.corner, self.edges.len(), best.concave, h_ord, v_ord, h_ins, v_ins);
 
         if insert {
             let corner = corner as usize;
-            self.edges.splice(corner..corner, insert_array.iter().cloned());
+            if corner == 0 {
+                self.edge_origin += match best.first {
+                    Vertical => Vector2::new(0, -v_ins),
+                    Horizontal => Vector2::new(h_ins, 0),
+                };
+            }
+            self.edges.splice(
+                corner..corner,
+                match best.concave {
+                    true => insert_array.iter().cloned(),
+                    false => insert_array_concave.iter().cloned(),
+                }
+            );
         }
 
-        println!("{:?}", self.edges);
-        self.verify();
+
+        // self.verify();
 
         Some(best.rect.min.to_vec().cast().unwrap())
     }
@@ -343,8 +374,8 @@ impl<P: Copy> PerimeterAtlas<P> {
     // }
 
     fn points(&self) -> impl '_ + Iterator<Item=Point2<i32>> {
-        let mut cursor = Point2::new(0, 0);
-        once(Point2::new(0, 0)).chain(
+        let mut cursor = self.edge_origin;
+        once(cursor).chain(
             self.edges
                 .iter()
                 .enumerate()
@@ -359,21 +390,101 @@ impl<P: Copy> PerimeterAtlas<P> {
             )
     }
 
-    fn verify(&self) {
+    fn lines(&self) -> impl '_ + Iterator<Item=Segment<D2, i32>> {
+        self.points()
+            .tuple_windows::<(_, _)>()
+            .map(|(a, b)| Segment::new(a, b))
+    }
+
+    fn edge_boxes(&self) -> impl '_ + Iterator<Item=BoundBox<D2, i32>> {
+        let mut cursor = self.edge_origin;
+
+        self.edges
+            .iter()
+            .cloned()
+            .enumerate()
+            .map(|(i, n)| (
+                match i % 2 {
+                    0 => Horizontal,
+                    1 => Vertical,
+                    _ => unreachable!()
+                },
+                n
+            ))
+            .map(move |(f, n)| match f {
+                Horizontal => {
+                    let h = n;
+                    let hnorm = h.signum();
+                    let rect_h = {
+                        let x0 = cursor.x;
+                        let y0 = cursor.y;
+                        let x1 = cursor.x + h;
+                        let y1 = cursor.y - hnorm;
+                        BoundBox::new2(
+                            Ord::min(x0, x1),
+                            Ord::min(y0, y1),
+                            Ord::max(x0, x1),
+                            Ord::max(y0, y1),
+                        )
+                    };
+
+                    cursor.x += h;
+                    rect_h
+                },
+                Vertical => {
+                    let v = n;
+                    let vnorm = -v.signum();
+                    let rect_v = {
+                        let x0 = cursor.x;
+                        let y0 = cursor.y;
+                        let x1 = cursor.x - vnorm;
+                        let y1 = cursor.y + v;
+                        BoundBox::new2(
+                            Ord::min(x0, x1),
+                            Ord::min(y0, y1),
+                            Ord::max(x0, x1),
+                            Ord::max(y0, y1),
+                        )
+                    };
+
+                    cursor.y += v;
+                    rect_v
+                }
+            })
+    }
+
+    pub fn verify(&self) {
         assert_eq!(0, self.edges.len() % 2);
-        let mut cursor = Point2::new(0, 0);
+        let mut cursor = self.edge_origin;
         let dims = self.dims.dims.cast::<i32>().unwrap();
-        println!("\nverifying:");
         for (h, v) in self.edges.iter().cloned().tuples() {
             cursor += Vector2::new(h, 0);
-            println!("+{:?}\t= {:?}", Vector2::new(h, 0), cursor);
             cursor += Vector2::new(0, v);
-            println!("+{:?}\t= {:?}", Vector2::new(0, v), cursor);
+            assert!(h != 0);
+            assert!(v != 0);
             assert!(cursor.x >= 0, "{}", cursor.x);
             assert!(cursor.y >= 0, "{}", cursor.y);
             assert!(cursor.x <= dims.x, "{}", cursor.x);
             assert!(cursor.y <= dims.y, "{}", cursor.y);
         }
-        assert_eq!(Point2::new(0, 0), cursor);
+        assert_eq!(self.edge_origin, cursor);
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    #[test]
+    fn test_edge_boxes() {
+        let atlas = PerimeterAtlas::new(DimsBox::new2(512, 512), 0);
+        assert_eq!(
+            vec![
+                BoundBox::new2(0, -1, 512, 0),
+                BoundBox::new2(512, 0, 513, 512),
+                BoundBox::new2(0, 512, 512, 513),
+                BoundBox::new2(-1, 0, 0, 512),
+            ],
+            atlas.edge_boxes().collect::<Vec<_>>()
+        );
     }
 }

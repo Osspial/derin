@@ -189,7 +189,7 @@ dependencies = [
 [[package]]
 name = "cgmath-geometry"
 version = "0.1.0"
-source = "git+https://github.com/Osspial/cgmath-geometry.git#6e76e8133f2e5bc0bb85985f8984281dabefbf74"
+source = "git+https://github.com/Osspial/cgmath-geometry.git#61573e39d030c38c354b4b2b6c0dc8cd198e4b50"
 dependencies = [
  "cgmath 0.16.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "num-traits 0.1.43 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -440,6 +440,7 @@ dependencies = [
  "cgmath-geometry 0.1.0 (git+https://github.com/Osspial/cgmath-geometry.git)",
  "image 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "itertools 0.8.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

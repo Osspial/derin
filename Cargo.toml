@@ -3,3 +3,7 @@ members = ["./derin_atlas", "./derin_common_types", "./derin_display_engines", "
 
 [replace]
 "winit:0.11.3" = { git = "https://github.com/osspial/winit", branch="prs_merged" }
+
+# TODO: REMOVE WHEN ATLAS TESTING IS DONE
+[profile.dev]
+opt-level = 2
