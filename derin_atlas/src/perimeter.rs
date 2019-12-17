@@ -130,6 +130,7 @@ impl<P: Copy> PerimeterAtlas<P> {
             first: First,
             cursor: Point2<i32>,
             concave: bool,
+            rect: BoundBox<D2, i32>,
         }
         use First::{Vertical, Horizontal};
         println!("\n\n\n");
@@ -139,16 +140,7 @@ impl<P: Copy> PerimeterAtlas<P> {
         let height = rect.height();
         let convex_perimeter_added = 2 * width * height;
 
-        let mut best = Best {
-            corner: 0,
-            vnorm: 0,
-            hnorm: 0,
-            v: 0,
-            h: 0,
-            first: Vertical,
-            cursor: Point2::new(0, 0),
-            concave: false,
-        };
+        let mut best = None;
         let mut best_perimeter_added = u32::max_value();
         let first_corner = [self.edges[self.edges.len() - 1], self.edges[0]];
         let mut cursor = Point2::new(0, 0);
@@ -171,26 +163,49 @@ impl<P: Copy> PerimeterAtlas<P> {
             let vabs = v.abs() as u32;
             let habs = h.abs() as u32;
 
-            let perimeter_added = match concave {
-                true => height.saturating_sub(vabs) + width.saturating_sub(habs),
-                false => convex_perimeter_added
+            let rect = {
+                let x0 = cursor.x;
+                let y0 = cursor.y;
+                let x1 = x0 + vnorm * width as i32;
+                let y1 = y0 + hnorm * height as i32;
+                BoundBox::new2(
+                    Ord::min(x0, x1),
+                    Ord::min(y0, y1),
+                    Ord::max(x0, x1),
+                    Ord::max(y0, y1),
+                )
             };
-            // println!("{:?}", concave);
-            // println!("{} - {} = {}", height, vabs, height.saturating_sub(vabs));
-            // println!("{} - {} = {}", width, habs, width.saturating_sub(habs));
-            // println!("{} {}", perimeter_added, best_perimeter_added);
-            if perimeter_added <= best_perimeter_added {
-                best = Best {
-                    corner: i,
-                    vnorm,
-                    hnorm,
-                    v,
-                    h,
-                    first,
-                    cursor,
-                    concave,
+
+            let valid =
+                0 <= rect.min.x &&
+                0 <= rect.min.y &&
+                rect.max.x <= self.dims.dims.x as i32 &&
+                rect.max.y <= self.dims.dims.y as i32 &&
+                self.points().find(|p| rect.contains_exclusive(*p)).is_none();
+
+            if valid {
+                let perimeter_added = match concave {
+                    true => height.saturating_sub(vabs) + width.saturating_sub(habs),
+                    false => convex_perimeter_added
                 };
-                best_perimeter_added = perimeter_added;
+                // println!("{:?}", concave);
+                // println!("{} - {} = {}", height, vabs, height.saturating_sub(vabs));
+                // println!("{} - {} = {}", width, habs, width.saturating_sub(habs));
+                // println!("{} {}", perimeter_added, best_perimeter_added);
+                if perimeter_added <= best_perimeter_added {
+                    best = Some(Best {
+                        corner: i,
+                        vnorm,
+                        hnorm,
+                        v,
+                        h,
+                        first,
+                        cursor,
+                        concave,
+                        rect,
+                    });
+                    best_perimeter_added = perimeter_added;
+                }
             }
 
             match first {
@@ -200,23 +215,10 @@ impl<P: Copy> PerimeterAtlas<P> {
         }
 
         dbg!(best);
+        let best = best?;
 
         let width = width as i32;
         let height = height as i32;
-
-        let rect = {
-            let x0 = best.cursor.x;
-            let y0 = best.cursor.y;
-            let x1 = x0 + best.vnorm * width;
-            let y1 = y0 + best.hnorm * height;
-            dbg!((x0, y0), (x1, y1));
-            BoundBox::new2(
-                Ord::min(x0, x1),
-                Ord::min(y0, y1),
-                Ord::max(x0, x1),
-                Ord::max(y0, y1),
-            )
-        };
 
         let insert: bool;
         let h_ins = width * best.h.signum();
@@ -277,7 +279,7 @@ impl<P: Copy> PerimeterAtlas<P> {
         println!("{:?}", self.edges);
         self.verify();
 
-        Some(rect.min.to_vec().cast().unwrap())
+        Some(best.rect.min.to_vec().cast().unwrap())
     }
 
     fn get(&self, index: isize) -> i32 {
@@ -319,6 +321,23 @@ impl<P: Copy> PerimeterAtlas<P> {
     // fn insert_rect(&mut self, corner_index: usize, dims: DimsBox<D2, u32>) {
 
     // }
+
+    fn points(&self) -> impl '_ + Iterator<Item=Point2<i32>> {
+        let mut cursor = Point2::new(0, 0);
+        once(Point2::new(0, 0)).chain(
+            self.edges
+                .iter()
+                .enumerate()
+                .map(move |(i, n)| {
+                    match i % 2 {
+                        0 => cursor.x += n,
+                        1 => cursor.y += n,
+                        _ => unreachable!()
+                    }
+                    cursor
+                })
+            )
+    }
 
     fn verify(&self) {
         assert_eq!(0, self.edges.len() % 2);

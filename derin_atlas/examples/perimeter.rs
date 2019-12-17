@@ -32,7 +32,7 @@ fn main() {
             ColorType::RGBA(8)
         ).unwrap();
 
-        // if iteration == 5 {
+        // if iteration == 14 {
         //     std::thread::sleep_ms(3000);
         // }
 
