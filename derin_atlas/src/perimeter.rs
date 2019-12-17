@@ -132,6 +132,11 @@ impl<P: Copy> PerimeterAtlas<P> {
             concave: bool,
             rect: BoundBox<D2, i32>,
         }
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+        struct BestSort {
+            perimeter_added: u32,
+            distance_to_edge: u32,
+        }
         use First::{Vertical, Horizontal};
         println!("\n\n\n");
         dbg!(rect);
@@ -141,7 +146,10 @@ impl<P: Copy> PerimeterAtlas<P> {
         let convex_perimeter_added = 2 * width * height;
 
         let mut best = None;
-        let mut best_perimeter_added = u32::max_value();
+        let mut best_sort = BestSort {
+            perimeter_added: u32::max_value(),
+            distance_to_edge: u32::max_value(),
+        };
         let first_corner = [self.edges[self.edges.len() - 1], self.edges[0]];
         let mut cursor = Point2::new(0, 0);
 
@@ -176,11 +184,19 @@ impl<P: Copy> PerimeterAtlas<P> {
                 )
             };
 
+            let distance_to_edge = Ord::min(
+                Ord::min(
+                    rect.min.x,
+                    rect.min.y,
+                ),
+                Ord::min(
+                    self.dims.dims.x as i32 - rect.max.x,
+                    self.dims.dims.y as i32 - rect.max.y,
+                )
+            );
+
             let valid =
-                0 <= rect.min.x &&
-                0 <= rect.min.y &&
-                rect.max.x <= self.dims.dims.x as i32 &&
-                rect.max.y <= self.dims.dims.y as i32 &&
+                distance_to_edge >= 0 &&
                 self.points().find(|p| rect.contains_exclusive(*p)).is_none();
 
             if valid {
@@ -188,11 +204,15 @@ impl<P: Copy> PerimeterAtlas<P> {
                     true => height.saturating_sub(vabs) + width.saturating_sub(habs),
                     false => convex_perimeter_added
                 };
+                let sort = BestSort {
+                    perimeter_added,
+                    distance_to_edge: distance_to_edge as u32,
+                };
                 // println!("{:?}", concave);
                 // println!("{} - {} = {}", height, vabs, height.saturating_sub(vabs));
                 // println!("{} - {} = {}", width, habs, width.saturating_sub(habs));
                 // println!("{} {}", perimeter_added, best_perimeter_added);
-                if perimeter_added <= best_perimeter_added {
+                if sort <= best_sort {
                     best = Some(Best {
                         corner: i,
                         vnorm,
@@ -204,7 +224,7 @@ impl<P: Copy> PerimeterAtlas<P> {
                         concave,
                         rect,
                     });
-                    best_perimeter_added = perimeter_added;
+                    best_sort = sort;
                 }
             }
 
