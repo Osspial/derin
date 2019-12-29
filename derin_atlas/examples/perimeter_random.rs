@@ -19,6 +19,8 @@ fn main() {
     let mut rng = rand::thread_rng();
     let mut gen_image = || {
         let dims = DimsBox::new2(
+            // 64,
+            // 64,
             rng.gen_range(4, 128),
             rng.gen_range(4, 128),
         );
@@ -48,9 +50,9 @@ fn main() {
 
     let mut rectangles = vec![];
 
-    println!("i,first,corner,len,concave,h_ord,v_ord,h_ins,v_ins");
+    // println!("i,first,corner,len,concave,h_ord,v_ord,h_ins,v_ins");
     for i in 0.. {
-        print!("{},", i);
+        println!("\n{},", i);
         let image = gen_image();
         let rect = atlas.add_image(image.0, &image.1);
         let rect = match rect {

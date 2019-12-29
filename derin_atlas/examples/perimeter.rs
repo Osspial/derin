@@ -23,7 +23,7 @@ fn main() {
     let mut iteration = 0;
     let mut output_atlas = |atlas: &PerimeterAtlas<_>| {
         let pixels = atlas.pixels();
-        let (edges_dims, edges) = atlas.edge_image([32; 4], [255; 4]);
+        let (edges_dims, edges) = atlas.edge_image([32; 4], |_| [255; 4]);
         let combined = pixels.chunks(512).flat_map(|p| p.iter().cloned().chain(Some([0; 4]))).chain(edges.iter().cloned()).collect::<Vec<_>>();
         image::save_buffer(
             format!("./out/perimeter_atlas_{}.bmp", iteration),
